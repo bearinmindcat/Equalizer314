@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Equalizer314" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Primary (grey) -->
+        <item name="colorPrimary">#FFAAAAAA</item>
+        <item name="colorOnPrimary">#FF000000</item>
+        <item name="colorPrimaryContainer">#FF3A3A3A</item>
+        <item name="colorOnPrimaryContainer">#FFDDDDDD</item>
+
+        <!-- Secondary -->
+        <item name="colorSecondary">#FF999999</item>
+        <item name="colorOnSecondary">#FF000000</item>
+        <item name="colorSecondaryContainer">#FF333333</item>
+        <item name="colorOnSecondaryContainer">#FFDDDDDD</item>
+
+        <!-- Tertiary -->
+        <item name="colorTertiary">#FFBBBBBB</item>
+        <item name="colorOnTertiary">#FF000000</item>
+        <item name="colorTertiaryContainer">#FF3A3A3A</item>
+        <item name="colorOnTertiaryContainer">#FFDDDDDD</item>
+
+        <!-- Surface / background -->
+        <item name="colorSurface">#FF0E0E0E</item>
+        <item name="colorOnSurface">#FFE2E2E2</item>
+        <item name="colorSurfaceVariant">#FF1E1E1E</item>
+        <item name="colorOnSurfaceVariant">#FFBBBBBB</item>
+        <item name="colorSurfaceContainerLow">#FF161616</item>
+        <item name="colorSurfaceContainer">#FF1C1C1C</item>
+        <item name="colorSurfaceContainerHigh">#FF252525</item>
+
+        <!-- Outline -->
+        <item name="colorOutline">#FF444444</item>
+        <item name="colorOutlineVariant">#FF333333</item>
+
+        <!-- System bars -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <!-- Rounded FAB -->
+    <style name="ShapeAppearanceOverlay.Equalizer314.FAB" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">50%</item>
+    </style>
+</resources>
