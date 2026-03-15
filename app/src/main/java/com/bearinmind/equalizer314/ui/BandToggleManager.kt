@@ -268,8 +268,18 @@ class BandToggleManager(
                                 row2NewBtn.alpha = 1f
                                 row2NewBtn.requestLayout()
                             }
+                            // Remove any stale "+" buttons if at max bands
+                            if (eq.getBandCount() >= EqStateManager.MAX_BANDS) {
+                                for (r in listOf(toggleGroup, toggleGroup2)) {
+                                    for (i in r.childCount - 1 downTo 0) {
+                                        if ((r.getChildAt(i) as? MaterialButton)?.text == "+") {
+                                            r.removeViewAt(i)
+                                        }
+                                    }
+                                }
+                            }
                             // For "+" overflow: add to row2 with grow animation
-                            if (isOverflowAdd) {
+                            if (isOverflowAdd && eq.getBandCount() < EqStateManager.MAX_BANDS) {
                                 val addBtn = createAddButton()
                                 toggleGroup2.addView(addBtn, 0)
                                 updateRowVisibility()
