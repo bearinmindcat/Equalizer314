@@ -22,6 +22,10 @@ class EqStateManager(
     companion object {
         const val MAX_BANDS = 16
         const val MIN_BANDS = 1
+        val COLOR_PALETTE = intArrayOf(
+            0xFFE53935.toInt(), 0xFFFF9800.toInt(), 0xFFFFEB3B.toInt(), 0xFF4CAF50.toInt(),
+            0xFF00BCD4.toInt(), 0xFF2196F3.toInt(), 0xFF7C4DFF.toInt(), 0xFFE91E63.toInt()
+        )
     }
 
     var parametricEq: ParametricEqualizer = ParametricEqualizer()

@@ -26,6 +26,7 @@ import com.bearinmind.equalizer314.ui.BandToggleManager
 import com.bearinmind.equalizer314.ui.EqGraphView
 import com.bearinmind.equalizer314.ui.GraphicEqController
 import com.bearinmind.equalizer314.ui.TableEqController
+
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.slider.Slider
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
@@ -87,6 +88,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tableEqRowContainer: LinearLayout
     private lateinit var graphicScrollView: HorizontalScrollView
     private lateinit var graphicSlidersContainer: LinearLayout
+    private lateinit var colorSwatchRow: LinearLayout
 
     // Hz slider uses logarithmic mapping: slider 0–1000 → 10–20000 Hz
     private val hzLogMin = kotlin.math.log10(10f)
@@ -185,6 +187,7 @@ class MainActivity : AppCompatActivity() {
         tableEqRowContainer = findViewById(R.id.tableEqRowContainer)
         graphicScrollView = findViewById(R.id.graphicScrollView)
         graphicSlidersContainer = findViewById(R.id.graphicSlidersContainer)
+        colorSwatchRow = findViewById(R.id.colorSwatchRow)
 
         val presets = arrayOf("Flat", "Bass Boost", "Treble Boost", "Vocal Enhance")
         val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, presets)
@@ -232,6 +235,9 @@ class MainActivity : AppCompatActivity() {
             this, graphicSlidersContainer, eqGraphView, stateManager,
             onEqChanged, onBandCountChanged
         )
+        graphicController.onColorChanged = {
+            bandToggleManager.updateSelection(stateManager.selectedBandIndex)
+        }
 
         tableController = TableEqController(
             this, tableEqRowContainer, eqGraphView, stateManager, onEqChanged
@@ -364,6 +370,8 @@ class MainActivity : AppCompatActivity() {
 
         // Filter type buttons
         setupFilterTypeButtons()
+        // Color swatches
+        setupColorSwatches()
 
         // EQ mode selector
         modeParametricBtn.setOnClickListener { switchEqUiMode(EqUiMode.PARAMETRIC) }
@@ -775,7 +783,87 @@ class MainActivity : AppCompatActivity() {
             bandDbSlider.alpha = 1f
             bandDbInput.alpha = 1f
         }
+        updateColorSwatches(bandIndex)
         isUpdatingInputs = false
+    }
+
+    private fun setupColorSwatches() {
+        colorSwatchRow.removeAllViews()
+        val density = resources.displayMetrics.density
+        val size = (22 * density).toInt()
+
+        for ((color, _) in TableEqController.BAND_COLORS) {
+            val isNone = color == 0xFF333333.toInt()
+            val wrapper = FrameLayout(this).apply {
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            val swatch: View = if (isNone) {
+                TextView(this).apply {
+                    text = "\u2014"
+                    textSize = 12f
+                    setTextColor(0xFFAAAAAA.toInt())
+                    gravity = android.view.Gravity.CENTER
+                    layoutParams = FrameLayout.LayoutParams(size, size).apply {
+                        gravity = android.view.Gravity.CENTER
+                    }
+                    background = android.graphics.drawable.GradientDrawable().apply {
+                        setColor(0xFF333333.toInt())
+                        cornerRadius = 6 * density
+                        setStroke((1 * density).toInt(), 0xFF666666.toInt())
+                    }
+                }
+            } else {
+                View(this).apply {
+                    layoutParams = FrameLayout.LayoutParams(size, size).apply {
+                        gravity = android.view.Gravity.CENTER
+                    }
+                    background = android.graphics.drawable.GradientDrawable().apply {
+                        setColor(color)
+                        cornerRadius = 6 * density
+                        setStroke((1 * density).toInt(), 0xFF666666.toInt())
+                    }
+                }
+            }
+            swatch.setOnClickListener {
+                val bandIndex = stateManager.selectedBandIndex ?: return@setOnClickListener
+                val slotIdx = if (bandIndex < stateManager.bandSlots.size) stateManager.bandSlots[bandIndex] else return@setOnClickListener
+                if (isNone) {
+                    stateManager.bandColors.remove(slotIdx)
+                } else {
+                    stateManager.bandColors[slotIdx] = color
+                }
+                stateManager.saveState()
+                eqGraphView.setBandColors(stateManager.bandColors)
+                eqGraphView.invalidate()
+                bandToggleManager.updateSelection(stateManager.selectedBandIndex)
+                updateColorSwatches(bandIndex)
+            }
+            wrapper.addView(swatch)
+            colorSwatchRow.addView(wrapper)
+        }
+    }
+
+    private fun updateColorSwatches(bandIndex: Int?) {
+        val idx = bandIndex ?: stateManager.selectedBandIndex ?: return
+        val slotIdx = if (idx < stateManager.bandSlots.size) stateManager.bandSlots[idx] else -1
+        val currentColor = if (slotIdx >= 0) stateManager.bandColors[slotIdx] else null
+        val density = resources.displayMetrics.density
+
+        for (i in 0 until colorSwatchRow.childCount) {
+            val wrapper = colorSwatchRow.getChildAt(i) as? FrameLayout ?: continue
+            val swatch = wrapper.getChildAt(0) ?: continue
+            val bg = swatch.background as? android.graphics.drawable.GradientDrawable ?: continue
+
+            val swatchColor = TableEqController.BAND_COLORS[i].first
+            val isNone = swatchColor == 0xFF333333.toInt()
+            val isSelected = if (isNone) currentColor == null else currentColor == swatchColor
+
+            if (isSelected) {
+                bg.setStroke((2 * density).toInt(), 0xFFFFFFFF.toInt())
+            } else {
+                bg.setStroke((1 * density).toInt(), 0xFF666666.toInt())
+            }
+        }
     }
 
     // ---- Processing Control ----

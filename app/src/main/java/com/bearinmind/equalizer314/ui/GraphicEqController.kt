@@ -20,6 +20,7 @@ class GraphicEqController(
     private val onEqChanged: () -> Unit,
     private val onBandCountChanged: () -> Unit
 ) {
+    var onColorChanged: (() -> Unit)? = null
     private val sliderRefs = mutableListOf<Slider>()
     private var sortedIndices = listOf<Int>()
     private var allSortedIndices = listOf<Int>()
@@ -373,6 +374,34 @@ class GraphicEqController(
             }
         }
         cardContent.addView(filterBtn)
+
+        // Color selector button
+        val slotIdx = if (bandIndex < state.bandSlots.size) state.bandSlots[bandIndex] else -1
+        val bandColor = if (slotIdx >= 0) state.bandColors[slotIdx] else null
+        val colorBtn = MaterialButton(activity, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            icon = null
+            text = if (bandColor != null) "COLOR" else "\u2014"
+            textSize = filterLabelSize
+            setTextColor(0xFFAAAAAA.toInt())
+            cornerRadius = (8 * density).toInt()
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, (32 * density).toInt()
+            ).apply {
+                setMargins((2 * density).toInt(), (4 * density).toInt(), (2 * density).toInt(), 0)
+            }
+            setPadding(0, 0, 0, 0)
+            insetTop = 0; insetBottom = 0
+            minWidth = 0; minimumWidth = 0
+            minHeight = 0; minimumHeight = 0
+            setBackgroundColor(0x00000000)
+            strokeColor = android.content.res.ColorStateList.valueOf(bandColor ?: 0xFF444444.toInt())
+            strokeWidth = (if (bandColor != null) 2 else 1).let { (it * density).toInt() }
+            setOnClickListener {
+                showColorPickerSheet(bandIndex, this)
+            }
+        }
+        cardContent.addView(colorBtn)
+
         card.addView(cardContent)
         return card
     }
@@ -471,5 +500,85 @@ class GraphicEqController(
             hz >= 1000 -> String.format("%.1fk", hz / 1000)
             else -> "${hz.toInt()}"
         }
+    }
+
+    private fun showColorPickerSheet(bandIndex: Int, colorBtn: MaterialButton) {
+        val density = activity.resources.displayMetrics.density
+        val slotIdx = if (bandIndex < state.bandSlots.size) state.bandSlots[bandIndex] else -1
+
+        val bottomSheet = com.google.android.material.bottomsheet.BottomSheetDialog(activity)
+        val sheetLayout = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((16 * density).toInt(), (16 * density).toInt(), (16 * density).toInt(), (24 * density).toInt())
+        }
+
+        val title = TextView(activity).apply {
+            text = "Band Color"
+            textSize = 16f
+            setTextColor(0xFFE2E2E2.toInt())
+            setPadding(0, 0, 0, (12 * density).toInt())
+        }
+        sheetLayout.addView(title)
+
+        val grid = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+
+        for ((color, _) in TableEqController.BAND_COLORS) {
+            val isNone = color == 0xFF333333.toInt()
+            val size = (32 * density).toInt()
+            val swatch = if (isNone) {
+                TextView(activity).apply {
+                    text = "\u2014"
+                    textSize = 16f
+                    setTextColor(0xFFAAAAAA.toInt())
+                    gravity = android.view.Gravity.CENTER
+                    layoutParams = LinearLayout.LayoutParams(size, size).apply {
+                        setMargins((3 * density).toInt(), 0, (3 * density).toInt(), 0)
+                    }
+                    background = android.graphics.drawable.GradientDrawable().apply {
+                        setColor(0xFF333333.toInt())
+                        cornerRadius = 8 * density
+                        setStroke((1 * density).toInt(), 0xFF666666.toInt())
+                    }
+                }
+            } else {
+                android.view.View(activity).apply {
+                    layoutParams = LinearLayout.LayoutParams(size, size).apply {
+                        setMargins((3 * density).toInt(), 0, (3 * density).toInt(), 0)
+                    }
+                    background = android.graphics.drawable.GradientDrawable().apply {
+                        setColor(color)
+                        cornerRadius = 8 * density
+                        setStroke((1 * density).toInt(), 0xFF666666.toInt())
+                    }
+                }
+            }
+            swatch.setOnClickListener {
+                if (slotIdx >= 0) {
+                    if (isNone) {
+                        state.bandColors.remove(slotIdx)
+                    } else {
+                        state.bandColors[slotIdx] = color
+                    }
+                    state.saveState()
+                    graphView.setBandColors(state.bandColors)
+                    graphView.invalidate()
+                    val applyColor = if (isNone) 0xFF444444.toInt() else color
+                    colorBtn.strokeColor = android.content.res.ColorStateList.valueOf(applyColor)
+                    colorBtn.strokeWidth = (if (isNone) 1 else 2).let { (it * density).toInt() }
+                    onColorChanged?.invoke()
+                }
+                bottomSheet.dismiss()
+            }
+            grid.addView(swatch)
+        }
+
+        sheetLayout.addView(grid)
+        bottomSheet.setContentView(sheetLayout)
+        bottomSheet.show()
     }
 }

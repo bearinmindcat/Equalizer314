@@ -312,6 +312,15 @@
                                 </com.google.android.material.textfield.TextInputLayout>
                             </LinearLayout>
 
+                            <!-- Color selector -->
+                            <LinearLayout
+                                android:id="@+id/colorSwatchRow"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="horizontal"
+                                android:gravity="center"
+                                android:paddingTop="12dp" />
+
                         </LinearLayout>
 
                     </LinearLayout>
