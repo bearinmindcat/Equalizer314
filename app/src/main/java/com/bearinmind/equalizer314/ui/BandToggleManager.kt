@@ -22,6 +22,7 @@ class BandToggleManager(
     private val onBandSelected: (Int?) -> Unit
 ) {
     private val ROW_SIZE = 8
+    private var isAnimating = false
 
     private fun getRowForDisplay(displayPos: Int): LinearLayout {
         return if (displayPos < ROW_SIZE) toggleGroup else toggleGroup2
@@ -108,11 +109,6 @@ class BandToggleManager(
         val newFreq = state.allDefaultFrequencies[newSlot]
         val insertPos = state.bandSlots.indexOfFirst { it > newSlot }.let { if (it < 0) state.bandSlots.size else it }
 
-        // Check if new band replaces "+" at a row boundary (row count stays same = no resize)
-        val replacesAdd = insertPos == oldBandCount &&
-                (getRowForDisplay(oldBandCount) != getRowForDisplay(oldBandCount + 1) ||
-                 oldBandCount + 1 == EqStateManager.MAX_BANDS)
-
         eq.insertBand(insertPos, newFreq, 0f, BiquadFilter.FilterType.BELL)
         state.bandSlots.add(insertPos, newSlot)
         state.displayToBandIndex = (0 until eq.getBandCount()).toList()
@@ -124,6 +120,20 @@ class BandToggleManager(
         graphView.setParametricEqualizer(eq)
         graphView.setBandSlotLabels(state.bandSlots)
         graphView.setBandColors(state.bandColors)
+
+        // If another animation is in progress, skip animated transition
+        if (isAnimating) {
+            setupToggles()
+            updateSelection(state.selectedBandIndex)
+            state.saveState()
+            onBandCountChanged()
+            return
+        }
+
+        // Check if new band replaces "+" at a row boundary (row count stays same = no resize)
+        val replacesAdd = insertPos == oldBandCount &&
+                (getRowForDisplay(oldBandCount) != getRowForDisplay(oldBandCount + 1) ||
+                 oldBandCount + 1 == EqStateManager.MAX_BANDS)
 
         if (replacesAdd) {
             // Dual animation: "+" shrinks out while new band grows in
@@ -146,6 +156,7 @@ class BandToggleManager(
                 newBtn.alpha = 0f
                 addRow.addView(newBtn, addRowIdx)
 
+                isAnimating = true
                 android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
                     duration = 200
                     interpolator = android.view.animation.DecelerateInterpolator()
@@ -160,6 +171,7 @@ class BandToggleManager(
                     }
                     addListener(object : android.animation.AnimatorListenerAdapter() {
                         override fun onAnimationEnd(animation: android.animation.Animator) {
+                            isAnimating = false
                             addRow.removeView(oldAddBtn)
                             newLp.weight = 1f; newLp.width = 0
                             newLp.height = LinearLayout.LayoutParams.WRAP_CONTENT
@@ -272,6 +284,7 @@ class BandToggleManager(
                     row2Remaining.add(Triple(child, clp, clp.width))
                 }
 
+                isAnimating = true
                 android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
                     duration = 200
                     interpolator = android.view.animation.DecelerateInterpolator()
@@ -303,6 +316,7 @@ class BandToggleManager(
                     }
                     addListener(object : android.animation.AnimatorListenerAdapter() {
                         override fun onAnimationEnd(animation: android.animation.Animator) {
+                            isAnimating = false
                             toggleGroup.removeView(overflowBtn)
                             // Remove "+" if it was shrunk
                             if (row2AddBtn != null) {
@@ -388,6 +402,7 @@ class BandToggleManager(
                         updateSelection(state.selectedBandIndex)
                         updateClickListeners()
 
+                        isAnimating = true
                         android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
                             duration = 200
                             interpolator = android.view.animation.DecelerateInterpolator()
@@ -402,6 +417,7 @@ class BandToggleManager(
                             }
                             addListener(object : android.animation.AnimatorListenerAdapter() {
                                 override fun onAnimationEnd(animation: android.animation.Animator) {
+                                    isAnimating = false
                                     row.removeView(addBtnToRemove)
                                     for (i in 0 until row.childCount) {
                                         val child = row.getChildAt(i) ?: continue
@@ -436,6 +452,12 @@ class BandToggleManager(
     fun removeBandAt(index: Int) {
         val eq = state.parametricEq
         if (eq.getBandCount() <= EqStateManager.MIN_BANDS) return
+
+        // If another animation is in progress, skip animated transition
+        if (isAnimating) {
+            performRemoveBand(index)
+            return
+        }
 
         val bandCount = eq.getBandCount()
         val displayPos = state.displayToBandIndex.indexOf(index)
@@ -479,6 +501,7 @@ class BandToggleManager(
                     addBtn.alpha = 0f
                     row.addView(addBtn, rowIdx + 1)
 
+                    isAnimating = true
                     android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
                         duration = 200
                         interpolator = android.view.animation.DecelerateInterpolator()
@@ -493,6 +516,7 @@ class BandToggleManager(
                         }
                         addListener(object : android.animation.AnimatorListenerAdapter() {
                             override fun onAnimationEnd(animation: android.animation.Animator) {
+                                isAnimating = false
                                 row.removeView(btn)
                                 addLp.weight = 1f; addLp.width = 0
                                 addLp.height = LinearLayout.LayoutParams.WRAP_CONTENT
@@ -579,6 +603,7 @@ class BandToggleManager(
 
                         val removedLp = btn.layoutParams as LinearLayout.LayoutParams
 
+                        isAnimating = true
                         android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
                             duration = 200
                             interpolator = android.view.animation.DecelerateInterpolator()
@@ -609,6 +634,7 @@ class BandToggleManager(
                             }
                             addListener(object : android.animation.AnimatorListenerAdapter() {
                                 override fun onAnimationEnd(animation: android.animation.Animator) {
+                                    isAnimating = false
                                     toggleGroup.removeView(btn)
                                     toggleGroup2.removeView(row2First)
                                     for (i in 0 until toggleGroup.childCount) {
@@ -667,6 +693,7 @@ class BandToggleManager(
                             addBtnLp = null
                         }
 
+                        isAnimating = true
                         android.animation.ValueAnimator.ofInt(startWidth, 0).apply {
                             duration = 200
                             interpolator = android.view.animation.DecelerateInterpolator()
@@ -682,6 +709,7 @@ class BandToggleManager(
                             }
                             addListener(object : android.animation.AnimatorListenerAdapter() {
                                 override fun onAnimationEnd(animation: android.animation.Animator) {
+                                    isAnimating = false
                                     row.removeView(btn)
                                     if (wasFull) {
                                         for (i in 0 until row.childCount) {
