@@ -299,23 +299,81 @@ class BandToggleManager(
                     val row = getRowForDisplay(newDisplayPos)
                     val rowIdx = getRowIndex(newDisplayPos)
                     val newBtn = createToggleButton(insertPos)
-                    row.addView(newBtn, rowIdx)
 
-                    // Remove "+" if we hit MAX_BANDS
+                    // Find "+" to animate out if we hit MAX_BANDS
+                    var addBtnToRemove: View? = null
                     if (eq.getBandCount() >= EqStateManager.MAX_BANDS) {
                         val addBtnRow = getRowForDisplay(oldBandCount)
                         for (i in addBtnRow.childCount - 1 downTo 0) {
                             if ((addBtnRow.getChildAt(i) as? MaterialButton)?.text == "+") {
-                                addBtnRow.removeViewAt(i)
+                                addBtnToRemove = addBtnRow.getChildAt(i)
                                 break
                             }
                         }
                     }
 
-                    updateRowVisibility()
-                    updateSelection(state.selectedBandIndex)
-                    updateClickListeners()
-                    animateButtonIn(newBtn, row)
+                    if (addBtnToRemove != null) {
+                        // Dual animation: new grows, "+" shrinks
+                        val addLp = addBtnToRemove.layoutParams as LinearLayout.LayoutParams
+                        val addWidth = addBtnToRemove.width
+                        val capturedHeight = addBtnToRemove.height
+
+                        // Lock all buttons in the row to explicit widths
+                        for (i in 0 until row.childCount) {
+                            val child = row.getChildAt(i) ?: continue
+                            val clp = child.layoutParams as LinearLayout.LayoutParams
+                            clp.weight = 0f
+                            clp.width = child.width
+                            clp.height = child.height
+                            child.layoutParams = clp
+                        }
+
+                        addLp.weight = 0f; addLp.width = addWidth
+
+                        val newLp = newBtn.layoutParams as LinearLayout.LayoutParams
+                        newLp.weight = 0f; newLp.width = 0
+                        newLp.height = capturedHeight
+                        newBtn.alpha = 0f
+                        row.addView(newBtn, rowIdx)
+
+                        updateRowVisibility()
+                        updateSelection(state.selectedBandIndex)
+                        updateClickListeners()
+
+                        android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+                            duration = 200
+                            interpolator = android.view.animation.DecelerateInterpolator()
+                            addUpdateListener { anim ->
+                                val f = anim.animatedFraction
+                                newLp.width = (addWidth * f).toInt()
+                                newBtn.alpha = f
+                                newBtn.requestLayout()
+                                addLp.width = (addWidth * (1f - f)).toInt()
+                                addBtnToRemove.alpha = 1f - f
+                                addBtnToRemove.requestLayout()
+                            }
+                            addListener(object : android.animation.AnimatorListenerAdapter() {
+                                override fun onAnimationEnd(animation: android.animation.Animator) {
+                                    row.removeView(addBtnToRemove)
+                                    for (i in 0 until row.childCount) {
+                                        val child = row.getChildAt(i) ?: continue
+                                        val clp = child.layoutParams as LinearLayout.LayoutParams
+                                        clp.weight = 1f; clp.width = 0
+                                        clp.height = LinearLayout.LayoutParams.WRAP_CONTENT
+                                        child.alpha = 1f
+                                        child.requestLayout()
+                                    }
+                                }
+                            })
+                            start()
+                        }
+                    } else {
+                        row.addView(newBtn, rowIdx)
+                        updateRowVisibility()
+                        updateSelection(state.selectedBandIndex)
+                        updateClickListeners()
+                        animateButtonIn(newBtn, row)
+                    }
                 } else {
                     setupToggles()
                     updateSelection(state.selectedBandIndex)
@@ -407,6 +465,7 @@ class BandToggleManager(
                         val itemWidth = btn.width
                         val capturedHeight = btn.height
                         val capturedBandCount = bandCount
+                        val needsAddBtn = capturedBandCount == EqStateManager.MAX_BANDS
 
                         // Lock all row1 buttons to explicit widths
                         for (i in 0 until toggleGroup.childCount) {
@@ -418,14 +477,19 @@ class BandToggleManager(
                             child.layoutParams = clp
                         }
 
-                        // Lock row2's first child to explicit width (will shrink out of row2)
+                        // Lock ALL row2 children to explicit widths
+                        for (i in 0 until toggleGroup2.childCount) {
+                            val child = toggleGroup2.getChildAt(i) ?: continue
+                            val clp = child.layoutParams as LinearLayout.LayoutParams
+                            clp.weight = 0f
+                            clp.width = child.width
+                            clp.height = child.height
+                            child.layoutParams = clp
+                        }
+
                         val row2First = toggleGroup2.getChildAt(0)
                         val row2FirstLp = row2First.layoutParams as LinearLayout.LayoutParams
                         val row2FirstWidth = row2First.width
-                        row2FirstLp.weight = 0f
-                        row2FirstLp.width = row2FirstWidth
-                        row2FirstLp.height = row2First.height
-                        row2First.layoutParams = row2FirstLp
 
                         // Create a fresh matching button at end of row1 at width 0
                         val isRow2FirstAdd = (row2First as? MaterialButton)?.text == "+"
@@ -440,8 +504,20 @@ class BandToggleManager(
                         newBtn.alpha = 0f
                         toggleGroup.addView(newBtn)
 
+                        // If at max bands, create "+" in row2 at width 0 to animate in
+                        val addBtn: View? = if (needsAddBtn) {
+                            val ab = createAddButton()
+                            val abLp = ab.layoutParams as LinearLayout.LayoutParams
+                            abLp.weight = 0f; abLp.width = 0
+                            abLp.height = capturedHeight
+                            ab.alpha = 0f
+                            toggleGroup2.addView(ab)
+                            ab
+                        } else null
+                        val addBtnLp = addBtn?.layoutParams as? LinearLayout.LayoutParams
+                        val addBtnTargetWidth = row2FirstWidth
+
                         val removedLp = btn.layoutParams as LinearLayout.LayoutParams
-                        val needsAddBtn = capturedBandCount == EqStateManager.MAX_BANDS
 
                         android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
                             duration = 200
@@ -455,10 +531,16 @@ class BandToggleManager(
                                 newLp.width = (itemWidth * f).toInt()
                                 newBtn.alpha = f
                                 newBtn.requestLayout()
-                                // Row2: shrink first child (remaining items expand via weight)
+                                // Row2: shrink first child
                                 row2FirstLp.width = (row2FirstWidth * (1f - f)).toInt()
                                 row2First.alpha = 1f - f
                                 row2First.requestLayout()
+                                // Row2: grow "+" if needed
+                                if (addBtn != null && addBtnLp != null) {
+                                    addBtnLp.width = (addBtnTargetWidth * f).toInt()
+                                    addBtn.alpha = f
+                                    addBtn.requestLayout()
+                                }
                             }
                             addListener(object : android.animation.AnimatorListenerAdapter() {
                                 override fun onAnimationEnd(animation: android.animation.Animator) {
@@ -472,9 +554,13 @@ class BandToggleManager(
                                         child.alpha = 1f
                                         child.requestLayout()
                                     }
-                                    if (needsAddBtn) {
-                                        val addRow = getRowForDisplay(capturedBandCount - 1)
-                                        addRow.addView(createAddButton())
+                                    for (i in 0 until toggleGroup2.childCount) {
+                                        val child = toggleGroup2.getChildAt(i) ?: continue
+                                        val clp = child.layoutParams as LinearLayout.LayoutParams
+                                        clp.weight = 1f; clp.width = 0
+                                        clp.height = LinearLayout.LayoutParams.WRAP_CONTENT
+                                        child.alpha = 1f
+                                        child.requestLayout()
                                     }
                                     performRemoveBand(index, skipViewRebuild = true)
                                     updateClickListeners()
@@ -487,6 +573,35 @@ class BandToggleManager(
                         val startWidth = btn.width
                         lp.height = btn.height
                         lp.weight = 0f; lp.width = startWidth; btn.layoutParams = lp
+
+                        val wasFull = bandCount == EqStateManager.MAX_BANDS
+
+                        // If at max bands, lock row and create "+" to grow simultaneously
+                        val addBtn: View?
+                        val addBtnLp: LinearLayout.LayoutParams?
+                        if (wasFull) {
+                            for (i in 0 until row.childCount) {
+                                val child = row.getChildAt(i) ?: continue
+                                if (child == btn) continue
+                                val clp = child.layoutParams as LinearLayout.LayoutParams
+                                clp.weight = 0f
+                                clp.width = child.width
+                                clp.height = child.height
+                                child.layoutParams = clp
+                            }
+                            val ab = createAddButton()
+                            val abLp = ab.layoutParams as LinearLayout.LayoutParams
+                            abLp.weight = 0f; abLp.width = 0
+                            abLp.height = btn.height
+                            ab.alpha = 0f
+                            row.addView(ab)
+                            addBtn = ab
+                            addBtnLp = abLp
+                        } else {
+                            addBtn = null
+                            addBtnLp = null
+                        }
+
                         android.animation.ValueAnimator.ofInt(startWidth, 0).apply {
                             duration = 200
                             interpolator = android.view.animation.DecelerateInterpolator()
@@ -494,10 +609,25 @@ class BandToggleManager(
                                 val w = it.animatedValue as Int
                                 lp.width = w; btn.requestLayout()
                                 btn.alpha = (w.toFloat() / startWidth).coerceIn(0f, 1f)
+                                if (addBtn != null && addBtnLp != null) {
+                                    addBtnLp.width = startWidth - w
+                                    addBtn.alpha = 1f - (w.toFloat() / startWidth).coerceIn(0f, 1f)
+                                    addBtn.requestLayout()
+                                }
                             }
                             addListener(object : android.animation.AnimatorListenerAdapter() {
                                 override fun onAnimationEnd(animation: android.animation.Animator) {
                                     row.removeView(btn)
+                                    if (wasFull) {
+                                        for (i in 0 until row.childCount) {
+                                            val child = row.getChildAt(i) ?: continue
+                                            val clp = child.layoutParams as LinearLayout.LayoutParams
+                                            clp.weight = 1f; clp.width = 0
+                                            clp.height = LinearLayout.LayoutParams.WRAP_CONTENT
+                                            child.alpha = 1f
+                                            child.requestLayout()
+                                        }
+                                    }
                                     performRemoveBand(index, skipViewRebuild = true)
                                     updateClickListeners()
                                 }
