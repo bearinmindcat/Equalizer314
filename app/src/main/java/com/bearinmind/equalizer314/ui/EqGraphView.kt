@@ -48,6 +48,79 @@ class EqGraphView @JvmOverloads constructor(
     private var dpCenterFrequencies: FloatArray? = null
     private var dpGains: FloatArray? = null
     var showDpBands = false
+    var showBandPoints = true
+
+    // MBC band visualization
+    var mbcCrossovers: FloatArray? = null       // crossover frequencies (N-1 for N bands)
+    var mbcBandColors: IntArray? = null          // one color per band (unused for now but kept)
+    var mbcBandGains: FloatArray? = null         // per-band postGain in dB
+    var mbcBandRanges: FloatArray? = null        // per-band range in dB (negative, max gain reduction cap)
+    var mbcSelectedBand: Int = 0
+    var onMbcCrossoverChanged: ((crossoverIndex: Int, frequency: Float) -> Unit)? = null
+    var onMbcBandGainChanged: ((bandIndex: Int, gain: Float) -> Unit)? = null
+    var onMbcBandRangeChanged: ((bandIndex: Int, range: Float) -> Unit)? = null
+    var onMbcBandSelected: ((bandIndex: Int) -> Unit)? = null
+    private var mbcHaloAlpha = 0f
+    private var mbcHaloAnimator: android.animation.ValueAnimator? = null
+    private var mbcHaloType = 0  // 1=postGain, 2=range
+    private var mbcHaloBand = -1
+    private var draggingCrossover: Int = -1
+    private var draggingMbcBand: Int = -1
+    private var draggingMbcRange: Int = -1
+
+    private val mbcCrossoverLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xAABBBBBB.toInt()
+        strokeWidth = 2f
+        style = Paint.Style.STROKE
+        pathEffect = DashPathEffect(floatArrayOf(8f, 6f), 0f)
+    }
+
+    private val mbcCurvePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFDDDDDD.toInt()
+        strokeWidth = 2.5f
+        style = Paint.Style.STROKE
+        // pathEffect = CornerPathEffect(30f)  // TODO: corner smoothing
+    }
+
+    private val mbcFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0x18FFFFFF.toInt()
+        style = Paint.Style.FILL
+    }
+
+    private val mbcDotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFFFFFFF.toInt()
+        style = Paint.Style.FILL
+    }
+
+    private val mbcDotRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFAAAAAA.toInt()
+        strokeWidth = 2f
+        style = Paint.Style.STROKE
+    }
+
+    private val mbcRangeCurvePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xAA999999.toInt()
+        strokeWidth = 2f
+        style = Paint.Style.STROKE
+        pathEffect = DashPathEffect(floatArrayOf(8f, 6f), 0f)
+        // TODO: corner smoothing — ComposePathEffect(DashPathEffect(...), CornerPathEffect(30f))
+    }
+
+    private val mbcRangeFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0x30444444.toInt()
+        style = Paint.Style.FILL
+    }
+
+    private val mbcRangeDotRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF777777.toInt()
+        strokeWidth = 2f
+        style = Paint.Style.STROKE
+    }
+
+    private val mbcTriTouchPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0x14AAAAAA.toInt()  // colorPrimary (#AAAAAA) at 8% alpha — exact Material3 Slider halo
+        style = Paint.Style.FILL
+    }
 
     private val dpCurveLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xAA555555.toInt()  // dark grey solid line
@@ -330,6 +403,11 @@ class EqGraphView @JvmOverloads constructor(
 
         drawGrid(canvas, vPad, graphWidth, graphHeight)
 
+        // MBC band regions (behind everything else)
+        if (mbcCrossovers != null) {
+            drawMbcBands(canvas, vPad, graphWidth, graphHeight)
+        }
+
         if (spectrumEnabled) {
             drawSpectrum(canvas, vPad, graphWidth, graphHeight)
         }
@@ -354,11 +432,13 @@ class EqGraphView @JvmOverloads constructor(
         calculatePointPositions(vPad, graphWidth, graphHeight)
         drawCurve(canvas, vPad, graphWidth, graphHeight)
 
-        drawPoints(canvas)
+        if (showBandPoints) {
+            drawPoints(canvas)
 
-        activeBandIndex?.let { index ->
-            if (index < bandPoints.size) {
-                drawActivePointLabel(canvas, bandPoints[index])
+            activeBandIndex?.let { index ->
+                if (index < bandPoints.size) {
+                    drawActivePointLabel(canvas, bandPoints[index])
+                }
             }
         }
     }
@@ -369,11 +449,7 @@ class EqGraphView @JvmOverloads constructor(
             val y = vPad + (graphHeight * i / dbSteps)
             val db = maxGain - (maxGain - minGain) * i / dbSteps
 
-            if (db == 0f) {
-                canvas.drawLine(0f, y, width.toFloat(), y, zeroDB_LinePaint)
-            } else {
-                canvas.drawLine(0f, y, width.toFloat(), y, gridPaint)
-            }
+            canvas.drawLine(0f, y, width.toFloat(), y, gridPaint)
 
             if (i % 2 == 0) {
                 val dbLabel = if (db > 0) "+${db.toInt()}" else "${db.toInt()}"
@@ -675,6 +751,234 @@ class EqGraphView @JvmOverloads constructor(
         return colors[slots[index]]
     }
 
+    // ---- Linkwitz-Riley 4th-order crossover math (Giannoulis et al. / Linkwitz-Riley) ----
+    // LR4 = two cascaded 2nd-order Butterworth filters
+    // Lowpass amplitude:  |H_LP(f)| = 1 / (1 + (f/fc)^4)
+    // Highpass amplitude: |H_HP(f)| = (f/fc)^4 / (1 + (f/fc)^4)
+    // LP + HP = 1 (flat sum at all frequencies), -6 dB each at crossover
+
+    private fun lr4LowpassAmplitude(f: Float, fc: Float): Float {
+        val ratio = f / fc
+        val r4 = ratio * ratio * ratio * ratio  // (f/fc)^4
+        return 1f / (1f + r4)
+    }
+
+    private fun lr4HighpassAmplitude(f: Float, fc: Float): Float {
+        val ratio = f / fc
+        val r4 = ratio * ratio * ratio * ratio
+        return r4 / (1f + r4)
+    }
+
+    /**
+     * Compute the crossover filter amplitude for a given band at a given frequency.
+     * Band 0 (lowest):  LP at crossover[0]
+     * Band i (middle):  HP at crossover[i-1] × LP at crossover[i]
+     * Band N-1 (highest): HP at crossover[N-2]
+     */
+    private fun mbcBandAmplitude(bandIndex: Int, freq: Float, crossovers: FloatArray): Float {
+        val bandCount = crossovers.size + 1
+        var amplitude = 1f
+        // Highpass from the crossover below this band
+        if (bandIndex > 0) {
+            amplitude *= lr4HighpassAmplitude(freq, crossovers[bandIndex - 1])
+        }
+        // Lowpass from the crossover above this band
+        if (bandIndex < bandCount - 1) {
+            amplitude *= lr4LowpassAmplitude(freq, crossovers[bandIndex])
+        }
+        return amplitude
+    }
+
+    /**
+     * Compute the MBC composite gain in dB at a given frequency.
+     * Each band contributes: crossover_amplitude × band_gain_linear
+     * Total is summed in linear domain, then converted back to dB.
+     *
+     * gain_dB(f) = 20 * log10( Σ_i [ bandAmplitude_i(f) × 10^(bandGain_i / 20) ] )
+     */
+    private fun mbcGainAtFreq(freq: Float, crossovers: FloatArray, gains: FloatArray): Float {
+        val bandCount = crossovers.size + 1
+        var totalLinear = 0f
+        for (i in 0 until bandCount) {
+            val amplitude = mbcBandAmplitude(i, freq, crossovers)
+            val bandLinear = 10f.pow(gains[i] / 20f)
+            totalLinear += amplitude * bandLinear
+        }
+        return 20f * log10(totalLinear.coerceAtLeast(0.00001f))
+    }
+
+    // ---- Compressor static gain curve (Giannoulis/Massberg/Reiss 2012) ----
+    // Soft knee gain computer:
+    //   if x < (T - W/2):   gc = 0
+    //   if (T-W/2) ≤ x ≤ (T+W/2):  gc = (1/R - 1) × (x - T + W/2)² / (2W)
+    //   if x > (T + W/2):   gc = (1/R - 1) × (x - T)
+    // Where T = threshold, R = ratio, W = knee width, x = input dB, gc = gain change dB
+
+    private fun compressorGainDb(inputDb: Float, threshold: Float, ratio: Float, kneeWidth: Float): Float {
+        if (ratio <= 1f) return 0f  // no compression
+        return when {
+            inputDb < (threshold - kneeWidth / 2f) -> 0f
+            inputDb > (threshold + kneeWidth / 2f) -> (1f / ratio - 1f) * (inputDb - threshold)
+            else -> {
+                // Soft knee region
+                val diff = inputDb - threshold + kneeWidth / 2f
+                (1f / ratio - 1f) * diff * diff / (2f * kneeWidth)
+            }
+        }
+    }
+
+    // Expander/noise gate gain (downward expansion below noise gate threshold)
+    // For signals below noiseGateThreshold, gain = expanderRatio × (input - noiseGateThreshold)
+    private fun expanderGainDb(inputDb: Float, noiseGateThreshold: Float, expanderRatio: Float): Float {
+        if (inputDb >= noiseGateThreshold || expanderRatio <= 1f) return 0f
+        return (1f - expanderRatio) * (inputDb - noiseGateThreshold)
+    }
+
+    private fun drawMbcBands(canvas: Canvas, vPad: Float, graphWidth: Float, graphHeight: Float) {
+        val crossovers = mbcCrossovers ?: return
+        val gains = mbcBandGains ?: return
+        val bandCount = crossovers.size + 1
+        if (gains.size < bandCount) return
+
+        val zeroY = vPad + graphHeight * (1f - (0f - minGain) / (maxGain - minGain))
+
+        // --- Draw MBC frequency response curve using LR4 crossover math ---
+        val numSamples = (graphWidth / 2f).toInt().coerceAtLeast(100)
+
+        val curvePath = Path()
+        for (s in 0..numSamples) {
+            val x = graphWidth * s.toFloat() / numSamples
+            val freq = xToFreq(x, graphWidth)
+            val gainDb = mbcGainAtFreq(freq, crossovers, gains).coerceIn(minGain, maxGain)
+            val y = vPad + graphHeight * (1f - (gainDb - minGain) / (maxGain - minGain))
+            if (s == 0) curvePath.moveTo(x, y) else curvePath.lineTo(x, y)
+        }
+        canvas.drawPath(curvePath, mbcCurvePaint)
+
+        // --- Draw range curve (dashed, below postGain curve) ---
+        val ranges = mbcBandRanges
+        if (ranges != null && ranges.size >= bandCount) {
+            val rangeGains = FloatArray(bandCount) { gains[it] + ranges[it] }
+
+            val rangeCurvePath = Path()
+            val rangeFillPath = Path()
+            val postGainYs = FloatArray(numSamples + 1)
+
+            for (s in 0..numSamples) {
+                val x = graphWidth * s.toFloat() / numSamples
+                val freq = xToFreq(x, graphWidth)
+                val postGainDb = mbcGainAtFreq(freq, crossovers, gains).coerceIn(minGain, maxGain)
+                postGainYs[s] = vPad + graphHeight * (1f - (postGainDb - minGain) / (maxGain - minGain))
+                val rangeDb = mbcGainAtFreq(freq, crossovers, rangeGains).coerceIn(minGain, maxGain)
+                val ry = vPad + graphHeight * (1f - (rangeDb - minGain) / (maxGain - minGain))
+
+                if (s == 0) {
+                    rangeCurvePath.moveTo(x, ry)
+                    rangeFillPath.moveTo(x, postGainYs[s])
+                    rangeFillPath.lineTo(x, ry)
+                } else {
+                    rangeCurvePath.lineTo(x, ry)
+                    rangeFillPath.lineTo(x, ry)
+                }
+            }
+
+            for (s in numSamples downTo 0) {
+                val x = graphWidth * s.toFloat() / numSamples
+                rangeFillPath.lineTo(x, postGainYs[s])
+            }
+            rangeFillPath.close()
+
+            canvas.drawPath(rangeFillPath, mbcRangeFillPaint)
+            canvas.drawPath(rangeCurvePath, mbcRangeCurvePaint)
+        }
+
+        // --- Draw crossover lines ---
+        for (i in crossovers.indices) {
+            val x = freqToX(crossovers[i], graphWidth)
+            canvas.drawLine(x, vPad, x, vPad + graphHeight, mbcCrossoverLinePaint)
+        }
+
+        // --- Draw draggable triangles at band center frequencies ---
+        // ▼ pointing down = postGain (output level)
+        // ▲ pointing up = range (max gain reduction)
+        val triPath = Path()
+
+        for (i in 0 until bandCount) {
+            val leftFreq = if (i == 0) graphMinFreq else crossovers[i - 1]
+            val rightFreq = if (i == bandCount - 1) graphMaxFreq else crossovers[i]
+            val centerFreq = 10f.pow((log10(leftFreq) + log10(rightFreq)) / 2f)
+            val dotX = freqToX(centerFreq, graphWidth)
+            val dotY = vPad + graphHeight * (1f - (gains[i] - minGain) / (maxGain - minGain))
+
+            val isSelected = (i == mbcSelectedBand)
+            val isDraggingGain = (draggingMbcBand == i)
+            val isDraggingRange = (draggingMbcRange == i)
+            val r = 28f // triangle radius
+            val cornerRadius = 8f
+
+            // PostGain ▼ — tip touches TOP of the postGain line, body extends above
+            triPath.reset()
+            triPath.moveTo(dotX, dotY)                          // tip ON the line
+            triPath.lineTo(dotX - r * 0.866f, dotY - r * 1.5f) // top-left
+            triPath.lineTo(dotX + r * 0.866f, dotY - r * 1.5f) // top-right
+            triPath.close()
+
+            // Rounded corners
+            val roundedBgPaint = Paint(pointBgPaint).apply { pathEffect = CornerPathEffect(cornerRadius) }
+            canvas.drawPath(triPath, roundedBgPaint)
+
+            val showGainHalo = isDraggingGain || (mbcHaloAlpha > 0f && mbcHaloType == 1 && mbcHaloBand == i && draggingMbcBand < 0)
+            if (showGainHalo) {
+                val triCenterY = dotY - r * 1.0f
+                val haloDp = 24f * resources.displayMetrics.density
+                mbcTriTouchPaint.alpha = (mbcHaloAlpha * 0x38).toInt()
+                canvas.drawCircle(dotX, triCenterY, haloDp, mbcTriTouchPaint)
+            }
+
+            if (isSelected) {
+                val fillPaint = Paint(activePointFillPaint).apply { pathEffect = CornerPathEffect(cornerRadius) }
+                val ringPaint = Paint(activePointRingPaint).apply { pathEffect = CornerPathEffect(cornerRadius) }
+                canvas.drawPath(triPath, fillPaint)
+                canvas.drawPath(triPath, ringPaint)
+            } else {
+                val ringPaint = Paint(pointRingPaint).apply { pathEffect = CornerPathEffect(cornerRadius) }
+                canvas.drawPath(triPath, ringPaint)
+            }
+
+            // Range ▲ — tip touches BOTTOM of the range line, body extends below
+            if (ranges != null && ranges.size > i) {
+                val rangeGainDb = (gains[i] + ranges[i]).coerceIn(minGain, maxGain)
+                val rangeDotY = vPad + graphHeight * (1f - (rangeGainDb - minGain) / (maxGain - minGain))
+
+                triPath.reset()
+                triPath.moveTo(dotX, rangeDotY)                          // tip ON the line
+                triPath.lineTo(dotX - r * 0.866f, rangeDotY + r * 1.5f) // bottom-left
+                triPath.lineTo(dotX + r * 0.866f, rangeDotY + r * 1.5f) // bottom-right
+                triPath.close()
+
+                canvas.drawPath(triPath, roundedBgPaint)
+
+                val showRangeHalo = isDraggingRange || (mbcHaloAlpha > 0f && mbcHaloType == 2 && mbcHaloBand == i && draggingMbcRange < 0)
+                if (showRangeHalo) {
+                    val rangeTriCenterY = rangeDotY + r * 1.0f
+                    val haloDp = 24f * resources.displayMetrics.density
+                    mbcTriTouchPaint.alpha = (mbcHaloAlpha * 0x38).toInt()
+                    canvas.drawCircle(dotX, rangeTriCenterY, haloDp, mbcTriTouchPaint)
+                }
+
+                if (isSelected) {
+                    mbcRangeDotRingPaint.color = 0xFFAAAAAA.toInt()
+                    mbcRangeDotRingPaint.strokeWidth = 2.5f
+                } else {
+                    mbcRangeDotRingPaint.color = 0xFF666666.toInt()
+                    mbcRangeDotRingPaint.strokeWidth = 2f
+                }
+                val rangeRingPaint = Paint(mbcRangeDotRingPaint).apply { pathEffect = CornerPathEffect(cornerRadius) }
+                canvas.drawPath(triPath, rangeRingPaint)
+            }
+        }
+    }
+
     private fun drawPoints(canvas: Canvas) {
         for (i in bandPoints.indices) {
             val point = bandPoints[i]
@@ -772,7 +1076,157 @@ class EqGraphView @JvmOverloads constructor(
         longPressRunnable = null
     }
 
+    private fun animateMbcHaloIn() {
+        mbcHaloAnimator?.cancel()
+        mbcHaloAnimator = android.animation.ValueAnimator.ofFloat(mbcHaloAlpha, 1f).apply {
+            duration = 100
+            addUpdateListener { mbcHaloAlpha = it.animatedValue as Float; invalidate() }
+            start()
+        }
+    }
+
+    private fun animateMbcHaloOut() {
+        mbcHaloAnimator?.cancel()
+        mbcHaloAnimator = android.animation.ValueAnimator.ofFloat(mbcHaloAlpha, 0f).apply {
+            duration = 200
+            addUpdateListener { mbcHaloAlpha = it.animatedValue as Float; invalidate() }
+            start()
+        }
+    }
+
+    private fun handleMbcTouch(event: MotionEvent, crossovers: FloatArray): Boolean {
+        val graphWidth = width.toFloat()
+        val vPad = 80f
+        val graphHeight = height - 2 * vPad
+        val gains = mbcBandGains ?: return true
+        val bandCount = crossovers.size + 1
+        val hitRadius = 50f
+
+        when (event.action) {
+            MotionEvent.ACTION_DOWN -> {
+                parent?.requestDisallowInterceptTouchEvent(true)
+                draggingCrossover = -1
+                draggingMbcBand = -1
+                draggingMbcRange = -1
+
+                // Find the closest dot (postGain or range) across all bands
+                var bestDist = hitRadius
+                var bestType = 0 // 0=none, 1=postGain, 2=range
+                var bestBand = -1
+                val ranges = mbcBandRanges
+
+                for (i in 0 until bandCount) {
+                    val leftFreq = if (i == 0) graphMinFreq else crossovers[i - 1]
+                    val rightFreq = if (i == bandCount - 1) graphMaxFreq else crossovers[i]
+                    val centerFreq = 10f.pow((log10(leftFreq) + log10(rightFreq)) / 2f)
+                    val dotX = freqToX(centerFreq, graphWidth)
+
+                    // PostGain ▼ — triangle body is ABOVE the line, center is offset up
+                    val dotY = vPad + graphHeight * (1f - (gains[i] - minGain) / (maxGain - minGain))
+                    val triCenterY = dotY - 28f * 0.75f // center of triangle body above line
+                    val distGain = Math.sqrt(((event.x - dotX) * (event.x - dotX) + (event.y - triCenterY) * (event.y - triCenterY)).toDouble()).toFloat()
+                    if (distGain < bestDist) {
+                        bestDist = distGain; bestType = 1; bestBand = i
+                    }
+
+                    // Range ▲ — triangle body is BELOW the line, center is offset down
+                    if (ranges != null && i < ranges.size) {
+                        val rangeGainDb = (gains[i] + ranges[i]).coerceIn(minGain, maxGain)
+                        val rangeDotY = vPad + graphHeight * (1f - (rangeGainDb - minGain) / (maxGain - minGain))
+                        val rangeTriCenterY = rangeDotY + 28f * 0.75f // center of triangle body below line
+                        val distRange = Math.sqrt(((event.x - dotX) * (event.x - dotX) + (event.y - rangeTriCenterY) * (event.y - rangeTriCenterY)).toDouble()).toFloat()
+                        if (distRange < bestDist) {
+                            bestDist = distRange; bestType = 2; bestBand = i
+                        }
+                    }
+                }
+
+                if (bestBand >= 0 && bestType > 0) {
+                    if (bestType == 1) draggingMbcBand = bestBand
+                    else draggingMbcRange = bestBand
+                    mbcSelectedBand = bestBand
+                    mbcHaloType = bestType
+                    mbcHaloBand = bestBand
+                    onMbcBandSelected?.invoke(bestBand)
+                    animateMbcHaloIn()
+                    invalidate()
+                    return true
+                }
+
+                // Check if touching near a crossover line
+                for (i in crossovers.indices) {
+                    val lineX = freqToX(crossovers[i], graphWidth)
+                    if (abs(event.x - lineX) < hitRadius) {
+                        draggingCrossover = i
+                        return true
+                    }
+                }
+
+                // Tap on a band region — select it
+                val tappedFreq = xToFreq(event.x, graphWidth)
+                for (i in 0 until bandCount) {
+                    val leftFreq = if (i == 0) graphMinFreq else crossovers[i - 1]
+                    val rightFreq = if (i == bandCount - 1) graphMaxFreq else crossovers[i]
+                    if (tappedFreq in leftFreq..rightFreq) {
+                        mbcSelectedBand = i
+                        onMbcBandSelected?.invoke(i)
+                        invalidate()
+                        return true
+                    }
+                }
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (draggingMbcBand >= 0) {
+                    parent?.requestDisallowInterceptTouchEvent(true)
+                    val newGain = yToGain(event.y, vPad, graphHeight).coerceIn(minGain, maxGain)
+                    gains[draggingMbcBand] = newGain
+                    onMbcBandGainChanged?.invoke(draggingMbcBand, newGain)
+                    invalidate()
+                    return true
+                }
+                if (draggingMbcRange >= 0) {
+                    parent?.requestDisallowInterceptTouchEvent(true)
+                    val ranges = mbcBandRanges ?: return true
+                    val newAbsGain = yToGain(event.y, vPad, graphHeight)
+                    // range = rangeAbsolutePosition - postGain, clamped to -60..0
+                    val newRange = (newAbsGain - gains[draggingMbcRange]).coerceIn(-60f, 0f)
+                    ranges[draggingMbcRange] = newRange
+                    onMbcBandRangeChanged?.invoke(draggingMbcRange, newRange)
+                    invalidate()
+                    return true
+                }
+                if (draggingCrossover >= 0) {
+                    parent?.requestDisallowInterceptTouchEvent(true)
+                    val newFreq = xToFreq(event.x, graphWidth)
+                    val minFreq = if (draggingCrossover == 0) 30f
+                                  else crossovers[draggingCrossover - 1] * 1.2f
+                    val maxFreq = if (draggingCrossover == crossovers.size - 1) 18000f
+                                  else crossovers[draggingCrossover + 1] / 1.2f
+                    crossovers[draggingCrossover] = newFreq.coerceIn(minFreq, maxFreq)
+                    onMbcCrossoverChanged?.invoke(draggingCrossover, crossovers[draggingCrossover])
+                    invalidate()
+                    return true
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                parent?.requestDisallowInterceptTouchEvent(false)
+                if (draggingMbcBand >= 0 || draggingMbcRange >= 0) animateMbcHaloOut()
+                draggingCrossover = -1
+                draggingMbcBand = -1
+                draggingMbcRange = -1
+            }
+        }
+        return true
+    }
+
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        // MBC crossover touch handling
+        val crossovers = mbcCrossovers
+        if (crossovers != null && mbcBandGains != null) {
+            return handleMbcTouch(event, crossovers)
+        }
+
         if (eqUiMode == EqUiMode.TABLE) {
             return super.onTouchEvent(event)
         }

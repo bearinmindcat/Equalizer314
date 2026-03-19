@@ -38,6 +38,11 @@
         <item name="android:windowLightStatusBar">false</item>
     </style>
 
+    <!-- Suffix text matching input text -->
+    <style name="TextAppearance.Equalizer314.Suffix" parent="TextAppearance.Material3.BodySmall">
+        <item name="android:textSize">12sp</item>
+    </style>
+
     <!-- Rounded FAB -->
     <style name="ShapeAppearanceOverlay.Equalizer314.FAB" parent="">
         <item name="cornerFamily">rounded</item>

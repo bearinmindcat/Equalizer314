@@ -37,6 +37,18 @@ class EqStateManager(
     var currentEqUiMode = EqUiMode.PARAMETRIC
     var displayToBandIndex = listOf<Int>()
 
+    // Preamp & auto-gain
+    var preampGainDb: Float = 0f
+    var autoGainEnabled: Boolean = false
+
+    // Limiter
+    var limiterEnabled: Boolean = true
+    var limiterAttackMs: Float = 1f
+    var limiterReleaseMs: Float = 50f
+    var limiterRatio: Float = 10f
+    var limiterThresholdDb: Float = -0.5f
+    var limiterPostGainDb: Float = 0f
+
     // Service binding
     var eqService: EqService? = null
     var serviceBound = false
@@ -81,6 +93,18 @@ class EqStateManager(
         bandColors.clear()
         bandColors.putAll(eqPrefs.getBandColors())
         graphView.setBandColors(bandColors)
+
+        // Restore preamp & auto-gain
+        preampGainDb = eqPrefs.getPreampGain()
+        autoGainEnabled = eqPrefs.getAutoGainEnabled()
+
+        // Restore limiter
+        limiterEnabled = eqPrefs.getLimiterEnabled()
+        limiterAttackMs = eqPrefs.getLimiterAttack()
+        limiterReleaseMs = eqPrefs.getLimiterRelease()
+        limiterRatio = eqPrefs.getLimiterRatio()
+        limiterThresholdDb = eqPrefs.getLimiterThreshold()
+        limiterPostGainDb = eqPrefs.getLimiterPostGain()
     }
 
     fun initBandSlots() {
@@ -106,7 +130,26 @@ class EqStateManager(
 
     fun pushEqUpdate() {
         if (!isProcessing) return
+        val dm = eqService?.dynamicsManager ?: return
+        dm.preampGainDb = preampGainDb
+        dm.autoGainEnabled = autoGainEnabled
         eqService?.updateEq(parametricEq)
+    }
+
+    fun pushLimiterUpdate() {
+        if (!isProcessing) return
+        val dm = eqService?.dynamicsManager ?: return
+        dm.limiterEnabled = limiterEnabled
+        dm.limiterAttackMs = limiterAttackMs
+        dm.limiterReleaseMs = limiterReleaseMs
+        dm.limiterRatio = limiterRatio
+        dm.limiterThresholdDb = limiterThresholdDb
+        dm.limiterPostGainDb = limiterPostGainDb
+        dm.updateLimiter()
+    }
+
+    fun getAutoGainOffset(): Float {
+        return eqService?.dynamicsManager?.lastAutoGainOffset ?: 0f
     }
 
     fun updateDpBandVisualization(graphView: EqGraphView) {
@@ -152,6 +195,16 @@ class EqStateManager(
 
     fun doStartEq(animatePower: (Boolean) -> Unit) {
         val service = eqService ?: return
+        // Sync all DSP params before starting
+        val dm = service.dynamicsManager
+        dm.preampGainDb = preampGainDb
+        dm.autoGainEnabled = autoGainEnabled
+        dm.limiterEnabled = limiterEnabled
+        dm.limiterAttackMs = limiterAttackMs
+        dm.limiterReleaseMs = limiterReleaseMs
+        dm.limiterRatio = limiterRatio
+        dm.limiterThresholdDb = limiterThresholdDb
+        dm.limiterPostGainDb = limiterPostGainDb
         val started = service.startEq(parametricEq)
         isProcessing = started
         if (!started) {
@@ -189,5 +242,13 @@ class EqStateManager(
     fun saveState() {
         eqPrefs.saveState(parametricEq, bandSlots)
         eqPrefs.saveBandColors(bandColors)
+        eqPrefs.savePreampGain(preampGainDb)
+        eqPrefs.saveAutoGainEnabled(autoGainEnabled)
+        eqPrefs.saveLimiterEnabled(limiterEnabled)
+        eqPrefs.saveLimiterAttack(limiterAttackMs)
+        eqPrefs.saveLimiterRelease(limiterReleaseMs)
+        eqPrefs.saveLimiterRatio(limiterRatio)
+        eqPrefs.saveLimiterThreshold(limiterThresholdDb)
+        eqPrefs.saveLimiterPostGain(limiterPostGainDb)
     }
 }

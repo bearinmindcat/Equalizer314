@@ -23,6 +23,22 @@ class DynamicsProcessingManager {
     var isActive = false
         private set
 
+    // Preamp
+    var preampGainDb: Float = 0f
+
+    // Auto-gain
+    var autoGainEnabled: Boolean = false
+    var lastAutoGainOffset: Float = 0f
+        private set
+
+    // Limiter
+    var limiterEnabled: Boolean = true
+    var limiterAttackMs: Float = 1f
+    var limiterReleaseMs: Float = 50f
+    var limiterRatio: Float = 10f
+    var limiterThresholdDb: Float = -0.5f
+    var limiterPostGainDb: Float = 0f
+
     fun start(eq: ParametricEqualizer) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
             Log.e(TAG, "DynamicsProcessing requires API 28+")
@@ -51,8 +67,9 @@ class DynamicsProcessingManager {
 
                 // Limiter for clipping protection
                 val limiter = DynamicsProcessing.Limiter(
-                    true, true, 0,
-                    1f, 50f, 10f, -0.5f, 0f
+                    limiterEnabled, limiterEnabled, 0,
+                    limiterAttackMs, limiterReleaseMs, limiterRatio,
+                    limiterThresholdDb, limiterPostGainDb
                 )
                 setLimiterByChannelIndex(0, limiter)
 
@@ -90,9 +107,39 @@ class DynamicsProcessingManager {
         val cutoffs = ParametricToDpConverter.cutoffFrequencies
         val gains = ParametricToDpConverter.convert(eq)
 
+        // Apply preamp offset
+        if (preampGainDb != 0f) {
+            for (i in gains.indices) gains[i] += preampGainDb
+        }
+
+        // Auto-gain: subtract peak boost to prevent clipping
+        if (autoGainEnabled) {
+            val peakGain = gains.max()
+            lastAutoGainOffset = if (peakGain > 0f) -peakGain else 0f
+            if (lastAutoGainOffset != 0f) {
+                for (i in gains.indices) gains[i] += lastAutoGainOffset
+            }
+        } else {
+            lastAutoGainOffset = 0f
+        }
+
         for (i in 0 until ParametricToDpConverter.numBands) {
             val eqBand = DynamicsProcessing.EqBand(true, cutoffs[i], gains[i])
             dp.setPreEqBandByChannelIndex(0, i, eqBand)
+        }
+    }
+
+    fun updateLimiter() {
+        val dp = dynamicsProcessing ?: return
+        try {
+            val limiter = DynamicsProcessing.Limiter(
+                limiterEnabled, limiterEnabled, 0,
+                limiterAttackMs, limiterReleaseMs, limiterRatio,
+                limiterThresholdDb, limiterPostGainDb
+            )
+            dp.setLimiterByChannelIndex(0, limiter)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to update limiter", e)
         }
     }
 

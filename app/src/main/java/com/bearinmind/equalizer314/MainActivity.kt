@@ -28,6 +28,7 @@ import com.bearinmind.equalizer314.ui.GraphicEqController
 import com.bearinmind.equalizer314.ui.TableEqController
 
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.slider.Slider
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import kotlin.math.pow
@@ -77,6 +78,23 @@ class MainActivity : AppCompatActivity() {
     private lateinit var bandQInput: com.google.android.material.textfield.TextInputEditText
     private lateinit var bandQInputLayout: com.google.android.material.textfield.TextInputLayout
     private var isUpdatingInputs = false
+
+    // Settings views
+    private lateinit var preampSlider: Slider
+    private lateinit var preampText: EditText
+    private lateinit var autoGainSwitch: MaterialSwitch
+    private lateinit var autoGainOffsetText: TextView
+    private lateinit var limiterSwitch: MaterialSwitch
+    private lateinit var limiterAttackSlider: Slider
+    private lateinit var limiterAttackText: EditText
+    private lateinit var limiterReleaseSlider: Slider
+    private lateinit var limiterReleaseText: EditText
+    private lateinit var limiterRatioSlider: Slider
+    private lateinit var limiterRatioText: EditText
+    private lateinit var limiterThresholdSlider: Slider
+    private lateinit var limiterThresholdText: EditText
+    private lateinit var limiterPostGainSlider: Slider
+    private lateinit var limiterPostGainText: EditText
 
     // EQ UI mode
     private lateinit var modeParametricBtn: MaterialButton
@@ -172,6 +190,21 @@ class MainActivity : AppCompatActivity() {
         dpBandCountGroup = findViewById(R.id.dpBandCountGroup)
         dpBandCountSlider = findViewById(R.id.dpBandCountSlider)
         dpBandCountText = findViewById(R.id.dpBandCountText)
+        preampSlider = findViewById(R.id.preampSlider)
+        preampText = findViewById(R.id.preampText)
+        autoGainSwitch = findViewById(R.id.autoGainSwitch)
+        autoGainOffsetText = findViewById(R.id.autoGainOffsetText)
+        limiterSwitch = findViewById(R.id.limiterSwitch)
+        limiterAttackSlider = findViewById(R.id.limiterAttackSlider)
+        limiterAttackText = findViewById(R.id.limiterAttackText)
+        limiterReleaseSlider = findViewById(R.id.limiterReleaseSlider)
+        limiterReleaseText = findViewById(R.id.limiterReleaseText)
+        limiterRatioSlider = findViewById(R.id.limiterRatioSlider)
+        limiterRatioText = findViewById(R.id.limiterRatioText)
+        limiterThresholdSlider = findViewById(R.id.limiterThresholdSlider)
+        limiterThresholdText = findViewById(R.id.limiterThresholdText)
+        limiterPostGainSlider = findViewById(R.id.limiterPostGainSlider)
+        limiterPostGainText = findViewById(R.id.limiterPostGainText)
         bandHzSlider = findViewById(R.id.bandHzSlider)
         bandDbSlider = findViewById(R.id.bandDbSlider)
         bandHzInput = findViewById(R.id.bandHzInput)
@@ -201,6 +234,24 @@ class MainActivity : AppCompatActivity() {
 
         eqGraphView.showDpBands = true
         eqGraphView.showSaturationCurve = false
+
+        // Init settings controls from saved state
+        preampSlider.value = stateManager.preampGainDb.coerceIn(-12f, 12f)
+        preampText.setText(String.format("%.1f", stateManager.preampGainDb))
+        autoGainSwitch.isChecked = stateManager.autoGainEnabled
+        updateAutoGainOffsetText()
+        limiterSwitch.isChecked = stateManager.limiterEnabled
+        limiterAttackSlider.value = stateManager.limiterAttackMs.coerceIn(0.1f, 50f)
+        limiterAttackText.setText(String.format("%.1f", stateManager.limiterAttackMs))
+        limiterReleaseSlider.value = stateManager.limiterReleaseMs.coerceIn(10f, 500f)
+        limiterReleaseText.setText(String.format("%.0f", stateManager.limiterReleaseMs))
+        limiterRatioSlider.value = stateManager.limiterRatio.coerceIn(1f, 50f)
+        limiterRatioText.setText(String.format("%.0f", stateManager.limiterRatio))
+        limiterThresholdSlider.value = stateManager.limiterThresholdDb.coerceIn(-30f, 0f)
+        limiterThresholdText.setText(String.format("%.1f", stateManager.limiterThresholdDb))
+        limiterPostGainSlider.value = stateManager.limiterPostGainDb.coerceIn(-12f, 12f)
+        limiterPostGainText.setText(String.format("%.1f", stateManager.limiterPostGainDb))
+        updateLimiterRowsEnabled(stateManager.limiterEnabled)
 
         updateBottomBarHighlight(isEqPage = true)
     }
@@ -377,6 +428,187 @@ class MainActivity : AppCompatActivity() {
         modeParametricBtn.setOnClickListener { switchEqUiMode(EqUiMode.PARAMETRIC) }
         modeGraphicBtn.setOnClickListener { switchEqUiMode(EqUiMode.GRAPHIC) }
         modeTableBtn.setOnClickListener { switchEqUiMode(EqUiMode.TABLE) }
+
+        // Settings controls
+        setupSettingsListeners()
+    }
+
+    // ---- Settings ----
+
+    private fun setupSettingsListeners() {
+        // MBC card (settings page)
+        findViewById<View>(R.id.mbcCard).setOnClickListener {
+            startActivity(Intent(this, MbcActivity::class.java))
+        }
+
+        // Preamp slider
+        preampSlider.addOnChangeListener { _, value, fromUser ->
+            if (!fromUser) return@addOnChangeListener
+            preampText.setText(String.format("%.1f", value))
+            stateManager.preampGainDb = value
+            eqPrefs.savePreampGain(value)
+            stateManager.pushEqUpdate()
+            updateAutoGainOffsetText()
+        }
+
+        preampText.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
+                val gain = preampText.text.toString().toFloatOrNull()?.coerceIn(-12f, 12f) ?: 0f
+                preampText.setText(String.format("%.1f", gain))
+                preampSlider.value = gain
+                stateManager.preampGainDb = gain
+                eqPrefs.savePreampGain(gain)
+                stateManager.pushEqUpdate()
+                updateAutoGainOffsetText()
+                preampText.clearFocus()
+            }
+            true
+        }
+
+        // Auto-gain switch
+        autoGainSwitch.setOnCheckedChangeListener { _, isChecked ->
+            stateManager.autoGainEnabled = isChecked
+            eqPrefs.saveAutoGainEnabled(isChecked)
+            stateManager.pushEqUpdate()
+            updateAutoGainOffsetText()
+        }
+
+        // Limiter switch
+        limiterSwitch.setOnCheckedChangeListener { _, isChecked ->
+            stateManager.limiterEnabled = isChecked
+            eqPrefs.saveLimiterEnabled(isChecked)
+            stateManager.pushLimiterUpdate()
+            updateLimiterRowsEnabled(isChecked)
+        }
+
+        // Limiter Attack
+        limiterAttackSlider.addOnChangeListener { _, value, fromUser ->
+            if (!fromUser) return@addOnChangeListener
+            limiterAttackText.setText(String.format("%.1f", value))
+            stateManager.limiterAttackMs = value
+            eqPrefs.saveLimiterAttack(value)
+            stateManager.pushLimiterUpdate()
+        }
+        limiterAttackText.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
+                val ms = limiterAttackText.text.toString().toFloatOrNull()?.coerceIn(0.1f, 50f) ?: 1f
+                limiterAttackText.setText(String.format("%.1f", ms))
+                limiterAttackSlider.value = ms
+                stateManager.limiterAttackMs = ms
+                eqPrefs.saveLimiterAttack(ms)
+                stateManager.pushLimiterUpdate()
+                limiterAttackText.clearFocus()
+            }
+            true
+        }
+
+        // Limiter Release
+        limiterReleaseSlider.addOnChangeListener { _, value, fromUser ->
+            if (!fromUser) return@addOnChangeListener
+            limiterReleaseText.setText(String.format("%.0f", value))
+            stateManager.limiterReleaseMs = value
+            eqPrefs.saveLimiterRelease(value)
+            stateManager.pushLimiterUpdate()
+        }
+        limiterReleaseText.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
+                val ms = limiterReleaseText.text.toString().toFloatOrNull()?.coerceIn(10f, 500f) ?: 50f
+                limiterReleaseText.setText(String.format("%.0f", ms))
+                limiterReleaseSlider.value = ms
+                stateManager.limiterReleaseMs = ms
+                eqPrefs.saveLimiterRelease(ms)
+                stateManager.pushLimiterUpdate()
+                limiterReleaseText.clearFocus()
+            }
+            true
+        }
+
+        // Limiter Ratio
+        limiterRatioSlider.addOnChangeListener { _, value, fromUser ->
+            if (!fromUser) return@addOnChangeListener
+            limiterRatioText.setText(String.format("%.0f", value))
+            stateManager.limiterRatio = value
+            eqPrefs.saveLimiterRatio(value)
+            stateManager.pushLimiterUpdate()
+        }
+        limiterRatioText.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
+                val ratio = limiterRatioText.text.toString().toFloatOrNull()?.coerceIn(1f, 50f) ?: 10f
+                limiterRatioText.setText(String.format("%.0f", ratio))
+                limiterRatioSlider.value = ratio
+                stateManager.limiterRatio = ratio
+                eqPrefs.saveLimiterRatio(ratio)
+                stateManager.pushLimiterUpdate()
+                limiterRatioText.clearFocus()
+            }
+            true
+        }
+
+        // Limiter Threshold
+        limiterThresholdSlider.addOnChangeListener { _, value, fromUser ->
+            if (!fromUser) return@addOnChangeListener
+            limiterThresholdText.setText(String.format("%.1f", value))
+            stateManager.limiterThresholdDb = value
+            eqPrefs.saveLimiterThreshold(value)
+            stateManager.pushLimiterUpdate()
+        }
+        limiterThresholdText.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
+                val db = limiterThresholdText.text.toString().toFloatOrNull()?.coerceIn(-30f, 0f) ?: -0.5f
+                limiterThresholdText.setText(String.format("%.1f", db))
+                limiterThresholdSlider.value = db
+                stateManager.limiterThresholdDb = db
+                eqPrefs.saveLimiterThreshold(db)
+                stateManager.pushLimiterUpdate()
+                limiterThresholdText.clearFocus()
+            }
+            true
+        }
+
+        // Limiter Post-Gain
+        limiterPostGainSlider.addOnChangeListener { _, value, fromUser ->
+            if (!fromUser) return@addOnChangeListener
+            limiterPostGainText.setText(String.format("%.1f", value))
+            stateManager.limiterPostGainDb = value
+            eqPrefs.saveLimiterPostGain(value)
+            stateManager.pushLimiterUpdate()
+        }
+        limiterPostGainText.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
+                val db = limiterPostGainText.text.toString().toFloatOrNull()?.coerceIn(-12f, 12f) ?: 0f
+                limiterPostGainText.setText(String.format("%.1f", db))
+                limiterPostGainSlider.value = db
+                stateManager.limiterPostGainDb = db
+                eqPrefs.saveLimiterPostGain(db)
+                stateManager.pushLimiterUpdate()
+                limiterPostGainText.clearFocus()
+            }
+            true
+        }
+    }
+
+    private fun updateAutoGainOffsetText() {
+        val offset = stateManager.getAutoGainOffset()
+        autoGainOffsetText.text = String.format("Offset: %.1f dB", offset)
+    }
+
+    private fun updateLimiterRowsEnabled(enabled: Boolean) {
+        val alpha = if (enabled) 1f else 0.4f
+        findViewById<View>(R.id.limiterAttackRow).alpha = alpha
+        findViewById<View>(R.id.limiterReleaseRow).alpha = alpha
+        findViewById<View>(R.id.limiterRatioRow).alpha = alpha
+        findViewById<View>(R.id.limiterThresholdRow).alpha = alpha
+        findViewById<View>(R.id.limiterPostGainRow).alpha = alpha
+        limiterAttackSlider.isEnabled = enabled
+        limiterReleaseSlider.isEnabled = enabled
+        limiterRatioSlider.isEnabled = enabled
+        limiterThresholdSlider.isEnabled = enabled
+        limiterPostGainSlider.isEnabled = enabled
+        limiterAttackText.isEnabled = enabled
+        limiterReleaseText.isEnabled = enabled
+        limiterRatioText.isEnabled = enabled
+        limiterThresholdText.isEnabled = enabled
+        limiterPostGainText.isEnabled = enabled
     }
 
     // ---- EQ UI Mode Switching ----

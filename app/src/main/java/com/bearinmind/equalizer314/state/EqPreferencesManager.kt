@@ -114,6 +114,28 @@ class EqPreferencesManager(context: Context) {
         return map
     }
 
+    // Preamp
+    fun savePreampGain(gain: Float) { prefs.edit().putFloat("preampGain", gain).apply() }
+    fun getPreampGain(): Float = prefs.getFloat("preampGain", 0f)
+
+    // Auto-gain
+    fun saveAutoGainEnabled(enabled: Boolean) { prefs.edit().putBoolean("autoGainEnabled", enabled).apply() }
+    fun getAutoGainEnabled(): Boolean = prefs.getBoolean("autoGainEnabled", false)
+
+    // Limiter
+    fun saveLimiterEnabled(enabled: Boolean) { prefs.edit().putBoolean("limiterEnabled", enabled).apply() }
+    fun getLimiterEnabled(): Boolean = prefs.getBoolean("limiterEnabled", true)
+    fun saveLimiterAttack(ms: Float) { prefs.edit().putFloat("limiterAttack", ms).apply() }
+    fun getLimiterAttack(): Float = prefs.getFloat("limiterAttack", 1f)
+    fun saveLimiterRelease(ms: Float) { prefs.edit().putFloat("limiterRelease", ms).apply() }
+    fun getLimiterRelease(): Float = prefs.getFloat("limiterRelease", 50f)
+    fun saveLimiterRatio(ratio: Float) { prefs.edit().putFloat("limiterRatio", ratio).apply() }
+    fun getLimiterRatio(): Float = prefs.getFloat("limiterRatio", 10f)
+    fun saveLimiterThreshold(db: Float) { prefs.edit().putFloat("limiterThreshold", db).apply() }
+    fun getLimiterThreshold(): Float = prefs.getFloat("limiterThreshold", -0.5f)
+    fun saveLimiterPostGain(db: Float) { prefs.edit().putFloat("limiterPostGain", db).apply() }
+    fun getLimiterPostGain(): Float = prefs.getFloat("limiterPostGain", 0f)
+
     fun saveLastFileUri(uri: Uri) {
         prefs.edit().putString("lastFileUri", uri.toString()).apply()
     }
@@ -122,4 +144,46 @@ class EqPreferencesManager(context: Context) {
         val str = prefs.getString("lastFileUri", null) ?: return null
         return Uri.parse(str)
     }
+
+    // MBC
+    fun saveMbcEnabled(enabled: Boolean) { prefs.edit().putBoolean("mbcEnabled", enabled).apply() }
+    fun getMbcEnabled(): Boolean = prefs.getBoolean("mbcEnabled", false)
+    fun saveMbcBandCount(count: Int) { prefs.edit().putInt("mbcBandCount", count).apply() }
+    fun getMbcBandCount(): Int = prefs.getInt("mbcBandCount", 3)
+
+    fun saveMbcBand(i: Int, enabled: Boolean, cutoff: Float, attack: Float, release: Float,
+                    ratio: Float, threshold: Float, knee: Float, noiseGate: Float,
+                    expander: Float, preGain: Float, postGain: Float, range: Float) {
+        prefs.edit()
+            .putBoolean("mbc_${i}_enabled", enabled)
+            .putFloat("mbc_${i}_cutoff", cutoff)
+            .putFloat("mbc_${i}_attack", attack)
+            .putFloat("mbc_${i}_release", release)
+            .putFloat("mbc_${i}_ratio", ratio)
+            .putFloat("mbc_${i}_threshold", threshold)
+            .putFloat("mbc_${i}_knee", knee)
+            .putFloat("mbc_${i}_noiseGate", noiseGate)
+            .putFloat("mbc_${i}_expander", expander)
+            .putFloat("mbc_${i}_preGain", preGain)
+            .putFloat("mbc_${i}_postGain", postGain)
+            .putFloat("mbc_${i}_range", range)
+            .apply()
+    }
+
+    fun getMbcBandEnabled(i: Int): Boolean = prefs.getBoolean("mbc_${i}_enabled", true)
+    fun getMbcBandCutoff(i: Int, default: Float): Float = prefs.getFloat("mbc_${i}_cutoff", default)
+    fun getMbcBandAttack(i: Int): Float = prefs.getFloat("mbc_${i}_attack", 1f)
+    fun getMbcBandRelease(i: Int): Float = prefs.getFloat("mbc_${i}_release", 60f)
+    fun getMbcBandRatio(i: Int): Float = prefs.getFloat("mbc_${i}_ratio", 10f)
+    fun getMbcBandThreshold(i: Int): Float = prefs.getFloat("mbc_${i}_threshold", -2f)
+    fun getMbcBandKnee(i: Int): Float = prefs.getFloat("mbc_${i}_knee", 3.5f)
+    fun getMbcBandNoiseGate(i: Int): Float = prefs.getFloat("mbc_${i}_noiseGate", -90f)
+    fun getMbcBandExpander(i: Int): Float = prefs.getFloat("mbc_${i}_expander", 1f)
+    fun getMbcBandPreGain(i: Int): Float = prefs.getFloat("mbc_${i}_preGain", 0f)
+    fun getMbcBandPostGain(i: Int): Float = prefs.getFloat("mbc_${i}_postGain", 0f)
+    fun getMbcBandRange(i: Int): Float = prefs.getFloat("mbc_${i}_range", -12f)
+
+    // MBC Crossovers
+    fun saveMbcCrossover(i: Int, freq: Float) { prefs.edit().putFloat("mbc_crossover_$i", freq).apply() }
+    fun getMbcCrossover(i: Int, default: Float): Float = prefs.getFloat("mbc_crossover_$i", default)
 }
