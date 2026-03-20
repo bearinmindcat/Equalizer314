@@ -31,6 +31,12 @@ class CompressorCurveView @JvmOverloads constructor(
     var kneeWidth: Float = 3.5f
         set(value) { field = value; invalidate() }
 
+    // Noise gate / expander
+    var gateThreshold: Float = -90f
+        set(value) { field = value; invalidate() }
+    var expanderRatio: Float = 1f
+        set(value) { field = value.coerceIn(1f, 20f); invalidate() }
+
     var selectedBand: Int = 0
         set(value) { field = value; invalidate() }
 
@@ -39,12 +45,16 @@ class CompressorCurveView @JvmOverloads constructor(
 
     var onThresholdChanged: ((Float) -> Unit)? = null
     var onRatioChanged: ((Float) -> Unit)? = null
+    var onGateThresholdChanged: ((Float) -> Unit)? = null
+    var onExpanderRatioChanged: ((Float) -> Unit)? = null
 
     private val minDb = -60f
     private val maxDb = 0f
 
     private var draggingThreshold = false
     private var draggingRatio = false
+    private var draggingGateThreshold = false
+    private var draggingExpanderRatio = false
     private var ratioTouchInputDb = 0f
 
     // Paints — matching EqGraphView
@@ -99,6 +109,7 @@ class CompressorCurveView @JvmOverloads constructor(
     private fun yToDb(y: Float): Float =
         maxDb - (y - gPad) / (height - 2 * gPad) * (maxDb - minDb)
 
+    /** Compressor-only transfer function (no gate) */
     private fun compressorOutput(inputDb: Float): Float {
         val t = threshold; val r = ratio; val w = kneeWidth
         return when {
@@ -281,12 +292,13 @@ class CompressorCurveView @JvmOverloads constructor(
             canvas.restore()
         }
 
-        // Threshold dot (outline only, clamped to stay visible)
+        // Compressor threshold dot (outline only, clamped to stay visible)
         canvas.drawCircle(dotX, dotY, 20f, dotBgPaint)
         canvas.drawCircle(dotX, dotY, 20f, dotRingPaint)
         val bandNumber = (selectedBand + 1).toString()
         val textY = dotY + (dotNumberPaint.textSize / 3)
         canvas.drawText(bandNumber, dotX, textY, dotNumberPaint)
+
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -306,7 +318,7 @@ class CompressorCurveView @JvmOverloads constructor(
                     return true
                 }
 
-                // Touching the curve above threshold = drag ratio
+                // Touching the curve above compressor threshold = drag ratio
                 val touchInputDb = xToDb(event.x)
                 if (touchInputDb > threshold - 5f) {
                     val curveY = dbToY(compressorOutput(touchInputDb.coerceIn(minDb, maxDb)))
@@ -317,6 +329,7 @@ class CompressorCurveView @JvmOverloads constructor(
                         return true
                     }
                 }
+
                 return false
             }
             MotionEvent.ACTION_MOVE -> {
@@ -328,7 +341,6 @@ class CompressorCurveView @JvmOverloads constructor(
                     return true
                 }
                 if (draggingRatio) {
-                    // Curve follows finger: R = (input - T) / (output - T)
                     val targetOutputDb = yToDb(event.y)
                     val inputDb = ratioTouchInputDb.coerceAtLeast(threshold + 0.5f)
                     val overshoot = inputDb - threshold
@@ -344,6 +356,8 @@ class CompressorCurveView @JvmOverloads constructor(
                 parent?.requestDisallowInterceptTouchEvent(false)
                 draggingThreshold = false
                 draggingRatio = false
+                draggingGateThreshold = false
+                draggingExpanderRatio = false
                 invalidate()
             }
         }

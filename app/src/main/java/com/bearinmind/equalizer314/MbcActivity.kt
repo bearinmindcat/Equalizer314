@@ -76,6 +76,7 @@ class MbcActivity : AppCompatActivity() {
     private lateinit var postGainText: EditText
     private lateinit var bandColorBox: TextView
     private lateinit var compressorCurve: com.bearinmind.equalizer314.ui.CompressorCurveView
+    private lateinit var gateCurve: com.bearinmind.equalizer314.ui.GateCurveView
     private lateinit var attackReleaseView: com.bearinmind.equalizer314.ui.AttackReleaseView
 
     private val mbcBandColors = mutableMapOf<Int, Int>() // band index → color
@@ -164,6 +165,7 @@ class MbcActivity : AppCompatActivity() {
         postGainSlider = findViewById(R.id.mbcPostGainSlider)
         postGainText = findViewById(R.id.mbcPostGainText)
         compressorCurve = findViewById(R.id.mbcCompressorCurve)
+        gateCurve = findViewById(R.id.mbcGateCurve)
         attackReleaseView = findViewById(R.id.mbcAttackReleaseView)
     }
 
@@ -346,8 +348,8 @@ class MbcActivity : AppCompatActivity() {
         kneeText.setText(String.format("%.2f", b.kneeWidth))
         noiseGateSlider.value = b.noiseGateThreshold.coerceIn(-90f, 0f)
         noiseGateText.setText(String.format("%.0f", b.noiseGateThreshold))
-        expanderSlider.value = b.expanderRatio.coerceIn(1f, 20f)
-        expanderText.setText(String.format("%.1f", b.expanderRatio))
+        expanderSlider.value = b.expanderRatio.coerceIn(1f, 50f)
+        expanderText.setText(String.format("%.2f", b.expanderRatio))
         preGainSlider.value = b.preGain.coerceIn(-12f, 12f)
         preGainText.setText(String.format("%.1f", b.preGain))
         postGainSlider.value = b.postGain.coerceIn(-30f, 30f)
@@ -357,6 +359,9 @@ class MbcActivity : AppCompatActivity() {
         compressorCurve.threshold = b.threshold
         compressorCurve.ratio = b.ratio
         compressorCurve.kneeWidth = b.kneeWidth
+        gateCurve.selectedBand = selectedBand
+        gateCurve.gateThreshold = b.noiseGateThreshold
+        gateCurve.expanderRatio = b.expanderRatio
         attackReleaseView.attackMs = b.attack
         attackReleaseView.releaseMs = b.release
         isUpdating = false
@@ -422,8 +427,14 @@ class MbcActivity : AppCompatActivity() {
             bands[selectedBand].kneeWidth = it
             compressorCurve.kneeWidth = it
         }
-        setupSlider(noiseGateSlider, noiseGateText, -90f, 0f, "%.0f") { bands[selectedBand].noiseGateThreshold = it }
-        setupSlider(expanderSlider, expanderText, 1f, 20f, "%.1f") { bands[selectedBand].expanderRatio = it }
+        setupSlider(noiseGateSlider, noiseGateText, -90f, 0f, "%.0f") {
+            bands[selectedBand].noiseGateThreshold = it
+            gateCurve.gateThreshold = it
+        }
+        setupSlider(expanderSlider, expanderText, 1f, 50f, "%.2f") {
+            bands[selectedBand].expanderRatio = it
+            gateCurve.expanderRatio = it
+        }
         setupSlider(preGainSlider, preGainText, -12f, 12f, "%.1f") {
             bands[selectedBand].preGain = it
             graphView.mbcBandGains?.let { gains ->
@@ -448,6 +459,24 @@ class MbcActivity : AppCompatActivity() {
             isUpdating = true
             ratioSlider.value = ratioToSlider(value)
             ratioText.setText(String.format("%.2f", value))
+            isUpdating = false
+        }
+
+        // Gate callbacks — sync sliders when dragging on the gate graph
+        gateCurve.onGateThresholdChanged = { value ->
+            bands[selectedBand].noiseGateThreshold = value
+            saveBand(selectedBand)
+            isUpdating = true
+            noiseGateSlider.value = value.coerceIn(-90f, 0f)
+            noiseGateText.setText(String.format("%.0f", value))
+            isUpdating = false
+        }
+        gateCurve.onExpanderRatioChanged = { value ->
+            bands[selectedBand].expanderRatio = value
+            saveBand(selectedBand)
+            isUpdating = true
+            expanderSlider.value = value.coerceIn(1f, 50f)
+            expanderText.setText(String.format("%.2f", value))
             isUpdating = false
         }
 

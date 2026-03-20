@@ -293,7 +293,7 @@
                     android:layout_height="wrap_content"
                     android:orientation="vertical">
 
-                    <!-- Compressor curve graph at top, edge-to-edge with rounded top corners -->
+                    <!-- Compressor curve graph -->
                     <com.google.android.material.card.MaterialCardView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -584,108 +584,122 @@
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
+                    android:orientation="vertical">
 
-                    <TextView
+                    <!-- Gate curve graph -->
+                    <com.google.android.material.card.MaterialCardView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Noise Gate"
-                        android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
-                        android:textColor="?attr/colorOnSurface"
-                        android:paddingBottom="8dp" />
+                        app:cardBackgroundColor="@android:color/transparent"
+                        app:cardCornerRadius="16dp"
+                        app:cardElevation="0dp"
+                        app:strokeColor="?attr/colorOutlineVariant"
+                        app:strokeWidth="1dp">
 
-                    <!-- Noise Gate Threshold -->
+                        <com.bearinmind.equalizer314.ui.GateCurveView
+                            android:id="@+id/mbcGateCurve"
+                            android:layout_width="match_parent"
+                            android:layout_height="200dp" />
+                    </com.google.android.material.card.MaterialCardView>
+
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical"
-                        android:paddingBottom="4dp">
+                        android:orientation="vertical"
+                        android:padding="16dp">
 
-                        <TextView
-                            android:layout_width="96dp"
+                        <!-- Gate Threshold -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Thresh (dB)"
-                            android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
-                            android:textColor="?attr/colorOnSurfaceVariant" />
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical"
+                            android:paddingBottom="4dp">
 
-                        <com.google.android.material.slider.Slider
-                            android:id="@+id/mbcNoiseGateSlider"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:valueFrom="-90"
-                            android:valueTo="0"
-                            android:value="-90"
-                            app:labelBehavior="gone" />
-
-                        <com.google.android.material.textfield.TextInputLayout
-                            android:layout_width="64dp"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="4dp"
-                            app:boxCornerRadiusTopStart="8dp"
-                            app:boxCornerRadiusTopEnd="8dp"
-                            app:boxCornerRadiusBottomStart="8dp"
-                            app:boxCornerRadiusBottomEnd="8dp"
-                            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense">
-
-                            <com.google.android.material.textfield.TextInputEditText
-                                android:id="@+id/mbcNoiseGateText"
-                                android:layout_width="match_parent"
+                            <TextView
+                                android:layout_width="96dp"
                                 android:layout_height="wrap_content"
-                                android:inputType="numberDecimal|numberSigned"
-                                android:textSize="12sp"
-                                android:text="-90"
-                                android:gravity="center"
-                                android:imeOptions="actionDone" />
-                        </com.google.android.material.textfield.TextInputLayout>
-                    </LinearLayout>
+                                android:text="Gate (dB)"
+                                android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                                android:textColor="?attr/colorOnSurfaceVariant" />
 
-                    <!-- Expander Ratio -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical">
-
-                        <TextView
-                            android:layout_width="96dp"
-                            android:layout_height="wrap_content"
-                            android:text="Exp. Ratio (X:1)"
-                            android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
-                            android:textColor="?attr/colorOnSurfaceVariant" />
-
-                        <com.google.android.material.slider.Slider
-                            android:id="@+id/mbcExpanderSlider"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:valueFrom="1"
-                            android:valueTo="20"
-                            android:value="1"
-                            app:labelBehavior="gone" />
-
-                        <com.google.android.material.textfield.TextInputLayout
-                            android:layout_width="64dp"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="4dp"
-                            app:boxCornerRadiusTopStart="8dp"
-                            app:boxCornerRadiusTopEnd="8dp"
-                            app:boxCornerRadiusBottomStart="8dp"
-                            app:boxCornerRadiusBottomEnd="8dp"
-                            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense">
-
-                            <com.google.android.material.textfield.TextInputEditText
-                                android:id="@+id/mbcExpanderText"
-                                android:layout_width="match_parent"
+                            <com.google.android.material.slider.Slider
+                                android:id="@+id/mbcNoiseGateSlider"
+                                android:layout_width="0dp"
                                 android:layout_height="wrap_content"
-                                android:inputType="numberDecimal"
-                                android:textSize="12sp"
-                                android:text="1.0"
-                                android:gravity="center"
-                                android:imeOptions="actionDone" />
-                        </com.google.android.material.textfield.TextInputLayout>
+                                android:layout_weight="1"
+                                android:valueFrom="-90"
+                                android:valueTo="0"
+                                android:value="-90"
+                                app:labelBehavior="gone" />
+
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:layout_width="64dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="4dp"
+                                app:boxCornerRadiusTopStart="8dp"
+                                app:boxCornerRadiusTopEnd="8dp"
+                                app:boxCornerRadiusBottomStart="8dp"
+                                app:boxCornerRadiusBottomEnd="8dp"
+                                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense">
+
+                                <com.google.android.material.textfield.TextInputEditText
+                                    android:id="@+id/mbcNoiseGateText"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:inputType="numberDecimal|numberSigned"
+                                    android:textSize="12sp"
+                                    android:text="-90"
+                                    android:gravity="center"
+                                    android:imeOptions="actionDone" />
+                            </com.google.android.material.textfield.TextInputLayout>
+                        </LinearLayout>
+
+                        <!-- Expander Ratio -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical">
+
+                            <TextView
+                                android:layout_width="96dp"
+                                android:layout_height="wrap_content"
+                                android:text="Exp. Ratio (X:1)"
+                                android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                                android:textColor="?attr/colorOnSurfaceVariant" />
+
+                            <com.google.android.material.slider.Slider
+                                android:id="@+id/mbcExpanderSlider"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:valueFrom="1"
+                                android:valueTo="50"
+                                android:value="1"
+                                app:labelBehavior="gone" />
+
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:layout_width="64dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="4dp"
+                                app:boxCornerRadiusTopStart="8dp"
+                                app:boxCornerRadiusTopEnd="8dp"
+                                app:boxCornerRadiusBottomStart="8dp"
+                                app:boxCornerRadiusBottomEnd="8dp"
+                                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense">
+
+                                <com.google.android.material.textfield.TextInputEditText
+                                    android:id="@+id/mbcExpanderText"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:inputType="numberDecimal"
+                                    android:textSize="12sp"
+                                    android:text="1.0"
+                                    android:gravity="center"
+                                    android:imeOptions="actionDone" />
+                            </com.google.android.material.textfield.TextInputLayout>
+                        </LinearLayout>
                     </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
