@@ -478,7 +478,7 @@ class EqGraphView @JvmOverloads constructor(
         // Use SpectrumAnalyzerRenderer if available
         val renderer = spectrumRenderer
         if (renderer != null) {
-            renderer.draw(canvas, 0f, vPad, graphWidth, vPad + graphHeight,
+            renderer.draw(canvas, 0f, vPad, graphWidth, height.toFloat(),
                 dbMin = -60f, dbMax = 0f)
             return
         }
