@@ -504,6 +504,9 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.mbcCard).setOnClickListener {
             startActivity(Intent(this, MbcActivity::class.java))
         }
+        findViewById<View>(R.id.experimentalCard).setOnClickListener {
+            startActivity(Intent(this, ExperimentalActivity::class.java))
+        }
 
         // Preamp slider
         preampSlider.addOnChangeListener { _, value, fromUser ->

@@ -1082,21 +1082,39 @@ class EqGraphView @JvmOverloads constructor(
     }
 
 
+    private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFAAAAAA.toInt()
+        textSize = 20f
+    }
+    private val labelBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF1C1C1C.toInt()
+        style = Paint.Style.FILL
+    }
+    private val labelStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF444444.toInt()
+        style = Paint.Style.STROKE
+        strokeWidth = 2f
+    }
+
     private fun drawActivePointLabel(canvas: Canvas, point: BandPoint) {
         val currentFilterType = parametricEq?.getBand(point.bandIndex)?.filterType?.name ?: "BELL"
         val actualGain = parametricEq?.getBand(point.bandIndex)?.gain ?: point.gain
         val label = "Band ${getBandLabel(point.bandIndex)}: ${formatFrequency(point.frequency.toInt())} | ${String.format("%.1f dB", actualGain)} | $currentFilterType"
 
-        val labelWidth = titleTextPaint.measureText(label)
+        val labelWidth = labelPaint.measureText(label)
+        val padH = 14f
+        val padV = 8f
+        val cornerRadius = 12f * resources.displayMetrics.density
         val labelX = (width - labelWidth) / 2f
-        val labelY = 40f
+        val labelY = 42f
 
-        val bgPaint = Paint().apply {
-            color = 0xDD000000.toInt()
-            style = Paint.Style.FILL
-        }
-        canvas.drawRect(labelX - 10f, labelY - 30f, labelX + labelWidth + 10f, labelY + 10f, bgPaint)
-        canvas.drawText(label, labelX, labelY, titleTextPaint)
+        val rect = android.graphics.RectF(
+            labelX - padH, labelY - 24f,
+            labelX + labelWidth + padH, labelY + padV
+        )
+        canvas.drawRoundRect(rect, cornerRadius, cornerRadius, labelBgPaint)
+        canvas.drawRoundRect(rect, cornerRadius, cornerRadius, labelStrokePaint)
+        canvas.drawText(label, labelX, labelY, labelPaint)
     }
 
     private fun formatFrequency(hz: Int): String {

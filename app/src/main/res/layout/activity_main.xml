@@ -476,8 +476,9 @@
                     android:paddingTop="8dp"
                     android:paddingBottom="16dp" />
 
-                <!-- Processing Mode Card -->
+                <!-- Experimental Card -->
                 <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/experimentalCard"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
@@ -495,7 +496,7 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Controls"
+                            android:text="Experimental"
                             android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                             android:textColor="?attr/colorOnSurface"
                             android:paddingBottom="4dp" />
@@ -503,7 +504,7 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="(ill add shit here later)"
+                            android:text="probably don&apos;t touch this shit (yet)"
                             android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                             android:textColor="?attr/colorOnSurfaceVariant"
                             android:paddingBottom="8dp" />
@@ -547,11 +548,12 @@
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
-                <!-- DP Band Count Card -->
+                <!-- DP Band Count Card (hidden — moved to Experimental screen) -->
                 <com.google.android.material.card.MaterialCardView
                     android:id="@+id/dpBandCountGroup"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:visibility="gone"
                     android:layout_marginBottom="12dp"
                     app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
                     app:cardCornerRadius="16dp"
@@ -646,10 +648,11 @@
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
-                <!-- Preamp / Global Gain Card -->
+                <!-- Preamp / Global Gain Card (hidden — moved to Experimental screen) -->
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:visibility="gone"
                     android:layout_marginBottom="12dp"
                     app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
                     app:cardCornerRadius="16dp"
@@ -665,7 +668,7 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Preamp"
+                            android:text="Preamp (dB)"
                             android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                             android:textColor="?attr/colorOnSurface"
                             android:paddingBottom="4dp" />
@@ -684,7 +687,7 @@
                                 android:valueFrom="-12"
                                 android:valueTo="12"
                                 android:value="0"
-                                android:stepSize="0.1"
+                                app:tickVisible="false"
                                 app:labelBehavior="gone" />
 
                             <com.google.android.material.textfield.TextInputLayout
@@ -695,7 +698,6 @@
                                 app:boxCornerRadiusTopEnd="8dp"
                                 app:boxCornerRadiusBottomStart="8dp"
                                 app:boxCornerRadiusBottomEnd="8dp"
-                                app:suffixText="dB"
                                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense">
 
                                 <com.google.android.material.textfield.TextInputEditText
@@ -712,10 +714,11 @@
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
-                <!-- Auto-Gain Card -->
+                <!-- Auto-Gain Card (hidden — moved to Experimental screen) -->
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:visibility="gone"
                     android:layout_marginBottom="12dp"
                     app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
                     app:cardCornerRadius="16dp"
