@@ -60,12 +60,10 @@ class BiquadFilter(
     }
 
     private fun calculateCoefficients() {
-        // Raw omega for Vicanek (impulse invariance — no bilinear pre-warping)
-        val rawOmega = 2.0 * PI * frequency / sampleRate
-
-        // Pre-warped omega for RBJ (bilinear transform frequency correction)
-        val warpedFreq = (sampleRate / PI) * tan(PI * frequency / sampleRate)
-        val omega = 2.0 * PI * warpedFreq / sampleRate
+        // Raw omega — no bilinear pre-warping for any filter type.
+        // Pre-warping uses tan() which diverges near Nyquist, causing
+        // warped/distorted curves at high frequencies. Raw omega avoids this.
+        val omega = 2.0 * PI * frequency / sampleRate
         val cosOmega = cos(omega)
         val sinOmega = sin(omega)
 
@@ -75,7 +73,7 @@ class BiquadFilter(
         val sqrtA = sqrt(A)
 
         if (useVicanekMethod && filterType == FilterType.BELL) {
-            calculateVicanekBell(rawOmega, cos(rawOmega), sin(rawOmega))
+            calculateVicanekBell(omega, cosOmega, sinOmega)
             return
         }
 
