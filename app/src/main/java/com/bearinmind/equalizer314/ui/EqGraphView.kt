@@ -79,7 +79,6 @@ class EqGraphView @JvmOverloads constructor(
         color = 0xFFDDDDDD.toInt()
         strokeWidth = 2.5f
         style = Paint.Style.STROKE
-        // pathEffect = CornerPathEffect(30f)  // TODO: corner smoothing
     }
 
     private val mbcFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -103,7 +102,6 @@ class EqGraphView @JvmOverloads constructor(
         strokeWidth = 2f
         style = Paint.Style.STROKE
         pathEffect = DashPathEffect(floatArrayOf(8f, 6f), 0f)
-        // TODO: corner smoothing — ComposePathEffect(DashPathEffect(...), CornerPathEffect(30f))
     }
 
     private val mbcRangeFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -126,11 +124,6 @@ class EqGraphView @JvmOverloads constructor(
         color = 0xAA555555.toInt()  // dark grey solid line
         strokeWidth = 2f
         style = Paint.Style.STROKE
-    }
-
-    private val dpBandDotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF666666.toInt()  // dark grey dots
-        style = Paint.Style.FILL
     }
 
     // Graphic mode paints
@@ -170,11 +163,7 @@ class EqGraphView @JvmOverloads constructor(
         style = Paint.Style.STROKE
     }
 
-    private val zeroDB_LinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF4A4A4A.toInt()
-        strokeWidth = 2f
-        style = Paint.Style.STROKE
-    }
+
 
     private val curvePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFFAAAAAA.toInt()  // grey curve
@@ -328,6 +317,9 @@ class EqGraphView @JvmOverloads constructor(
     }
 
     fun isSpectrumEnabled(): Boolean = spectrumEnabled
+
+    /** Spectrum renderer — set by MainActivity when visualizer is active */
+    var spectrumRenderer: com.bearinmind.equalizer314.audio.SpectrumAnalyzerRenderer? = null
 
     fun updateDpBandData(centerFreqs: FloatArray, gains: FloatArray) {
         dpCenterFrequencies = centerFreqs
@@ -483,6 +475,14 @@ class EqGraphView @JvmOverloads constructor(
     private var cachedNormalizedSpectrum: FloatArray? = null
 
     private fun drawSpectrum(canvas: Canvas, vPad: Float, graphWidth: Float, graphHeight: Float) {
+        // Use SpectrumAnalyzerRenderer if available
+        val renderer = spectrumRenderer
+        if (renderer != null) {
+            renderer.draw(canvas, 0f, vPad, graphWidth, vPad + graphHeight,
+                dbMin = -60f, dbMax = 0f)
+            return
+        }
+
         val spectrum = spectrumData ?: return
         val analyzer = spectrumAnalyzer ?: return
 
@@ -606,6 +606,8 @@ class EqGraphView @JvmOverloads constructor(
         }
     }
 
+    /** Draw smooth spectrum from Visualizer (pre-normalized 0..1 dB values) */
+    /** Draw spectrum — magnitudes are pre-normalized 0..1 from VisualizerHelper */
     private fun calculatePointPositions(vPad: Float, graphWidth: Float, graphHeight: Float) {
         for (point in bandPoints) {
             point.x = freqToX(point.frequency, graphWidth).coerceIn(23f, graphWidth - 23f)
@@ -888,7 +890,40 @@ class EqGraphView @JvmOverloads constructor(
             }
             rangeFillPath.close()
 
-            canvas.drawPath(rangeFillPath, mbcRangeFillPaint)
+            // Per-band colored fills — only color bands that have a color assigned
+            val bandColorArr = mbcBandColors
+            for (b in 0 until bandCount) {
+                val bColor = if (bandColorArr != null && b < bandColorArr.size && bandColorArr[b] != 0) bandColorArr[b] else null
+                val leftFreq = if (b == 0) graphMinFreq else crossovers[b - 1]
+                val rightFreq = if (b == bandCount - 1) graphMaxFreq else crossovers[b]
+                val leftS = ((log10(leftFreq) - log10(graphMinFreq)) / (log10(graphMaxFreq) - log10(graphMinFreq)) * numSamples).toInt().coerceIn(0, numSamples)
+                val rightS = ((log10(rightFreq) - log10(graphMinFreq)) / (log10(graphMaxFreq) - log10(graphMinFreq)) * numSamples).toInt().coerceIn(0, numSamples)
+
+                val bandFillPath = Path()
+                // Top edge: postGain curve
+                bandFillPath.moveTo(graphWidth * leftS.toFloat() / numSamples, postGainYs[leftS])
+                for (s in leftS..rightS) {
+                    bandFillPath.lineTo(graphWidth * s.toFloat() / numSamples, postGainYs[s])
+                }
+                // Bottom edge: range curve (reverse)
+                for (s in rightS downTo leftS) {
+                    val x = graphWidth * s.toFloat() / numSamples
+                    val freq = xToFreq(x, graphWidth)
+                    val rangeDb = mbcGainAtFreq(freq, crossovers, rangeGains).coerceIn(minGain, maxGain)
+                    val ry = vPad + graphHeight * (1f - (rangeDb - minGain) / (maxGain - minGain))
+                    bandFillPath.lineTo(x, ry)
+                }
+                bandFillPath.close()
+
+                if (bColor != null) {
+                    val coloredFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = bColor; style = Paint.Style.FILL; alpha = 40
+                    }
+                    canvas.drawPath(bandFillPath, coloredFill)
+                } else {
+                    canvas.drawPath(bandFillPath, mbcRangeFillPaint)
+                }
+            }
             canvas.drawPath(rangeCurvePath, mbcRangeCurvePaint)
         }
 
@@ -916,6 +951,10 @@ class EqGraphView @JvmOverloads constructor(
             val r = 28f // triangle radius
             val cornerRadius = 8f
 
+            // Check for band color
+            val bandColors = mbcBandColors
+            val bandColor = if (bandColors != null && i < bandColors.size && bandColors[i] != 0) bandColors[i] else null
+
             // PostGain ▼ — tip touches TOP of the postGain line, body extends above
             triPath.reset()
             triPath.moveTo(dotX, dotY)                          // tip ON the line
@@ -935,7 +974,18 @@ class EqGraphView @JvmOverloads constructor(
                 canvas.drawCircle(dotX, triCenterY, haloDp, mbcTriTouchPaint)
             }
 
-            if (isSelected) {
+            if (bandColor != null) {
+                val colorFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = bandColor; style = Paint.Style.FILL; alpha = if (isSelected) 200 else 120
+                    pathEffect = CornerPathEffect(cornerRadius)
+                }
+                val colorRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = bandColor; style = Paint.Style.STROKE; strokeWidth = if (isSelected) 3f else 2f
+                    pathEffect = CornerPathEffect(cornerRadius)
+                }
+                canvas.drawPath(triPath, colorFillPaint)
+                canvas.drawPath(triPath, colorRingPaint)
+            } else if (isSelected) {
                 val fillPaint = Paint(activePointFillPaint).apply { pathEffect = CornerPathEffect(cornerRadius) }
                 val ringPaint = Paint(activePointRingPaint).apply { pathEffect = CornerPathEffect(cornerRadius) }
                 canvas.drawPath(triPath, fillPaint)
@@ -966,7 +1016,14 @@ class EqGraphView @JvmOverloads constructor(
                     canvas.drawCircle(dotX, rangeTriCenterY, haloDp, mbcTriTouchPaint)
                 }
 
-                if (isSelected) {
+                if (bandColor != null) {
+                    val colorRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = bandColor; style = Paint.Style.STROKE; strokeWidth = if (isSelected) 2.5f else 2f
+                        alpha = if (isSelected) 200 else 120
+                        pathEffect = CornerPathEffect(cornerRadius)
+                    }
+                    canvas.drawPath(triPath, colorRingPaint)
+                } else if (isSelected) {
                     mbcRangeDotRingPaint.color = 0xFFAAAAAA.toInt()
                     mbcRangeDotRingPaint.strokeWidth = 2.5f
                 } else {
@@ -985,6 +1042,9 @@ class EqGraphView @JvmOverloads constructor(
             val isActive = i == activeBandIndex
             val bandEnabled = parametricEq?.getBand(i)?.enabled != false
             val customColor = getBandColor(i)
+
+            // In Table mode, don't draw disabled band dots on the graph
+            if (!bandEnabled && eqUiMode == EqUiMode.TABLE) continue
 
             // Solid background fill to mask grid lines under all dots
             canvas.drawCircle(point.x, point.y, 20f, pointBgPaint)

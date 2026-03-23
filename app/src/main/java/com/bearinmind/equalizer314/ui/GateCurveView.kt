@@ -22,6 +22,10 @@ class GateCurveView @JvmOverloads constructor(
     var expanderRatio: Float = 1f
         set(value) { field = value.coerceIn(1f, 50f); invalidate() }
 
+    // Compressor reference (for showing dulled dot)
+    var compressorThreshold: Float = -12f
+        set(value) { field = value; invalidate() }
+
     var selectedBand: Int = 0
         set(value) { field = value; invalidate() }
 
@@ -34,6 +38,20 @@ class GateCurveView @JvmOverloads constructor(
     private var draggingThreshold = false
     private var draggingRatio = false
     private var ratioTouchInputDb = 0f
+
+    private var lastTapTime = 0L
+    private var lastTapType = 0  // 1=threshold, 2=ratio
+    private val doubleTapTimeout = 300L
+    private var touchStartX = 0f
+    private var touchStartY = 0f
+    private var hasDragged = false
+    private var justReset = false
+    private var pendingDragType = 0
+
+    companion object {
+        const val DEFAULT_GATE_THRESHOLD = -40f
+        const val DEFAULT_EXPANDER_RATIO = 2f
+    }
 
     // Paints — identical to CompressorCurveView
     private val bgPaint = Paint().apply {
@@ -97,6 +115,13 @@ class GateCurveView @JvmOverloads constructor(
 
         // Background
         canvas.drawRect(0f, 0f, w, h, bgPaint)
+
+        // Title — centered between -10 and 0 dB on Y axis
+        val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFF888888.toInt(); textSize = 24f; textAlign = Paint.Align.CENTER
+        }
+        val titleY = (dbToY(-10f) + dbToY(0f)) / 2f + 8f
+        canvas.drawText("Gate (below threshold)", w / 2f, titleY, titlePaint)
 
         // Grid every 10 dB with labels (skip 0 and -60)
         for (db in minDb.toInt()..maxDb.toInt() step 10) {
@@ -171,12 +196,27 @@ class GateCurveView @JvmOverloads constructor(
         val bandNumber = (selectedBand + 1).toString()
         val textY = dotY + (dotNumberPaint.textSize / 3)
         canvas.drawText(bandNumber, dotX, textY, dotNumberPaint)
+
+        // Ghost compressor dot — same size as main dot, dimmed
+        val compRefX = dbToX(compressorThreshold.coerceIn(minDb, maxDb)).coerceIn(dotMargin, w - dotMargin)
+        val compRefY = dbToY(compressorThreshold.coerceIn(minDb, maxDb)).coerceIn(dotMargin, h - dotMargin)
+        val ghostRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFF444444.toInt(); style = Paint.Style.STROKE; strokeWidth = 2f
+        }
+        val ghostTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFF444444.toInt(); textSize = 14f
+            textAlign = Paint.Align.CENTER; typeface = Typeface.DEFAULT_BOLD
+        }
+        canvas.drawCircle(compRefX, compRefY, 20f, dotBgPaint)
+        canvas.drawCircle(compRefX, compRefY, 20f, ghostRingPaint)
+        canvas.drawText(bandNumber, compRefX, compRefY + ghostTextPaint.textSize / 3f, ghostTextPaint)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
                 parent?.requestDisallowInterceptTouchEvent(true)
+                touchStartX = event.x; touchStartY = event.y; hasDragged = false
 
                 // Threshold dot
                 val threshOut = gateOutput(gateThreshold)
@@ -184,26 +224,66 @@ class GateCurveView @JvmOverloads constructor(
                 val dotY = dbToY(threshOut)
                 val distThresh = sqrt((event.x - dotX).pow(2) + (event.y - dotY).pow(2))
 
+                val now = System.currentTimeMillis()
+
                 if (distThresh < 55f) {
-                    draggingThreshold = true
+                    if (now - lastTapTime < doubleTapTimeout && lastTapType == 1) {
+                        gateThreshold = DEFAULT_GATE_THRESHOLD
+                        onGateThresholdChanged?.invoke(DEFAULT_GATE_THRESHOLD)
+                        lastTapTime = 0L
+                        justReset = true
+                        invalidate()
+                        return true
+                    }
+                    lastTapTime = now; lastTapType = 1
+                    pendingDragType = 1
                     invalidate()
                     return true
                 }
 
-                // Touching the curve below threshold = drag expander ratio
-                val touchInputDb = xToDb(event.x)
-                if (touchInputDb < gateThreshold + 5f) {
-                    val curveY = dbToY(gateOutput(touchInputDb.coerceIn(minDb, maxDb)))
-                    if (abs(event.y - curveY) < 50f) {
-                        draggingRatio = true
-                        ratioTouchInputDb = touchInputDb.coerceIn(minDb, gateThreshold - 1f)
+                // Touching the expander line = drag ratio
+                val gtClamped = gateThreshold.coerceIn(minDb, maxDb)
+                val lineX1 = dbToX(minDb); val lineY1 = dbToY(gateOutput(minDb))
+                val lineX2 = dbToX(gtClamped); val lineY2 = dbToY(gtClamped)
+                val lineDist = distToSegment(event.x, event.y, lineX1, lineY1, lineX2, lineY2)
+                if (lineDist < 50f) {
+                    if (now - lastTapTime < doubleTapTimeout && lastTapType == 2) {
+                        expanderRatio = DEFAULT_EXPANDER_RATIO
+                        onExpanderRatioChanged?.invoke(DEFAULT_EXPANDER_RATIO)
+                        lastTapTime = 0L
+                        justReset = true
                         invalidate()
                         return true
                     }
+                    lastTapTime = now; lastTapType = 2
+                    pendingDragType = 2
+                    val touchInputDb = xToDb(event.x)
+                    ratioTouchInputDb = touchInputDb.coerceIn(minDb, gtClamped - 10f)
+                    invalidate()
+                    return true
+                }
+
+                // Also allow touching the 1:1 portion (above gate threshold)
+                val diag1X = dbToX(gtClamped); val diag1Y = dbToY(gtClamped)
+                val diag2X = dbToX(maxDb); val diag2Y = dbToY(maxDb)
+                val diagDist = distToSegment(event.x, event.y, diag1X, diag1Y, diag2X, diag2Y)
+                if (diagDist < 50f) {
+                    draggingThreshold = true
+                    invalidate()
+                    return true
                 }
                 return false
             }
             MotionEvent.ACTION_MOVE -> {
+                if (justReset) return true
+
+                if (!hasDragged) {
+                    val dx = event.x - touchStartX; val dy = event.y - touchStartY
+                    if (dx * dx + dy * dy < 64f) return true
+                    hasDragged = true
+                    if (pendingDragType == 1) draggingThreshold = true
+                    else if (pendingDragType == 2) draggingRatio = true
+                }
                 if (draggingThreshold) {
                     val newGate = xToDb(event.x).coerceIn(-60f, 0f)
                     val snapped = Math.round(newGate * 10f) / 10f
@@ -212,12 +292,13 @@ class GateCurveView @JvmOverloads constructor(
                     return true
                 }
                 if (draggingRatio) {
-                    // Mirror compressor: R = outputUndershoot / undershoot, curve follows finger
+                    // Follow finger in all directions — update reference point from finger X
                     val targetOutputDb = yToDb(event.y)
-                    val inputDb = ratioTouchInputDb.coerceAtMost(gateThreshold - 0.5f)
-                    val undershoot = gateThreshold - inputDb
-                    val outputUndershoot = (gateThreshold - targetOutputDb).coerceIn(undershoot, undershoot * 50f)
-                    val newExpRatio = (outputUndershoot / undershoot).coerceIn(1f, 50f)
+                    val inputDb = xToDb(event.x).coerceIn(minDb, gateThreshold - 0.5f)
+                    val inputDiff = inputDb - gateThreshold  // negative (below gate)
+                    val outputDiff = targetOutputDb - gateThreshold  // negative (below gate)
+                    val clampedOutputDiff = outputDiff.coerceIn(inputDiff * 50f, inputDiff)
+                    val newExpRatio = if (inputDiff < -0.01f) (clampedOutputDiff / inputDiff).coerceIn(1f, 50f) else 1f
                     val snapped = Math.round(newExpRatio * 100f) / 100f
                     expanderRatio = snapped
                     onExpanderRatioChanged?.invoke(snapped)
@@ -228,9 +309,21 @@ class GateCurveView @JvmOverloads constructor(
                 parent?.requestDisallowInterceptTouchEvent(false)
                 draggingThreshold = false
                 draggingRatio = false
+                pendingDragType = 0
+                justReset = false
                 invalidate()
             }
         }
         return true
+    }
+
+    private fun distToSegment(px: Float, py: Float, x1: Float, y1: Float, x2: Float, y2: Float): Float {
+        val dx = x2 - x1; val dy = y2 - y1
+        val len2 = dx * dx + dy * dy
+        if (len2 < 0.01f) return sqrt((px - x1) * (px - x1) + (py - y1) * (py - y1))
+        val t = ((px - x1) * dx + (py - y1) * dy) / len2
+        val ct = t.coerceIn(0f, 1f)
+        val projX = x1 + ct * dx; val projY = y1 + ct * dy
+        return sqrt((px - projX) * (px - projX) + (py - projY) * (py - projY))
     }
 }

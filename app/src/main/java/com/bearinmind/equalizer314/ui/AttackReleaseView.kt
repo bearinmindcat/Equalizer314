@@ -22,6 +22,15 @@ class AttackReleaseView @JvmOverloads constructor(
     private var draggingAttack = false
     private var draggingRelease = false
 
+    private var lastTapTime = 0L
+    private var lastTapType = 0  // 1=attack, 2=release
+    private val doubleTapTimeout = 300L
+
+    companion object {
+        const val DEFAULT_ATTACK = 1f
+        const val DEFAULT_RELEASE = 100f
+    }
+
     private val bgPaint = Paint().apply {
         color = 0xFF1E1E1E.toInt(); style = Paint.Style.FILL
     }
@@ -199,10 +208,22 @@ class AttackReleaseView @JvmOverloads constructor(
                 val aDotDist = sqrt((event.x - aDX) * (event.x - aDX) + (event.y - dotCY) * (event.y - dotCY))
                 val rDotDist = sqrt((event.x - rDX) * (event.x - rDX) + (event.y - dotCY) * (event.y - dotCY))
 
+                val now = System.currentTimeMillis()
+
                 if (aDotDist < 50f && aDotDist <= rDotDist) {
+                    if (now - lastTapTime < doubleTapTimeout && lastTapType == 1) {
+                        attackMs = DEFAULT_ATTACK; onAttackChanged?.invoke(DEFAULT_ATTACK)
+                        lastTapTime = 0L; invalidate(); return true
+                    }
+                    lastTapTime = now; lastTapType = 1
                     draggingAttack = true; invalidate(); return true
                 }
                 if (rDotDist < 50f) {
+                    if (now - lastTapTime < doubleTapTimeout && lastTapType == 2) {
+                        releaseMs = DEFAULT_RELEASE; onReleaseChanged?.invoke(DEFAULT_RELEASE)
+                        lastTapTime = 0L; invalidate(); return true
+                    }
+                    lastTapTime = now; lastTapType = 2
                     draggingRelease = true; invalidate(); return true
                 }
 
@@ -210,9 +231,19 @@ class AttackReleaseView @JvmOverloads constructor(
                 val attackDist = distToLine(event.x, event.y, leftFootX, botY, peakX, topY)
                 val releaseDist = distToLine(event.x, event.y, peakX, topY, rightFootX, botY)
                 if (attackDist < 50f && attackDist <= releaseDist) {
+                    if (now - lastTapTime < doubleTapTimeout && lastTapType == 1) {
+                        attackMs = DEFAULT_ATTACK; onAttackChanged?.invoke(DEFAULT_ATTACK)
+                        lastTapTime = 0L; invalidate(); return true
+                    }
+                    lastTapTime = now; lastTapType = 1
                     draggingAttack = true; invalidate(); return true
                 }
                 if (releaseDist < 50f) {
+                    if (now - lastTapTime < doubleTapTimeout && lastTapType == 2) {
+                        releaseMs = DEFAULT_RELEASE; onReleaseChanged?.invoke(DEFAULT_RELEASE)
+                        lastTapTime = 0L; invalidate(); return true
+                    }
+                    lastTapTime = now; lastTapType = 2
                     draggingRelease = true; invalidate(); return true
                 }
                 return false

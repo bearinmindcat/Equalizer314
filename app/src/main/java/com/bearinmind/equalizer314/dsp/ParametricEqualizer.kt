@@ -33,12 +33,11 @@ class ParametricEqualizer(private val sampleRate: Int = 44100) {
     }
 
     private fun addDefaultBands() {
-        // Start with 4 bands at every-other position of the 8-point log grid
-        // This gives even visual spacing across the graph (10–22000 Hz)
-        val allFreqs = logSpacedFrequencies(8)
-        val initialIndices = listOf(0, 2, 4, 6) // positions 1, 3, 5, 7
-        for (idx in initialIndices) {
-            addBand(allFreqs[idx], 0f, BiquadFilter.FilterType.BELL)
+        // Start with 4 bands at slots 0,1,2,3 using those exact default frequencies
+        // so initBandSlots() assigns them to slots 0-3 (displayed as 1,2,3,4)
+        val allFreqs = logSpacedFrequencies(16)
+        for (i in 0..3) {
+            addBand(allFreqs[i], 0f, BiquadFilter.FilterType.BELL)
         }
     }
 

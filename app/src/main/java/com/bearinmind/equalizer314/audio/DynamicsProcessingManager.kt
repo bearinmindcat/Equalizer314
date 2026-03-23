@@ -51,7 +51,7 @@ class DynamicsProcessingManager {
 
         val config = DynamicsProcessing.Config.Builder(
             DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,
-            1,          // channel count
+            2,          // channel count (stereo)
             true,       // pre-EQ enabled
             bandCount,  // pre-EQ band count
             false,      // MBC disabled
@@ -62,7 +62,7 @@ class DynamicsProcessingManager {
         ).build()
 
         try {
-            dynamicsProcessing = DynamicsProcessing(0, 0, config).apply {
+            dynamicsProcessing = DynamicsProcessing(Int.MAX_VALUE, 0, config).apply {
                 enabled = true
 
                 // Limiter for clipping protection
@@ -72,6 +72,7 @@ class DynamicsProcessingManager {
                     limiterThresholdDb, limiterPostGainDb
                 )
                 setLimiterByChannelIndex(0, limiter)
+                setLimiterByChannelIndex(1, limiter)
 
                 // Apply parametric response sampled at N frequencies
                 applyParametricResponse(this, eq)
@@ -125,7 +126,8 @@ class DynamicsProcessingManager {
 
         for (i in 0 until ParametricToDpConverter.numBands) {
             val eqBand = DynamicsProcessing.EqBand(true, cutoffs[i], gains[i])
-            dp.setPreEqBandByChannelIndex(0, i, eqBand)
+            dp.setPreEqBandByChannelIndex(0, i, eqBand)  // left
+            dp.setPreEqBandByChannelIndex(1, i, eqBand)  // right
         }
     }
 
@@ -138,6 +140,7 @@ class DynamicsProcessingManager {
                 limiterThresholdDb, limiterPostGainDb
             )
             dp.setLimiterByChannelIndex(0, limiter)
+            dp.setLimiterByChannelIndex(1, limiter)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to update limiter", e)
         }

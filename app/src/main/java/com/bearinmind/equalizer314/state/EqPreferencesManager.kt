@@ -173,15 +173,15 @@ class EqPreferencesManager(context: Context) {
     fun getMbcBandEnabled(i: Int): Boolean = prefs.getBoolean("mbc_${i}_enabled", true)
     fun getMbcBandCutoff(i: Int, default: Float): Float = prefs.getFloat("mbc_${i}_cutoff", default)
     fun getMbcBandAttack(i: Int): Float = prefs.getFloat("mbc_${i}_attack", 1f)
-    fun getMbcBandRelease(i: Int): Float = prefs.getFloat("mbc_${i}_release", 60f)
-    fun getMbcBandRatio(i: Int): Float = prefs.getFloat("mbc_${i}_ratio", 10f)
-    fun getMbcBandThreshold(i: Int): Float = prefs.getFloat("mbc_${i}_threshold", -2f)
-    fun getMbcBandKnee(i: Int): Float = prefs.getFloat("mbc_${i}_knee", 3.5f)
-    fun getMbcBandNoiseGate(i: Int): Float = prefs.getFloat("mbc_${i}_noiseGate", -90f)
-    fun getMbcBandExpander(i: Int): Float = prefs.getFloat("mbc_${i}_expander", 1f)
+    fun getMbcBandRelease(i: Int): Float = prefs.getFloat("mbc_${i}_release", 100f)
+    fun getMbcBandRatio(i: Int): Float = prefs.getFloat("mbc_${i}_ratio", 2f)
+    fun getMbcBandThreshold(i: Int): Float = prefs.getFloat("mbc_${i}_threshold", -12f)
+    fun getMbcBandKnee(i: Int): Float = prefs.getFloat("mbc_${i}_knee", 8f)
+    fun getMbcBandNoiseGate(i: Int): Float = prefs.getFloat("mbc_${i}_noiseGate", -40f)
+    fun getMbcBandExpander(i: Int): Float = prefs.getFloat("mbc_${i}_expander", 2f)
     fun getMbcBandPreGain(i: Int): Float = prefs.getFloat("mbc_${i}_preGain", 0f)
     fun getMbcBandPostGain(i: Int): Float = prefs.getFloat("mbc_${i}_postGain", 0f)
-    fun getMbcBandRange(i: Int): Float = prefs.getFloat("mbc_${i}_range", -12f)
+    fun getMbcBandRange(i: Int, default: Float = -12f): Float = prefs.getFloat("mbc_${i}_range", default)
 
     // MBC Crossovers
     fun saveMbcCrossover(i: Int, freq: Float) { prefs.edit().putFloat("mbc_crossover_$i", freq).apply() }

@@ -45,17 +45,31 @@ class CompressorCurveView @JvmOverloads constructor(
 
     var onThresholdChanged: ((Float) -> Unit)? = null
     var onRatioChanged: ((Float) -> Unit)? = null
-    var onGateThresholdChanged: ((Float) -> Unit)? = null
-    var onExpanderRatioChanged: ((Float) -> Unit)? = null
+    var onKneeChanged: ((Float) -> Unit)? = null
 
     private val minDb = -60f
     private val maxDb = 0f
 
     private var draggingThreshold = false
     private var draggingRatio = false
-    private var draggingGateThreshold = false
-    private var draggingExpanderRatio = false
     private var ratioTouchInputDb = 0f
+
+    // Double-tap detection
+    private var lastTapTime = 0L
+    private var lastTapType = 0  // 1=threshold, 2=ratio
+    private val doubleTapTimeout = 300L
+    private var touchStartX = 0f
+    private var touchStartY = 0f
+    private var hasDragged = false
+    private var justReset = false
+    private var pendingDragType = 0  // 0=none, 1=threshold, 2=ratio
+
+    // Default values for reset
+    companion object {
+        const val DEFAULT_THRESHOLD = -12f
+        const val DEFAULT_RATIO = 2f
+        const val DEFAULT_KNEE = 8f
+    }
 
     // Paints — matching EqGraphView
     private val bgPaint = Paint().apply {
@@ -129,6 +143,13 @@ class CompressorCurveView @JvmOverloads constructor(
 
         // Background
         canvas.drawRect(0f, 0f, w, h, bgPaint)
+
+        // Title — centered between -10 and 0 dB on Y axis
+        val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFF888888.toInt(); textSize = 24f; textAlign = Paint.Align.CENTER
+        }
+        val titleY = (dbToY(-10f) + dbToY(0f)) / 2f + 8f
+        canvas.drawText("Compressor (above threshold)", w / 2f, titleY, titlePaint)
 
         // Grid every 10 dB with labels (skip 0 and -60)
         for (db in minDb.toInt()..maxDb.toInt() step 10) {
@@ -299,12 +320,27 @@ class CompressorCurveView @JvmOverloads constructor(
         val textY = dotY + (dotNumberPaint.textSize / 3)
         canvas.drawText(bandNumber, dotX, textY, dotNumberPaint)
 
+        // Ghost gate dot — same size as main dot, dimmed
+        val gateRefX = dbToX(gateThreshold.coerceIn(minDb, maxDb)).coerceIn(dotMargin, w - dotMargin)
+        val gateRefY = dbToY(gateThreshold.coerceIn(minDb, maxDb)).coerceIn(dotMargin, h - dotMargin)
+        val ghostRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFF444444.toInt(); style = Paint.Style.STROKE; strokeWidth = 2f
+        }
+        val ghostTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFF444444.toInt(); textSize = 14f
+            textAlign = Paint.Align.CENTER; typeface = Typeface.DEFAULT_BOLD
+        }
+        canvas.drawCircle(gateRefX, gateRefY, 20f, dotBgPaint)
+        canvas.drawCircle(gateRefX, gateRefY, 20f, ghostRingPaint)
+        canvas.drawText(bandNumber, gateRefX, gateRefY + ghostTextPaint.textSize / 3f, ghostTextPaint)
+
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
                 parent?.requestDisallowInterceptTouchEvent(true)
+                touchStartX = event.x; touchStartY = event.y; hasDragged = false
 
                 // Threshold dot
                 val threshOut = compressorOutput(threshold)
@@ -312,18 +348,39 @@ class CompressorCurveView @JvmOverloads constructor(
                 val dotY = dbToY(threshOut)
                 val distThresh = sqrt((event.x - dotX).pow(2) + (event.y - dotY).pow(2))
 
+                val now = System.currentTimeMillis()
+
                 if (distThresh < 55f) {
-                    draggingThreshold = true
+                    if (now - lastTapTime < doubleTapTimeout && lastTapType == 1) {
+                        threshold = DEFAULT_THRESHOLD
+                        kneeWidth = DEFAULT_KNEE
+                        onThresholdChanged?.invoke(DEFAULT_THRESHOLD)
+                        onKneeChanged?.invoke(DEFAULT_KNEE)
+                        lastTapTime = 0L
+                        justReset = true
+                        invalidate()
+                        return true
+                    }
+                    lastTapTime = now; lastTapType = 1
+                    pendingDragType = 1
                     invalidate()
                     return true
                 }
 
-                // Touching the curve above compressor threshold = drag ratio
                 val touchInputDb = xToDb(event.x)
                 if (touchInputDb > threshold - 5f) {
                     val curveY = dbToY(compressorOutput(touchInputDb.coerceIn(minDb, maxDb)))
                     if (abs(event.y - curveY) < 50f) {
-                        draggingRatio = true
+                        if (now - lastTapTime < doubleTapTimeout && lastTapType == 2) {
+                            ratio = DEFAULT_RATIO
+                            onRatioChanged?.invoke(DEFAULT_RATIO)
+                            lastTapTime = 0L
+                            justReset = true
+                            invalidate()
+                            return true
+                        }
+                        lastTapTime = now; lastTapType = 2
+                        pendingDragType = 2
                         ratioTouchInputDb = touchInputDb.coerceIn(threshold + 1f, maxDb)
                         invalidate()
                         return true
@@ -333,6 +390,16 @@ class CompressorCurveView @JvmOverloads constructor(
                 return false
             }
             MotionEvent.ACTION_MOVE -> {
+                if (justReset) return true
+
+                // Activate dragging after moving 8px
+                if (!hasDragged) {
+                    val dx = event.x - touchStartX; val dy = event.y - touchStartY
+                    if (dx * dx + dy * dy < 64f) return true
+                    hasDragged = true
+                    if (pendingDragType == 1) draggingThreshold = true
+                    else if (pendingDragType == 2) draggingRatio = true
+                }
                 if (draggingThreshold) {
                     val newThresh = xToDb(event.x).coerceIn(-60f, 0f)
                     val snapped = Math.round(newThresh * 10f) / 10f
@@ -356,8 +423,8 @@ class CompressorCurveView @JvmOverloads constructor(
                 parent?.requestDisallowInterceptTouchEvent(false)
                 draggingThreshold = false
                 draggingRatio = false
-                draggingGateThreshold = false
-                draggingExpanderRatio = false
+                pendingDragType = 0
+                justReset = false
                 invalidate()
             }
         }

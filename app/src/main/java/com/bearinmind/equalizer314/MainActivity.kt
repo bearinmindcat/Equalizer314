@@ -47,6 +47,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var graphicController: GraphicEqController
     private lateinit var tableController: TableEqController
     private lateinit var bandToggleManager: BandToggleManager
+    private val visualizerHelper = com.bearinmind.equalizer314.audio.VisualizerHelper()
 
     // Views
     private lateinit var eqGraphView: EqGraphView
@@ -344,6 +345,26 @@ class MainActivity : AppCompatActivity() {
         powerFab.setOnClickListener {
             if (stateManager.isProcessing) stopProcessing() else startProcessing()
         }
+
+        // Visualizer toggle
+        val vizToggle = findViewById<android.widget.ImageButton>(R.id.visualizerToggle)
+        vizToggle.setOnClickListener {
+            if (visualizerHelper.isRunning) {
+                visualizerHelper.stop()
+                eqGraphView.spectrumRenderer = null
+                eqGraphView.invalidate()
+                vizToggle.alpha = 0.3f
+            } else {
+                if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 200)
+                    return@setOnClickListener
+                }
+                visualizerHelper.start(eqGraphView)
+                eqGraphView.spectrumRenderer = visualizerHelper.renderer
+                vizToggle.alpha = 1.0f
+            }
+        }
         powerButton.setOnClickListener {
             if (stateManager.isProcessing) stopProcessing() else startProcessing()
         }
@@ -614,6 +635,10 @@ class MainActivity : AppCompatActivity() {
     // ---- EQ UI Mode Switching ----
 
     private fun switchEqUiMode(mode: EqUiMode) {
+        // Clean up table mode bands when leaving
+        if (stateManager.currentEqUiMode == EqUiMode.TABLE && mode != EqUiMode.TABLE) {
+            tableController.cleanup()
+        }
         stateManager.currentEqUiMode = mode
         eqGraphView.eqUiMode = mode
         eqPrefs.saveEqUiMode(mode.name)
@@ -679,7 +704,7 @@ class MainActivity : AppCompatActivity() {
 
                     // Measure visible elements above table card
                     val modeSelector = findViewById<View>(R.id.modeSelectorGroup)
-                    val graphCard = eqGraphView.parent as View // the MaterialCardView wrapping the graph
+                    val graphCard = (eqGraphView.parent as? View)?.parent as? View ?: eqGraphView.parent as View // the MaterialCardView wrapping the graph
                     val modeSelectorH = modeSelector.height + (modeSelector.layoutParams as? LinearLayout.LayoutParams)?.let { it.topMargin + it.bottomMargin } .let { it ?: 0 }
                     val graphCardH = graphCard.height + (graphCard.layoutParams as? LinearLayout.LayoutParams)?.let { it.topMargin + it.bottomMargin } .let { it ?: 0 }
                     val tableMargin = (tableEqCard.layoutParams as? LinearLayout.LayoutParams)?.let { it.topMargin + it.bottomMargin } ?: 0
@@ -713,7 +738,7 @@ class MainActivity : AppCompatActivity() {
         val inactiveRow = if (activePage == 0) bandToggleGroup2 else bandToggleGroup
 
         // Check if both rows are already in correct positions
-        val graphCard = eqGraphView.parent as View
+        val graphCard = (eqGraphView.parent as? View)?.parent as? View ?: eqGraphView.parent as View
         val graphIdx = parent.indexOfChild(graphCard)
         val currentActiveIdx = parent.indexOfChild(activeRow)
         val controlsView = when (stateManager.currentEqUiMode) {
@@ -1339,6 +1364,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        visualizerHelper.stop()
         try { unregisterReceiver(eqStoppedReceiver) } catch (_: Exception) {}
         super.onDestroy()
     }
@@ -1347,6 +1373,11 @@ class MainActivity : AppCompatActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 100) {
             startProcessing()
+        }
+        if (requestCode == 200 && grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            visualizerHelper.start(eqGraphView)
+            eqGraphView.spectrumRenderer = visualizerHelper.renderer
+            findViewById<android.widget.ImageButton>(R.id.visualizerToggle).alpha = 1.0f
         }
     }
 

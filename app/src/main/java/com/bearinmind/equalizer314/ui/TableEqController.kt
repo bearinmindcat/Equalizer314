@@ -29,10 +29,25 @@ class TableEqController(
         )
     }
 
+    /** Remove disabled bands that were auto-added for table display */
+    fun cleanup() {
+        val eq = state.parametricEq
+        // Remove bands in reverse to avoid index shifting
+        for (i in eq.getBandCount() - 1 downTo 0) {
+            if (eq.getBand(i)?.enabled == false) {
+                eq.removeBand(i)
+                if (i < state.bandSlots.size) state.bandSlots.removeAt(i)
+            }
+        }
+        graphView.setParametricEqualizer(eq)
+        graphView.setBandSlotLabels(state.bandSlots)
+    }
+
     fun buildTable() {
         rowContainer.removeAllViews()
         val eq = state.parametricEq
 
+        // Fill all 16 slots — inactive bands are disabled and greyed out
         while (eq.getBandCount() < EqStateManager.MAX_BANDS) {
             val usedSlots = state.bandSlots.toSet()
             val newSlot = (0 until EqStateManager.MAX_BANDS).firstOrNull { it !in usedSlots } ?: break

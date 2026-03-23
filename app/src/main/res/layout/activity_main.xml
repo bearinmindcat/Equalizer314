@@ -85,10 +85,27 @@
                     app:strokeColor="?attr/colorOutlineVariant"
                     app:strokeWidth="1dp">
 
-                    <com.bearinmind.equalizer314.ui.EqGraphView
-                        android:id="@+id/eqGraphView"
+                    <FrameLayout
                         android:layout_width="match_parent"
-                        android:layout_height="280dp" />
+                        android:layout_height="wrap_content">
+
+                        <com.bearinmind.equalizer314.ui.EqGraphView
+                            android:id="@+id/eqGraphView"
+                            android:layout_width="match_parent"
+                            android:layout_height="280dp" />
+
+                        <ImageButton
+                            android:id="@+id/visualizerToggle"
+                            android:layout_width="32dp"
+                            android:layout_height="32dp"
+                            android:layout_gravity="top|end"
+                            android:layout_margin="8dp"
+                            android:background="@android:color/transparent"
+                            android:src="@android:drawable/ic_media_play"
+                            android:scaleType="centerInside"
+                            android:alpha="0.5"
+                            android:contentDescription="Toggle visualizer" />
+                    </FrameLayout>
                 </com.google.android.material.card.MaterialCardView>
 
                 <!-- Per-band on/off toggles row 1 (1-8) -->
@@ -558,8 +575,8 @@
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
-                                android:valueFrom="128"
-                                android:valueTo="1024"
+                                android:valueFrom="32"
+                                android:valueTo="128"
                                 android:value="128"
                                 app:labelBehavior="gone" />
 

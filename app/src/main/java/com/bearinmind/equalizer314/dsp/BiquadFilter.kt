@@ -203,17 +203,20 @@ class BiquadFilter(
     fun getFrequencyResponse(freq: Float): Float {
         val omega = 2.0 * PI * freq / sampleRate
         val z = Complex(cos(omega), sin(omega))
+        val zInv = z.inverse()
+        val zInv2 = zInv.times(zInv)
 
         val numerator = Complex(b0, 0.0)
-            .plus(Complex(b1, 0.0).times(z.inverse()))
-            .plus(Complex(b2, 0.0).times(z.inverse().times(z.inverse())))
+            .plus(Complex(b1, 0.0).times(zInv))
+            .plus(Complex(b2, 0.0).times(zInv2))
 
         val denominator = Complex(1.0, 0.0)
-            .plus(Complex(a1, 0.0).times(z.inverse()))
-            .plus(Complex(a2, 0.0).times(z.inverse().times(z.inverse())))
+            .plus(Complex(a1, 0.0).times(zInv))
+            .plus(Complex(a2, 0.0).times(zInv2))
 
         val response = numerator.div(denominator)
         val mag = response.magnitude().toFloat()
+
         return if (mag.isNaN() || mag.isInfinite()) 1f else mag
     }
 

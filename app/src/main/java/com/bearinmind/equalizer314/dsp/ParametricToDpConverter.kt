@@ -33,7 +33,7 @@ object ParametricToDpConverter {
         }
 
     fun setNumBands(count: Int) {
-        numBands = count.coerceIn(128, 1024)
+        numBands = count.coerceIn(32, 128)
         _cutoffFrequencies = null // invalidate cache
     }
 

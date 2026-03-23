@@ -37,11 +37,15 @@ class MbcActivity : AppCompatActivity() {
             0xFF4DD0E1.toInt()   // cyan
         )
         val DEFAULT_CROSSOVERS_BY_COUNT = mapOf(
-            3 to floatArrayOf(200f, 4000f),
-            4 to floatArrayOf(120f, 1000f, 8000f),
-            5 to floatArrayOf(80f, 400f, 2000f, 10000f),
-            6 to floatArrayOf(60f, 200f, 800f, 3500f, 12000f)
+            3 to floatArrayOf(200f, 2000f),
+            4 to floatArrayOf(200f, 2000f, 5000f),
+            5 to floatArrayOf(200f, 2000f, 5000f, 7000f),
+            6 to floatArrayOf(200f, 2000f, 5000f, 7000f, 10000f)
         )
+        // Default cutoff frequencies per band index
+        val DEFAULT_CUTOFFS = floatArrayOf(200f, 700f, 2000f, 5000f, 7000f, 10000f)
+        // Default range values per band index
+        val DEFAULT_RANGES = floatArrayOf(-4f, -8f, -6f, -6f, -6f, -6f)
     }
 
     private lateinit var eqPrefs: EqPreferencesManager
@@ -90,12 +94,12 @@ class MbcActivity : AppCompatActivity() {
         var enabled: Boolean = true,
         var cutoff: Float = 1000f,
         var attack: Float = 1f,
-        var release: Float = 60f,
-        var ratio: Float = 10f,
-        var threshold: Float = -2f,
-        var kneeWidth: Float = 3.5f,
-        var noiseGateThreshold: Float = -90f,
-        var expanderRatio: Float = 1f,
+        var release: Float = 100f,
+        var ratio: Float = 2f,
+        var threshold: Float = -12f,
+        var kneeWidth: Float = 8f,
+        var noiseGateThreshold: Float = -40f,
+        var expanderRatio: Float = 2f,
         var preGain: Float = 0f,
         var postGain: Float = 0f,
         var range: Float = -12f
@@ -174,11 +178,10 @@ class MbcActivity : AppCompatActivity() {
         bandCount = eqPrefs.getMbcBandCount().coerceIn(MIN_BAND_COUNT, MAX_BAND_COUNT)
 
         bands.clear()
-        val defaultFreqs = logSpacedFrequencies(bandCount)
         for (i in 0 until bandCount) {
             bands.add(MbcBandData(
                 enabled = eqPrefs.getMbcBandEnabled(i),
-                cutoff = eqPrefs.getMbcBandCutoff(i, defaultFreqs[i]),
+                cutoff = eqPrefs.getMbcBandCutoff(i, DEFAULT_CUTOFFS.getOrElse(i) { 10000f }),
                 attack = eqPrefs.getMbcBandAttack(i),
                 release = eqPrefs.getMbcBandRelease(i),
                 ratio = eqPrefs.getMbcBandRatio(i),
@@ -188,7 +191,7 @@ class MbcActivity : AppCompatActivity() {
                 expanderRatio = eqPrefs.getMbcBandExpander(i),
                 preGain = eqPrefs.getMbcBandPreGain(i),
                 postGain = eqPrefs.getMbcBandPostGain(i),
-                range = eqPrefs.getMbcBandRange(i)
+                range = eqPrefs.getMbcBandRange(i, DEFAULT_RANGES.getOrElse(i) { -6f })
             ))
         }
     }
@@ -204,7 +207,7 @@ class MbcActivity : AppCompatActivity() {
         }
 
         graphView.mbcCrossovers = crossoverFreqs
-        graphView.mbcBandColors = null // no color coding
+        graphView.mbcBandColors = IntArray(bandCount) { mbcBandColors[it] ?: 0 }
         graphView.mbcSelectedBand = selectedBand
 
         // Initialize band gains from preGain (input level before compression)
@@ -296,7 +299,8 @@ class MbcActivity : AppCompatActivity() {
         for (i in 0 until bandCount) {
             bandTabs.addView(createBandButton(i))
         }
-        if (bandCount < MAX_BAND_COUNT) {
+        // Only show (+) when bands have been removed below default count
+        if (bandCount < DEFAULT_BAND_COUNT) {
             bandTabs.addView(createAddButton())
         }
         updateTabHighlight()
@@ -348,7 +352,7 @@ class MbcActivity : AppCompatActivity() {
         kneeText.setText(String.format("%.2f", b.kneeWidth))
         noiseGateSlider.value = b.noiseGateThreshold.coerceIn(-90f, 0f)
         noiseGateText.setText(String.format("%.0f", b.noiseGateThreshold))
-        expanderSlider.value = b.expanderRatio.coerceIn(1f, 50f)
+        expanderSlider.value = ratioToSlider(b.expanderRatio)
         expanderText.setText(String.format("%.2f", b.expanderRatio))
         preGainSlider.value = b.preGain.coerceIn(-12f, 12f)
         preGainText.setText(String.format("%.1f", b.preGain))
@@ -359,9 +363,11 @@ class MbcActivity : AppCompatActivity() {
         compressorCurve.threshold = b.threshold
         compressorCurve.ratio = b.ratio
         compressorCurve.kneeWidth = b.kneeWidth
+        compressorCurve.gateThreshold = b.noiseGateThreshold  // for dulled dot reference
         gateCurve.selectedBand = selectedBand
         gateCurve.gateThreshold = b.noiseGateThreshold
         gateCurve.expanderRatio = b.expanderRatio
+        gateCurve.compressorThreshold = b.threshold  // for dulled dot reference
         attackReleaseView.attackMs = b.attack
         attackReleaseView.releaseMs = b.release
         isUpdating = false
@@ -411,6 +417,7 @@ class MbcActivity : AppCompatActivity() {
         setupSlider(thresholdSlider, thresholdText, -60f, 0f, "%.1f") {
             bands[selectedBand].threshold = it
             compressorCurve.threshold = it
+            gateCurve.compressorThreshold = it  // sync dulled dot
         }
         setupSlider(rangeSlider, rangeText, -12f, 0f, "%.1f") {
             bands[selectedBand].range = it
@@ -430,10 +437,28 @@ class MbcActivity : AppCompatActivity() {
         setupSlider(noiseGateSlider, noiseGateText, -90f, 0f, "%.0f") {
             bands[selectedBand].noiseGateThreshold = it
             gateCurve.gateThreshold = it
+            compressorCurve.gateThreshold = it  // sync dulled dot
         }
-        setupSlider(expanderSlider, expanderText, 1f, 50f, "%.2f") {
-            bands[selectedBand].expanderRatio = it
-            gateCurve.expanderRatio = it
+        // Expander ratio slider: same exponential mapping as compressor ratio
+        expanderSlider.addOnChangeListener { _, value, fromUser ->
+            if (!fromUser || isUpdating) return@addOnChangeListener
+            val ratio = sliderToRatio(value)
+            expanderText.setText(String.format("%.2f", ratio))
+            bands[selectedBand].expanderRatio = ratio
+            gateCurve.expanderRatio = ratio
+            saveBand(selectedBand)
+        }
+        expanderText.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
+                val v = expanderText.text.toString().toFloatOrNull()?.coerceIn(1f, 50f) ?: 1f
+                expanderText.setText(String.format("%.2f", v))
+                expanderSlider.value = ratioToSlider(v)
+                bands[selectedBand].expanderRatio = v
+                gateCurve.expanderRatio = v
+                saveBand(selectedBand)
+                expanderText.clearFocus()
+            }
+            true
         }
         setupSlider(preGainSlider, preGainText, -12f, 12f, "%.1f") {
             bands[selectedBand].preGain = it
@@ -451,6 +476,7 @@ class MbcActivity : AppCompatActivity() {
             isUpdating = true
             thresholdSlider.value = value.coerceIn(-60f, 0f)
             thresholdText.setText(String.format("%.1f", value))
+            gateCurve.compressorThreshold = value  // sync dulled dot
             isUpdating = false
         }
         compressorCurve.onRatioChanged = { value ->
@@ -462,6 +488,15 @@ class MbcActivity : AppCompatActivity() {
             isUpdating = false
         }
 
+        compressorCurve.onKneeChanged = { value ->
+            bands[selectedBand].kneeWidth = value
+            saveBand(selectedBand)
+            isUpdating = true
+            kneeSlider.value = value.coerceIn(0.01f, 24f)
+            kneeText.setText(String.format("%.2f", value))
+            isUpdating = false
+        }
+
         // Gate callbacks — sync sliders when dragging on the gate graph
         gateCurve.onGateThresholdChanged = { value ->
             bands[selectedBand].noiseGateThreshold = value
@@ -469,13 +504,14 @@ class MbcActivity : AppCompatActivity() {
             isUpdating = true
             noiseGateSlider.value = value.coerceIn(-90f, 0f)
             noiseGateText.setText(String.format("%.0f", value))
+            compressorCurve.gateThreshold = value  // sync dulled dot
             isUpdating = false
         }
         gateCurve.onExpanderRatioChanged = { value ->
             bands[selectedBand].expanderRatio = value
             saveBand(selectedBand)
             isUpdating = true
-            expanderSlider.value = value.coerceIn(1f, 50f)
+            expanderSlider.value = ratioToSlider(value)
             expanderText.setText(String.format("%.2f", value))
             isUpdating = false
         }
@@ -496,6 +532,90 @@ class MbcActivity : AppCompatActivity() {
             releaseSlider.value = value.coerceIn(1f, 5000f)
             releaseText.setText(String.format("%.0f", value))
             isUpdating = false
+        }
+
+        // Double-tap slider thumbs to reset to defaults
+        addDoubleTapReset(thresholdSlider) {
+            bands[selectedBand].threshold = -12f; saveBand(selectedBand)
+            thresholdSlider.value = -12f; thresholdText.setText("-12.0")
+            compressorCurve.threshold = -12f; gateCurve.compressorThreshold = -12f
+        }
+        addDoubleTapReset(ratioSlider) {
+            bands[selectedBand].ratio = 2f; saveBand(selectedBand)
+            ratioSlider.value = ratioToSlider(2f); ratioText.setText("2.00")
+            compressorCurve.ratio = 2f
+        }
+        addDoubleTapReset(kneeSlider) {
+            bands[selectedBand].kneeWidth = 8f; saveBand(selectedBand)
+            kneeSlider.value = 8f; kneeText.setText("8.00")
+            compressorCurve.kneeWidth = 8f
+        }
+        addDoubleTapReset(attackSlider) {
+            bands[selectedBand].attack = 1f; saveBand(selectedBand)
+            attackSlider.value = 1f; attackText.setText("1.00")
+            attackReleaseView.attackMs = 1f
+        }
+        addDoubleTapReset(releaseSlider) {
+            bands[selectedBand].release = 100f; saveBand(selectedBand)
+            releaseSlider.value = 100f; releaseText.setText("100")
+            attackReleaseView.releaseMs = 100f
+        }
+        addDoubleTapReset(noiseGateSlider) {
+            bands[selectedBand].noiseGateThreshold = -40f; saveBand(selectedBand)
+            noiseGateSlider.value = -40f; noiseGateText.setText("-40")
+            gateCurve.gateThreshold = -40f; compressorCurve.gateThreshold = -40f
+        }
+        addDoubleTapReset(expanderSlider) {
+            bands[selectedBand].expanderRatio = 2f; saveBand(selectedBand)
+            expanderSlider.value = ratioToSlider(2f); expanderText.setText("2.00")
+            gateCurve.expanderRatio = 2f
+        }
+        addDoubleTapReset(preGainSlider) {
+            bands[selectedBand].preGain = 0f; saveBand(selectedBand)
+            preGainSlider.value = 0f; preGainText.setText("0.0")
+            graphView.mbcBandGains?.let { it[selectedBand] = 0f; graphView.invalidate() }
+        }
+        addDoubleTapReset(rangeSlider) {
+            val defRange = DEFAULT_RANGES.getOrElse(selectedBand) { -6f }
+            bands[selectedBand].range = defRange; saveBand(selectedBand)
+            rangeSlider.value = defRange; rangeText.setText(String.format("%.1f", defRange))
+            graphView.mbcBandRanges?.let { it[selectedBand] = defRange; graphView.invalidate() }
+        }
+        addDoubleTapReset(postGainSlider) {
+            bands[selectedBand].postGain = 0f; saveBand(selectedBand)
+            postGainSlider.value = 0f; postGainText.setText("0.0")
+        }
+        addDoubleTapReset(cutoffSlider) {
+            val defCutoff = DEFAULT_CUTOFFS.getOrElse(selectedBand) { 1000f }
+            bands[selectedBand].cutoff = defCutoff; saveBand(selectedBand)
+            cutoffSlider.value = defCutoff; cutoffText.setText(defCutoff.toInt().toString())
+        }
+    }
+
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    private fun addDoubleTapReset(slider: Slider, onReset: () -> Unit) {
+        var lastTapTime = 0L
+        var consumeUntilUp = false
+        slider.setOnTouchListener { _, event ->
+            if (consumeUntilUp) {
+                if (event.action == android.view.MotionEvent.ACTION_UP || event.action == android.view.MotionEvent.ACTION_CANCEL) {
+                    consumeUntilUp = false
+                }
+                return@setOnTouchListener true
+            }
+            if (event.action == android.view.MotionEvent.ACTION_DOWN) {
+                val now = System.currentTimeMillis()
+                if (now - lastTapTime < 300) {
+                    isUpdating = true
+                    onReset()
+                    isUpdating = false
+                    lastTapTime = 0L
+                    consumeUntilUp = true
+                    return@setOnTouchListener true
+                }
+                lastTapTime = now
+            }
+            false
         }
     }
 
@@ -537,15 +657,14 @@ class MbcActivity : AppCompatActivity() {
     }
 
     private fun addBand() {
-        if (bandCount >= MAX_BAND_COUNT) return
+        if (bandCount >= DEFAULT_BAND_COUNT) return
 
         val oldBandCount = bandCount
         bandCount++
         eqPrefs.saveMbcBandCount(bandCount)
 
         // Add new band with defaults
-        val defaultFreqs = logSpacedFrequencies(bandCount)
-        bands.add(MbcBandData(cutoff = defaultFreqs.last()))
+        bands.add(MbcBandData(cutoff = DEFAULT_CUTOFFS.getOrElse(bandCount - 1) { 10000f }))
         saveBand(bandCount - 1)
 
         // Recompute crossovers
@@ -597,7 +716,7 @@ class MbcActivity : AppCompatActivity() {
 
         // Target widths: all buttons share equally
         val totalWidth = buttonWidths.sum()
-        val atMax = bandCount >= MAX_BAND_COUNT
+        val atMax = bandCount >= DEFAULT_BAND_COUNT
         val newTotalButtons = bandCount + if (atMax) 0 else 1
         val targetWidth = totalWidth / newTotalButtons
 
@@ -670,7 +789,7 @@ class MbcActivity : AppCompatActivity() {
         val removeWidth = buttonWidths.getOrElse(index) { 0 }
 
         // If was at max (no "+"), add one at the end at width 0
-        val wasAtMax = bandCount == MAX_BAND_COUNT
+        val wasAtMax = bandCount == DEFAULT_BAND_COUNT
         if (wasAtMax) {
             val addBtn = createAddButton()
             val addLp = addBtn.layoutParams as LinearLayout.LayoutParams
@@ -833,6 +952,8 @@ class MbcActivity : AppCompatActivity() {
                     mbcBandColors[selectedBand] = color
                 }
                 updateMbcColorBox()
+                graphView.mbcBandColors = IntArray(bandCount) { mbcBandColors[it] ?: 0 }
+                graphView.invalidate()
                 bottomSheet.dismiss()
             }
             grid.addView(swatch)
