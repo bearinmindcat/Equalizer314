@@ -94,16 +94,24 @@
                             android:layout_width="match_parent"
                             android:layout_height="280dp" />
 
-                        <ImageButton
+                        <com.google.android.material.button.MaterialButton
                             android:id="@+id/visualizerToggle"
-                            android:layout_width="32dp"
-                            android:layout_height="32dp"
+                            style="?attr/materialButtonOutlinedStyle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
                             android:layout_gravity="top|end"
-                            android:layout_margin="8dp"
-                            android:background="@android:color/transparent"
-                            android:src="@android:drawable/ic_media_play"
-                            android:scaleType="centerInside"
-                            android:alpha="0.5"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            android:padding="3dp"
+                            app:icon="@drawable/ic_spectrum"
+                            app:iconGravity="textStart"
+                            app:iconPadding="0dp"
+                            app:iconTint="@null"
+                            app:shapeAppearanceOverlay="@style/ShapeAppearance.SpectrumButton"
+                            app:strokeColor="#FF444444"
+                            app:strokeWidth="1dp"
                             android:contentDescription="Toggle visualizer" />
                     </FrameLayout>
                 </com.google.android.material.card.MaterialCardView>

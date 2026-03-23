@@ -138,6 +138,23 @@ class SpectrumAnalyzerRenderer(
             yArr[x] = top + graphHeight * (1f - normalized)
         }
 
+        // Smooth micro-spikes in bass region with fading smoothing:
+        // Full smoothing below 150 Hz, tapering to none at 300 Hz.
+        val bass150Pixel = ((log10(150f) - logMin) / logRange * displayWidth).toInt()
+            .coerceIn(0, displayWidth - 1)
+        val bass300Pixel = ((log10(300f) - logMin) / logRange * displayWidth).toInt()
+            .coerceIn(0, displayWidth - 1)
+        // 3 passes of weighted moving average — blend fades from 1.0 to 0.0
+        for (pass in 0 until 3) {
+            val tmp = yArr.copyOf()
+            for (x in 2 until bass300Pixel - 2) {
+                val smoothed = (tmp[x - 2] + tmp[x - 1] + tmp[x] + tmp[x + 1] + tmp[x + 2]) / 5f
+                val blend = if (x < bass150Pixel) 1f
+                            else 1f - (x - bass150Pixel).toFloat() / (bass300Pixel - bass150Pixel)
+                yArr[x] = blend * smoothed + (1f - blend) * tmp[x]
+            }
+        }
+
         // Render with cubic Bézier paths (horizontal tangent approach from guide)
         fillPath.reset()
         strokePath.reset()
@@ -179,8 +196,8 @@ class SpectrumAnalyzerRenderer(
         fillPaint.shader = LinearGradient(
             0f, top, 0f, bottom,
             intArrayOf(
-                Color.argb(45, 180, 180, 180),
-                Color.argb(8, 100, 100, 100)
+                Color.argb(80, 180, 180, 180),
+                Color.argb(15, 100, 100, 100)
             ),
             null,
             Shader.TileMode.CLAMP

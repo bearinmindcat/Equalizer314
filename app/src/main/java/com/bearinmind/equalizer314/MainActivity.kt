@@ -346,14 +346,57 @@ class MainActivity : AppCompatActivity() {
             if (stateManager.isProcessing) stopProcessing() else startProcessing()
         }
 
-        // Visualizer toggle
-        val vizToggle = findViewById<android.widget.ImageButton>(R.id.visualizerToggle)
+        // Visualizer toggle — positioned exactly between grid lines with 2dp gap
+        val vizToggle = findViewById<com.google.android.material.button.MaterialButton>(R.id.visualizerToggle)
+        val vizDensity = resources.displayMetrics.density
+        val gapPx = (2 * vizDensity).toInt()
+        eqGraphView.post {
+            val viewWidth = eqGraphView.width
+            val vPadPx = 80  // +12 dB grid line y position
+            // 10kHz vertical grid line: x = viewWidth * (log10(10000)-log10(10))/(log10(20000)-log10(10))
+            val gridLine10k = (viewWidth * 3.0 / 3.301).toInt()
+            // Right grid line = viewWidth
+            // Button bounds: 2dp inside from each grid line
+            val btnLeft = gridLine10k + gapPx
+            val btnTop = gapPx
+            val btnRight = viewWidth - gapPx
+            val btnBottom = vPadPx - gapPx
+            val btnWidth = btnRight - btnLeft
+            val btnHeight = btnBottom - btnTop
+            val lp = vizToggle.layoutParams as android.widget.FrameLayout.LayoutParams
+            lp.width = btnWidth
+            lp.height = btnHeight
+            lp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+            lp.leftMargin = btnLeft
+            lp.topMargin = btnTop
+            lp.rightMargin = 0
+            vizToggle.layoutParams = lp
+            vizToggle.minimumWidth = 0
+            vizToggle.minimumHeight = 0
+            vizToggle.setPadding(0, 0, 0, 0)
+        }
+        fun updateVizToggleStyle(active: Boolean) {
+            if (active) {
+                vizToggle.alpha = 1.0f
+                vizToggle.setBackgroundColor(0xFF555555.toInt())
+                vizToggle.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+                vizToggle.strokeWidth = (2 * vizDensity).toInt()
+                vizToggle.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
+            } else {
+                vizToggle.alpha = 1.0f
+                vizToggle.setBackgroundColor(0x00000000)
+                vizToggle.strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                vizToggle.strokeWidth = (1 * vizDensity).toInt()
+                vizToggle.iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+            }
+        }
+        updateVizToggleStyle(false)
         vizToggle.setOnClickListener {
             if (visualizerHelper.isRunning) {
                 visualizerHelper.stop()
                 eqGraphView.spectrumRenderer = null
                 eqGraphView.invalidate()
-                vizToggle.alpha = 0.3f
+                updateVizToggleStyle(false)
             } else {
                 if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
                     != android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -362,7 +405,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 visualizerHelper.start(eqGraphView)
                 eqGraphView.spectrumRenderer = visualizerHelper.renderer
-                vizToggle.alpha = 1.0f
+                updateVizToggleStyle(true)
             }
         }
         powerButton.setOnClickListener {
@@ -1377,7 +1420,13 @@ class MainActivity : AppCompatActivity() {
         if (requestCode == 200 && grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
             visualizerHelper.start(eqGraphView)
             eqGraphView.spectrumRenderer = visualizerHelper.renderer
-            findViewById<android.widget.ImageButton>(R.id.visualizerToggle).alpha = 1.0f
+            val vizBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.visualizerToggle)
+            val d = resources.displayMetrics.density
+            vizBtn.alpha = 1.0f
+            vizBtn.setBackgroundColor(0xFF555555.toInt())
+            vizBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+            vizBtn.strokeWidth = (2 * d).toInt()
+            vizBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
         }
     }
 

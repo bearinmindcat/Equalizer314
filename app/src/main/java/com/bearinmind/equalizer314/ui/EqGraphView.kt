@@ -1369,9 +1369,9 @@ class EqGraphView @JvmOverloads constructor(
         return super.onTouchEvent(event)
     }
 
-    // All 8 log-spaced positions for double-tap reset
+    // All 16 log-spaced positions for double-tap reset (matches ParametricEqualizer defaults)
     private val defaultFrequencies: List<Float> by lazy {
-        val all = com.bearinmind.equalizer314.dsp.ParametricEqualizer.logSpacedFrequencies(8)
+        val all = com.bearinmind.equalizer314.dsp.ParametricEqualizer.logSpacedFrequencies(16)
         all.toList()
     }
 
