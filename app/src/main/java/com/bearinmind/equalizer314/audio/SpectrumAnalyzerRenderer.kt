@@ -2,7 +2,6 @@ package com.bearinmind.equalizer314.audio
 
 import android.graphics.*
 import kotlin.math.ln
-import kotlin.math.log10
 import kotlin.math.exp
 
 /**
@@ -103,70 +102,74 @@ class SpectrumAnalyzerRenderer(
 
         val binWidthHz = fftProcessor.binWidthHz
 
-        fillPath.reset()
-        strokePath.reset()
-
-        var firstPoint = true
-        val step = 2f  // every 2 pixels (smooth enough, half the work)
-
         // Log frequency axis: 20 Hz – 20 kHz
         val logMin = ln(20f)
         val logMax = ln(20000f)
         val logRange = logMax - logMin
 
+        // ── Step 1: Collect sample points via direct bin interpolation ──
+        // No octave smoothing — show individual peaks. Hann window + zero-padding
+        // already provides clean data. Linear interpolation between nearest bins
+        // gives sub-bin precision for smooth curves.
+        val step = 2f
+        val pointCount = ((graphWidth / step).toInt()) + 1
+        val pxArr = FloatArray(pointCount)
+        val pyArr = FloatArray(pointCount)
+        var idx = 0
+
         var x = 0f
-        while (x <= graphWidth) {
-            // ── Pixel → frequency (log scale) ──
+        while (x <= graphWidth && idx < pointCount) {
             val norm = x / graphWidth
             val freq = exp(logMin + norm * logRange)
 
-            // ── 1/6-octave smoothing (max-bin within ±1/12 octave) ──
-            // This averages out noise while preserving peaks, like SPAN's approach.
-            // At 4096 FFT / 48kHz, bins are ~11.7 Hz apart.
-            // At 100 Hz, ±1/12 octave = ~94–106 Hz = ~1 bin (not much smoothing)
-            // At 5 kHz, ±1/12 octave = ~4700–5300 Hz = ~51 bins (significant smoothing)
-            // This natural widening is exactly what makes high frequencies look clean.
-            val octaveRatio = 1.0595f  // 2^(1/12)
-            val lowFreq = freq / octaveRatio
-            val highFreq = freq * octaveRatio
-            val lowBin = (lowFreq / binWidthHz).toInt().coerceIn(1, n - 1)
-            val highBin = (highFreq / binWidthHz).toInt().coerceIn(lowBin, n - 1)
+            // Fractional bin index for this frequency
+            val binF = freq / binWidthHz
+            val binLow = binF.toInt().coerceIn(1, n - 2)
+            val frac = binF - binLow
+            // Linear interpolation between adjacent bins
+            val interpDb = db[binLow] * (1f - frac) + db[binLow + 1] * frac
 
-            var maxDb = -96f
-            for (b in lowBin..highBin) {
-                if (db[b] > maxDb) maxDb = db[b]
-            }
-
-            // ── 4.5 dB/octave tilt compensation ──
-            // THE key technique that makes pro analyzers look flat.
-            // Music has roughly -4.5 dB/oct spectral slope. This cancels it.
-            // Pivot at 1 kHz: frequencies above get boosted on display,
-            // frequencies below get attenuated on display.
-            val octavesFrom1k = log10(freq / 1000f) / 0.30103f  // log2 via log10
-            val tiltDb = octavesFrom1k * 4.5f
-            val displayDb = maxDb + tiltDb
-
-            // ── dB → Y pixel ──
-            val normalizedDb = ((displayDb - dbMin) / dbRange).coerceIn(0f, 1f)
-            val y = top + graphHeight * (1f - normalizedDb)
-            val px = left + x
-
-            if (firstPoint) {
-                strokePath.moveTo(px, y)
-                fillPath.moveTo(px, bottom)
-                fillPath.lineTo(px, y)
-                firstPoint = false
-            } else {
-                strokePath.lineTo(px, y)
-                fillPath.lineTo(px, y)
-            }
-
+            val normalizedDb = ((interpDb - dbMin) / dbRange).coerceIn(0f, 1f)
+            pxArr[idx] = left + x
+            pyArr[idx] = top + graphHeight * (1f - normalizedDb)
+            idx++
             x += step
         }
 
-        if (firstPoint) return
+        val count = idx
+        if (count < 2) return
 
-        fillPath.lineTo(right, bottom)
+        // ── Step 2: Draw with Catmull-Rom splines ──
+        fillPath.reset()
+        strokePath.reset()
+
+        strokePath.moveTo(pxArr[0], pyArr[0])
+        fillPath.moveTo(pxArr[0], bottom)
+        fillPath.lineTo(pxArr[0], pyArr[0])
+
+        for (i in 0 until count - 1) {
+            // Catmull-Rom needs 4 points: p0, p1, p2, p3
+            // Clamp at boundaries
+            val p0x = pxArr[maxOf(i - 1, 0)]
+            val p0y = pyArr[maxOf(i - 1, 0)]
+            val p1x = pxArr[i]
+            val p1y = pyArr[i]
+            val p2x = pxArr[i + 1]
+            val p2y = pyArr[i + 1]
+            val p3x = pxArr[minOf(i + 2, count - 1)]
+            val p3y = pyArr[minOf(i + 2, count - 1)]
+
+            // Catmull-Rom → cubic Bezier control points
+            val cp1x = p1x + (p2x - p0x) / 6f
+            val cp1y = p1y + (p2y - p0y) / 6f
+            val cp2x = p2x - (p3x - p1x) / 6f
+            val cp2y = p2y - (p3y - p1y) / 6f
+
+            strokePath.cubicTo(cp1x, cp1y, cp2x, cp2y, p2x, p2y)
+            fillPath.cubicTo(cp1x, cp1y, cp2x, cp2y, p2x, p2y)
+        }
+
+        fillPath.lineTo(pxArr[count - 1], bottom)
         fillPath.close()
 
         // Clip to graph bounds
