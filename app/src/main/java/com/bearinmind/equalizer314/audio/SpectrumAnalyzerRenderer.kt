@@ -36,6 +36,7 @@ class SpectrumAnalyzerRenderer(
 
     // Reusable drawing objects — input spectrum
     private val inputFillPath = Path()
+    private val inputStrokePath = Path()
 
     // Reusable drawing objects — output spectrum
     private val outputFillPath = Path()
@@ -43,6 +44,12 @@ class SpectrumAnalyzerRenderer(
 
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
+    }
+
+    private val inputStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 1.2f
+        color = Color.argb(70, 180, 180, 180)
     }
 
     private val outputStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -204,46 +211,51 @@ class SpectrumAnalyzerRenderer(
         canvas.saveLayerAlpha(left, top, right, bottom, layerAlpha)
         canvas.clipRect(left, top, right, bottom)
 
-        // ── Draw INPUT spectrum (dim, background layer) ──
+        // ── Draw INPUT spectrum (background layer) ──
         inputFillPath.reset()
+        inputStrokePath.reset()
         inputFillPath.moveTo(xArr[0], bottom)
         inputFillPath.lineTo(xArr[0], inputY[0])
+        inputStrokePath.moveTo(xArr[0], inputY[0])
         var i = step
         while (i < displayWidth) {
             val midX = (xArr[i - step] + xArr[i]) / 2f
             inputFillPath.cubicTo(midX, inputY[i - step], midX, inputY[i], xArr[i], inputY[i])
+            inputStrokePath.cubicTo(midX, inputY[i - step], midX, inputY[i], xArr[i], inputY[i])
             i += step
         }
-        if (i - step < lastIdx) inputFillPath.lineTo(xArr[lastIdx], inputY[lastIdx])
+        if (i - step < lastIdx) {
+            inputFillPath.lineTo(xArr[lastIdx], inputY[lastIdx])
+            inputStrokePath.lineTo(xArr[lastIdx], inputY[lastIdx])
+        }
         inputFillPath.lineTo(xArr[lastIdx], bottom)
         inputFillPath.close()
 
         if (outputY != null) {
-            // When showing dual spectrum, input is dim
-            fillPaint.shader = LinearGradient(
-                0f, top, 0f, bottom,
-                intArrayOf(Color.argb(35, 150, 150, 150), Color.argb(8, 100, 100, 100)),
-                null, Shader.TileMode.CLAMP
-            )
-        } else {
-            // Single spectrum mode — normal brightness
-            fillPaint.shader = LinearGradient(
-                0f, top, 0f, bottom,
-                intArrayOf(Color.argb(80, 180, 180, 180), Color.argb(15, 100, 100, 100)),
-                null, Shader.TileMode.CLAMP
-            )
-        }
-        canvas.drawPath(inputFillPath, fillPaint)
+            // Dual mode:
+            // 1. "Common" area (overlap of input & output) = 80 alpha (the main spectrum)
+            // 2. Difference areas (boost above input, cut leftover) = 5 alpha
+            //
+            // Build a "common" path using the LOWER of input/output at each point
+            // (lower dB = higher Y pixel). This is the area both spectrums share.
+            val commonY = FloatArray(displayWidth) { x ->
+                maxOf(inputY[x], outputY[x])  // max Y = lower on screen = lower dB
+            }
 
-        // ── Draw OUTPUT spectrum (bright, foreground layer) ──
-        if (outputY != null) {
+            // Draw input fill at 5 alpha (covers cut leftover areas)
+            fillPaint.shader = LinearGradient(
+                0f, top, 0f, bottom,
+                intArrayOf(Color.argb(5, 160, 160, 160), Color.argb(2, 100, 100, 100)),
+                null, Shader.TileMode.CLAMP
+            )
+            canvas.drawPath(inputFillPath, fillPaint)
+
+            // Draw output fill at 5 alpha (covers boost areas above input)
             outputFillPath.reset()
             outputStrokePath.reset()
-
             outputFillPath.moveTo(xArr[0], bottom)
             outputFillPath.lineTo(xArr[0], outputY[0])
             outputStrokePath.moveTo(xArr[0], outputY[0])
-
             i = step
             while (i < displayWidth) {
                 val midX = (xArr[i - step] + xArr[i]) / 2f
@@ -257,14 +269,41 @@ class SpectrumAnalyzerRenderer(
             }
             outputFillPath.lineTo(xArr[lastIdx], bottom)
             outputFillPath.close()
+            canvas.drawPath(outputFillPath, fillPaint)
+
+            // Draw common area at 80 alpha (the bright main spectrum)
+            val commonFillPath = Path()
+            commonFillPath.moveTo(xArr[0], bottom)
+            commonFillPath.lineTo(xArr[0], commonY[0])
+            i = step
+            while (i < displayWidth) {
+                val midX = (xArr[i - step] + xArr[i]) / 2f
+                commonFillPath.cubicTo(midX, commonY[i - step], midX, commonY[i], xArr[i], commonY[i])
+                i += step
+            }
+            if (i - step < lastIdx) commonFillPath.lineTo(xArr[lastIdx], commonY[lastIdx])
+            commonFillPath.lineTo(xArr[lastIdx], bottom)
+            commonFillPath.close()
 
             fillPaint.shader = LinearGradient(
                 0f, top, 0f, bottom,
-                intArrayOf(Color.argb(65, 200, 200, 200), Color.argb(12, 120, 120, 120)),
+                intArrayOf(Color.argb(80, 180, 180, 180), Color.argb(15, 100, 100, 100)),
                 null, Shader.TileMode.CLAMP
             )
-            canvas.drawPath(outputFillPath, fillPaint)
+            canvas.drawPath(commonFillPath, fillPaint)
+
+            // Draw outlines
+            canvas.drawPath(inputStrokePath, inputStrokePaint)
             canvas.drawPath(outputStrokePath, outputStrokePaint)
+        } else {
+            // Single spectrum mode — normal brightness
+            fillPaint.shader = LinearGradient(
+                0f, top, 0f, bottom,
+                intArrayOf(Color.argb(80, 180, 180, 180), Color.argb(15, 100, 100, 100)),
+                null, Shader.TileMode.CLAMP
+            )
+            canvas.drawPath(inputFillPath, fillPaint)
+            canvas.drawPath(inputStrokePath, inputStrokePaint)
         }
 
         canvas.restore()
