@@ -4,20 +4,6 @@ import android.media.audiofx.Visualizer
 import android.util.Log
 import com.bearinmind.equalizer314.ui.EqGraphView
 
-/**
- * Thin wrapper around Android's Visualizer API.
- *
- * KEY CHANGE: Captures WAVEFORM data instead of FFT data.
- *
- * Why: Visualizer.getFft() returns a pre-cooked 8-bit FFT with:
- *   - No windowing (causes spectral leakage = spiky look)
- *   - No control over normalization (absolute dB values are meaningless)
- *   - Interleaved byte format that's easy to parse wrong
- *
- * Visualizer.getWaveForm() returns raw 8-bit PCM that we feed into
- * our own pipeline: Hann window → zero-pad 1024→4096 → float FFT → dBFS.
- * Same 8-bit source, dramatically better display quality.
- */
 class VisualizerHelper {
 
     companion object {
@@ -34,29 +20,44 @@ class VisualizerHelper {
 
         try {
             visualizer = Visualizer(0).apply {
-                captureSize = Visualizer.getCaptureSizeRange()[1] // max (typically 1024)
+                captureSize = Visualizer.getCaptureSizeRange()[1]
                 scalingMode = Visualizer.SCALING_MODE_NORMALIZED
                 measurementMode = Visualizer.MEASUREMENT_MODE_PEAK_RMS
+
+                // Silence detection state
+                var silentFrames = 0
 
                 setDataCaptureListener(object : Visualizer.OnDataCaptureListener {
                     override fun onWaveFormDataCapture(
                         v: Visualizer?, waveform: ByteArray?, samplingRate: Int
                     ) {
-                        if (waveform == null || waveform.size < 64) return
-                        // Feed raw waveform into our own FFT pipeline
-                        renderer.updateWaveformData(waveform)
+                        if (waveform == null || waveform.size < 64 || v == null) return
+
+                        // Use 16-bit peak/RMS measurement for reliable silence detection
+                        // This is unaffected by SCALING_MODE_NORMALIZED
+                        val measurement = Visualizer.MeasurementPeakRms()
+                        v.getMeasurementPeakRms(measurement)
+                        val isSilent = measurement.mPeak < -6000 // -60 dBFS
+
+                        if (isSilent) {
+                            silentFrames++
+                            // Feed zeros into the smoother so the EMA naturally decays
+                            renderer.feedSilence()
+                            // Fade opacity: ramp down over ~12 frames (~0.6s at 20Hz)
+                            renderer.fadeOut(0.08f)
+                        } else {
+                            silentFrames = 0
+                            renderer.updateWaveformData(waveform)
+                        }
                         graphView.postInvalidate()
                     }
 
                     override fun onFftDataCapture(
                         v: Visualizer?, fft: ByteArray?, samplingRate: Int
-                    ) {
-                        // No longer used — we do our own FFT from waveform data
-                    }
+                    ) { }
                 },
                     Visualizer.getMaxCaptureRate(),
-                    true,   // waveform = true  ← THE KEY CHANGE
-                    false   // fft = false (we don't need it anymore)
+                    true, false
                 )
 
                 enabled = true

@@ -29,6 +29,11 @@ class SpectrumAnalyzerRenderer(
     private val attackAlpha = 0.6f    // fast rise (~2-3 frames to reach 90%)
     private val releaseAlpha = 0.22f  // ~6 frames to decay
 
+    // Opacity for fade-out when music stops (1.0 = fully visible)
+    @Volatile
+    var opacity = 1f
+        private set
+
     // Reusable drawing objects — input spectrum
     private val inputFillPath = Path()
 
@@ -50,20 +55,18 @@ class SpectrumAnalyzerRenderer(
      * Called from Visualizer callback with RAW WAVEFORM bytes.
      */
     fun updateWaveformData(waveform: ByteArray) {
+        opacity = 1f  // reset fade on real audio
+
         val dbValues = fftProcessor.process(waveform)
         val n = dbValues.size
 
-        // Convert dB → linear magnitude for smoothing
-        // Smoothing in linear domain averages noise properly (reduces by √N)
-        // instead of dB domain which biases toward peaks
         val currentLinear = FloatArray(n) { i ->
             10f.pow(dbValues[i] / 20f)
         }
 
-        // Asymmetric EMA in linear domain
         var prev = smoothedLinear
         if (prev == null || prev.size != n) {
-            prev = FloatArray(n) // zeros = silence
+            prev = FloatArray(n)
         }
         val result = FloatArray(n)
         for (i in 0 until n) {
@@ -71,6 +74,26 @@ class SpectrumAnalyzerRenderer(
             result[i] = alpha * currentLinear[i] + (1f - alpha) * prev[i]
         }
         smoothedLinear = result
+    }
+
+    /** Feed zeros into the EMA so it decays naturally toward silence */
+    fun feedSilence() {
+        val prev = smoothedLinear ?: return
+        val n = prev.size
+        val result = FloatArray(n)
+        for (i in 0 until n) {
+            // releaseAlpha blends toward zero: result = (1 - alpha) * prev
+            result[i] = (1f - releaseAlpha) * prev[i]
+        }
+        smoothedLinear = result
+    }
+
+    /** Reduce opacity by [amount] per call. At 0, draw() returns early. */
+    fun fadeOut(amount: Float) {
+        opacity = (opacity - amount).coerceAtLeast(0f)
+        if (opacity <= 0f) {
+            smoothedLinear = null  // fully gone
+        }
     }
 
     /**
@@ -87,6 +110,7 @@ class SpectrumAnalyzerRenderer(
         val linear = smoothedLinear ?: return
         val n = linear.size
         if (n < 2) return
+        if (opacity <= 0f) return
 
         val graphWidth = right - left
         val graphHeight = bottom - top
@@ -175,8 +199,9 @@ class SpectrumAnalyzerRenderer(
         val step = 2
         val lastIdx = displayWidth - 1
 
-        // Clip to graph bounds
-        canvas.save()
+        // Clip to graph bounds + apply fade opacity
+        val layerAlpha = (opacity * 255).toInt().coerceIn(0, 255)
+        canvas.saveLayerAlpha(left, top, right, bottom, layerAlpha)
         canvas.clipRect(left, top, right, bottom)
 
         // ── Draw INPUT spectrum (dim, background layer) ──
@@ -247,5 +272,6 @@ class SpectrumAnalyzerRenderer(
 
     fun release() {
         smoothedLinear = null
+        opacity = 0f
     }
 }
