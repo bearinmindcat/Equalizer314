@@ -29,18 +29,21 @@ class SpectrumAnalyzerRenderer(
     private val attackAlpha = 0.6f    // fast rise (~2-3 frames to reach 90%)
     private val releaseAlpha = 0.22f  // ~6 frames to decay
 
-    // Reusable drawing objects
-    private val fillPath = Path()
-    private val strokePath = Path()
+    // Reusable drawing objects — input spectrum
+    private val inputFillPath = Path()
+
+    // Reusable drawing objects — output spectrum
+    private val outputFillPath = Path()
+    private val outputStrokePath = Path()
 
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
     }
 
-    private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    private val outputStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = 1.2f
-        color = Color.argb(80, 200, 200, 200)
+        strokeWidth = 1.5f
+        color = Color.argb(100, 220, 220, 220)
     }
 
     /**
@@ -70,10 +73,16 @@ class SpectrumAnalyzerRenderer(
         smoothedLinear = result
     }
 
+    /**
+     * @param eqResponseDb Optional EQ frequency response in dB per display pixel.
+     *                     When provided, draws dual spectrum: dim input + bright output.
+     *                     When null, draws single spectrum (input only).
+     */
     fun draw(
         canvas: Canvas,
         left: Float, top: Float, right: Float, bottom: Float,
-        dbMin: Float, dbMax: Float
+        dbMin: Float, dbMax: Float,
+        eqResponseDb: FloatArray? = null
     ) {
         val linear = smoothedLinear ?: return
         val n = linear.size
@@ -100,28 +109,26 @@ class SpectrumAnalyzerRenderer(
         // Collect display points — one per pixel column
         val displayWidth = graphWidth.toInt().coerceAtLeast(1)
         val xArr = FloatArray(displayWidth)
-        val yArr = FloatArray(displayWidth)
+        val inputY = FloatArray(displayWidth)
+        val outputY = if (eqResponseDb != null) FloatArray(displayWidth) else null
 
         for (x in 0 until displayWidth) {
-            // Frequency range for this pixel column
             val logFreqLow = logMin + logRange * x / displayWidth
             val logFreqHigh = logMin + logRange * (x + 1) / displayWidth
             val freqLow = 10f.pow(logFreqLow)
             val freqHigh = 10f.pow(logFreqHigh)
-            val freq = 10f.pow((logFreqLow + logFreqHigh) / 2f) // center freq
+            val freq = 10f.pow((logFreqLow + logFreqHigh) / 2f)
 
             val binLow = (freqLow / binWidthHz).toInt().coerceIn(1, n - 1)
             val binHigh = (freqHigh / binWidthHz).toInt().coerceIn(1, n - 1)
 
             val rawDb: Float
             if (binLow == binHigh) {
-                // Sub-bin resolution: interpolate between adjacent bins
                 val exactBin = freq / binWidthHz
                 val lower = exactBin.toInt().coerceIn(1, n - 2)
                 val frac = exactBin - lower
                 rawDb = db[lower] * (1f - frac) + db[lower + 1] * frac
             } else {
-                // Multiple bins per pixel: take peak (preserves spectral peaks)
                 var peak = -96f
                 for (b in binLow..binHigh.coerceAtMost(n - 1)) {
                     if (db[b] > peak) peak = db[b]
@@ -131,80 +138,110 @@ class SpectrumAnalyzerRenderer(
 
             // +3 dB/octave tilt compensation (pivot at 1 kHz)
             val tiltDb = 3.0f * (log10(freq / 1000f) / 0.30103f)
-            val displayDb = rawDb + tiltDb
+            val inputDb = rawDb + tiltDb
 
-            val normalized = ((displayDb - dbMin) / dbRange).coerceIn(0f, 1f)
+            val inputNorm = ((inputDb - dbMin) / dbRange).coerceIn(0f, 1f)
             xArr[x] = left + x
-            yArr[x] = top + graphHeight * (1f - normalized)
-        }
+            inputY[x] = top + graphHeight * (1f - inputNorm)
 
-        // Smooth micro-spikes in bass region with fading smoothing:
-        // Full smoothing below 150 Hz, tapering to none at 300 Hz.
-        val bass150Pixel = ((log10(150f) - logMin) / logRange * displayWidth).toInt()
-            .coerceIn(0, displayWidth - 1)
-        val bass300Pixel = ((log10(300f) - logMin) / logRange * displayWidth).toInt()
-            .coerceIn(0, displayWidth - 1)
-        // 3 passes of weighted moving average — blend fades from 1.0 to 0.0
-        for (pass in 0 until 3) {
-            val tmp = yArr.copyOf()
-            for (x in 2 until bass300Pixel - 2) {
-                val smoothed = (tmp[x - 2] + tmp[x - 1] + tmp[x] + tmp[x + 1] + tmp[x + 2]) / 5f
-                val blend = if (x < bass150Pixel) 1f
-                            else 1f - (x - bass150Pixel).toFloat() / (bass300Pixel - bass150Pixel)
-                yArr[x] = blend * smoothed + (1f - blend) * tmp[x]
+            // Output = input + EQ response
+            if (outputY != null && eqResponseDb != null && x < eqResponseDb.size) {
+                val outputDb = inputDb + eqResponseDb[x]
+                val outputNorm = ((outputDb - dbMin) / dbRange).coerceIn(0f, 1f)
+                outputY[x] = top + graphHeight * (1f - outputNorm)
             }
         }
 
-        // Render with cubic Bézier paths (horizontal tangent approach from guide)
-        fillPath.reset()
-        strokePath.reset()
+        // Bass smoothing disabled — was killing low-end extension
+        // val bass150Pixel = ((log10(150f) - logMin) / logRange * displayWidth).toInt()
+        //     .coerceIn(0, displayWidth - 1)
+        // val bass300Pixel = ((log10(300f) - logMin) / logRange * displayWidth).toInt()
+        //     .coerceIn(0, displayWidth - 1)
+        // for (pass in 0 until 3) {
+        //     val tmp = inputY.copyOf()
+        //     val tmpOut = outputY?.copyOf()
+        //     for (x in 2 until bass300Pixel - 2) {
+        //         val smoothed = (tmp[x - 2] + tmp[x - 1] + tmp[x] + tmp[x + 1] + tmp[x + 2]) / 5f
+        //         val blend = if (x < bass150Pixel) 1f
+        //                     else 1f - (x - bass150Pixel).toFloat() / (bass300Pixel - bass150Pixel)
+        //         inputY[x] = blend * smoothed + (1f - blend) * tmp[x]
+        //         if (tmpOut != null && outputY != null) {
+        //             val sOut = (tmpOut[x - 2] + tmpOut[x - 1] + tmpOut[x] + tmpOut[x + 1] + tmpOut[x + 2]) / 5f
+        //             outputY[x] = blend * sOut + (1f - blend) * tmpOut[x]
+        //         }
+        //     }
+        // }
 
-        // Subsample for Bézier control points — every 2 pixels
         val step = 2
-        val first = true
-        strokePath.moveTo(xArr[0], yArr[0])
-        fillPath.moveTo(xArr[0], bottom)
-        fillPath.lineTo(xArr[0], yArr[0])
-
-        var i = step
-        while (i < displayWidth) {
-            val x0 = xArr[i - step]
-            val y0 = yArr[i - step]
-            val x1 = xArr[i]
-            val y1 = yArr[i]
-            val midX = (x0 + x1) / 2f
-            // Cubic Bézier with horizontal tangents at control points
-            strokePath.cubicTo(midX, y0, midX, y1, x1, y1)
-            fillPath.cubicTo(midX, y0, midX, y1, x1, y1)
-            i += step
-        }
-
-        // Connect to last point if we didn't land exactly on it
         val lastIdx = displayWidth - 1
-        if (i - step < lastIdx) {
-            strokePath.lineTo(xArr[lastIdx], yArr[lastIdx])
-            fillPath.lineTo(xArr[lastIdx], yArr[lastIdx])
-        }
 
-        fillPath.lineTo(xArr[lastIdx], bottom)
-        fillPath.close()
-
-        // Clip to graph bounds and draw
+        // Clip to graph bounds
         canvas.save()
         canvas.clipRect(left, top, right, bottom)
 
-        fillPaint.shader = LinearGradient(
-            0f, top, 0f, bottom,
-            intArrayOf(
-                Color.argb(80, 180, 180, 180),
-                Color.argb(15, 100, 100, 100)
-            ),
-            null,
-            Shader.TileMode.CLAMP
-        )
+        // ── Draw INPUT spectrum (dim, background layer) ──
+        inputFillPath.reset()
+        inputFillPath.moveTo(xArr[0], bottom)
+        inputFillPath.lineTo(xArr[0], inputY[0])
+        var i = step
+        while (i < displayWidth) {
+            val midX = (xArr[i - step] + xArr[i]) / 2f
+            inputFillPath.cubicTo(midX, inputY[i - step], midX, inputY[i], xArr[i], inputY[i])
+            i += step
+        }
+        if (i - step < lastIdx) inputFillPath.lineTo(xArr[lastIdx], inputY[lastIdx])
+        inputFillPath.lineTo(xArr[lastIdx], bottom)
+        inputFillPath.close()
 
-        canvas.drawPath(fillPath, fillPaint)
-        canvas.drawPath(strokePath, strokePaint)
+        if (outputY != null) {
+            // When showing dual spectrum, input is dim
+            fillPaint.shader = LinearGradient(
+                0f, top, 0f, bottom,
+                intArrayOf(Color.argb(35, 150, 150, 150), Color.argb(8, 100, 100, 100)),
+                null, Shader.TileMode.CLAMP
+            )
+        } else {
+            // Single spectrum mode — normal brightness
+            fillPaint.shader = LinearGradient(
+                0f, top, 0f, bottom,
+                intArrayOf(Color.argb(80, 180, 180, 180), Color.argb(15, 100, 100, 100)),
+                null, Shader.TileMode.CLAMP
+            )
+        }
+        canvas.drawPath(inputFillPath, fillPaint)
+
+        // ── Draw OUTPUT spectrum (bright, foreground layer) ──
+        if (outputY != null) {
+            outputFillPath.reset()
+            outputStrokePath.reset()
+
+            outputFillPath.moveTo(xArr[0], bottom)
+            outputFillPath.lineTo(xArr[0], outputY[0])
+            outputStrokePath.moveTo(xArr[0], outputY[0])
+
+            i = step
+            while (i < displayWidth) {
+                val midX = (xArr[i - step] + xArr[i]) / 2f
+                outputFillPath.cubicTo(midX, outputY[i - step], midX, outputY[i], xArr[i], outputY[i])
+                outputStrokePath.cubicTo(midX, outputY[i - step], midX, outputY[i], xArr[i], outputY[i])
+                i += step
+            }
+            if (i - step < lastIdx) {
+                outputFillPath.lineTo(xArr[lastIdx], outputY[lastIdx])
+                outputStrokePath.lineTo(xArr[lastIdx], outputY[lastIdx])
+            }
+            outputFillPath.lineTo(xArr[lastIdx], bottom)
+            outputFillPath.close()
+
+            fillPaint.shader = LinearGradient(
+                0f, top, 0f, bottom,
+                intArrayOf(Color.argb(65, 200, 200, 200), Color.argb(12, 120, 120, 120)),
+                null, Shader.TileMode.CLAMP
+            )
+            canvas.drawPath(outputFillPath, fillPaint)
+            canvas.drawPath(outputStrokePath, outputStrokePaint)
+        }
+
         canvas.restore()
     }
 

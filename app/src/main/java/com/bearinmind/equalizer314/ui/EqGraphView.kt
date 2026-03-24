@@ -478,8 +478,21 @@ class EqGraphView @JvmOverloads constructor(
         // Use SpectrumAnalyzerRenderer if available
         val renderer = spectrumRenderer
         if (renderer != null) {
+            // Compute EQ frequency response per display pixel for dual spectrum
+            val eq = parametricEq
+            val eqResponse: FloatArray? = if (eq != null && eq.getBandCount() > 0) {
+                val displayWidth = graphWidth.toInt().coerceAtLeast(1)
+                val logMin = kotlin.math.log10(20f)
+                val logMax = kotlin.math.log10(20000f)
+                val logRange = logMax - logMin
+                FloatArray(displayWidth) { x ->
+                    val logFreqMid = logMin + logRange * (x + 0.5f) / displayWidth
+                    val freq = 10f.toDouble().pow((logFreqMid).toDouble()).toFloat()
+                    eq.getFrequencyResponse(freq)
+                }
+            } else null
             renderer.draw(canvas, 0f, vPad, graphWidth, height.toFloat(),
-                dbMin = -60f, dbMax = 0f)
+                dbMin = -60f, dbMax = 0f, eqResponseDb = eqResponse)
             return
         }
 

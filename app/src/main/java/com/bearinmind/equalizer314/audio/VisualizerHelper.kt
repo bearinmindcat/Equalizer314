@@ -35,7 +35,7 @@ class VisualizerHelper {
         try {
             visualizer = Visualizer(0).apply {
                 captureSize = Visualizer.getCaptureSizeRange()[1] // max (typically 1024)
-                scalingMode = Visualizer.SCALING_MODE_AS_PLAYED
+                scalingMode = Visualizer.SCALING_MODE_NORMALIZED
                 measurementMode = Visualizer.MEASUREMENT_MODE_PEAK_RMS
 
                 setDataCaptureListener(object : Visualizer.OnDataCaptureListener {
