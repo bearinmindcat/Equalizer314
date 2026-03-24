@@ -223,6 +223,17 @@ class MbcActivity : AppCompatActivity() {
             eqPrefs.saveMbcCrossover(index, freq)
             bands[index].cutoff = freq
             saveBand(index)
+            // Also update the next band's cutoff reference if it exists
+            if (index + 1 < bands.size) {
+                bands[index + 1].cutoff = freq
+                saveBand(index + 1)
+            }
+            // Sync cutoff slider/text if the selected band is affected
+            if (index == selectedBand || index + 1 == selectedBand) {
+                val b = bands[selectedBand]
+                cutoffSlider.value = b.cutoff.coerceIn(20f, 20000f)
+                cutoffText.setText(b.cutoff.toInt().toString())
+            }
         }
 
         graphView.onMbcBandGainChanged = { bandIndex, gain ->

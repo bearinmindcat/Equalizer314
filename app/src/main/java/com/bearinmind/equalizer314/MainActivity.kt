@@ -342,6 +342,9 @@ class MainActivity : AppCompatActivity() {
             pageSettings.visibility = View.GONE
             updateBottomBarHighlight(isEqPage = true)
         }
+        findViewById<ImageButton>(R.id.navMbcButton).setOnClickListener {
+            startActivity(Intent(this, MbcActivity::class.java))
+        }
         powerFab.setOnClickListener {
             if (stateManager.isProcessing) stopProcessing() else startProcessing()
         }
@@ -1268,6 +1271,8 @@ class MainActivity : AppCompatActivity() {
         val inactiveColor = 0xFF666666.toInt()
         navPresetsButton.setColorFilter(if (isEqPage) activeColor else inactiveColor)
         navSettingsButton.setColorFilter(if (isEqPage) inactiveColor else activeColor)
+        // MBC button always inactive color (it launches a separate activity)
+        findViewById<ImageButton>(R.id.navMbcButton).setColorFilter(inactiveColor)
     }
 
     private fun updateEqToggleUI() {

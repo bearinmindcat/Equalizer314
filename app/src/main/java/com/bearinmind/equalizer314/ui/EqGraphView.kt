@@ -988,15 +988,19 @@ class EqGraphView @JvmOverloads constructor(
             }
 
             if (bandColor != null) {
-                val colorFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = bandColor; style = Paint.Style.FILL; alpha = if (isSelected) 200 else 120
-                    pathEffect = CornerPathEffect(cornerRadius)
+                if (isSelected) {
+                    // Selected: fill + ring
+                    val colorFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = bandColor; style = Paint.Style.FILL; alpha = 200
+                        pathEffect = CornerPathEffect(cornerRadius)
+                    }
+                    canvas.drawPath(triPath, colorFillPaint)
                 }
+                // Always draw color outline
                 val colorRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = bandColor; style = Paint.Style.STROKE; strokeWidth = if (isSelected) 3f else 2f
                     pathEffect = CornerPathEffect(cornerRadius)
                 }
-                canvas.drawPath(triPath, colorFillPaint)
                 canvas.drawPath(triPath, colorRingPaint)
             } else if (isSelected) {
                 val fillPaint = Paint(activePointFillPaint).apply { pathEffect = CornerPathEffect(cornerRadius) }
@@ -1030,9 +1034,9 @@ class EqGraphView @JvmOverloads constructor(
                 }
 
                 if (bandColor != null) {
+                    // Bottom triangle: color outline only, no fill
                     val colorRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                         color = bandColor; style = Paint.Style.STROKE; strokeWidth = if (isSelected) 2.5f else 2f
-                        alpha = if (isSelected) 200 else 120
                         pathEffect = CornerPathEffect(cornerRadius)
                     }
                     canvas.drawPath(triPath, colorRingPaint)
