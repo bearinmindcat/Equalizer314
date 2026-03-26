@@ -99,6 +99,10 @@ class EqService : Service() {
         dynamicsManager.setEnabled(enabled)
     }
 
+    fun updateMbc(bands: List<DynamicsProcessingManager.MbcBandParams>, crossovers: FloatArray) {
+        dynamicsManager.applyMbcBands(bands, crossovers)
+    }
+
     private fun updateNotification() {
         val nm = getSystemService(NotificationManager::class.java)
         nm.notify(NOTIFICATION_ID, buildNotification())

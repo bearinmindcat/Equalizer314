@@ -56,10 +56,73 @@
         app:strokeColor="?attr/colorOutlineVariant"
         app:strokeWidth="1dp">
 
-        <com.bearinmind.equalizer314.ui.EqGraphView
-            android:id="@+id/mbcGraphView"
+        <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="220dp" />
+            android:layout_height="wrap_content">
+
+            <com.bearinmind.equalizer314.ui.EqGraphView
+                android:id="@+id/mbcGraphView"
+                android:layout_width="match_parent"
+                android:layout_height="220dp" />
+
+            <com.bearinmind.equalizer314.ui.GrTraceView
+                android:id="@+id/mbcGrTraceView"
+                android:layout_width="match_parent"
+                android:layout_height="220dp"
+                android:visibility="gone" />
+
+            <!-- Graph mode toggles (top-left) -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top|start"
+                android:layout_marginTop="4dp"
+                android:layout_marginStart="4dp"
+                android:orientation="horizontal">
+
+                <ImageButton
+                    android:id="@+id/mbcGraphModeFreq"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:src="@drawable/ic_graph_freq"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:scaleType="centerInside"
+                    android:contentDescription="Frequency view"
+                    app:tint="?attr/colorOnSurface" />
+
+                <ImageButton
+                    android:id="@+id/mbcGraphModeTime"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:layout_marginStart="4dp"
+                    android:src="@drawable/ic_graph_time"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:scaleType="centerInside"
+                    android:alpha="0.4"
+                    android:contentDescription="GR trace view"
+                    app:tint="?attr/colorOnSurface" />
+            </LinearLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/mbcVisualizerToggle"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top|end"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="3dp"
+                app:icon="@drawable/ic_spectrum"
+                app:iconGravity="textStart"
+                app:iconPadding="0dp"
+                app:iconTint="@null"
+                app:shapeAppearanceOverlay="@style/ShapeAppearance.SpectrumButton"
+                app:strokeColor="#FF444444"
+                app:strokeWidth="1dp"
+                android:contentDescription="Toggle visualizer" />
+        </FrameLayout>
     </com.google.android.material.card.MaterialCardView>
 
     <!-- Band selector tabs -->
@@ -230,52 +293,6 @@
                         </com.google.android.material.textfield.TextInputLayout>
                     </LinearLayout>
 
-                    <!-- Range -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical">
-
-                        <TextView
-                            android:layout_width="96dp"
-                            android:layout_height="wrap_content"
-                            android:text="Range (dB)"
-                            android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
-                            android:textColor="?attr/colorOnSurfaceVariant" />
-
-                        <com.google.android.material.slider.Slider
-                            android:id="@+id/mbcRangeSlider"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:valueFrom="-12"
-                            android:valueTo="0"
-                            android:value="-12"
-                            app:labelBehavior="gone" />
-
-                        <com.google.android.material.textfield.TextInputLayout
-                            android:layout_width="64dp"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="4dp"
-                            app:boxCornerRadiusTopStart="8dp"
-                            app:boxCornerRadiusTopEnd="8dp"
-                            app:boxCornerRadiusBottomStart="8dp"
-                            app:boxCornerRadiusBottomEnd="8dp"
-                            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense">
-
-                            <com.google.android.material.textfield.TextInputEditText
-                                android:id="@+id/mbcRangeText"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:inputType="numberDecimal|numberSigned"
-                                android:textSize="12sp"
-                                android:text="-12.0"
-                                android:gravity="center"
-                                android:imeOptions="actionDone" />
-                        </com.google.android.material.textfield.TextInputLayout>
-                    </LinearLayout>
-
                     <!-- Post-Gain -->
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -321,6 +338,108 @@
                                 android:imeOptions="actionDone" />
                         </com.google.android.material.textfield.TextInputLayout>
                     </LinearLayout>
+
+                    <!-- RANGE FEATURE COMMENTED OUT - Range UI hidden, data still saved/loaded in code -->
+                    <!--
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:paddingTop="4dp">
+
+                        <com.google.android.material.card.MaterialCardView
+                            android:id="@+id/mbcRangeInfoButton"
+                            android:layout_width="110dp"
+                            android:layout_height="wrap_content"
+                            android:clickable="true"
+                            android:focusable="true"
+                            app:cardBackgroundColor="@android:color/transparent"
+                            app:cardCornerRadius="8dp"
+                            app:cardElevation="0dp"
+                            app:strokeWidth="0dp"
+                            app:rippleColor="#33AAAAAA">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="Range (dB)"
+                                android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                                android:textColor="?attr/colorOnSurfaceVariant"
+                                android:paddingStart="4dp"
+                                android:paddingTop="6dp"
+                                android:paddingBottom="6dp" />
+                        </com.google.android.material.card.MaterialCardView>
+
+                        <com.google.android.material.slider.Slider
+                            android:id="@+id/mbcRangeSlider"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:valueFrom="-12"
+                            android:valueTo="0"
+                            android:value="-12"
+                            app:labelBehavior="gone" />
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:layout_width="64dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="4dp"
+                            app:boxCornerRadiusTopStart="8dp"
+                            app:boxCornerRadiusTopEnd="8dp"
+                            app:boxCornerRadiusBottomStart="8dp"
+                            app:boxCornerRadiusBottomEnd="8dp"
+                            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/mbcRangeText"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:inputType="numberDecimal|numberSigned"
+                                android:textSize="12sp"
+                                android:text="-12.0"
+                                android:gravity="center"
+                                android:imeOptions="actionDone" />
+                        </com.google.android.material.textfield.TextInputLayout>
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/mbcRangeHintCard"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:layout_marginTop="2dp"
+                        android:layout_marginBottom="4dp"
+                        android:visibility="gone">
+
+                        <ImageView
+                            android:id="@+id/mbcRangeTrianglePointer"
+                            android:layout_width="16dp"
+                            android:layout_height="8dp"
+                            android:layout_marginStart="40dp"
+                            android:scaleType="fitXY" />
+
+                        <com.google.android.material.card.MaterialCardView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            app:cardBackgroundColor="#1A333333"
+                            app:cardCornerRadius="8dp"
+                            app:cardElevation="0dp"
+                            app:strokeColor="?attr/colorOutlineVariant"
+                            app:strokeWidth="1dp">
+
+                            <TextView
+                                android:id="@+id/mbcRangeHint"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="Range (visual only)\nTo achieve this range, set threshold and ratio accordingly"
+                                android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                                android:textColor="?attr/colorOnSurfaceVariant"
+                                android:padding="10dp" />
+                        </com.google.android.material.card.MaterialCardView>
+                    </LinearLayout>
+                    -->
+
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 

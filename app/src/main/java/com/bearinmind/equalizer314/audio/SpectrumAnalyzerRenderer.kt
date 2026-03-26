@@ -25,6 +25,14 @@ class SpectrumAnalyzerRenderer(
     @Volatile
     private var smoothedLinear: FloatArray? = null
 
+    /** Expose smoothed linear magnitudes for compressor gain computation */
+    fun getSmoothedLinear(): FloatArray? = smoothedLinear
+    fun getBinWidthHz(): Float = fftProcessor.binWidthHz
+
+    // MBC gain computer — computes per-band GR from actual spectrum levels each frame
+    var mbcGainComputer: MbcGainComputer? = null
+    var mbcBandSettings: Array<MbcGainComputer.BandSettings>? = null
+
     // Asymmetric ballistics — applied to linear magnitudes
     private val attackAlpha = 0.6f    // fast rise (~2-3 frames to reach 90%)
     private val releaseAlpha = 0.22f  // ~6 frames to decay
@@ -132,6 +140,13 @@ class SpectrumAnalyzerRenderer(
             else -96f
         }
 
+        // Compute MBC band gains from the ACTUAL spectrum levels this frame
+        val mbcComputer = mbcGainComputer
+        val mbcSettings = mbcBandSettings
+        if (mbcComputer != null && mbcSettings != null) {
+            mbcComputer.computeAllBandGains(db, sampleRate, fftProcessor.fftSize, mbcSettings)
+        }
+
         // Log frequency mapping: 20 Hz – 20 kHz
         val logMin = log10(20f)
         val logMax = log10(20000f)
@@ -141,7 +156,7 @@ class SpectrumAnalyzerRenderer(
         val displayWidth = graphWidth.toInt().coerceAtLeast(1)
         val xArr = FloatArray(displayWidth)
         val inputY = FloatArray(displayWidth)
-        val outputY = if (eqResponseDb != null) FloatArray(displayWidth) else null
+        val outputY = if (eqResponseDb != null || mbcComputer != null) FloatArray(displayWidth) else null
 
         for (x in 0 until displayWidth) {
             val logFreqLow = logMin + logRange * x / displayWidth
@@ -175,9 +190,11 @@ class SpectrumAnalyzerRenderer(
             xArr[x] = left + x
             inputY[x] = top + graphHeight * (1f - inputNorm)
 
-            // Output = input + EQ response
-            if (outputY != null && eqResponseDb != null && x < eqResponseDb.size) {
-                val outputDb = inputDb + eqResponseDb[x]
+            // Output = input + EQ response + MBC gain
+            if (outputY != null) {
+                var outputDb = inputDb
+                if (eqResponseDb != null && x < eqResponseDb.size) outputDb += eqResponseDb[x]
+                if (mbcComputer != null) outputDb += mbcComputer.getGainAtFrequency(freq)
                 val outputNorm = ((outputDb - dbMin) / dbRange).coerceIn(0f, 1f)
                 outputY[x] = top + graphHeight * (1f - outputNorm)
             }

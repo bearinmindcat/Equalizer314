@@ -21,7 +21,7 @@ import kotlin.math.*
  * range is typically only ~60 dB and 48 dB covers the meaningful content.
  */
 class WaveformFftProcessor(
-    private val fftSize: Int = 4096,   // zero-padded output size
+    val fftSize: Int = 4096,   // zero-padded output size
     private val sampleRate: Int = 48000
 ) {
     // Pre-computed Hann window for the capture size (1024)

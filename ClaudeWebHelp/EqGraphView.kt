@@ -53,20 +53,12 @@ class EqGraphView @JvmOverloads constructor(
     // MBC band visualization
     var mbcCrossovers: FloatArray? = null       // crossover frequencies (N-1 for N bands)
     var mbcBandColors: IntArray? = null          // one color per band (unused for now but kept)
-    var mbcBandGains: FloatArray? = null         // per-band preGain in dB
-    var mbcBandPostGains: FloatArray? = null    // per-band postGain in dB
-    var mbcBandThresholds: FloatArray? = null   // per-band compressor threshold
-    var mbcBandRatios: FloatArray? = null       // per-band compressor ratio
-    var mbcBandKnees: FloatArray? = null        // per-band knee width
-    var mbcBandGateThresholds: FloatArray? = null // per-band noise gate threshold
-    var mbcBandExpanderRatios: FloatArray? = null // per-band expander ratio
-    // RANGE FEATURE COMMENTED OUT — range data not displayed or drawn
-    // var mbcBandRanges: FloatArray? = null        // per-band range in dB (negative, max gain reduction cap)
+    var mbcBandGains: FloatArray? = null         // per-band postGain in dB
+    var mbcBandRanges: FloatArray? = null        // per-band range in dB (negative, max gain reduction cap)
     var mbcSelectedBand: Int = 0
     var onMbcCrossoverChanged: ((crossoverIndex: Int, frequency: Float) -> Unit)? = null
     var onMbcBandGainChanged: ((bandIndex: Int, gain: Float) -> Unit)? = null
-    // RANGE FEATURE COMMENTED OUT
-    // var onMbcBandRangeChanged: ((bandIndex: Int, range: Float) -> Unit)? = null
+    var onMbcBandRangeChanged: ((bandIndex: Int, range: Float) -> Unit)? = null
     var onMbcBandSelected: ((bandIndex: Int) -> Unit)? = null
     private var mbcHaloAlpha = 0f
     private var mbcHaloAnimator: android.animation.ValueAnimator? = null
@@ -74,11 +66,7 @@ class EqGraphView @JvmOverloads constructor(
     private var mbcHaloBand = -1
     private var draggingCrossover: Int = -1
     private var draggingMbcBand: Int = -1
-    private var lastMbcTapTime = 0L
-    private var lastMbcTapBand = -1
-    var onMbcBandGainReset: ((bandIndex: Int) -> Unit)? = null
-    // RANGE FEATURE COMMENTED OUT
-    // private var draggingMbcRange: Int = -1
+    private var draggingMbcRange: Int = -1
 
     private val mbcCrossoverLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xAABBBBBB.toInt()
@@ -109,24 +97,23 @@ class EqGraphView @JvmOverloads constructor(
         style = Paint.Style.STROKE
     }
 
-    // RANGE FEATURE COMMENTED OUT — range paint objects
-    // private val mbcRangeCurvePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-    //     color = 0xAA999999.toInt()
-    //     strokeWidth = 2f
-    //     style = Paint.Style.STROKE
-    //     pathEffect = DashPathEffect(floatArrayOf(8f, 6f), 0f)
-    // }
-    //
-    // private val mbcRangeFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-    //     color = 0x30444444.toInt()
-    //     style = Paint.Style.FILL
-    // }
-    //
-    // private val mbcRangeDotRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-    //     color = 0xFF777777.toInt()
-    //     strokeWidth = 2f
-    //     style = Paint.Style.STROKE
-    // }
+    private val mbcRangeCurvePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xAA999999.toInt()
+        strokeWidth = 2f
+        style = Paint.Style.STROKE
+        pathEffect = DashPathEffect(floatArrayOf(8f, 6f), 0f)
+    }
+
+    private val mbcRangeFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0x30444444.toInt()
+        style = Paint.Style.FILL
+    }
+
+    private val mbcRangeDotRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF777777.toInt()
+        strokeWidth = 2f
+        style = Paint.Style.STROKE
+    }
 
     private val mbcTriTouchPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0x14AAAAAA.toInt()  // colorPrimary (#AAAAAA) at 8% alpha — exact Material3 Slider halo
@@ -331,6 +318,14 @@ class EqGraphView @JvmOverloads constructor(
 
     fun isSpectrumEnabled(): Boolean = spectrumEnabled
 
+    /** Accept raw FFT magnitudes from Visualizer (no SpectrumAnalyzer needed) */
+    private var visualizerMagnitudes: FloatArray? = null
+
+    fun postSpectrumData(magnitudes: FloatArray) {
+        visualizerMagnitudes = magnitudes
+        postInvalidate()
+    }
+
     /** Spectrum renderer — set by MainActivity when visualizer is active */
     var spectrumRenderer: com.bearinmind.equalizer314.audio.SpectrumAnalyzerRenderer? = null
 
@@ -491,23 +486,18 @@ class EqGraphView @JvmOverloads constructor(
         // Use SpectrumAnalyzerRenderer if available
         val renderer = spectrumRenderer
         if (renderer != null) {
-            // Compute EQ frequency response per display pixel for dual spectrum
-            val eq = parametricEq
-            // EQ frequency response only — MBC gain is computed inside the renderer
-            // by MbcGainComputer (which measures band levels from actual FFT each frame)
-            val eqResponse: FloatArray? = if (eq != null && eq.getBandCount() > 0) {
-                val displayWidth = graphWidth.toInt().coerceAtLeast(1)
-                val logMin = kotlin.math.log10(20f)
-                val logMax = kotlin.math.log10(20000f)
-                val logRange = logMax - logMin
-                FloatArray(displayWidth) { x ->
-                    val logFreqMid = logMin + logRange * (x + 0.5f) / displayWidth
-                    val freq = 10f.toDouble().pow((logFreqMid).toDouble()).toFloat()
-                    eq.getFrequencyResponse(freq)
-                }
-            } else null
-            renderer.draw(canvas, 0f, 0f, graphWidth, height.toFloat(),
-                dbMin = -60f, dbMax = 0f, eqResponseDb = eqResponse)
+            // Draw spectrum with dBFS range mapped to fill the graph
+            // Visualizer 8-bit FFT + tilt gives roughly -45 to +5 dBFS for typical music
+            // Map so peaks reach upper-middle area, valleys reach bottom
+            renderer.draw(canvas, 0f, vPad, graphWidth, vPad + graphHeight,
+                dbMin = -45f, dbMax = 5f)
+            return
+        }
+
+        // Legacy: use old Visualizer magnitudes or SpectrumAnalyzer data
+        val visMags = visualizerMagnitudes
+        if (visMags != null && visMags.isNotEmpty()) {
+            drawVisualizerSpectrum(canvas, vPad, graphWidth, graphHeight, visMags)
             return
         }
 
@@ -636,6 +626,68 @@ class EqGraphView @JvmOverloads constructor(
 
     /** Draw smooth spectrum from Visualizer (pre-normalized 0..1 dB values) */
     /** Draw spectrum — magnitudes are pre-normalized 0..1 from VisualizerHelper */
+    private fun drawVisualizerSpectrum(canvas: Canvas, vPad: Float, graphWidth: Float, graphHeight: Float, magnitudes: FloatArray) {
+        if (magnitudes.size < 2) return
+
+        val sampleRate = 48000f
+        val binWidth = sampleRate / (magnitudes.size * 2)
+        val bottomY = vPad + graphHeight
+
+        spectrumPath.reset()
+        spectrumFillPath.reset()
+        var started = false
+
+        // Draw many points across the graph for smooth log-frequency curve
+        val steps = (graphWidth / 2f).toInt().coerceAtLeast(200)
+        for (s in 0..steps) {
+            val x = graphWidth * s.toFloat() / steps
+            val freq = xToFreq(x, graphWidth)
+            if (freq < 15f || freq > 21000f) continue
+
+            // Map frequency to FFT bin with linear interpolation
+            val binF = freq / binWidth
+            val b0 = binF.toInt().coerceIn(0, magnitudes.size - 1)
+            val b1 = (b0 + 1).coerceIn(0, magnitudes.size - 1)
+            val frac = binF - b0
+            val mag = magnitudes[b0] + frac * (magnitudes[b1] - magnitudes[b0])
+
+            val y = vPad + graphHeight * (1f - mag.coerceIn(0f, 1f))
+
+            if (!started) {
+                spectrumPath.moveTo(x, y)
+                spectrumFillPath.moveTo(x, bottomY)
+                spectrumFillPath.lineTo(x, y)
+                started = true
+            } else {
+                spectrumPath.lineTo(x, y)
+                spectrumFillPath.lineTo(x, y)
+            }
+        }
+
+        if (!started) return
+
+        spectrumFillPath.lineTo(graphWidth, bottomY)
+        spectrumFillPath.close()
+
+        // Gradient fill
+        val gradient = android.graphics.LinearGradient(
+            0f, vPad, 0f, bottomY,
+            intArrayOf(0x50AAAAAA.toInt(), 0x15555555.toInt()),
+            null,
+            android.graphics.Shader.TileMode.CLAMP
+        )
+        spectrumFillPaint.shader = gradient
+        canvas.drawPath(spectrumFillPath, spectrumFillPaint)
+
+        // Line on top
+        val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0x70CCCCCC.toInt()
+            strokeWidth = 1.2f
+            style = Paint.Style.STROKE
+        }
+        canvas.drawPath(spectrumPath, linePaint)
+    }
+
     private fun calculatePointPositions(vPad: Float, graphWidth: Float, graphHeight: Float) {
         for (point in bandPoints) {
             point.x = freqToX(point.frequency, graphWidth).coerceIn(23f, graphWidth - 23f)
@@ -697,16 +749,7 @@ class EqGraphView @JvmOverloads constructor(
             }
         }
 
-        // In MBC mode, draw EQ curve as dotted + dimmer
-        if (mbcCrossovers != null) {
-            val dottedPaint = Paint(curvePaint).apply {
-                pathEffect = android.graphics.DashPathEffect(floatArrayOf(10f, 8f), 0f)
-                alpha = 50
-            }
-            canvas.drawPath(path, dottedPaint)
-        } else {
-            canvas.drawPath(path, curvePaint)
-        }
+        canvas.drawPath(path, curvePaint)
         if (showSaturated && showSaturationCurve) {
             canvas.drawPath(saturatedPath, saturatedCurvePaint)
         }
@@ -868,12 +911,9 @@ class EqGraphView @JvmOverloads constructor(
 
     // Expander/noise gate gain (downward expansion below noise gate threshold)
     // For signals below noiseGateThreshold, gain = expanderRatio × (input - noiseGateThreshold)
-    // Expander/gate: attenuates signal below noise gate threshold.
-    // GR is always negative (or zero) — pushes quiet signals further down.
     private fun expanderGainDb(inputDb: Float, noiseGateThreshold: Float, expanderRatio: Float): Float {
         if (inputDb >= noiseGateThreshold || expanderRatio <= 1f) return 0f
-        // (expanderRatio - 1) is positive, (inputDb - NGT) is negative → result is negative ✓
-        return (expanderRatio - 1f) * (inputDb - noiseGateThreshold)
+        return (1f - expanderRatio) * (inputDb - noiseGateThreshold)
     }
 
     private fun drawMbcBands(canvas: Canvas, vPad: Float, graphWidth: Float, graphHeight: Float) {
@@ -897,73 +937,75 @@ class EqGraphView @JvmOverloads constructor(
         }
         canvas.drawPath(curvePath, mbcCurvePaint)
 
-        // RANGE FEATURE COMMENTED OUT — range curve drawing section
-        // val ranges = mbcBandRanges
-        // if (ranges != null && ranges.size >= bandCount) {
-        //     val rangeGains = FloatArray(bandCount) { gains[it] + ranges[it] }
-        //
-        //     val rangeCurvePath = Path()
-        //     val rangeFillPath = Path()
-        //     val postGainYs = FloatArray(numSamples + 1)
-        //
-        //     for (s in 0..numSamples) {
-        //         val x = graphWidth * s.toFloat() / numSamples
-        //         val freq = xToFreq(x, graphWidth)
-        //         val postGainDb = mbcGainAtFreq(freq, crossovers, gains).coerceIn(minGain, maxGain)
-        //         postGainYs[s] = vPad + graphHeight * (1f - (postGainDb - minGain) / (maxGain - minGain))
-        //         val rangeDb = mbcGainAtFreq(freq, crossovers, rangeGains).coerceIn(minGain, maxGain)
-        //         val ry = vPad + graphHeight * (1f - (rangeDb - minGain) / (maxGain - minGain))
-        //
-        //         if (s == 0) {
-        //             rangeCurvePath.moveTo(x, ry)
-        //             rangeFillPath.moveTo(x, postGainYs[s])
-        //             rangeFillPath.lineTo(x, ry)
-        //         } else {
-        //             rangeCurvePath.lineTo(x, ry)
-        //             rangeFillPath.lineTo(x, ry)
-        //         }
-        //     }
-        //
-        //     for (s in numSamples downTo 0) {
-        //         val x = graphWidth * s.toFloat() / numSamples
-        //         rangeFillPath.lineTo(x, postGainYs[s])
-        //     }
-        //     rangeFillPath.close()
-        //
-        //     // Per-band colored fills
-        //     val bandColorArr = mbcBandColors
-        //     for (b in 0 until bandCount) {
-        //         val bColor = if (bandColorArr != null && b < bandColorArr.size && bandColorArr[b] != 0) bandColorArr[b] else null
-        //         val leftFreq = if (b == 0) graphMinFreq else crossovers[b - 1]
-        //         val rightFreq = if (b == bandCount - 1) graphMaxFreq else crossovers[b]
-        //         val leftS = ((log10(leftFreq) - log10(graphMinFreq)) / (log10(graphMaxFreq) - log10(graphMinFreq)) * numSamples).toInt().coerceIn(0, numSamples)
-        //         val rightS = ((log10(rightFreq) - log10(graphMinFreq)) / (log10(graphMaxFreq) - log10(graphMinFreq)) * numSamples).toInt().coerceIn(0, numSamples)
-        //
-        //         val bandFillPath = Path()
-        //         bandFillPath.moveTo(graphWidth * leftS.toFloat() / numSamples, postGainYs[leftS])
-        //         for (s in leftS..rightS) {
-        //             bandFillPath.lineTo(graphWidth * s.toFloat() / numSamples, postGainYs[s])
-        //         }
-        //         for (s in rightS downTo leftS) {
-        //             val x = graphWidth * s.toFloat() / numSamples
-        //             val freq = xToFreq(x, graphWidth)
-        //             val rangeDb = mbcGainAtFreq(freq, crossovers, rangeGains).coerceIn(minGain, maxGain)
-        //             val ry = vPad + graphHeight * (1f - (rangeDb - minGain) / (maxGain - minGain))
-        //             bandFillPath.lineTo(x, ry)
-        //         }
-        //         bandFillPath.close()
-        //
-        //         if (bColor != null) {
-        //             val coloredFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        //                 color = bColor; style = Paint.Style.FILL; alpha = 40
-        //             }
-        //             canvas.drawPath(bandFillPath, coloredFill)
-        //         } else {
-        //             canvas.drawPath(bandFillPath, mbcRangeFillPaint)
-        //         }
-        //     }
-        //     canvas.drawPath(rangeCurvePath, mbcRangeCurvePaint)
-        // }
+        // --- Draw range curve (dashed, below postGain curve) ---
+        val ranges = mbcBandRanges
+        if (ranges != null && ranges.size >= bandCount) {
+            val rangeGains = FloatArray(bandCount) { gains[it] + ranges[it] }
+
+            val rangeCurvePath = Path()
+            val rangeFillPath = Path()
+            val postGainYs = FloatArray(numSamples + 1)
+
+            for (s in 0..numSamples) {
+                val x = graphWidth * s.toFloat() / numSamples
+                val freq = xToFreq(x, graphWidth)
+                val postGainDb = mbcGainAtFreq(freq, crossovers, gains).coerceIn(minGain, maxGain)
+                postGainYs[s] = vPad + graphHeight * (1f - (postGainDb - minGain) / (maxGain - minGain))
+                val rangeDb = mbcGainAtFreq(freq, crossovers, rangeGains).coerceIn(minGain, maxGain)
+                val ry = vPad + graphHeight * (1f - (rangeDb - minGain) / (maxGain - minGain))
+
+                if (s == 0) {
+                    rangeCurvePath.moveTo(x, ry)
+                    rangeFillPath.moveTo(x, postGainYs[s])
+                    rangeFillPath.lineTo(x, ry)
+                } else {
+                    rangeCurvePath.lineTo(x, ry)
+                    rangeFillPath.lineTo(x, ry)
+                }
+            }
+
+            for (s in numSamples downTo 0) {
+                val x = graphWidth * s.toFloat() / numSamples
+                rangeFillPath.lineTo(x, postGainYs[s])
+            }
+            rangeFillPath.close()
+
+            // Per-band colored fills — only color bands that have a color assigned
+            val bandColorArr = mbcBandColors
+            for (b in 0 until bandCount) {
+                val bColor = if (bandColorArr != null && b < bandColorArr.size && bandColorArr[b] != 0) bandColorArr[b] else null
+                val leftFreq = if (b == 0) graphMinFreq else crossovers[b - 1]
+                val rightFreq = if (b == bandCount - 1) graphMaxFreq else crossovers[b]
+                val leftS = ((log10(leftFreq) - log10(graphMinFreq)) / (log10(graphMaxFreq) - log10(graphMinFreq)) * numSamples).toInt().coerceIn(0, numSamples)
+                val rightS = ((log10(rightFreq) - log10(graphMinFreq)) / (log10(graphMaxFreq) - log10(graphMinFreq)) * numSamples).toInt().coerceIn(0, numSamples)
+
+                val bandFillPath = Path()
+                // Top edge: postGain curve
+                bandFillPath.moveTo(graphWidth * leftS.toFloat() / numSamples, postGainYs[leftS])
+                for (s in leftS..rightS) {
+                    bandFillPath.lineTo(graphWidth * s.toFloat() / numSamples, postGainYs[s])
+                }
+                // Bottom edge: range curve (reverse)
+                for (s in rightS downTo leftS) {
+                    val x = graphWidth * s.toFloat() / numSamples
+                    val freq = xToFreq(x, graphWidth)
+                    val rangeDb = mbcGainAtFreq(freq, crossovers, rangeGains).coerceIn(minGain, maxGain)
+                    val ry = vPad + graphHeight * (1f - (rangeDb - minGain) / (maxGain - minGain))
+                    bandFillPath.lineTo(x, ry)
+                }
+                bandFillPath.close()
+
+                if (bColor != null) {
+                    val coloredFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = bColor; style = Paint.Style.FILL; alpha = 40
+                    }
+                    canvas.drawPath(bandFillPath, coloredFill)
+                } else {
+                    canvas.drawPath(bandFillPath, mbcRangeFillPaint)
+                }
+            }
+            canvas.drawPath(rangeCurvePath, mbcRangeCurvePaint)
+        }
 
         // --- Draw crossover lines ---
         for (i in crossovers.indices) {
@@ -985,8 +1027,7 @@ class EqGraphView @JvmOverloads constructor(
 
             val isSelected = (i == mbcSelectedBand)
             val isDraggingGain = (draggingMbcBand == i)
-            // RANGE FEATURE COMMENTED OUT
-            // val isDraggingRange = (draggingMbcRange == i)
+            val isDraggingRange = (draggingMbcRange == i)
             val r = 28f // triangle radius
             val cornerRadius = 8f
 
@@ -1014,19 +1055,15 @@ class EqGraphView @JvmOverloads constructor(
             }
 
             if (bandColor != null) {
-                if (isSelected) {
-                    // Selected: fill + ring
-                    val colorFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                        color = bandColor; style = Paint.Style.FILL; alpha = 200
-                        pathEffect = CornerPathEffect(cornerRadius)
-                    }
-                    canvas.drawPath(triPath, colorFillPaint)
+                val colorFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = bandColor; style = Paint.Style.FILL; alpha = if (isSelected) 200 else 120
+                    pathEffect = CornerPathEffect(cornerRadius)
                 }
-                // Always draw color outline
                 val colorRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = bandColor; style = Paint.Style.STROKE; strokeWidth = if (isSelected) 3f else 2f
                     pathEffect = CornerPathEffect(cornerRadius)
                 }
+                canvas.drawPath(triPath, colorFillPaint)
                 canvas.drawPath(triPath, colorRingPaint)
             } else if (isSelected) {
                 val fillPaint = Paint(activePointFillPaint).apply { pathEffect = CornerPathEffect(cornerRadius) }
@@ -1038,43 +1075,44 @@ class EqGraphView @JvmOverloads constructor(
                 canvas.drawPath(triPath, ringPaint)
             }
 
-            // RANGE FEATURE COMMENTED OUT — Range triangle drawing
-            // if (ranges != null && ranges.size > i) {
-            //     val rangeGainDb = (gains[i] + ranges[i]).coerceIn(minGain, maxGain)
-            //     val rangeDotY = vPad + graphHeight * (1f - (rangeGainDb - minGain) / (maxGain - minGain))
-            //
-            //     triPath.reset()
-            //     triPath.moveTo(dotX, rangeDotY)
-            //     triPath.lineTo(dotX - r * 0.866f, rangeDotY + r * 1.5f)
-            //     triPath.lineTo(dotX + r * 0.866f, rangeDotY + r * 1.5f)
-            //     triPath.close()
-            //
-            //     canvas.drawPath(triPath, roundedBgPaint)
-            //
-            //     val showRangeHalo = isDraggingRange || (mbcHaloAlpha > 0f && mbcHaloType == 2 && mbcHaloBand == i && draggingMbcRange < 0)
-            //     if (showRangeHalo) {
-            //         val rangeTriCenterY = rangeDotY + r * 1.0f
-            //         val haloDp = 24f * resources.displayMetrics.density
-            //         mbcTriTouchPaint.alpha = (mbcHaloAlpha * 0x38).toInt()
-            //         canvas.drawCircle(dotX, rangeTriCenterY, haloDp, mbcTriTouchPaint)
-            //     }
-            //
-            //     if (bandColor != null) {
-            //         val colorRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            //             color = bandColor; style = Paint.Style.STROKE; strokeWidth = if (isSelected) 2.5f else 2f
-            //             pathEffect = CornerPathEffect(cornerRadius)
-            //         }
-            //         canvas.drawPath(triPath, colorRingPaint)
-            //     } else if (isSelected) {
-            //         mbcRangeDotRingPaint.color = 0xFFAAAAAA.toInt()
-            //         mbcRangeDotRingPaint.strokeWidth = 2.5f
-            //     } else {
-            //         mbcRangeDotRingPaint.color = 0xFF666666.toInt()
-            //         mbcRangeDotRingPaint.strokeWidth = 2f
-            //     }
-            //     val rangeRingPaint = Paint(mbcRangeDotRingPaint).apply { pathEffect = CornerPathEffect(cornerRadius) }
-            //     canvas.drawPath(triPath, rangeRingPaint)
-            // }
+            // Range ▲ — tip touches BOTTOM of the range line, body extends below
+            if (ranges != null && ranges.size > i) {
+                val rangeGainDb = (gains[i] + ranges[i]).coerceIn(minGain, maxGain)
+                val rangeDotY = vPad + graphHeight * (1f - (rangeGainDb - minGain) / (maxGain - minGain))
+
+                triPath.reset()
+                triPath.moveTo(dotX, rangeDotY)                          // tip ON the line
+                triPath.lineTo(dotX - r * 0.866f, rangeDotY + r * 1.5f) // bottom-left
+                triPath.lineTo(dotX + r * 0.866f, rangeDotY + r * 1.5f) // bottom-right
+                triPath.close()
+
+                canvas.drawPath(triPath, roundedBgPaint)
+
+                val showRangeHalo = isDraggingRange || (mbcHaloAlpha > 0f && mbcHaloType == 2 && mbcHaloBand == i && draggingMbcRange < 0)
+                if (showRangeHalo) {
+                    val rangeTriCenterY = rangeDotY + r * 1.0f
+                    val haloDp = 24f * resources.displayMetrics.density
+                    mbcTriTouchPaint.alpha = (mbcHaloAlpha * 0x38).toInt()
+                    canvas.drawCircle(dotX, rangeTriCenterY, haloDp, mbcTriTouchPaint)
+                }
+
+                if (bandColor != null) {
+                    val colorRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = bandColor; style = Paint.Style.STROKE; strokeWidth = if (isSelected) 2.5f else 2f
+                        alpha = if (isSelected) 200 else 120
+                        pathEffect = CornerPathEffect(cornerRadius)
+                    }
+                    canvas.drawPath(triPath, colorRingPaint)
+                } else if (isSelected) {
+                    mbcRangeDotRingPaint.color = 0xFFAAAAAA.toInt()
+                    mbcRangeDotRingPaint.strokeWidth = 2.5f
+                } else {
+                    mbcRangeDotRingPaint.color = 0xFF666666.toInt()
+                    mbcRangeDotRingPaint.strokeWidth = 2f
+                }
+                val rangeRingPaint = Paint(mbcRangeDotRingPaint).apply { pathEffect = CornerPathEffect(cornerRadius) }
+                canvas.drawPath(triPath, rangeRingPaint)
+            }
         }
     }
 
@@ -1124,39 +1162,21 @@ class EqGraphView @JvmOverloads constructor(
     }
 
 
-    private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFFAAAAAA.toInt()
-        textSize = 20f
-    }
-    private val labelBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF1C1C1C.toInt()
-        style = Paint.Style.FILL
-    }
-    private val labelStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF444444.toInt()
-        style = Paint.Style.STROKE
-        strokeWidth = 2f
-    }
-
     private fun drawActivePointLabel(canvas: Canvas, point: BandPoint) {
         val currentFilterType = parametricEq?.getBand(point.bandIndex)?.filterType?.name ?: "BELL"
         val actualGain = parametricEq?.getBand(point.bandIndex)?.gain ?: point.gain
         val label = "Band ${getBandLabel(point.bandIndex)}: ${formatFrequency(point.frequency.toInt())} | ${String.format("%.1f dB", actualGain)} | $currentFilterType"
 
-        val labelWidth = labelPaint.measureText(label)
-        val padH = 14f
-        val padV = 8f
-        val cornerRadius = 12f * resources.displayMetrics.density
+        val labelWidth = titleTextPaint.measureText(label)
         val labelX = (width - labelWidth) / 2f
-        val labelY = 42f
+        val labelY = 40f
 
-        val rect = android.graphics.RectF(
-            labelX - padH, labelY - 24f,
-            labelX + labelWidth + padH, labelY + padV
-        )
-        canvas.drawRoundRect(rect, cornerRadius, cornerRadius, labelBgPaint)
-        canvas.drawRoundRect(rect, cornerRadius, cornerRadius, labelStrokePaint)
-        canvas.drawText(label, labelX, labelY, labelPaint)
+        val bgPaint = Paint().apply {
+            color = 0xDD000000.toInt()
+            style = Paint.Style.FILL
+        }
+        canvas.drawRect(labelX - 10f, labelY - 30f, labelX + labelWidth + 10f, labelY + 10f, bgPaint)
+        canvas.drawText(label, labelX, labelY, titleTextPaint)
     }
 
     private fun formatFrequency(hz: Int): String {
@@ -1176,14 +1196,6 @@ class EqGraphView @JvmOverloads constructor(
         val logMax = log10(graphMaxFreq)
         val logFreq = log10(freq)
         return graphWidth * (logFreq - logMin) / (logMax - logMin)
-    }
-
-    /** Find which MBC band a frequency belongs to based on crossover points */
-    private fun getMbcBandForFreq(freq: Float, crossovers: FloatArray): Int {
-        for (i in crossovers.indices) {
-            if (freq < crossovers[i]) return i
-        }
-        return crossovers.size  // last band
     }
 
     private fun xToFreq(x: Float, graphWidth: Float): Float {
@@ -1235,15 +1247,13 @@ class EqGraphView @JvmOverloads constructor(
                 parent?.requestDisallowInterceptTouchEvent(true)
                 draggingCrossover = -1
                 draggingMbcBand = -1
-                // RANGE FEATURE COMMENTED OUT
-                // draggingMbcRange = -1
+                draggingMbcRange = -1
 
-                // Find the closest dot (postGain) across all bands
+                // Find the closest dot (postGain or range) across all bands
                 var bestDist = hitRadius
-                var bestType = 0 // 0=none, 1=postGain
+                var bestType = 0 // 0=none, 1=postGain, 2=range
                 var bestBand = -1
-                // RANGE FEATURE COMMENTED OUT
-                // val ranges = mbcBandRanges
+                val ranges = mbcBandRanges
 
                 for (i in 0 until bandCount) {
                     val leftFreq = if (i == 0) graphMinFreq else crossovers[i - 1]
@@ -1259,37 +1269,21 @@ class EqGraphView @JvmOverloads constructor(
                         bestDist = distGain; bestType = 1; bestBand = i
                     }
 
-                    // RANGE FEATURE COMMENTED OUT — range touch hit detection
-                    // if (ranges != null && i < ranges.size) {
-                    //     val rangeGainDb = (gains[i] + ranges[i]).coerceIn(minGain, maxGain)
-                    //     val rangeDotY = vPad + graphHeight * (1f - (rangeGainDb - minGain) / (maxGain - minGain))
-                    //     val rangeTriCenterY = rangeDotY + 28f * 0.75f
-                    //     val distRange = Math.sqrt(((event.x - dotX) * (event.x - dotX) + (event.y - rangeTriCenterY) * (event.y - rangeTriCenterY)).toDouble()).toFloat()
-                    //     if (distRange < bestDist) {
-                    //         bestDist = distRange; bestType = 2; bestBand = i
-                    //     }
-                    // }
+                    // Range ▲ — triangle body is BELOW the line, center is offset down
+                    if (ranges != null && i < ranges.size) {
+                        val rangeGainDb = (gains[i] + ranges[i]).coerceIn(minGain, maxGain)
+                        val rangeDotY = vPad + graphHeight * (1f - (rangeGainDb - minGain) / (maxGain - minGain))
+                        val rangeTriCenterY = rangeDotY + 28f * 0.75f // center of triangle body below line
+                        val distRange = Math.sqrt(((event.x - dotX) * (event.x - dotX) + (event.y - rangeTriCenterY) * (event.y - rangeTriCenterY)).toDouble()).toFloat()
+                        if (distRange < bestDist) {
+                            bestDist = distRange; bestType = 2; bestBand = i
+                        }
+                    }
                 }
 
                 if (bestBand >= 0 && bestType > 0) {
-                    // Double-tap detection — reset gain to 0 dB
-                    val now = System.currentTimeMillis()
-                    if (bestType == 1 && bestBand == lastMbcTapBand && now - lastMbcTapTime < 300L) {
-                        // Double-tap on postGain triangle — reset to 0
-                        gains[bestBand] = 0f
-                        onMbcBandGainChanged?.invoke(bestBand, 0f)
-                        onMbcBandGainReset?.invoke(bestBand)
-                        lastMbcTapTime = 0L
-                        lastMbcTapBand = -1
-                        invalidate()
-                        return true
-                    }
-                    lastMbcTapTime = now
-                    lastMbcTapBand = bestBand
-
                     if (bestType == 1) draggingMbcBand = bestBand
-                    // RANGE FEATURE COMMENTED OUT
-                    // else draggingMbcRange = bestBand
+                    else draggingMbcRange = bestBand
                     mbcSelectedBand = bestBand
                     mbcHaloType = bestType
                     mbcHaloBand = bestBand
@@ -1331,17 +1325,17 @@ class EqGraphView @JvmOverloads constructor(
                     invalidate()
                     return true
                 }
-                // RANGE FEATURE COMMENTED OUT — range drag handling
-                // if (draggingMbcRange >= 0) {
-                //     parent?.requestDisallowInterceptTouchEvent(true)
-                //     val ranges = mbcBandRanges ?: return true
-                //     val newAbsGain = yToGain(event.y, vPad, graphHeight)
-                //     val newRange = (newAbsGain - gains[draggingMbcRange]).coerceIn(-60f, 0f)
-                //     ranges[draggingMbcRange] = newRange
-                //     onMbcBandRangeChanged?.invoke(draggingMbcRange, newRange)
-                //     invalidate()
-                //     return true
-                // }
+                if (draggingMbcRange >= 0) {
+                    parent?.requestDisallowInterceptTouchEvent(true)
+                    val ranges = mbcBandRanges ?: return true
+                    val newAbsGain = yToGain(event.y, vPad, graphHeight)
+                    // range = rangeAbsolutePosition - postGain, clamped to -60..0
+                    val newRange = (newAbsGain - gains[draggingMbcRange]).coerceIn(-60f, 0f)
+                    ranges[draggingMbcRange] = newRange
+                    onMbcBandRangeChanged?.invoke(draggingMbcRange, newRange)
+                    invalidate()
+                    return true
+                }
                 if (draggingCrossover >= 0) {
                     parent?.requestDisallowInterceptTouchEvent(true)
                     val newFreq = xToFreq(event.x, graphWidth)
@@ -1357,11 +1351,10 @@ class EqGraphView @JvmOverloads constructor(
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 parent?.requestDisallowInterceptTouchEvent(false)
-                // RANGE FEATURE COMMENTED OUT — draggingMbcRange references removed
-                if (draggingMbcBand >= 0) animateMbcHaloOut()
+                if (draggingMbcBand >= 0 || draggingMbcRange >= 0) animateMbcHaloOut()
                 draggingCrossover = -1
                 draggingMbcBand = -1
-                // draggingMbcRange = -1
+                draggingMbcRange = -1
             }
         }
         return true
@@ -1456,9 +1449,9 @@ class EqGraphView @JvmOverloads constructor(
         return super.onTouchEvent(event)
     }
 
-    // All 16 log-spaced positions for double-tap reset (matches ParametricEqualizer defaults)
+    // All 8 log-spaced positions for double-tap reset
     private val defaultFrequencies: List<Float> by lazy {
-        val all = com.bearinmind.equalizer314.dsp.ParametricEqualizer.logSpacedFrequencies(16)
+        val all = com.bearinmind.equalizer314.dsp.ParametricEqualizer.logSpacedFrequencies(8)
         all.toList()
     }
 

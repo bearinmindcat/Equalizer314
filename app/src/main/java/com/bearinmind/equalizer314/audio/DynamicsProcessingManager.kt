@@ -31,6 +31,10 @@ class DynamicsProcessingManager {
     var lastAutoGainOffset: Float = 0f
         private set
 
+    // MBC
+    var mbcEnabled: Boolean = false
+    var mbcBandCount: Int = 3
+
     // Limiter
     var limiterEnabled: Boolean = true
     var limiterAttackMs: Float = 1f
@@ -54,8 +58,8 @@ class DynamicsProcessingManager {
             2,          // channel count (stereo)
             true,       // pre-EQ enabled
             bandCount,  // pre-EQ band count
-            false,      // MBC disabled
-            0,
+            mbcEnabled, // MBC enabled/disabled
+            if (mbcEnabled) mbcBandCount else 0,
             false,      // post-EQ disabled
             0,
             true        // limiter enabled
@@ -145,6 +149,58 @@ class DynamicsProcessingManager {
             Log.e(TAG, "Failed to update limiter", e)
         }
     }
+
+    /**
+     * Apply MBC band settings from MbcActivity's band data.
+     * @param bands List of band parameters: cutoff, attack, release, ratio, threshold, knee, noiseGate, expander, preGain, postGain
+     * @param crossovers Crossover frequencies (bands.size - 1)
+     */
+    fun applyMbcBands(
+        bands: List<MbcBandParams>,
+        crossovers: FloatArray
+    ) {
+        val dp = dynamicsProcessing ?: return
+        if (!mbcEnabled) return
+
+        try {
+            for (i in bands.indices) {
+                val b = bands[i]
+                val cutoff = if (i < crossovers.size) crossovers[i] else 20000f
+                val mbcBand = DynamicsProcessing.MbcBand(
+                    b.enabled,
+                    cutoff,
+                    b.attackMs,
+                    b.releaseMs,
+                    b.ratio,
+                    b.thresholdDb,
+                    b.kneeDb,
+                    b.noiseGateDb,
+                    b.expanderRatio,
+                    b.preGainDb,
+                    b.postGainDb
+                )
+                dp.setMbcBandByChannelIndex(0, i, mbcBand)  // left
+                dp.setMbcBandByChannelIndex(1, i, mbcBand)  // right
+            }
+            Log.d(TAG, "Applied ${bands.size} MBC bands")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to apply MBC bands", e)
+        }
+    }
+
+    /** Simple data class for MBC band parameters passed to applyMbcBands */
+    data class MbcBandParams(
+        val enabled: Boolean = true,
+        val attackMs: Float = 1f,
+        val releaseMs: Float = 100f,
+        val ratio: Float = 2f,
+        val thresholdDb: Float = -12f,
+        val kneeDb: Float = 8f,
+        val noiseGateDb: Float = -40f,
+        val expanderRatio: Float = 2f,
+        val preGainDb: Float = 0f,
+        val postGainDb: Float = 0f
+    )
 
     fun setEnabled(enabled: Boolean) {
         dynamicsProcessing?.enabled = enabled

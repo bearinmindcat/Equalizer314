@@ -50,8 +50,29 @@ class MbcActivity : AppCompatActivity() {
 
     private lateinit var eqPrefs: EqPreferencesManager
 
+    // Service binding
+    private var eqService: com.bearinmind.equalizer314.audio.EqService? = null
+    private var serviceBound = false
+    private val serviceConnection = object : android.content.ServiceConnection {
+        override fun onServiceConnected(name: android.content.ComponentName?, binder: android.os.IBinder?) {
+            eqService = (binder as com.bearinmind.equalizer314.audio.EqService.EqBinder).service
+            serviceBound = true
+            // Apply MBC settings now that we have the service
+            pushMbcToService()
+        }
+        override fun onServiceDisconnected(name: android.content.ComponentName?) {
+            eqService = null
+            serviceBound = false
+        }
+    }
+
+    // Visualizer
+    private val visualizerHelper = com.bearinmind.equalizer314.audio.VisualizerHelper()
+
     // Views
     private lateinit var graphView: EqGraphView
+    private lateinit var grTraceView: com.bearinmind.equalizer314.ui.GrTraceView
+    private var isGrTraceMode = false
     private lateinit var masterSwitch: MaterialSwitch
     private lateinit var bandTabs: LinearLayout
     private lateinit var bandTitle: TextView
@@ -68,8 +89,11 @@ class MbcActivity : AppCompatActivity() {
     private lateinit var thresholdText: EditText
     private lateinit var kneeSlider: Slider
     private lateinit var kneeText: EditText
-    private lateinit var rangeSlider: Slider
-    private lateinit var rangeText: EditText
+    // RANGE FEATURE COMMENTED OUT — range UI hidden, data still saved/loaded
+    // private lateinit var rangeSlider: Slider
+    // private lateinit var rangeText: EditText
+    // private lateinit var rangeHint: android.widget.TextView
+    // private lateinit var rangeHintCard: android.view.View
     private lateinit var noiseGateSlider: Slider
     private lateinit var noiseGateText: EditText
     private lateinit var expanderSlider: Slider
@@ -126,6 +150,243 @@ class MbcActivity : AppCompatActivity() {
         buildBandTabs()
         selectBand(0)
         setupListeners()
+        startVisualizer()
+
+        // Bind to EqService to push MBC settings
+        val intent = android.content.Intent(this, com.bearinmind.equalizer314.audio.EqService::class.java)
+        bindService(intent, serviceConnection, android.content.Context.BIND_AUTO_CREATE)
+
+        // GR trace view + graph mode toggles
+        grTraceView = findViewById(R.id.mbcGrTraceView)
+        grTraceView.updateNumBands(bandCount)
+        // Sync initial thresholds to the GR trace view
+        for (b in bands.indices) grTraceView.setThreshold(b, bands[b].threshold)
+        // Wire threshold drag callback
+        grTraceView.onThresholdChanged = { bandIndex, thresholdDb ->
+            bands[bandIndex].threshold = thresholdDb
+            saveBand(bandIndex)
+            // Sync threshold slider + compressor curve if this is the selected band
+            if (bandIndex == selectedBand) {
+                isUpdating = true
+                thresholdSlider.value = thresholdDb.coerceIn(-60f, 0f)
+                thresholdText.setText(String.format("%.1f", thresholdDb))
+                compressorCurve.threshold = thresholdDb
+                gateCurve.compressorThreshold = thresholdDb
+                isUpdating = false
+            }
+        }
+        // Wire crossover drag on GR trace view
+        grTraceView.onCrossoverChanged = { index, freq ->
+            crossoverFreqs[index] = freq
+            eqPrefs.saveMbcCrossover(index, freq)
+            bands[index].cutoff = freq
+            saveBand(index)
+            // Sync to main graph
+            graphView.mbcCrossovers = crossoverFreqs.copyOf()
+            graphView.invalidate()
+            // Sync cutoff slider if selected band matches
+            if (index == selectedBand || index + 1 == selectedBand) {
+                val b = bands[selectedBand]
+                val cutoffVal = if (selectedBand < crossoverFreqs.size) crossoverFreqs[selectedBand] else b.cutoff
+                isUpdating = true
+                cutoffSlider.value = freqToSlider(cutoffVal)
+                cutoffText.setText(cutoffVal.toInt().toString())
+                isUpdating = false
+            }
+        }
+        val freqBtn = findViewById<android.widget.ImageButton>(R.id.mbcGraphModeFreq)
+        val timeBtn = findViewById<android.widget.ImageButton>(R.id.mbcGraphModeTime)
+        freqBtn.setOnClickListener {
+            if (isGrTraceMode) {
+                isGrTraceMode = false
+                graphView.visibility = android.view.View.VISIBLE
+                grTraceView.visibility = android.view.View.GONE
+                freqBtn.alpha = 1f
+                timeBtn.alpha = 0.4f
+            }
+        }
+        timeBtn.setOnClickListener {
+            if (!isGrTraceMode) {
+                isGrTraceMode = true
+                graphView.visibility = android.view.View.GONE
+                grTraceView.visibility = android.view.View.VISIBLE
+                freqBtn.alpha = 0.4f
+                timeBtn.alpha = 1f
+                startGrTraceUpdates()
+            }
+        }
+    }
+
+    // Feed GR values to the trace view from MbcGainComputer
+    private var grTraceRunnable: Runnable? = null
+    private val grTraceHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
+    private fun startGrTraceUpdates() {
+        grTraceRunnable?.let { grTraceHandler.removeCallbacks(it) }
+
+        val traceComputer = com.bearinmind.equalizer314.audio.MbcGainComputer(bandCount)
+
+        val runnable = object : Runnable {
+            override fun run() {
+                if (!isGrTraceMode) return
+
+                val renderer = visualizerHelper.renderer
+                val specLinear = renderer.getSmoothedLinear()
+
+                grTraceView.selectedBand = selectedBand
+
+                if (specLinear != null && specLinear.isNotEmpty()) {
+                    // Convert linear to dB
+                    val specDb = FloatArray(specLinear.size) { i ->
+                        if (specLinear[i] > 1e-10f) 20f * kotlin.math.log10(specLinear[i])
+                        else -96f
+                    }
+
+                    // Compute overall input level (RMS of all bins)
+                    var sumPower = 0.0
+                    var count = 0
+                    for (i in 1 until specDb.size) {
+                        sumPower += Math.pow(10.0, specDb[i].toDouble() / 10.0)
+                        count++
+                    }
+                    val overallLevel = if (count > 0 && sumPower > 0)
+                        (10.0 * Math.log10(sumPower / count)).toFloat() else -96f
+
+                    // Build band settings
+                    val settings = Array(bandCount) { i ->
+                        val b = bands[i]
+                        com.bearinmind.equalizer314.audio.MbcGainComputer.BandSettings(
+                            preGain = b.preGain, postGain = b.postGain,
+                            threshold = b.threshold, ratio = b.ratio, kneeWidth = b.kneeWidth,
+                            noiseGateThreshold = b.noiseGateThreshold, expanderRatio = b.expanderRatio,
+                            lowCutoff = if (i == 0) 20f else crossoverFreqs[i - 1],
+                            highCutoff = if (i >= crossoverFreqs.size) 20000f else crossoverFreqs[i]
+                        )
+                    }
+
+                    // Compute per-band GR from actual spectrum
+                    traceComputer.computeAllBandGains(specDb, 48000, 4096, settings)
+
+                    grTraceView.spectrumDb = specDb
+                    grTraceView.spectrumBinWidth = renderer.getBinWidthHz()
+                    grTraceView.crossoverFreqs = crossoverFreqs.copyOf()
+                    grTraceView.selectedBand = selectedBand
+
+                    val grValues = FloatArray(bandCount) { traceComputer.getSmoothedGR(it) }
+
+                    // Compute per-band RMS levels from the spectrum
+                    val bandLevels = FloatArray(bandCount) { b ->
+                        val lowFreq = if (b == 0) 20f else crossoverFreqs[b - 1]
+                        val highFreq = if (b >= crossoverFreqs.size) 20000f else crossoverFreqs[b]
+                        val binW = renderer.getBinWidthHz()
+                        val lowBin = (lowFreq / binW).toInt().coerceIn(1, specDb.size - 1)
+                        val highBin = (highFreq / binW).toInt().coerceIn(lowBin, specDb.size - 1)
+                        var sumPow = 0.0; var cnt = 0
+                        for (k in lowBin..highBin) {
+                            sumPow += Math.pow(10.0, specDb[k].toDouble() / 10.0); cnt++
+                        }
+                        if (cnt > 0 && sumPow > 0) (10.0 * Math.log10(sumPow / cnt)).toFloat() else -96f
+                    }
+
+                    grTraceView.pushFrame(grValues, bandLevels)
+                } else {
+                    // Silence — push zeros
+                    grTraceView.pushFrame(FloatArray(bandCount), FloatArray(bandCount) { -96f })
+                }
+
+                grTraceView.invalidate()
+                grTraceHandler.postDelayed(this, 33)
+            }
+        }
+        grTraceRunnable = runnable
+        grTraceHandler.post(runnable)
+    }
+
+    private fun startVisualizer() {
+        val vizToggle = findViewById<com.google.android.material.button.MaterialButton>(R.id.mbcVisualizerToggle)
+        val density = resources.displayMetrics.density
+
+        // Position button in top-right corner of graph (same as main EQ)
+        val gapPx = (2 * density).toInt()
+        val vPadPx = 80
+        graphView.post {
+            val viewWidth = graphView.width
+            val gridLine10k = (viewWidth * 3.0 / 3.301).toInt()
+            val btnLeft = gridLine10k + gapPx
+            val btnTop = gapPx
+            val btnRight = viewWidth - gapPx
+            val btnBottom = vPadPx - gapPx
+            val lp = vizToggle.layoutParams as android.widget.FrameLayout.LayoutParams
+            lp.width = btnRight - btnLeft
+            lp.height = btnBottom - btnTop
+            lp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+            lp.leftMargin = btnLeft
+            lp.topMargin = btnTop
+            lp.rightMargin = 0
+            vizToggle.layoutParams = lp
+            vizToggle.minimumWidth = 0
+            vizToggle.minimumHeight = 0
+            vizToggle.setPadding(0, 0, 0, 0)
+        }
+
+        fun updateVizStyle(active: Boolean) {
+            if (active) {
+                vizToggle.alpha = 1.0f
+                vizToggle.setBackgroundColor(0xFF555555.toInt())
+                vizToggle.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+                vizToggle.strokeWidth = (2 * density).toInt()
+                vizToggle.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
+            } else {
+                vizToggle.alpha = 1.0f
+                vizToggle.setBackgroundColor(0x00000000)
+                vizToggle.strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                vizToggle.strokeWidth = (1 * density).toInt()
+                vizToggle.iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+            }
+        }
+
+        vizToggle.setOnClickListener {
+            if (visualizerHelper.isRunning) {
+                visualizerHelper.stop()
+                graphView.spectrumRenderer = null
+                graphView.invalidate()
+                updateVizStyle(false)
+            } else {
+                if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 200)
+                    return@setOnClickListener
+                }
+                visualizerHelper.start(graphView)
+                graphView.spectrumRenderer = visualizerHelper.renderer
+                updateVizStyle(true)
+            }
+        }
+
+        // Auto-start if permission granted
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+            == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            visualizerHelper.start(graphView)
+            graphView.spectrumRenderer = visualizerHelper.renderer
+            updateVizStyle(true)
+        } else {
+            updateVizStyle(false)
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 200 && grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            visualizerHelper.start(graphView)
+            graphView.spectrumRenderer = visualizerHelper.renderer
+            val vizToggle = findViewById<com.google.android.material.button.MaterialButton>(R.id.mbcVisualizerToggle)
+            val d = resources.displayMetrics.density
+            vizToggle.alpha = 1.0f
+            vizToggle.setBackgroundColor(0xFF555555.toInt())
+            vizToggle.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+            vizToggle.strokeWidth = (2 * d).toInt()
+            vizToggle.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
+        }
     }
 
     private fun initViews() {
@@ -156,8 +417,49 @@ class MbcActivity : AppCompatActivity() {
         ratioText = findViewById(R.id.mbcRatioText)
         thresholdSlider = findViewById(R.id.mbcThresholdSlider)
         thresholdText = findViewById(R.id.mbcThresholdText)
-        rangeSlider = findViewById(R.id.mbcRangeSlider)
-        rangeText = findViewById(R.id.mbcRangeText)
+        // RANGE FEATURE COMMENTED OUT — range UI hidden
+        // rangeSlider = findViewById(R.id.mbcRangeSlider)
+        // rangeText = findViewById(R.id.mbcRangeText)
+        // rangeHint = findViewById(R.id.mbcRangeHint)
+        // rangeHintCard = findViewById(R.id.mbcRangeHintCard)
+        // // Draw triangle pointer for the hint bubble
+        // val triangleView = findViewById<android.widget.ImageView>(R.id.mbcRangeTrianglePointer)
+        // val triSize = (8 * resources.displayMetrics.density).toInt()
+        // val triWidth = (16 * resources.displayMetrics.density).toInt()
+        // val triBitmap = android.graphics.Bitmap.createBitmap(triWidth, triSize, android.graphics.Bitmap.Config.ARGB_8888)
+        // val triCanvas = android.graphics.Canvas(triBitmap)
+        // val triPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        //     color = 0xFF333333.toInt()
+        //     style = android.graphics.Paint.Style.FILL
+        // }
+        // val triPath = android.graphics.Path().apply {
+        //     moveTo(triWidth / 2f, 0f)
+        //     lineTo(0f, triSize.toFloat())
+        //     lineTo(triWidth.toFloat(), triSize.toFloat())
+        //     close()
+        // }
+        // triCanvas.drawPath(triPath, triPaint)
+        // triangleView.setImageBitmap(triBitmap)
+
+        // RANGE FEATURE COMMENTED OUT — range info button and triangle positioning
+        // val rangeInfoBtn = findViewById<android.view.View>(R.id.mbcRangeInfoButton)
+        // rangeInfoBtn.setOnClickListener {
+        //     rangeHintCard.visibility = if (rangeHintCard.visibility == android.view.View.VISIBLE)
+        //         android.view.View.GONE else android.view.View.VISIBLE
+        // }
+        // // Measure actual text width of "Range (dB)" and center triangle under it
+        // rangeInfoBtn.post {
+        //     val paint = android.graphics.Paint().apply {
+        //         textSize = 12f * resources.displayMetrics.scaledDensity // LabelMedium ~12sp
+        //     }
+        //     val textWidth = paint.measureText("Range (dB)")
+        //     val paddingStart = 4 * resources.displayMetrics.density // 4dp paddingStart on the TextView
+        //     val textCenter = paddingStart + textWidth / 2f
+        //     val triHalfWidth = 8 * resources.displayMetrics.density // half of 16dp triangle
+        //     val margin = (textCenter - triHalfWidth).toInt().coerceAtLeast(0)
+        //     (triangleView.layoutParams as android.widget.LinearLayout.LayoutParams).leftMargin = margin
+        //     triangleView.requestLayout()
+        // }
         kneeSlider = findViewById(R.id.mbcKneeSlider)
         kneeText = findViewById(R.id.mbcKneeText)
         noiseGateSlider = findViewById(R.id.mbcNoiseGateSlider)
@@ -210,9 +512,10 @@ class MbcActivity : AppCompatActivity() {
         graphView.mbcBandColors = IntArray(bandCount) { mbcBandColors[it] ?: 0 }
         graphView.mbcSelectedBand = selectedBand
 
-        // Initialize band gains from preGain (input level before compression)
-        graphView.mbcBandGains = FloatArray(bandCount) { bands[it].preGain }
-        graphView.mbcBandRanges = FloatArray(bandCount) { bands[it].range }
+        // Initialize all MBC params for spectrum overlay
+        syncMbcParamsToGraph()
+        // RANGE FEATURE COMMENTED OUT — range data not sent to graph
+        // graphView.mbcBandRanges = FloatArray(bandCount) { bands[it].range }
 
         graphView.onMbcBandSelected = { bandIndex ->
             selectBand(bandIndex)
@@ -249,17 +552,29 @@ class MbcActivity : AppCompatActivity() {
             }
         }
 
-        graphView.onMbcBandRangeChanged = { bandIndex, range ->
-            val snapped = Math.round(range * 10f) / 10f
-            bands[bandIndex].range = snapped
+        graphView.onMbcBandGainReset = { bandIndex ->
+            bands[bandIndex].preGain = 0f
             saveBand(bandIndex)
             if (bandIndex == selectedBand) {
                 isUpdating = true
-                rangeSlider.value = snapped.coerceIn(-12f, 0f)
-                rangeText.setText(String.format("%.1f", snapped))
+                preGainSlider.value = 0f
+                preGainText.setText("0.0")
                 isUpdating = false
             }
         }
+
+        // RANGE FEATURE COMMENTED OUT — range graph callback
+        // graphView.onMbcBandRangeChanged = { bandIndex, range ->
+        //     val snapped = Math.round(range * 10f) / 10f
+        //     bands[bandIndex].range = snapped
+        //     saveBand(bandIndex)
+        //     if (bandIndex == selectedBand) {
+        //         isUpdating = true
+        //         rangeSlider.value = snapped.coerceIn(-12f, 0f)
+        //         rangeText.setText(String.format("%.1f", snapped))
+        //         isUpdating = false
+        //     }
+        // }
     }
 
     private fun createBandButton(index: Int): MaterialButton {
@@ -347,8 +662,12 @@ class MbcActivity : AppCompatActivity() {
         bandTitle.text = "Band ${selectedBand + 1}"
         updateMbcColorBox()
         bandSwitch.isChecked = b.enabled
-        cutoffSlider.value = b.cutoff.coerceIn(20f, 20000f)
-        cutoffText.setText(b.cutoff.toInt().toString())
+        // Cutoff reads from crossoverFreqs, log-mapped slider
+        val cutoffVal = if (selectedBand < crossoverFreqs.size) crossoverFreqs[selectedBand] else b.cutoff
+        cutoffSlider.valueFrom = 0f
+        cutoffSlider.valueTo = 1000f
+        cutoffSlider.value = freqToSlider(cutoffVal)
+        cutoffText.setText(cutoffVal.toInt().toString())
         attackSlider.value = b.attack.coerceIn(0.01f, 500f)
         attackText.setText(String.format("%.2f", b.attack))
         releaseSlider.value = b.release.coerceIn(1f, 5000f)
@@ -357,8 +676,9 @@ class MbcActivity : AppCompatActivity() {
         ratioText.setText(String.format("%.2f", b.ratio))
         thresholdSlider.value = b.threshold.coerceIn(-60f, 0f)
         thresholdText.setText(String.format("%.1f", b.threshold))
-        rangeSlider.value = b.range.coerceIn(-12f, 0f)
-        rangeText.setText(String.format("%.1f", b.range))
+        // RANGE FEATURE COMMENTED OUT — range slider/text in loadBandToUI
+        // rangeSlider.value = b.range.coerceIn(-12f, 0f)
+        // rangeText.setText(String.format("%.1f", b.range))
         kneeSlider.value = b.kneeWidth.coerceIn(0.01f, 24f)
         kneeText.setText(String.format("%.2f", b.kneeWidth))
         noiseGateSlider.value = b.noiseGateThreshold.coerceIn(-90f, 0f)
@@ -381,12 +701,15 @@ class MbcActivity : AppCompatActivity() {
         gateCurve.compressorThreshold = b.threshold  // for dulled dot reference
         attackReleaseView.attackMs = b.attack
         attackReleaseView.releaseMs = b.release
+        // RANGE FEATURE COMMENTED OUT — updateRangeHint() call in loadBandToUI
+        // updateRangeHint()
         isUpdating = false
     }
 
     private fun setupListeners() {
         masterSwitch.setOnCheckedChangeListener { _, checked ->
             eqPrefs.saveMbcEnabled(checked)
+            pushMbcToService()
         }
 
         bandSwitch.setOnCheckedChangeListener { _, checked ->
@@ -395,7 +718,54 @@ class MbcActivity : AppCompatActivity() {
             saveBand(selectedBand)
         }
 
-        setupSlider(cutoffSlider, cutoffText, 20f, 20000f, "%.0f") { bands[selectedBand].cutoff = it }
+        // Cutoff slider: logarithmic (0-1000 → 20-20000 Hz), clamped between adjacent crossovers
+        cutoffSlider.valueFrom = 0f
+        cutoffSlider.valueTo = 1000f
+        cutoffSlider.addOnChangeListener { _, value, fromUser ->
+            if (!fromUser || isUpdating) return@addOnChangeListener
+            var freq = sliderToFreq(value)
+            // Clamp between adjacent crossovers
+            val minFreq = if (selectedBand > 0 && selectedBand - 1 < crossoverFreqs.size)
+                crossoverFreqs[selectedBand - 1] + 1f else 20f
+            val maxFreq = if (selectedBand + 1 < crossoverFreqs.size)
+                crossoverFreqs[selectedBand + 1] - 1f else 20000f
+            freq = freq.coerceIn(minFreq, maxFreq)
+            if (freqToSlider(freq) != value) {
+                isUpdating = true
+                cutoffSlider.value = freqToSlider(freq)
+                isUpdating = false
+            }
+            cutoffText.setText(freq.toInt().toString())
+            bands[selectedBand].cutoff = freq
+            if (selectedBand < crossoverFreqs.size) {
+                crossoverFreqs[selectedBand] = freq
+                eqPrefs.saveMbcCrossover(selectedBand, freq)
+                graphView.mbcCrossovers = crossoverFreqs.copyOf()
+                graphView.invalidate()
+            }
+            saveBand(selectedBand)
+        }
+        cutoffText.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
+                val minFreq = if (selectedBand > 0 && selectedBand - 1 < crossoverFreqs.size)
+                    crossoverFreqs[selectedBand - 1] + 1f else 20f
+                val maxFreq = if (selectedBand + 1 < crossoverFreqs.size)
+                    crossoverFreqs[selectedBand + 1] - 1f else 20000f
+                val v = cutoffText.text.toString().toFloatOrNull()?.coerceIn(minFreq, maxFreq) ?: minFreq
+                cutoffText.setText(v.toInt().toString())
+                cutoffSlider.value = freqToSlider(v)
+                bands[selectedBand].cutoff = v
+                if (selectedBand < crossoverFreqs.size) {
+                    crossoverFreqs[selectedBand] = v
+                    eqPrefs.saveMbcCrossover(selectedBand, v)
+                    graphView.mbcCrossovers = crossoverFreqs.copyOf()
+                    graphView.invalidate()
+                }
+                saveBand(selectedBand)
+                cutoffText.clearFocus()
+            }
+            true
+        }
         setupSlider(attackSlider, attackText, 0.01f, 500f, "%.2f") {
             bands[selectedBand].attack = it
             attackReleaseView.attackMs = it
@@ -412,6 +782,8 @@ class MbcActivity : AppCompatActivity() {
             bands[selectedBand].ratio = ratio
             compressorCurve.ratio = ratio
             saveBand(selectedBand)
+            // RANGE FEATURE COMMENTED OUT
+            // updateRangeHint()
         }
         ratioText.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
@@ -429,14 +801,19 @@ class MbcActivity : AppCompatActivity() {
             bands[selectedBand].threshold = it
             compressorCurve.threshold = it
             gateCurve.compressorThreshold = it  // sync dulled dot
+            grTraceView.setThreshold(selectedBand, it)
+            // RANGE FEATURE COMMENTED OUT
+            // updateRangeHint()
         }
-        setupSlider(rangeSlider, rangeText, -12f, 0f, "%.1f") {
-            bands[selectedBand].range = it
-            graphView.mbcBandRanges?.let { ranges ->
-                ranges[selectedBand] = it
-                graphView.invalidate()
-            }
-        }
+        // RANGE FEATURE COMMENTED OUT — range slider setup
+        // setupSlider(rangeSlider, rangeText, -12f, 0f, "%.1f") {
+        //     bands[selectedBand].range = it
+        //     graphView.mbcBandRanges?.let { ranges ->
+        //         ranges[selectedBand] = it
+        //         graphView.invalidate()
+        //     }
+        //     updateRangeHint()
+        // }
         kneeSlider.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
             override fun onStartTrackingTouch(slider: Slider) { compressorCurve.showKneeZoom = true }
             override fun onStopTrackingTouch(slider: Slider) { compressorCurve.showKneeZoom = false }
@@ -586,12 +963,13 @@ class MbcActivity : AppCompatActivity() {
             preGainSlider.value = 0f; preGainText.setText("0.0")
             graphView.mbcBandGains?.let { it[selectedBand] = 0f; graphView.invalidate() }
         }
-        addDoubleTapReset(rangeSlider) {
-            val defRange = DEFAULT_RANGES.getOrElse(selectedBand) { -6f }
-            bands[selectedBand].range = defRange; saveBand(selectedBand)
-            rangeSlider.value = defRange; rangeText.setText(String.format("%.1f", defRange))
-            graphView.mbcBandRanges?.let { it[selectedBand] = defRange; graphView.invalidate() }
-        }
+        // RANGE FEATURE COMMENTED OUT — range double-tap reset
+        // addDoubleTapReset(rangeSlider) {
+        //     val defRange = DEFAULT_RANGES.getOrElse(selectedBand) { -6f }
+        //     bands[selectedBand].range = defRange; saveBand(selectedBand)
+        //     rangeSlider.value = defRange; rangeText.setText(String.format("%.1f", defRange))
+        //     graphView.mbcBandRanges?.let { it[selectedBand] = defRange; graphView.invalidate() }
+        // }
         addDoubleTapReset(postGainSlider) {
             bands[selectedBand].postGain = 0f; saveBand(selectedBand)
             postGainSlider.value = 0f; postGainText.setText("0.0")
@@ -599,7 +977,13 @@ class MbcActivity : AppCompatActivity() {
         addDoubleTapReset(cutoffSlider) {
             val defCutoff = DEFAULT_CUTOFFS.getOrElse(selectedBand) { 1000f }
             bands[selectedBand].cutoff = defCutoff; saveBand(selectedBand)
-            cutoffSlider.value = defCutoff; cutoffText.setText(defCutoff.toInt().toString())
+            cutoffSlider.value = freqToSlider(defCutoff); cutoffText.setText(defCutoff.toInt().toString())
+            if (selectedBand < crossoverFreqs.size) {
+                crossoverFreqs[selectedBand] = defCutoff
+                eqPrefs.saveMbcCrossover(selectedBand, defCutoff)
+                graphView.mbcCrossovers = crossoverFreqs.copyOf()
+                graphView.invalidate()
+            }
         }
     }
 
@@ -655,16 +1039,136 @@ class MbcActivity : AppCompatActivity() {
         }
     }
 
+    // RANGE FEATURE COMMENTED OUT — entire updateRangeHint() function
+    // private fun updateRangeHint() {
+    //     val b = bands[selectedBand]
+    //     val range = b.range
+    //     val threshold = b.threshold
+    //     if (range >= 0f || threshold >= 0f) {
+    //         rangeHint.text = "Range (visual only)\nShows estimated gain reduction on graph"
+    //         return
+    //     }
+    //     val absRange = -range
+    //     val absThresh = -threshold
+    //     val ratio = b.ratio
+    //     val actualRange = if (ratio > 1f) -(absThresh * (1f - 1f / ratio)) else 0f
+    //
+    //     val sb = StringBuilder("Range (visual only)\n")
+    //     sb.append("Current: ${String.format("%.1f", threshold)} dB thresh | ${String.format("%.2f", ratio)}:1 ratio → ${String.format("%.1f", actualRange)} dB reduction\n")
+    //     sb.append("\nTo achieve ${String.format("%.1f", range)} dB range:\n")
+    //
+    //     // Option 1: keep current threshold, adjust ratio
+    //     if (absRange < absThresh) {
+    //         val neededRatio = absThresh / (absThresh - absRange)
+    //         sb.append("• Keep thresh ${String.format("%.1f", threshold)} dB → set ratio to ${String.format("%.2f", neededRatio)}:1\n")
+    //     } else {
+    //         sb.append("• Keep thresh ${String.format("%.1f", threshold)} dB → need ∞:1 (limiter)\n")
+    //     }
+    //
+    //     // Option 2: keep current ratio, adjust threshold
+    //     if (ratio > 1f) {
+    //         val neededThresh = -(absRange / (1f - 1f / ratio))
+    //         if (neededThresh in -60f..0f) {
+    //             sb.append("• Keep ratio ${String.format("%.2f", ratio)}:1 → set thresh to ${String.format("%.1f", neededThresh)} dB")
+    //         }
+    //     }
+    //
+    //     rangeHint.text = sb.toString().trimEnd()
+    // }
+
+    /** Push MBC band params to the renderer's MbcGainComputer for spectrum overlay */
+    private fun syncMbcParamsToGraph() {
+        graphView.mbcBandGains = FloatArray(bandCount) { bands[it].preGain }
+
+        // Push full band settings to the renderer's MbcGainComputer
+        val renderer = graphView.spectrumRenderer
+        if (renderer != null) {
+            if (renderer.mbcGainComputer == null || renderer.mbcGainComputer!!.let { false }) {
+                renderer.mbcGainComputer = com.bearinmind.equalizer314.audio.MbcGainComputer(bandCount)
+            }
+            renderer.mbcBandSettings = Array(bandCount) { i ->
+                val b = bands[i]
+                com.bearinmind.equalizer314.audio.MbcGainComputer.BandSettings(
+                    preGain = b.preGain,
+                    postGain = b.postGain,
+                    threshold = b.threshold,
+                    ratio = b.ratio,
+                    kneeWidth = b.kneeWidth,
+                    noiseGateThreshold = b.noiseGateThreshold,
+                    expanderRatio = b.expanderRatio,
+                    lowCutoff = if (i == 0) 20f else crossoverFreqs[i - 1],
+                    highCutoff = if (i >= crossoverFreqs.size) 20000f else crossoverFreqs[i]
+                )
+            }
+        }
+        graphView.invalidate()
+    }
+
+    /** Push current MBC band settings to DynamicsProcessing via the service */
+    private fun pushMbcToService() {
+        val service = eqService ?: return
+        val dm = service.dynamicsManager
+        val isEnabled = masterSwitch.isChecked
+
+        // If MBC enable state or band count changed, need to recreate DP
+        if (dm.mbcEnabled != isEnabled || (isEnabled && dm.mbcBandCount != bandCount)) {
+            dm.mbcEnabled = isEnabled
+            dm.mbcBandCount = bandCount
+            // DP must be recreated for config changes — get the current EQ from the service
+            // and restart. This preserves the Pre-EQ settings.
+            if (dm.isActive) {
+                // Create a temporary EQ to restart with
+                val tempEq = com.bearinmind.equalizer314.dsp.ParametricEqualizer()
+                // Load the saved EQ state
+                val eqState = com.bearinmind.equalizer314.state.EqPreferencesManager(this)
+                eqState.restoreState(tempEq)
+                dm.start(tempEq)
+            }
+        }
+
+        if (!isEnabled) return
+
+        val mbcBands = bands.map { b ->
+            com.bearinmind.equalizer314.audio.DynamicsProcessingManager.MbcBandParams(
+                enabled = b.enabled,
+                attackMs = b.attack,
+                releaseMs = b.release,
+                ratio = b.ratio,
+                thresholdDb = b.threshold,
+                kneeDb = b.kneeWidth,
+                noiseGateDb = b.noiseGateThreshold,
+                expanderRatio = b.expanderRatio,
+                preGainDb = b.preGain,
+                postGainDb = b.postGain
+            )
+        }
+        service.updateMbc(mbcBands, crossoverFreqs)
+    }
+
     private fun saveBand(index: Int) {
         val b = bands[index]
         eqPrefs.saveMbcBand(index, b.enabled, b.cutoff, b.attack, b.release, b.ratio,
             b.threshold, b.kneeWidth, b.noiseGateThreshold, b.expanderRatio, b.preGain, b.postGain, b.range)
+        syncMbcParamsToGraph()
+        pushMbcToService()
     }
 
     override fun onPause() {
         super.onPause()
         eqPrefs.saveMbcEnabled(masterSwitch.isChecked)
         for (i in bands.indices) saveBand(i)
+    }
+
+    override fun onDestroy() {
+        grTraceRunnable?.let { grTraceHandler.removeCallbacks(it) }
+        grTraceView.release()
+        visualizerHelper.stop()
+        graphView.spectrumRenderer = null
+        if (serviceBound) {
+            unbindService(serviceConnection)
+            serviceBound = false
+        }
+        super.onDestroy()
     }
 
     private fun addBand() {
@@ -689,7 +1193,8 @@ class MbcActivity : AppCompatActivity() {
         // Update graph
         graphView.mbcCrossovers = crossoverFreqs
         graphView.mbcBandGains = FloatArray(bandCount) { bands[it].preGain }
-        graphView.mbcBandRanges = FloatArray(bandCount) { bands[it].range }
+        // RANGE FEATURE COMMENTED OUT
+        // graphView.mbcBandRanges = FloatArray(bandCount) { bands[it].range }
         graphView.invalidate()
 
         if (isAnimating) {
@@ -877,7 +1382,8 @@ class MbcActivity : AppCompatActivity() {
         // Update graph
         graphView.mbcCrossovers = crossoverFreqs
         graphView.mbcBandGains = FloatArray(bandCount) { bands[it].preGain }
-        graphView.mbcBandRanges = FloatArray(bandCount) { bands[it].range }
+        // RANGE FEATURE COMMENTED OUT
+        // graphView.mbcBandRanges = FloatArray(bandCount) { bands[it].range }
         graphView.invalidate()
 
         // Adjust selection
@@ -989,6 +1495,21 @@ class MbcActivity : AppCompatActivity() {
     //   output = T + 10/R  → ranges from T+10 (R=1) to T (R=∞)
     // Slider 0 = no compression (R=1), slider 100 = max compression (R=50)
     // Map slider linearly to the output position, then derive ratio from that
+    // Log-frequency mapping for cutoff slider (slider 0-1000 → freq 20-20000 Hz)
+    private fun sliderToFreq(sliderValue: Float): Float {
+        val norm = (sliderValue / 1000f).coerceIn(0f, 1f)
+        val logMin = kotlin.math.log10(20f)
+        val logMax = kotlin.math.log10(20000f)
+        return Math.pow(10.0, (logMin + norm * (logMax - logMin)).toDouble()).toFloat()
+    }
+
+    private fun freqToSlider(freq: Float): Float {
+        val logMin = kotlin.math.log10(20f)
+        val logMax = kotlin.math.log10(20000f)
+        val norm = (kotlin.math.log10(freq.coerceIn(20f, 20000f)) - logMin) / (logMax - logMin)
+        return (norm * 1000f).coerceIn(0f, 1000f)
+    }
+
     private fun sliderToRatio(sliderValue: Float): Float {
         val norm = (sliderValue / 100f).coerceIn(0f, 1f)
         // norm=0 → output=T+10 (R=1), norm=1 → output≈T (R=50)
