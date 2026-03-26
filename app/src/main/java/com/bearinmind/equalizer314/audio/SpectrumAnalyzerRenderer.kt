@@ -190,11 +190,10 @@ class SpectrumAnalyzerRenderer(
             xArr[x] = left + x
             inputY[x] = top + graphHeight * (1f - inputNorm)
 
-            // Output = input + EQ response + MBC gain
+            // Output = input + EQ response only (MBC shown on its own GR trace view)
             if (outputY != null) {
                 var outputDb = inputDb
                 if (eqResponseDb != null && x < eqResponseDb.size) outputDb += eqResponseDb[x]
-                if (mbcComputer != null) outputDb += mbcComputer.getGainAtFrequency(freq)
                 val outputNorm = ((outputDb - dbMin) / dbRange).coerceIn(0f, 1f)
                 outputY[x] = top + graphHeight * (1f - outputNorm)
             }

@@ -194,15 +194,63 @@ class MbcActivity : AppCompatActivity() {
                 isUpdating = false
             }
         }
-        val freqBtn = findViewById<android.widget.ImageButton>(R.id.mbcGraphModeFreq)
-        val timeBtn = findViewById<android.widget.ImageButton>(R.id.mbcGraphModeTime)
+        val freqBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.mbcGraphModeFreq)
+        val timeBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.mbcGraphModeTime)
+        val toggleGroup = findViewById<android.widget.LinearLayout>(R.id.mbcGraphModeToggleGroup)
+        val density = resources.displayMetrics.density
+
+        // Position toggle icons — same width as spectrum button (right side)
+        val gapPx = (2 * density).toInt()
+        val vPadPx = 80
+        graphView.post {
+            val viewWidth = graphView.width
+            val gridLine10k = (viewWidth * 3.0 / 3.301).toInt()
+            // Spectrum button width = space between 10kHz line and right edge
+            val specBtnWidth = (viewWidth - gapPx) - (gridLine10k + gapPx)
+            val btnHeight = vPadPx - 2 * gapPx
+
+            for (btn in listOf(freqBtn, timeBtn)) {
+                val lp = btn.layoutParams as android.widget.LinearLayout.LayoutParams
+                lp.width = specBtnWidth
+                lp.height = btnHeight
+                btn.layoutParams = lp
+                btn.minimumWidth = 0
+                btn.minimumHeight = 0
+                btn.setPadding(0, 0, 0, 0)
+            }
+            val groupLp = toggleGroup.layoutParams as android.widget.FrameLayout.LayoutParams
+            groupLp.topMargin = gapPx
+            groupLp.leftMargin = gapPx
+            toggleGroup.layoutParams = groupLp
+        }
+        fun updateGraphToggleStyle(freqActive: Boolean) {
+            if (freqActive) {
+                freqBtn.alpha = 1f; freqBtn.setBackgroundColor(0xFF555555.toInt())
+                freqBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+                freqBtn.strokeWidth = (2 * density).toInt()
+                freqBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
+                timeBtn.alpha = 1f; timeBtn.setBackgroundColor(0x00000000)
+                timeBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                timeBtn.strokeWidth = (1 * density).toInt()
+                timeBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+            } else {
+                freqBtn.alpha = 1f; freqBtn.setBackgroundColor(0x00000000)
+                freqBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                freqBtn.strokeWidth = (1 * density).toInt()
+                freqBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+                timeBtn.alpha = 1f; timeBtn.setBackgroundColor(0xFF555555.toInt())
+                timeBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+                timeBtn.strokeWidth = (2 * density).toInt()
+                timeBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
+            }
+        }
+        updateGraphToggleStyle(true) // freq active by default
         freqBtn.setOnClickListener {
             if (isGrTraceMode) {
                 isGrTraceMode = false
                 graphView.visibility = android.view.View.VISIBLE
                 grTraceView.visibility = android.view.View.GONE
-                freqBtn.alpha = 1f
-                timeBtn.alpha = 0.4f
+                updateGraphToggleStyle(true)
             }
         }
         timeBtn.setOnClickListener {
@@ -210,8 +258,7 @@ class MbcActivity : AppCompatActivity() {
                 isGrTraceMode = true
                 graphView.visibility = android.view.View.GONE
                 grTraceView.visibility = android.view.View.VISIBLE
-                freqBtn.alpha = 0.4f
-                timeBtn.alpha = 1f
+                updateGraphToggleStyle(false)
                 startGrTraceUpdates()
             }
         }

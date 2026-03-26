@@ -71,36 +71,52 @@
                 android:layout_height="220dp"
                 android:visibility="gone" />
 
-            <!-- Graph mode toggles (top-left) -->
+            <!-- Graph mode toggles (top-left, same size/style as spectrum toggle) -->
             <LinearLayout
+                android:id="@+id/mbcGraphModeToggleGroup"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="top|start"
-                android:layout_marginTop="4dp"
-                android:layout_marginStart="4dp"
                 android:orientation="horizontal">
 
-                <ImageButton
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/mbcGraphModeFreq"
-                    android:layout_width="28dp"
-                    android:layout_height="28dp"
-                    android:src="@drawable/ic_graph_freq"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:scaleType="centerInside"
-                    android:contentDescription="Frequency view"
-                    app:tint="?attr/colorOnSurface" />
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:padding="0dp"
+                    app:icon="@drawable/ic_graph_freq"
+                    app:iconGravity="textStart"
+                    app:iconPadding="0dp"
+                    app:iconTint="@null"
+                    app:shapeAppearanceOverlay="@style/ShapeAppearance.MbcEqButton"
+                    app:strokeColor="#FF444444"
+                    app:strokeWidth="1dp"
+                    android:contentDescription="Frequency view" />
 
-                <ImageButton
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/mbcGraphModeTime"
-                    android:layout_width="28dp"
-                    android:layout_height="28dp"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
                     android:layout_marginStart="4dp"
-                    android:src="@drawable/ic_graph_time"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:scaleType="centerInside"
-                    android:alpha="0.4"
-                    android:contentDescription="GR trace view"
-                    app:tint="?attr/colorOnSurface" />
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:padding="0dp"
+                    app:icon="@drawable/ic_graph_time"
+                    app:iconGravity="textStart"
+                    app:iconPadding="0dp"
+                    app:iconTint="@null"
+                    app:shapeAppearanceOverlay="@style/ShapeAppearance.MbcGrButton"
+                    app:strokeColor="#FF444444"
+                    app:strokeWidth="1dp"
+                    android:contentDescription="GR trace view" />
             </LinearLayout>
 
             <com.google.android.material.button.MaterialButton
