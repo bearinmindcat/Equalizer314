@@ -279,10 +279,14 @@ class MbcActivity : AppCompatActivity() {
 
                 val renderer = visualizerHelper.renderer
                 val specLinear = renderer.getSmoothedLinear()
+                // Use renderer opacity as silence indicator
+                // Also clamp: if opacity is fading (< 1.0), blend toward defaults
+                val opacity = renderer.opacity
+                val isSilent = opacity < 0.3f
 
                 grTraceView.selectedBand = selectedBand
 
-                if (specLinear != null && specLinear.isNotEmpty()) {
+                if (!isSilent && specLinear != null && specLinear.isNotEmpty()) {
                     // Convert linear to dB
                     val specDb = FloatArray(specLinear.size) { i ->
                         if (specLinear[i] > 1e-10f) 20f * kotlin.math.log10(specLinear[i])
@@ -332,13 +336,21 @@ class MbcActivity : AppCompatActivity() {
                         for (k in lowBin..highBin) {
                             sumPow += Math.pow(10.0, specDb[k].toDouble() / 10.0); cnt++
                         }
-                        if (cnt > 0 && sumPow > 0) (10.0 * Math.log10(sumPow / cnt)).toFloat() else -96f
+                        if (cnt > 0 && sumPow > 0) (10.0 * Math.log10(sumPow / cnt)).toFloat().coerceAtLeast(-60f) else -60f
                     }
 
+                    // Blend toward defaults as opacity fades (prevents spikes during transition)
+                    if (opacity < 1f) {
+                        val blend = opacity.coerceIn(0f, 1f)
+                        for (b in grValues.indices) {
+                            grValues[b] = grValues[b] * blend  // GR fades toward 0
+                            bandLevels[b] = bandLevels[b] * blend + (-60f) * (1f - blend)  // level fades toward -60
+                        }
+                    }
                     grTraceView.pushFrame(grValues, bandLevels)
                 } else {
-                    // Silence — push zeros
-                    grTraceView.pushFrame(FloatArray(bandCount), FloatArray(bandCount) { -96f })
+                    // Silence — GR at 0 (no compression), levels at -60 (bottom)
+                    grTraceView.pushFrame(FloatArray(bandCount) { 0f }, FloatArray(bandCount) { -60f })
                 }
 
                 grTraceView.invalidate()
