@@ -1,6 +1,9 @@
 package com.bearinmind.equalizer314.audio
 
+import android.content.Context
+import android.media.AudioManager
 import android.media.audiofx.Visualizer
+import android.os.Build
 import android.util.Log
 import com.bearinmind.equalizer314.ui.EqGraphView
 
@@ -15,8 +18,41 @@ class VisualizerHelper {
     var isRunning = false
         private set
 
+    // Playback state detection (no permissions needed, API 26+)
+    private var audioManager: AudioManager? = null
+    private var playbackCallback: AudioManager.AudioPlaybackCallback? = null
+    @Volatile
+    private var isMusicPlaying = true  // assume playing until told otherwise
+    private var graphViewRef: EqGraphView? = null
+
     fun start(graphView: EqGraphView) {
         stop()
+        graphViewRef = graphView
+
+        // Register AudioPlaybackCallback to detect play/pause (works on speaker AND Bluetooth)
+        val context = graphView.context
+        audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        isMusicPlaying = audioManager?.isMusicActive() ?: true
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            playbackCallback = object : AudioManager.AudioPlaybackCallback() {
+                override fun onPlaybackConfigChanged(configs: MutableList<android.media.AudioPlaybackConfiguration>?) {
+                    val wasPlaying = isMusicPlaying
+                    // isMusicActive() is the simplest reliable check
+                    isMusicPlaying = audioManager?.isMusicActive() ?: false
+                    // If just stopped playing, start fading
+                    if (wasPlaying && !isMusicPlaying) {
+                        Log.d(TAG, "Playback stopped — fading spectrum")
+                    }
+                    // If just started playing, ensure opacity is restored
+                    if (!wasPlaying && isMusicPlaying) {
+                        renderer.resetOpacity()
+                        Log.d(TAG, "Playback started — showing spectrum")
+                    }
+                }
+            }
+            audioManager?.registerAudioPlaybackCallback(playbackCallback!!, null)
+        }
 
         try {
             visualizer = Visualizer(0).apply {
@@ -24,30 +60,19 @@ class VisualizerHelper {
                 scalingMode = Visualizer.SCALING_MODE_NORMALIZED
                 measurementMode = Visualizer.MEASUREMENT_MODE_PEAK_RMS
 
-                // Silence detection state
-                var silentFrames = 0
-
                 setDataCaptureListener(object : Visualizer.OnDataCaptureListener {
                     override fun onWaveFormDataCapture(
                         v: Visualizer?, waveform: ByteArray?, samplingRate: Int
                     ) {
-                        if (waveform == null || waveform.size < 64 || v == null) return
+                        if (waveform == null || waveform.size < 64) return
 
-                        // Use 16-bit peak/RMS measurement for reliable silence detection
-                        // This is unaffected by SCALING_MODE_NORMALIZED
-                        val measurement = Visualizer.MeasurementPeakRms()
-                        v.getMeasurementPeakRms(measurement)
-                        val isSilent = measurement.mPeak < -6000 // -60 dBFS
-
-                        if (isSilent) {
-                            silentFrames++
-                            // Feed zeros into the smoother so the EMA naturally decays
-                            renderer.feedSilence()
-                            // Fade opacity: ramp down over ~12 frames (~0.6s at 20Hz)
-                            renderer.fadeOut(0.08f)
-                        } else {
-                            silentFrames = 0
+                        if (isMusicPlaying) {
+                            // Audio is playing — feed real data
                             renderer.updateWaveformData(waveform)
+                        } else {
+                            // Audio is paused/stopped — decay and fade
+                            renderer.feedSilence()
+                            renderer.fadeOut(0.04f)  // slower fade (~25 frames / ~1.2s)
                         }
                         graphView.postInvalidate()
                     }
@@ -72,6 +97,14 @@ class VisualizerHelper {
     }
 
     fun stop() {
+        // Unregister playback callback
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            playbackCallback?.let { audioManager?.unregisterAudioPlaybackCallback(it) }
+        }
+        playbackCallback = null
+        audioManager = null
+        graphViewRef = null
+
         try {
             visualizer?.enabled = false
             visualizer?.release()

@@ -97,11 +97,14 @@ class SpectrumAnalyzerRenderer(
         val n = prev.size
         val result = FloatArray(n)
         for (i in 0 until n) {
-            // releaseAlpha blends toward zero: result = (1 - alpha) * prev
-            result[i] = (1f - releaseAlpha) * prev[i]
+            // Slower decay than normal release for a gentle fall
+            result[i] = 0.92f * prev[i]
         }
         smoothedLinear = result
     }
+
+    /** Restore opacity to full (called when playback resumes) */
+    fun resetOpacity() { opacity = 1f }
 
     /** Reduce opacity by [amount] per call. At 0, draw() returns early. */
     fun fadeOut(amount: Float) {
