@@ -116,11 +116,11 @@ class GateCurveView @JvmOverloads constructor(
         // Background
         canvas.drawRect(0f, 0f, w, h, bgPaint)
 
-        // Title — centered between -10 and 0 dB on Y axis
+        // Title — centered between 10 and 20 dB on Y axis (top of graph)
         val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = 0xFF888888.toInt(); textSize = 24f; textAlign = Paint.Align.CENTER
         }
-        val titleY = (dbToY(-10f) + dbToY(0f)) / 2f + 8f
+        val titleY = (dbToY(10f) + dbToY(20f)) / 2f + 8f
         canvas.drawText("Gate (below threshold)", w / 2f, titleY, titlePaint)
 
         // Grid every 10 dB with labels (skip 0 and -60)

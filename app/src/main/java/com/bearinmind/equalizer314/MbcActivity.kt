@@ -339,7 +339,7 @@ class MbcActivity : AppCompatActivity() {
 
                     // Recompute GR using CALIBRATED (absolute dBFS) spectrum
                     traceComputer.computeAllBandGains(calibratedSpecDb, 48000, 4096, settings)
-                    val grValues = FloatArray(bandCount) { traceComputer.getSmoothedGR(it) }
+                    val grValues = FloatArray(bandCount) { traceComputer.getSmoothedCompressorGR(it) }
 
                     // Display uses CALIBRATED levels (so input trace matches threshold position)
                     val bandLevelsAbsolute = FloatArray(bandCount) {

@@ -5,6 +5,7 @@ import android.graphics.*
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
+import kotlin.math.exp
 import kotlin.math.sqrt
 
 class AttackReleaseView @JvmOverloads constructor(
@@ -120,24 +121,31 @@ class AttackReleaseView @JvmOverloads constructor(
         val aDotX = aSlopeAtDotY.coerceAtMost(peakX - minOffset)
         val rDotX = rSlopeAtDotY.coerceAtLeast(peakX + minOffset)
 
-        // Triangle — line goes from peak down to botY at the foot X
-        // but only draw down to dotCY where it meets the dot (if it reaches the dot)
+        // Envelope curves — exponential shape matching real compressor behavior
+        // Attack: 1 - e^(-t/τ) — steep rise at start, leveling off at peak
+        // Release: e^(-t/τ) — steep drop from peak, leveling off at bottom
         val triPath = Path()
-        // Attack side: if slope reaches dot, end at dot. Otherwise end at botY.
+
+        // Attack side start point
+        val attackStartX: Float
+        val attackStartY: Float
         if (aSlopeAtDotY <= aDotX) {
-            // Slope reaches past the dot — line goes through dot center
-            triPath.moveTo(aDotX, dotCY)
+            attackStartX = aDotX; attackStartY = dotCY
         } else {
-            // Slope is steep, foot is closer to center than dot — line goes to botY
-            triPath.moveTo(leftFootX, botY)
+            attackStartX = leftFootX; attackStartY = botY
         }
-        triPath.lineTo(peakX, topY)
-        // Release side
+        triPath.moveTo(attackStartX, attackStartY)
+        addExpCurve(triPath, attackStartX, attackStartY, peakX, topY)
+
+        // Release side end point
+        val releaseEndX: Float
+        val releaseEndY: Float
         if (rSlopeAtDotY >= rDotX) {
-            triPath.lineTo(rDotX, dotCY)
+            releaseEndX = rDotX; releaseEndY = dotCY
         } else {
-            triPath.lineTo(rightFootX, botY)
+            releaseEndX = rightFootX; releaseEndY = botY
         }
+        addExpCurve(triPath, peakX, topY, releaseEndX, releaseEndY)
         canvas.drawPath(triPath, linePaint)
 
         // Halos when dragging
@@ -148,13 +156,13 @@ class AttackReleaseView @JvmOverloads constructor(
         }
         if (draggingAttack) {
             val p = Path()
-            if (aSlopeAtDotY <= aDotX) p.moveTo(aDotX, dotCY) else p.moveTo(leftFootX, botY)
-            p.lineTo(peakX, topY)
+            p.moveTo(attackStartX, attackStartY)
+            addExpCurve(p, attackStartX, attackStartY, peakX, topY)
             canvas.drawPath(p, haloStrokePaint)
         }
         if (draggingRelease) {
             val p = Path(); p.moveTo(peakX, topY)
-            if (rSlopeAtDotY >= rDotX) p.lineTo(rDotX, dotCY) else p.lineTo(rightFootX, botY)
+            addExpCurve(p, peakX, topY, releaseEndX, releaseEndY)
             canvas.drawPath(p, haloStrokePaint)
         }
 
@@ -273,6 +281,24 @@ class AttackReleaseView @JvmOverloads constructor(
             }
         }
         return true
+    }
+
+    /**
+     * Draw an exponential curve segment from (startX,startY) to (endX,endY).
+     * Uses 1 - e^(-t*k) shape: steep at start, leveling off at end.
+     * This matches real compressor envelope follower behavior (first-order IIR).
+     */
+    private fun addExpCurve(path: Path, startX: Float, startY: Float, endX: Float, endY: Float) {
+        val k = 4.0
+        val norm = 1.0 / (1.0 - exp(-k))
+        val segments = 30
+        for (s in 1..segments) {
+            val t = s.toDouble() / segments
+            val expT = ((1.0 - exp(-t * k)) * norm).toFloat()
+            val x = startX + (endX - startX) * (s.toFloat() / segments)
+            val y = startY + (endY - startY) * expT
+            path.lineTo(x, y)
+        }
     }
 
     private fun distToLine(px: Float, py: Float, x1: Float, y1: Float, x2: Float, y2: Float): Float {

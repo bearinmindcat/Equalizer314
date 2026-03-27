@@ -24,6 +24,9 @@ class MbcGainComputer(private val numBands: Int) {
     // Smoothed GR for animation (asymmetric attack/release)
     private val smoothedGR = FloatArray(numBands)
 
+    // Smoothed compressor-only GR (excludes expander/gate) for trace display
+    private val smoothedCompressorGR = FloatArray(numBands)
+
     // Crossover frequencies between bands (size = numBands - 1)
     private var crossoverFreqs = FloatArray(0)
 
@@ -179,6 +182,10 @@ class MbcGainComputer(private val numBands: Int) {
             }
             smoothedGR[i] = alpha * totalGR + (1f - alpha) * smoothedGR[i]
 
+            // Smooth compressor-only GR separately (for trace display)
+            val compAlpha = if (compressorGR < smoothedCompressorGR[i]) 0.35f else 0.06f
+            smoothedCompressorGR[i] = compAlpha * compressorGR + (1f - compAlpha) * smoothedCompressorGR[i]
+
             // Step 7: Total gain = preGain + smoothed GR + postGain
             bandTotalGains[i] = s.preGain + smoothedGR[i] + s.postGain
         }
@@ -223,8 +230,12 @@ class MbcGainComputer(private val numBands: Int) {
      */
     fun getSmoothedGR(bandIndex: Int): Float = smoothedGR.getOrElse(bandIndex) { 0f }
 
+    /** Compressor-only GR (excludes expander/gate). Use for the GR trace display. */
+    fun getSmoothedCompressorGR(bandIndex: Int): Float = smoothedCompressorGR.getOrElse(bandIndex) { 0f }
+
     fun release() {
         smoothedGR.fill(0f)
+        smoothedCompressorGR.fill(0f)
         bandTotalGains.fill(0f)
     }
 }
