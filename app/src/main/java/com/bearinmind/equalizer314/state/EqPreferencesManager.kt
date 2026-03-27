@@ -145,6 +145,10 @@ class EqPreferencesManager(context: Context) {
         return Uri.parse(str)
     }
 
+    // Spectrum visualizer
+    fun saveSpectrumEnabled(enabled: Boolean) { prefs.edit().putBoolean("spectrumEnabled", enabled).apply() }
+    fun getSpectrumEnabled(): Boolean = prefs.getBoolean("spectrumEnabled", false)
+
     // MBC
     fun saveMbcEnabled(enabled: Boolean) { prefs.edit().putBoolean("mbcEnabled", enabled).apply() }
     fun getMbcEnabled(): Boolean = prefs.getBoolean("mbcEnabled", false)

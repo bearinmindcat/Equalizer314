@@ -393,13 +393,23 @@ class MainActivity : AppCompatActivity() {
                 vizToggle.iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
             }
         }
-        updateVizToggleStyle(false)
+        // Restore spectrum state from preferences
+        if (eqPrefs.getSpectrumEnabled() &&
+            checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+            == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            visualizerHelper.start(eqGraphView)
+            eqGraphView.spectrumRenderer = visualizerHelper.renderer
+            updateVizToggleStyle(true)
+        } else {
+            updateVizToggleStyle(false)
+        }
         vizToggle.setOnClickListener {
             if (visualizerHelper.isRunning) {
                 visualizerHelper.stop()
                 eqGraphView.spectrumRenderer = null
                 eqGraphView.invalidate()
                 updateVizToggleStyle(false)
+                eqPrefs.saveSpectrumEnabled(false)
             } else {
                 if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
                     != android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -409,6 +419,7 @@ class MainActivity : AppCompatActivity() {
                 visualizerHelper.start(eqGraphView)
                 eqGraphView.spectrumRenderer = visualizerHelper.renderer
                 updateVizToggleStyle(true)
+                eqPrefs.saveSpectrumEnabled(true)
             }
         }
         powerButton.setOnClickListener {
@@ -1398,10 +1409,20 @@ class MainActivity : AppCompatActivity() {
             stateManager.isProcessing = false
         }
         updatePowerUI()
+        // Restart visualizer if it was enabled (may have been stopped in onPause)
+        if (eqPrefs.getSpectrumEnabled() && !visualizerHelper.isRunning &&
+            checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+            == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            visualizerHelper.start(eqGraphView)
+            eqGraphView.spectrumRenderer = visualizerHelper.renderer
+        }
     }
 
     override fun onPause() {
         super.onPause()
+        // Release visualizer so other activities can use session 0
+        visualizerHelper.stop()
+        eqGraphView.spectrumRenderer = null
         stateManager.saveState()
         eqPrefs.savePresetName(presetDropdown.text.toString())
     }

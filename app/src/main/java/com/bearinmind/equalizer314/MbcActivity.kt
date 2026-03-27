@@ -146,6 +146,18 @@ class MbcActivity : AppCompatActivity() {
         eqPrefs = EqPreferencesManager(this)
         initViews()
         loadState()
+
+        // Initialize first 3 band colors with picker colors (blue, green, red)
+        // Must happen BEFORE setupMbcGraph/selectBand so colors are available
+        val defaultColors = intArrayOf(
+            0xFF90CAF9.toInt(), 0xFFA5D6A7.toInt(), 0xFFEF9A9A.toInt()
+        )
+        for (i in 0 until defaultColors.size.coerceAtMost(bandCount)) {
+            if (!mbcBandColors.containsKey(i)) {
+                mbcBandColors[i] = defaultColors[i]
+            }
+        }
+
         setupMbcGraph()
         buildBandTabs()
         selectBand(0)
@@ -159,21 +171,22 @@ class MbcActivity : AppCompatActivity() {
         // GR trace view + graph mode toggles
         grTraceView = findViewById(R.id.mbcGrTraceView)
         grTraceView.updateNumBands(bandCount)
+        grTraceView.customBandColors = IntArray(bandCount) { mbcBandColors[it] ?: 0 }
         // Sync initial thresholds to the GR trace view
         for (b in bands.indices) grTraceView.setThreshold(b, bands[b].threshold)
         // Wire threshold drag callback
         grTraceView.onThresholdChanged = { bandIndex, thresholdDb ->
             bands[bandIndex].threshold = thresholdDb
             saveBand(bandIndex)
-            // Sync threshold slider + compressor curve if this is the selected band
-            if (bandIndex == selectedBand) {
-                isUpdating = true
-                thresholdSlider.value = thresholdDb.coerceIn(-60f, 0f)
-                thresholdText.setText(String.format("%.1f", thresholdDb))
-                compressorCurve.threshold = thresholdDb
-                gateCurve.compressorThreshold = thresholdDb
-                isUpdating = false
-            }
+            // Switch to the dragged band if different
+            if (bandIndex != selectedBand) selectBand(bandIndex)
+            // Always sync threshold slider + compressor curve
+            isUpdating = true
+            thresholdSlider.value = thresholdDb.coerceIn(-60f, 0f)
+            thresholdText.setText(String.format("%.1f", thresholdDb))
+            compressorCurve.threshold = thresholdDb
+            gateCurve.compressorThreshold = thresholdDb
+            isUpdating = false
         }
         // Wire crossover drag on GR trace view
         grTraceView.onCrossoverChanged = { index, freq ->
@@ -410,6 +423,7 @@ class MbcActivity : AppCompatActivity() {
                 graphView.spectrumRenderer = null
                 graphView.invalidate()
                 updateVizStyle(false)
+                eqPrefs.saveSpectrumEnabled(false)
             } else {
                 if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
                     != android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -419,11 +433,13 @@ class MbcActivity : AppCompatActivity() {
                 visualizerHelper.start(graphView)
                 graphView.spectrumRenderer = visualizerHelper.renderer
                 updateVizStyle(true)
+                eqPrefs.saveSpectrumEnabled(true)
             }
         }
 
-        // Auto-start if permission granted
-        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+        // Restore spectrum state from preferences
+        if (eqPrefs.getSpectrumEnabled() &&
+            checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
             == android.content.pm.PackageManager.PERMISSION_GRANTED) {
             visualizerHelper.start(graphView)
             graphView.spectrumRenderer = visualizerHelper.renderer
@@ -1212,8 +1228,22 @@ class MbcActivity : AppCompatActivity() {
         pushMbcToService()
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Restart visualizer if it was enabled (may have been stopped in onPause)
+        if (eqPrefs.getSpectrumEnabled() && !visualizerHelper.isRunning &&
+            checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+            == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            visualizerHelper.start(graphView)
+            graphView.spectrumRenderer = visualizerHelper.renderer
+        }
+    }
+
     override fun onPause() {
         super.onPause()
+        // Release visualizer so other activities can use session 0
+        visualizerHelper.stop()
+        graphView.spectrumRenderer = null
         eqPrefs.saveMbcEnabled(masterSwitch.isChecked)
         for (i in bands.indices) saveBand(i)
     }
@@ -1528,8 +1558,11 @@ class MbcActivity : AppCompatActivity() {
                     mbcBandColors[selectedBand] = color
                 }
                 updateMbcColorBox()
-                graphView.mbcBandColors = IntArray(bandCount) { mbcBandColors[it] ?: 0 }
+                val colorArray = IntArray(bandCount) { mbcBandColors[it] ?: 0 }
+                graphView.mbcBandColors = colorArray
+                grTraceView.customBandColors = colorArray
                 graphView.invalidate()
+                grTraceView.invalidate()
                 bottomSheet.dismiss()
             }
             grid.addView(swatch)

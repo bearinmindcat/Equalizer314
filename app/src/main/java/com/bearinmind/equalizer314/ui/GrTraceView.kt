@@ -33,6 +33,15 @@ class GrTraceView @JvmOverloads constructor(
     private var draggingThresholdBand = -1
     var onThresholdChanged: ((bandIndex: Int, thresholdDb: Float) -> Unit)? = null
 
+    // Double-tap detection for threshold reset
+    private var lastThreshTapTime = 0L
+    private var lastThreshTapBand = -1
+    private val doubleTapTimeout = 300L
+    private var pendingThreshBand = -1
+    private var hasDragged = false
+    private var touchStartX = 0f
+    private var touchStartY = 0f
+
     // Crossover dragging
     private var draggingCrossover = -1
     var onCrossoverChanged: ((crossoverIndex: Int, frequency: Float) -> Unit)? = null
@@ -46,10 +55,19 @@ class GrTraceView @JvmOverloads constructor(
 
     var crossoverFreqs: FloatArray? = null
 
-    private val bandColors = intArrayOf(
-        0xFF4FC3F7.toInt(), 0xFF81C784.toInt(), 0xFFE57373.toInt(),
-        0xFFFFB74D.toInt(), 0xFFBA68C8.toInt(), 0xFF4DB6AC.toInt()
+    private val defaultBandColors = intArrayOf(
+        0xFF90CAF9.toInt(), 0xFFA5D6A7.toInt(), 0xFFEF9A9A.toInt(),
+        0xFFAAAAAA.toInt(), 0xFFAAAAAA.toInt(), 0xFFAAAAAA.toInt()
     )
+
+    // User-selected colors per band (0 = use default)
+    var customBandColors: IntArray? = null
+
+    private fun bandColor(index: Int): Int {
+        val custom = customBandColors
+        if (custom != null && index < custom.size && custom[index] != 0) return custom[index]
+        return defaultBandColors[index % defaultBandColors.size]
+    }
 
     // Unified dB scale: +20 at top, -60 at bottom
     private val dbMax = 20f
@@ -134,7 +152,7 @@ class GrTraceView @JvmOverloads constructor(
             val sectionWidth = rightX - leftX
             if (sectionWidth < 2f) continue
 
-            val color = bandColors[b % bandColors.size]
+            val color = bandColor(b)
             val isSelected = b == selectedBand
             val samplesVisible = bufferSize
             val pxPerSample = sectionWidth / samplesVisible
@@ -264,7 +282,7 @@ class GrTraceView @JvmOverloads constructor(
             val threshY = dbToY(thresholds[b], h)
             val centerX = (leftX + rightX) / 2f
 
-            threshLinePaint.color = bandColors[b % bandColors.size]
+            threshLinePaint.color = bandColor(b)
             threshLinePaint.alpha = if (b == selectedBand || b == draggingThresholdBand) 180 else 80
 
             // Measure text to create gap in the line
@@ -322,7 +340,7 @@ class GrTraceView @JvmOverloads constructor(
 
             // Rounded rect glow around the line (no outline)
             val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = bandColors[b % bandColors.size]; alpha = 40; style = Paint.Style.FILL
+                color = bandColor(b); alpha = 40; style = Paint.Style.FILL
             }
             val glowPad = 24f
             val cornerR = 10f
@@ -369,12 +387,26 @@ class GrTraceView @JvmOverloads constructor(
                 }
 
                 // Check threshold lines
+                val now = System.currentTimeMillis()
                 for (b in 0 until numBands.coerceAtMost(xovers.size + 1)) {
                     val leftX = freqToX(if (b == 0) freqMin else xovers[b - 1], w)
                     val rightX = freqToX(if (b >= xovers.size) freqMax else xovers[b], w)
                     if (touchX < leftX || touchX > rightX) continue
                     if (Math.abs(touchY - dbToY(thresholds[b], h)) < hitRadius) {
-                        draggingThresholdBand = b
+                        // Double-tap: reset threshold to 0 dB
+                        if (now - lastThreshTapTime < doubleTapTimeout && lastThreshTapBand == b) {
+                            thresholds[b] = 0f
+                            onThresholdChanged?.invoke(b, 0f)
+                            lastThreshTapTime = 0L
+                            invalidate()
+                            return true
+                        }
+                        lastThreshTapTime = now
+                        lastThreshTapBand = b
+                        pendingThreshBand = b
+                        hasDragged = false
+                        touchStartX = touchX
+                        touchStartY = touchY
                         selectedBand = b
                         parent?.requestDisallowInterceptTouchEvent(true)
                         invalidate()
@@ -392,6 +424,14 @@ class GrTraceView @JvmOverloads constructor(
                     invalidate()
                     return true
                 }
+                if (pendingThreshBand >= 0 && !hasDragged) {
+                    val dx = event.x - touchStartX
+                    val dy = event.y - touchStartY
+                    if (dx * dx + dy * dy > 64f) {
+                        hasDragged = true
+                        draggingThresholdBand = pendingThreshBand
+                    }
+                }
                 if (draggingThresholdBand >= 0) {
                     val newDb = (dbMax - (event.y / h) * dbRange).coerceIn(dbMin, dbMax)
                     thresholds[draggingThresholdBand] = Math.round(newDb * 2f) / 2f
@@ -402,6 +442,7 @@ class GrTraceView @JvmOverloads constructor(
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 parent?.requestDisallowInterceptTouchEvent(false)
+                pendingThreshBand = -1
                 if (draggingCrossover >= 0) { draggingCrossover = -1; invalidate(); return true }
                 if (draggingThresholdBand >= 0) { draggingThresholdBand = -1; invalidate(); return true }
             }

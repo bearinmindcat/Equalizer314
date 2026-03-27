@@ -153,11 +153,14 @@ class GraphicEqController(
             R.drawable.ic_filter_high_pass to BiquadFilter.FilterType.HIGH_PASS
         )
 
-        // Match width of toggle buttons — use band count only, not add button
+        // Match width of toggle buttons — include "+" button when it fits in the row
         val bandsOnPage = sortedIndices.size
+        val totalBands = eq.getBandCount()
+        val hasAddButton = totalBands < EqStateManager.MAX_BANDS && bandsOnPage < PAGE_SIZE
+        val itemsInRow = bandsOnPage + (if (hasAddButton) 1 else 0)
         val availableWidth = activity.resources.displayMetrics.widthPixels - (32 * density).toInt()
-        val totalMargins = bandsOnPage * (btnMargin * 2)
-        val cardWidth = (availableWidth - totalMargins) / bandsOnPage
+        val totalMargins = itemsInRow * (btnMargin * 2)
+        val cardWidth = (availableWidth - totalMargins) / itemsInRow
         val cardHeight = if (targetHeight > 0) targetHeight else LinearLayout.LayoutParams.WRAP_CONTENT
         val card = com.google.android.material.card.MaterialCardView(activity).apply {
             layoutParams = LinearLayout.LayoutParams(cardWidth, cardHeight).apply {
