@@ -120,10 +120,10 @@ class MbcActivity : AppCompatActivity() {
         var attack: Float = 1f,
         var release: Float = 100f,
         var ratio: Float = 2f,
-        var threshold: Float = -12f,
+        var threshold: Float = 0f,
         var kneeWidth: Float = 8f,
-        var noiseGateThreshold: Float = -40f,
-        var expanderRatio: Float = 2f,
+        var noiseGateThreshold: Float = -60f,
+        var expanderRatio: Float = 1f,
         var preGain: Float = 0f,
         var postGain: Float = 0f,
         var range: Float = -12f
@@ -340,13 +340,14 @@ class MbcActivity : AppCompatActivity() {
                     // Recompute GR using CALIBRATED (absolute dBFS) spectrum
                     traceComputer.computeAllBandGains(calibratedSpecDb, 48000, 4096, settings)
                     val grValues = FloatArray(bandCount) { traceComputer.getSmoothedCompressorGR(it) }
+                    val gateGrValues = FloatArray(bandCount) { traceComputer.getSmoothedExpanderGR(it) }
 
                     // Display uses CALIBRATED levels (so input trace matches threshold position)
                     val bandLevelsAbsolute = FloatArray(bandCount) {
                         (bandLevelsNormalized[it] + calibrationOffset).coerceIn(-60f, 20f)
                     }
 
-                    grTraceView.pushFrame(grValues, bandLevelsAbsolute)
+                    grTraceView.pushFrame(grValues, bandLevelsAbsolute, gateGrValues)
                 } else {
                     // Silence — GR at 0 (no compression), levels at -60 (bottom)
                     grTraceView.pushFrame(FloatArray(bandCount) { 0f }, FloatArray(bandCount) { -60f })
@@ -982,9 +983,9 @@ class MbcActivity : AppCompatActivity() {
 
         // Double-tap slider thumbs to reset to defaults
         addDoubleTapReset(thresholdSlider) {
-            bands[selectedBand].threshold = -12f; saveBand(selectedBand)
-            thresholdSlider.value = -12f; thresholdText.setText("-12.0")
-            compressorCurve.threshold = -12f; gateCurve.compressorThreshold = -12f
+            bands[selectedBand].threshold = 0f; saveBand(selectedBand)
+            thresholdSlider.value = 0f; thresholdText.setText("0.0")
+            compressorCurve.threshold = 0f; gateCurve.compressorThreshold = 0f
         }
         addDoubleTapReset(ratioSlider) {
             bands[selectedBand].ratio = 2f; saveBand(selectedBand)
@@ -1007,14 +1008,14 @@ class MbcActivity : AppCompatActivity() {
             attackReleaseView.releaseMs = 100f
         }
         addDoubleTapReset(noiseGateSlider) {
-            bands[selectedBand].noiseGateThreshold = -40f; saveBand(selectedBand)
-            noiseGateSlider.value = -40f; noiseGateText.setText("-40")
-            gateCurve.gateThreshold = -40f; compressorCurve.gateThreshold = -40f
+            bands[selectedBand].noiseGateThreshold = -60f; saveBand(selectedBand)
+            noiseGateSlider.value = -60f; noiseGateText.setText("-60")
+            gateCurve.gateThreshold = -60f; compressorCurve.gateThreshold = -60f
         }
         addDoubleTapReset(expanderSlider) {
-            bands[selectedBand].expanderRatio = 2f; saveBand(selectedBand)
-            expanderSlider.value = ratioToSlider(2f); expanderText.setText("2.00")
-            gateCurve.expanderRatio = 2f
+            bands[selectedBand].expanderRatio = 1f; saveBand(selectedBand)
+            expanderSlider.value = ratioToSlider(1f); expanderText.setText("1.00")
+            gateCurve.expanderRatio = 1f
         }
         addDoubleTapReset(preGainSlider) {
             bands[selectedBand].preGain = 0f; saveBand(selectedBand)

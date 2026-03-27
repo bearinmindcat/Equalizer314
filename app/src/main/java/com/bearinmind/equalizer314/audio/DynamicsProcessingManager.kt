@@ -194,10 +194,10 @@ class DynamicsProcessingManager {
         val attackMs: Float = 1f,
         val releaseMs: Float = 100f,
         val ratio: Float = 2f,
-        val thresholdDb: Float = -12f,
+        val thresholdDb: Float = 0f,
         val kneeDb: Float = 8f,
-        val noiseGateDb: Float = -40f,
-        val expanderRatio: Float = 2f,
+        val noiseGateDb: Float = -60f,
+        val expanderRatio: Float = 1f,
         val preGainDb: Float = 0f,
         val postGainDb: Float = 0f
     )

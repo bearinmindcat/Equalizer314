@@ -49,8 +49,8 @@ class GateCurveView @JvmOverloads constructor(
     private var pendingDragType = 0
 
     companion object {
-        const val DEFAULT_GATE_THRESHOLD = -40f
-        const val DEFAULT_EXPANDER_RATIO = 2f
+        const val DEFAULT_GATE_THRESHOLD = -60f
+        const val DEFAULT_EXPANDER_RATIO = 1f
     }
 
     // Paints — identical to CompressorCurveView

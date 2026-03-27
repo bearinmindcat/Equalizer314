@@ -27,6 +27,9 @@ class MbcGainComputer(private val numBands: Int) {
     // Smoothed compressor-only GR (excludes expander/gate) for trace display
     private val smoothedCompressorGR = FloatArray(numBands)
 
+    // Smoothed expander/gate-only GR for input fill dimming
+    private val smoothedExpanderGR = FloatArray(numBands)
+
     // Crossover frequencies between bands (size = numBands - 1)
     private var crossoverFreqs = FloatArray(0)
 
@@ -186,6 +189,10 @@ class MbcGainComputer(private val numBands: Int) {
             val compAlpha = if (compressorGR < smoothedCompressorGR[i]) 0.35f else 0.06f
             smoothedCompressorGR[i] = compAlpha * compressorGR + (1f - compAlpha) * smoothedCompressorGR[i]
 
+            // Smooth expander/gate GR separately (for input fill dimming)
+            val expAlpha = if (expanderGR < smoothedExpanderGR[i]) 0.35f else 0.06f
+            smoothedExpanderGR[i] = expAlpha * expanderGR + (1f - expAlpha) * smoothedExpanderGR[i]
+
             // Step 7: Total gain = preGain + smoothed GR + postGain
             bandTotalGains[i] = s.preGain + smoothedGR[i] + s.postGain
         }
@@ -233,9 +240,13 @@ class MbcGainComputer(private val numBands: Int) {
     /** Compressor-only GR (excludes expander/gate). Use for the GR trace display. */
     fun getSmoothedCompressorGR(bandIndex: Int): Float = smoothedCompressorGR.getOrElse(bandIndex) { 0f }
 
+    /** Expander/gate-only GR. Use for input fill dimming when gate is active. */
+    fun getSmoothedExpanderGR(bandIndex: Int): Float = smoothedExpanderGR.getOrElse(bandIndex) { 0f }
+
     fun release() {
         smoothedGR.fill(0f)
         smoothedCompressorGR.fill(0f)
+        smoothedExpanderGR.fill(0f)
         bandTotalGains.fill(0f)
     }
 }

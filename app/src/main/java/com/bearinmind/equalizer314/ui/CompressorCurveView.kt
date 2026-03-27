@@ -66,7 +66,7 @@ class CompressorCurveView @JvmOverloads constructor(
 
     // Default values for reset
     companion object {
-        const val DEFAULT_THRESHOLD = -12f
+        const val DEFAULT_THRESHOLD = 0f
         const val DEFAULT_RATIO = 2f
         const val DEFAULT_KNEE = 8f
     }
