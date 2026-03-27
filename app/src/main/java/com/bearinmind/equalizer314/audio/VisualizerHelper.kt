@@ -22,7 +22,7 @@ class VisualizerHelper {
     private var audioManager: AudioManager? = null
     private var playbackCallback: AudioManager.AudioPlaybackCallback? = null
     @Volatile
-    private var isMusicPlaying = true  // assume playing until told otherwise
+    var isMusicPlaying = true  // assume playing until told otherwise
     private var graphViewRef: EqGraphView? = null
 
     fun start(graphView: EqGraphView) {
@@ -32,19 +32,17 @@ class VisualizerHelper {
         // Register AudioPlaybackCallback to detect play/pause (works on speaker AND Bluetooth)
         val context = graphView.context
         audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        isMusicPlaying = audioManager?.isMusicActive() ?: true
+        isMusicPlaying = true  // assume playing on start
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             playbackCallback = object : AudioManager.AudioPlaybackCallback() {
                 override fun onPlaybackConfigChanged(configs: MutableList<android.media.AudioPlaybackConfiguration>?) {
                     val wasPlaying = isMusicPlaying
-                    // isMusicActive() is the simplest reliable check
-                    isMusicPlaying = audioManager?.isMusicActive() ?: false
-                    // If just stopped playing, start fading
+                    // Check if ANY playback config exists (regardless of volume level)
+                    isMusicPlaying = configs != null && configs.isNotEmpty()
                     if (wasPlaying && !isMusicPlaying) {
                         Log.d(TAG, "Playback stopped — fading spectrum")
                     }
-                    // If just started playing, ensure opacity is restored
                     if (!wasPlaying && isMusicPlaying) {
                         renderer.resetOpacity()
                         Log.d(TAG, "Playback started — showing spectrum")

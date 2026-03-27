@@ -279,10 +279,8 @@ class MbcActivity : AppCompatActivity() {
 
                 val renderer = visualizerHelper.renderer
                 val specLinear = renderer.getSmoothedLinear()
-                // Use renderer opacity as silence indicator
-                // Also clamp: if opacity is fading (< 1.0), blend toward defaults
-                val opacity = renderer.opacity
-                val isSilent = opacity < 0.3f
+                // Use AudioPlaybackCallback-driven flag for silence detection
+                val isSilent = !visualizerHelper.isMusicPlaying
 
                 grTraceView.selectedBand = selectedBand
 
@@ -339,14 +337,6 @@ class MbcActivity : AppCompatActivity() {
                         if (cnt > 0 && sumPow > 0) (10.0 * Math.log10(sumPow / cnt)).toFloat().coerceAtLeast(-60f) else -60f
                     }
 
-                    // Blend toward defaults as opacity fades (prevents spikes during transition)
-                    if (opacity < 1f) {
-                        val blend = opacity.coerceIn(0f, 1f)
-                        for (b in grValues.indices) {
-                            grValues[b] = grValues[b] * blend  // GR fades toward 0
-                            bandLevels[b] = bandLevels[b] * blend + (-60f) * (1f - blend)  // level fades toward -60
-                        }
-                    }
                     grTraceView.pushFrame(grValues, bandLevels)
                 } else {
                     // Silence — GR at 0 (no compression), levels at -60 (bottom)
