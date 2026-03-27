@@ -25,6 +25,12 @@ class VisualizerHelper {
     var isMusicPlaying = true  // assume playing until told otherwise
     private var graphViewRef: EqGraphView? = null
 
+    // Calibration: offset between normalized spectrum dB and absolute dBFS
+    // Apply this to normalized per-band levels to get absolute dBFS for compressor math
+    @Volatile
+    var normToAbsoluteOffset = 0f
+        private set
+
     fun start(graphView: EqGraphView) {
         stop()
         graphViewRef = graphView
@@ -62,15 +68,36 @@ class VisualizerHelper {
                     override fun onWaveFormDataCapture(
                         v: Visualizer?, waveform: ByteArray?, samplingRate: Int
                     ) {
-                        if (waveform == null || waveform.size < 64) return
+                        if (waveform == null || waveform.size < 64 || v == null) return
 
                         if (isMusicPlaying) {
-                            // Audio is playing — feed real data
                             renderer.updateWaveformData(waveform)
+
+                            // Compute calibration offset: absolute dBFS vs normalized spectrum
+                            // getMeasurementPeakRms gives absolute level in millibels (0 = full scale)
+                            val measurement = Visualizer.MeasurementPeakRms()
+                            v.getMeasurementPeakRms(measurement)
+                            val absoluteRmsDb = measurement.mRms / 100f  // mB to dB
+
+                            // Compute broadband RMS from the normalized spectrum
+                            val specLinear = renderer.getSmoothedLinear()
+                            if (specLinear != null && specLinear.isNotEmpty()) {
+                                var sumPower = 0.0
+                                var count = 0
+                                for (i in 1 until specLinear.size) {
+                                    if (specLinear[i] > 1e-10f) {
+                                        sumPower += (specLinear[i] * specLinear[i]).toDouble()
+                                        count++
+                                    }
+                                }
+                                if (count > 0 && sumPower > 0) {
+                                    val normalizedRmsDb = (10.0 * Math.log10(sumPower / count)).toFloat()
+                                    normToAbsoluteOffset = absoluteRmsDb - normalizedRmsDb
+                                }
+                            }
                         } else {
-                            // Audio is paused/stopped — decay and fade
                             renderer.feedSilence()
-                            renderer.fadeOut(0.04f)  // slower fade (~25 frames / ~1.2s)
+                            renderer.fadeOut(0.04f)
                         }
                         graphView.postInvalidate()
                     }

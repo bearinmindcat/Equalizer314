@@ -313,18 +313,13 @@ class MbcActivity : AppCompatActivity() {
                         )
                     }
 
-                    // Compute per-band GR from actual spectrum
-                    traceComputer.computeAllBandGains(specDb, 48000, 4096, settings)
-
                     grTraceView.spectrumDb = specDb
                     grTraceView.spectrumBinWidth = renderer.getBinWidthHz()
                     grTraceView.crossoverFreqs = crossoverFreqs.copyOf()
                     grTraceView.selectedBand = selectedBand
 
-                    val grValues = FloatArray(bandCount) { traceComputer.getSmoothedGR(it) }
-
-                    // Compute per-band RMS levels from the spectrum
-                    val bandLevels = FloatArray(bandCount) { b ->
+                    // Compute per-band RMS levels from the NORMALIZED spectrum (for display)
+                    val bandLevelsNormalized = FloatArray(bandCount) { b ->
                         val lowFreq = if (b == 0) 20f else crossoverFreqs[b - 1]
                         val highFreq = if (b >= crossoverFreqs.size) 20000f else crossoverFreqs[b]
                         val binW = renderer.getBinWidthHz()
@@ -337,7 +332,21 @@ class MbcActivity : AppCompatActivity() {
                         if (cnt > 0 && sumPow > 0) (10.0 * Math.log10(sumPow / cnt)).toFloat().coerceAtLeast(-60f) else -60f
                     }
 
-                    grTraceView.pushFrame(grValues, bandLevels)
+                    // Calibrate to absolute dBFS for the compressor math
+                    // This makes the GR computation match the threshold values
+                    val calibrationOffset = visualizerHelper.normToAbsoluteOffset
+                    val calibratedSpecDb = FloatArray(specDb.size) { specDb[it] + calibrationOffset }
+
+                    // Recompute GR using CALIBRATED (absolute dBFS) spectrum
+                    traceComputer.computeAllBandGains(calibratedSpecDb, 48000, 4096, settings)
+                    val grValues = FloatArray(bandCount) { traceComputer.getSmoothedGR(it) }
+
+                    // Display uses CALIBRATED levels (so input trace matches threshold position)
+                    val bandLevelsAbsolute = FloatArray(bandCount) {
+                        (bandLevelsNormalized[it] + calibrationOffset).coerceIn(-60f, 20f)
+                    }
+
+                    grTraceView.pushFrame(grValues, bandLevelsAbsolute)
                 } else {
                     // Silence — GR at 0 (no compression), levels at -60 (bottom)
                     grTraceView.pushFrame(FloatArray(bandCount) { 0f }, FloatArray(bandCount) { -60f })

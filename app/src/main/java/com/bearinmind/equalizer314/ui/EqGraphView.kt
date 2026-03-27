@@ -965,10 +965,21 @@ class EqGraphView @JvmOverloads constructor(
         //     canvas.drawPath(rangeCurvePath, mbcRangeCurvePaint)
         // }
 
-        // --- Draw crossover lines ---
+        // --- Draw crossover lines + drag ripple ---
         for (i in crossovers.indices) {
             val x = freqToX(crossovers[i], graphWidth)
             canvas.drawLine(x, vPad, x, vPad + graphHeight, mbcCrossoverLinePaint)
+
+            // Ripple glow when dragging this crossover (full height of graph)
+            if (i == draggingCrossover) {
+                val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = 0xFFBBBBBB.toInt(); alpha = 40; style = Paint.Style.FILL
+                }
+                val glowPad = 24f
+                val cornerR = 10f
+                val glowRect = android.graphics.RectF(x - glowPad, vPad, x + glowPad, vPad + graphHeight)
+                canvas.drawRoundRect(glowRect, cornerR, cornerR, glowPaint)
+            }
         }
 
         // --- Draw draggable triangles at band center frequencies ---

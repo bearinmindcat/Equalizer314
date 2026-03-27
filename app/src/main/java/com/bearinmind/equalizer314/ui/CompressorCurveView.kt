@@ -48,7 +48,7 @@ class CompressorCurveView @JvmOverloads constructor(
     var onKneeChanged: ((Float) -> Unit)? = null
 
     private val minDb = -60f
-    private val maxDb = 0f
+    private val maxDb = 20f
 
     private var draggingThreshold = false
     private var draggingRatio = false
