@@ -518,6 +518,10 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.mbcCard).setOnClickListener {
             startActivity(Intent(this, MbcActivity::class.java))
         }
+        // Limiter card (settings page)
+        findViewById<View>(R.id.limiterCard).setOnClickListener {
+            startActivity(Intent(this, LimiterActivity::class.java))
+        }
         findViewById<View>(R.id.experimentalCard).setOnClickListener {
             startActivity(Intent(this, ExperimentalActivity::class.java))
         }
