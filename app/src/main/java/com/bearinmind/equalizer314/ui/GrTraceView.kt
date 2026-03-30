@@ -50,7 +50,7 @@ class GrTraceView @JvmOverloads constructor(
     private val bufferSize = 300
     private var writeIdx = 0
     private val grHistory = Array(maxBands) { FloatArray(bufferSize) }  // GR in dB (always <= 0)
-    private val levelHistory = Array(maxBands) { FloatArray(bufferSize) { -60f } }  // input level in dB
+    private val levelHistory = Array(maxBands) { FloatArray(bufferSize) { -80f } }  // input level in dB
     private val gateGrHistory = Array(maxBands) { FloatArray(bufferSize) }  // gate/expander GR (always <= 0)
 
     var crossoverFreqs: FloatArray? = null
@@ -69,9 +69,9 @@ class GrTraceView @JvmOverloads constructor(
         return defaultBandColors[index % defaultBandColors.size]
     }
 
-    // Unified dB scale: +20 at top, -60 at bottom
+    // Unified dB scale: +20 at top, -80 at bottom
     private val dbMax = 20f
-    private val dbMin = -60f
+    private val dbMin = -80f
     private val dbRange = dbMax - dbMin
 
     // Frequency axis (matches EqGraphView: 10 Hz to 20000 Hz)
@@ -105,7 +105,7 @@ class GrTraceView @JvmOverloads constructor(
         val idx = writeIdx % bufferSize
         for (b in 0 until numBands.coerceAtMost(maxBands)) {
             grHistory[b][idx] = bandGrValues.getOrElse(b) { 0f }.coerceIn(-30f, 0f)
-            levelHistory[b][idx] = bandLevels.getOrElse(b) { -60f }.coerceIn(-60f, 20f)
+            levelHistory[b][idx] = bandLevels.getOrElse(b) { -80f }.coerceIn(-80f, 20f)
             gateGrHistory[b][idx] = bandGateGr.getOrElse(b) { 0f }.coerceIn(-30f, 0f)
         }
         writeIdx++
@@ -123,7 +123,7 @@ class GrTraceView @JvmOverloads constructor(
         canvas.drawRect(0f, 0f, w, h, bgPaint)
 
         // Horizontal grid
-        for (db in listOf(10f, 0f, -10f, -20f, -30f, -40f, -50f)) {
+        for (db in listOf(10f, 0f, -10f, -20f, -30f, -40f, -50f, -60f, -70f)) {
             val y = dbToY(db, h)
             canvas.drawLine(0f, y, w, y, gridPaint)
         }
@@ -209,7 +209,7 @@ class GrTraceView @JvmOverloads constructor(
                 val bufIdx = ringIdx(s, samplesVisible)
                 val gateGr = gateGrHistory[b][bufIdx]
                 if (gateGr < -0.5f) hasGateActivity = true
-                val gatedLevel = (levelHistory[b][bufIdx] + gateGr).coerceAtLeast(-60f)
+                val gatedLevel = (levelHistory[b][bufIdx] + gateGr).coerceAtLeast(-80f)
                 val y = dbToY(gatedLevel, h)
                 val x = leftX + s * pxPerSample
                 if (!gateStarted) {
@@ -323,7 +323,7 @@ class GrTraceView @JvmOverloads constructor(
         val dbTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = 0xFF888888.toInt(); textSize = 24f
         }
-        for (db in listOf(10f, 0f, -10f, -20f, -30f, -40f, -50f)) {
+        for (db in listOf(10f, 0f, -10f, -20f, -30f, -40f, -50f, -60f, -70f)) {
             val y = dbToY(db, h)
             val label = if (db > 0) "+${db.toInt()}" else "${db.toInt()}"
             canvas.drawText(label, 10f, y + 8f, dbTextPaint)

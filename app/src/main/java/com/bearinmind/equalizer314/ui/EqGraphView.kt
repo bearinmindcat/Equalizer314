@@ -493,17 +493,25 @@ class EqGraphView @JvmOverloads constructor(
         if (renderer != null) {
             // Compute EQ frequency response per display pixel for dual spectrum
             val eq = parametricEq
-            // EQ frequency response only — MBC gain is computed inside the renderer
-            // by MbcGainComputer (which measures band levels from actual FFT each frame)
-            val eqResponse: FloatArray? = if (eq != null && eq.getBandCount() > 0) {
-                val displayWidth = graphWidth.toInt().coerceAtLeast(1)
-                val logMin = kotlin.math.log10(20f)
-                val logMax = kotlin.math.log10(20000f)
-                val logRange = logMax - logMin
+            // EQ frequency response + MBC pre-gain combined
+            val displayWidth = graphWidth.toInt().coerceAtLeast(1)
+            val logMin = kotlin.math.log10(20f)
+            val logMax = kotlin.math.log10(20000f)
+            val logRange = logMax - logMin
+            val crossovers = mbcCrossovers
+            val gains = mbcBandGains
+
+            val eqResponse: FloatArray? = if ((eq != null && eq.getBandCount() > 0) || (crossovers != null && gains != null)) {
                 FloatArray(displayWidth) { x ->
                     val logFreqMid = logMin + logRange * (x + 0.5f) / displayWidth
                     val freq = 10f.toDouble().pow((logFreqMid).toDouble()).toFloat()
-                    eq.getFrequencyResponse(freq)
+                    var db = 0f
+                    // Add parametric EQ response
+                    if (eq != null && eq.getBandCount() > 0) {
+                        db += eq.getFrequencyResponse(freq)
+                    }
+                    // MBC pre-gain does NOT affect output spectrum — it only affects compressor sidechain
+                    db
                 }
             } else null
             renderer.draw(canvas, 0f, 0f, graphWidth, height.toFloat(),
@@ -840,7 +848,8 @@ class EqGraphView @JvmOverloads constructor(
         var totalLinear = 0f
         for (i in 0 until bandCount) {
             val amplitude = mbcBandAmplitude(i, freq, crossovers)
-            val bandLinear = 10f.pow(gains[i] / 20f)
+            val gain = gains.getOrElse(i) { 0f }
+            val bandLinear = 10f.pow(gain / 20f)
             totalLinear += amplitude * bandLinear
         }
         return 20f * log10(totalLinear.coerceAtLeast(0.00001f))

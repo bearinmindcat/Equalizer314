@@ -231,9 +231,15 @@ class MbcActivity : AppCompatActivity() {
                 btn.minimumHeight = 0
                 btn.setPadding(0, 0, 0, 0)
             }
+            // Position between left border and 100 Hz grid line (centered)
+            val gridLine100 = (viewWidth * (kotlin.math.log10(100f) - kotlin.math.log10(10f)) /
+                (kotlin.math.log10(20000f) - kotlin.math.log10(10f))).toInt()
+            val toggleWidth = toggleGroup.measuredWidth.takeIf { it > 0 }
+                ?: (specBtnWidth * 2 + (4 * density).toInt()) // estimate if not measured yet
+            val centerX = (gridLine100 - toggleWidth) / 2
             val groupLp = toggleGroup.layoutParams as android.widget.FrameLayout.LayoutParams
             groupLp.topMargin = gapPx
-            groupLp.leftMargin = gapPx
+            groupLp.leftMargin = centerX.coerceAtLeast(gapPx)
             toggleGroup.layoutParams = groupLp
         }
         fun updateGraphToggleStyle(freqActive: Boolean) {
@@ -342,7 +348,7 @@ class MbcActivity : AppCompatActivity() {
                         for (k in lowBin..highBin) {
                             sumPow += Math.pow(10.0, specDb[k].toDouble() / 10.0); cnt++
                         }
-                        if (cnt > 0 && sumPow > 0) (10.0 * Math.log10(sumPow / cnt)).toFloat().coerceAtLeast(-60f) else -60f
+                        if (cnt > 0 && sumPow > 0) (10.0 * Math.log10(sumPow / cnt)).toFloat().coerceAtLeast(-80f) else -80f
                     }
 
                     // Calibrate to absolute dBFS for the compressor math
@@ -355,15 +361,15 @@ class MbcActivity : AppCompatActivity() {
                     val grValues = FloatArray(bandCount) { traceComputer.getSmoothedCompressorGR(it) }
                     val gateGrValues = FloatArray(bandCount) { traceComputer.getSmoothedExpanderGR(it) }
 
-                    // Display uses CALIBRATED levels (so input trace matches threshold position)
+                    // Display uses CALIBRATED levels + pre-gain (shows what the compressor sees)
                     val bandLevelsAbsolute = FloatArray(bandCount) {
-                        (bandLevelsNormalized[it] + calibrationOffset).coerceIn(-60f, 20f)
+                        (bandLevelsNormalized[it] + calibrationOffset + bands[it].preGain).coerceIn(-80f, 20f)
                     }
 
                     grTraceView.pushFrame(grValues, bandLevelsAbsolute, gateGrValues)
                 } else {
-                    // Silence — GR at 0 (no compression), levels at -60 (bottom)
-                    grTraceView.pushFrame(FloatArray(bandCount) { 0f }, FloatArray(bandCount) { -60f })
+                    // Silence — GR at 0 (no compression), levels at -80 (bottom)
+                    grTraceView.pushFrame(FloatArray(bandCount) { 0f }, FloatArray(bandCount) { -80f })
                 }
 
                 grTraceView.invalidate()
@@ -621,7 +627,7 @@ class MbcActivity : AppCompatActivity() {
             // Sync preGain slider if this is the currently selected band
             if (bandIndex == selectedBand) {
                 isUpdating = true
-                preGainSlider.value = snapped.coerceIn(-12f, 12f)
+                preGainSlider.value = snapped.coerceIn(-30f, 30f)
                 preGainText.setText(String.format("%.1f", snapped))
                 isUpdating = false
             }
@@ -760,7 +766,7 @@ class MbcActivity : AppCompatActivity() {
         noiseGateText.setText(String.format("%.0f", b.noiseGateThreshold))
         expanderSlider.value = ratioToSlider(b.expanderRatio)
         expanderText.setText(String.format("%.2f", b.expanderRatio))
-        preGainSlider.value = b.preGain.coerceIn(-12f, 12f)
+        preGainSlider.value = b.preGain.coerceIn(-30f, 30f)
         preGainText.setText(String.format("%.1f", b.preGain))
         postGainSlider.value = b.postGain.coerceIn(-30f, 30f)
         postGainText.setText(String.format("%.1f", b.postGain))
@@ -923,7 +929,7 @@ class MbcActivity : AppCompatActivity() {
             }
             true
         }
-        setupSlider(preGainSlider, preGainText, -12f, 12f, "%.1f") {
+        setupSlider(preGainSlider, preGainText, -30f, 30f, "%.1f") {
             bands[selectedBand].preGain = it
             graphView.mbcBandGains?.let { gains ->
                 gains[selectedBand] = it
@@ -1181,24 +1187,24 @@ class MbcActivity : AppCompatActivity() {
 
     /** Push current MBC band settings to DynamicsProcessing via the service */
     private fun pushMbcToService() {
-        val service = eqService ?: return
+        val service = eqService ?: run {
+            android.util.Log.w("MbcActivity", "pushMbcToService: eqService is NULL — service not bound yet")
+            return
+        }
         val dm = service.dynamicsManager
         val isEnabled = masterSwitch.isChecked
+        android.util.Log.d("MbcActivity", "pushMbcToService: isEnabled=$isEnabled, dm.isActive=${dm.isActive}, dm.mbcEnabled=${dm.mbcEnabled}")
 
         // If MBC enable state or band count changed, need to recreate DP
-        if (dm.mbcEnabled != isEnabled || (isEnabled && dm.mbcBandCount != bandCount)) {
+        if (dm.mbcEnabled != isEnabled || (isEnabled && dm.mbcBandCount != bandCount) || (isEnabled && !dm.isActive)) {
             dm.mbcEnabled = isEnabled
             dm.mbcBandCount = bandCount
-            // DP must be recreated for config changes — get the current EQ from the service
-            // and restart. This preserves the Pre-EQ settings.
-            if (dm.isActive) {
-                // Create a temporary EQ to restart with
-                val tempEq = com.bearinmind.equalizer314.dsp.ParametricEqualizer()
-                // Load the saved EQ state
-                val eqState = com.bearinmind.equalizer314.state.EqPreferencesManager(this)
-                eqState.restoreState(tempEq)
-                dm.start(tempEq)
-            }
+            // DP must be recreated for config changes — start it if not active
+            val tempEq = com.bearinmind.equalizer314.dsp.ParametricEqualizer()
+            val eqState = com.bearinmind.equalizer314.state.EqPreferencesManager(this)
+            eqState.restoreState(tempEq)
+            dm.start(tempEq)
+            android.util.Log.d("MbcActivity", "Started DynamicsProcessing with MBC enabled=$isEnabled, bandCount=$bandCount")
         }
 
         if (!isEnabled) return

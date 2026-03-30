@@ -74,9 +74,10 @@ class VisualizerHelper {
                             renderer.updateWaveformData(waveform)
 
                             // Compute calibration offset: absolute dBFS vs normalized spectrum
-                            // getMeasurementPeakRms gives absolute level in millibels (0 = full scale)
                             val measurement = Visualizer.MeasurementPeakRms()
-                            v.getMeasurementPeakRms(measurement)
+                            try {
+                                v.getMeasurementPeakRms(measurement)
+                            } catch (_: Exception) { return }
                             val absoluteRmsDb = measurement.mRms / 100f  // mB to dB
 
                             // Compute broadband RMS from the normalized spectrum

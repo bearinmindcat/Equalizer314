@@ -179,9 +179,15 @@ class DynamicsProcessingManager {
                     b.preGainDb,
                     b.postGainDb
                 )
-                dp.setMbcBandByChannelIndex(0, i, mbcBand)  // left
-                dp.setMbcBandByChannelIndex(1, i, mbcBand)  // right
+                dp.setMbcBandByChannelIndex(0, i, mbcBand)
+                dp.setMbcBandByChannelIndex(1, i, mbcBand)
+                Log.d(TAG, "MBC band $i: preGain=${b.preGainDb} postGain=${b.postGainDb} threshold=${b.thresholdDb} ratio=${b.ratio} cutoff=$cutoff")
             }
+
+            // Readback
+            val readback = dp.getMbcBandByChannelIndex(0, 0)
+            Log.d(TAG, "MBC readback band 0: preGain=${readback.preGain} postGain=${readback.postGain} threshold=${readback.threshold}")
+            Log.d(TAG, "DP enabled=${dp.enabled}, MBC stage enabled=${dp.getMbcByChannelIndex(0).isEnabled}, bandCount=${dp.getMbcByChannelIndex(0).bandCount}")
             Log.d(TAG, "Applied ${bands.size} MBC bands")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to apply MBC bands", e)

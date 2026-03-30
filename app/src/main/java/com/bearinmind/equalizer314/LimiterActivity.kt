@@ -271,7 +271,8 @@ class LimiterActivity : AppCompatActivity() {
         try {
             visualizer = android.media.audiofx.Visualizer(0).apply {
                 captureSize = android.media.audiofx.Visualizer.getCaptureSizeRange()[1]
-                scalingMode = android.media.audiofx.Visualizer.SCALING_MODE_NORMALIZED
+                // AS_PLAYED = bytes represent actual amplitude, not auto-scaled
+                scalingMode = android.media.audiofx.Visualizer.SCALING_MODE_AS_PLAYED
                 measurementMode = android.media.audiofx.Visualizer.MEASUREMENT_MODE_PEAK_RMS
 
                 setDataCaptureListener(object : android.media.audiofx.Visualizer.OnDataCaptureListener {
@@ -281,12 +282,17 @@ class LimiterActivity : AppCompatActivity() {
                         if (waveform == null || waveform.size < 32) return
                         if (isMusicPlaying) {
                             // Push 32 sub-block peaks into the view's staging queue
+                            // With AS_PLAYED, these are REAL levels — no calibration needed
                             waveformView.pushWaveformData(waveform)
 
-                            // Also get absolute peak for the ceiling meter
-                            val measurement = android.media.audiofx.Visualizer.MeasurementPeakRms()
-                            try { v?.getMeasurementPeakRms(measurement) } catch (_: Exception) {}
-                            val peakDb = (measurement.mPeak / 100f).coerceIn(-96f, 10f)
+                            // Compute overall peak for the ceiling meter from the same real data
+                            var maxSample = 0f
+                            for (b in waveform) {
+                                val sample = kotlin.math.abs(((b.toInt() and 0xFF) - 128) / 128f)
+                                if (sample > maxSample) maxSample = sample
+                            }
+                            val peakDb = if (maxSample > 0.0001f)
+                                (20f * kotlin.math.log10(maxSample)).coerceIn(-96f, 10f) else -96f
                             val threshold = eqPrefs.getLimiterThreshold()
                             latestPeakDb = peakDb
                             latestGrDb = if (peakDb > threshold) -(peakDb - threshold) else 0f

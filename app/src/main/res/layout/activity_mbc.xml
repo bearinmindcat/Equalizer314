@@ -282,8 +282,8 @@
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:valueFrom="-12"
-                            android:valueTo="12"
+                            android:valueFrom="-30"
+                            android:valueTo="30"
                             android:value="0"
                             app:labelBehavior="gone" />
 

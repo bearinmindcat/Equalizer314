@@ -23,7 +23,7 @@ class LimiterWaveformView @JvmOverloads constructor(
     // Buffer sized to pixel width — one column per ~2px
     private val bufferSize = 600
     private var writeHead = 0
-    private val inputLevels = FloatArray(bufferSize) { -96f }
+    private val inputLevels = FloatArray(bufferSize) { -80f }
     private val grLevels = FloatArray(bufferSize)
 
     // Staging queue: Visualizer pushes many sub-block peaks, drain timer releases steadily
@@ -32,13 +32,13 @@ class LimiterWaveformView @JvmOverloads constructor(
     var ceilingDb: Float = -0.5f
 
     // Peak tracker state (near-instant attack, smooth release)
-    private var trackedLevel = -96f
+    private var trackedLevel = -80f
     private val peakAttack = 0.97f
     private val peakRelease = 0.15f
 
-    // dB scale: 0 at top, -24 at bottom
-    private val dbMax = 0f
-    private val dbMin = -24f
+    // dB scale: +20 at top, -80 at bottom (same as MBC GrTraceView)
+    private val dbMax = 20f
+    private val dbMin = -80f
     private val dbRange = dbMax - dbMin
 
     // Drain: 1 column per 33ms frame — same scroll speed as MBC
@@ -50,20 +50,31 @@ class LimiterWaveformView @JvmOverloads constructor(
             // Drain 1 column per frame for smooth, slow scrolling
             run {
                 val pair = stagingQueue.poll() ?: return@run
-                // Apply peak tracking per column
                 val rawDb = pair[0]
-                trackedLevel = if (rawDb > trackedLevel) {
-                    peakAttack * rawDb + (1f - peakAttack) * trackedLevel
-                } else {
-                    peakRelease * rawDb + (1f - peakRelease) * trackedLevel
-                }
-                val ceiling = ceilingDb
-                val gr = if (trackedLevel > ceiling) -(trackedLevel - ceiling) else 0f
+                val silenceThreshold = -72f
 
-                val pos = writeHead % bufferSize
-                inputLevels[pos] = trackedLevel.coerceIn(-96f, 10f)
-                grLevels[pos] = gr.coerceIn(-30f, 0f)
-                writeHead++
+                if (rawDb < silenceThreshold) {
+                    // Audio is silent — snap to silence, no smoothing
+                    trackedLevel = -80f
+                    val pos = writeHead % bufferSize
+                    inputLevels[pos] = -80f
+                    grLevels[pos] = 0f
+                    writeHead++
+                } else {
+                    // Real audio — apply peak tracking
+                    trackedLevel = if (rawDb > trackedLevel) {
+                        peakAttack * rawDb + (1f - peakAttack) * trackedLevel
+                    } else {
+                        peakRelease * rawDb + (1f - peakRelease) * trackedLevel
+                    }
+                    val ceiling = ceilingDb
+                    val gr = if (trackedLevel > ceiling) -(trackedLevel - ceiling) else 0f
+
+                    val pos = writeHead % bufferSize
+                    inputLevels[pos] = trackedLevel.coerceIn(-80f, 10f)
+                    grLevels[pos] = gr.coerceIn(-30f, 0f)
+                    writeHead++
+                }
             }
             invalidate()
             handler.postDelayed(this, 33) // 30fps, same as MBC
@@ -126,7 +137,7 @@ class LimiterWaveformView @JvmOverloads constructor(
                 val absSample = abs(sample)
                 if (absSample > maxSample) maxSample = absSample
             }
-            val peakDb = if (maxSample > 0.0001f) (20f * log10(maxSample)).coerceAtLeast(-96f) else -96f
+            val peakDb = if (maxSample > 0.0001f) (20f * log10(maxSample)).coerceAtLeast(-80f) else -80f
             stagingQueue.offer(floatArrayOf(peakDb))
         }
     }
@@ -148,10 +159,10 @@ class LimiterWaveformView @JvmOverloads constructor(
 
         canvas.drawRect(0f, 0f, w, h, bgPaint)
 
-        for (db in listOf(0f, -3f, -6f, -9f, -12f, -18f)) {
+        for (db in listOf(10f, 0f, -10f, -20f, -30f, -40f, -50f, -60f, -70f)) {
             val y = dbToY(db, h)
             canvas.drawLine(0f, y, w, y, gridPaint)
-            val label = if (db == 0f) "0" else "${db.toInt()}"
+            val label = if (db > 0) "+${db.toInt()}" else if (db == 0f) "0" else "${db.toInt()}"
             canvas.drawText(label, 10f, y + 8f, labelPaint)
         }
 
