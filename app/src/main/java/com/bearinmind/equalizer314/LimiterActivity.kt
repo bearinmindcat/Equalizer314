@@ -48,6 +48,7 @@ class LimiterActivity : AppCompatActivity() {
     private var audioManager: android.media.AudioManager? = null
     private var playbackCallback: android.media.AudioManager.AudioPlaybackCallback? = null
     @Volatile private var isMusicPlaying = true
+    private var wasMusicPlaying = true
 
     private var isUpdating = false
     private var eqService: EqService? = null
@@ -307,8 +308,15 @@ class LimiterActivity : AppCompatActivity() {
 
         // 33ms timer — just updates the ceiling/GR meter (waveform has its own drain timer)
         meterRunnable?.let { meterHandler.removeCallbacks(it) }
+        wasMusicPlaying = true
         val runnable = object : Runnable {
             override fun run() {
+                // Edge detect: flush waveform on pause transition
+                if (!isMusicPlaying && wasMusicPlaying) {
+                    waveformView.flushToSilence()
+                }
+                wasMusicPlaying = isMusicPlaying
+
                 if (!isMusicPlaying) {
                     ceilingView.inputDb = -24f
                     ceilingView.grDb = 0f

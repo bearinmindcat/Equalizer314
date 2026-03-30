@@ -52,12 +52,12 @@ class LimiterCeilingView @JvmOverloads constructor(
 
     private val bgPaint = Paint().apply { color = 0xFF1E1E1E.toInt() }
     private val columnBgPaint = Paint().apply { color = 0xFF2A2A2A.toInt() }
-    private val inputBelowPaint = Paint().apply { color = 0xFF4CAF50.toInt() } // green
-    private val inputAbovePaint = Paint().apply { color = 0xFFF44336.toInt() } // red (above ceiling)
+    private val inputBelowPaint = Paint().apply { color = 0xFFBBBBBB.toInt() } // grey
+    private val inputAbovePaint = Paint().apply { color = 0xFF999999.toInt() } // darker grey (above ceiling)
     private val ceilingLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF4FC3F7.toInt(); strokeWidth = 3f
+        color = 0xFFBBBBBB.toInt(); strokeWidth = 3f
     }
-    private val grFillPaint = Paint().apply { color = 0xFFFF8A65.toInt() }
+    private val grFillPaint = Paint().apply { color = 0xFFAAAAAA.toInt() }
     private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFF3A3A3A.toInt(); strokeWidth = 1f
     }
@@ -72,7 +72,7 @@ class LimiterCeilingView @JvmOverloads constructor(
         typeface = Typeface.DEFAULT_BOLD
     }
     private val grValuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFFFF8A65.toInt(); textSize = 24f; textAlign = Paint.Align.CENTER
+        color = 0xFFBBBBBB.toInt(); textSize = 24f; textAlign = Paint.Align.CENTER
         typeface = Typeface.DEFAULT_BOLD
     }
     private val peakLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {

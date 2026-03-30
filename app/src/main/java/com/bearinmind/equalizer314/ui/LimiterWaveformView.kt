@@ -36,9 +36,9 @@ class LimiterWaveformView @JvmOverloads constructor(
     private val peakAttack = 0.97f
     private val peakRelease = 0.15f
 
-    // dB scale: +20 at top, -80 at bottom (same as MBC GrTraceView)
+    // dB scale: +20 at top, -40 at bottom
     private val dbMax = 20f
-    private val dbMin = -80f
+    private val dbMin = -40f
     private val dbRange = dbMax - dbMin
 
     // Drain: 1 column per 33ms frame — same scroll speed as MBC
@@ -47,10 +47,10 @@ class LimiterWaveformView @JvmOverloads constructor(
     private val redrawRunnable = object : Runnable {
         override fun run() {
             if (!isRunning) return
-            // Drain 1 column per frame for smooth, slow scrolling
+            // Drain 1 column per frame — if queue is empty, push silence (keeps scrolling)
             run {
-                val pair = stagingQueue.poll() ?: return@run
-                val rawDb = pair[0]
+                val pair = stagingQueue.poll()
+                val rawDb = pair?.get(0) ?: -80f  // silence when nothing in queue
                 val silenceThreshold = -72f
 
                 if (rawDb < silenceThreshold) {
@@ -147,6 +147,12 @@ class LimiterWaveformView @JvmOverloads constructor(
         stagingQueue.offer(floatArrayOf(inputDb))
     }
 
+    /** Flush stale queue data and start pushing silence (keeps scrolling) */
+    fun flushToSilence() {
+        stagingQueue.clear()
+        trackedLevel = -80f
+    }
+
     private fun dbToY(db: Float, h: Float): Float {
         val clamped = db.coerceIn(dbMin, dbMax)
         return h * (dbMax - clamped) / dbRange
@@ -159,7 +165,7 @@ class LimiterWaveformView @JvmOverloads constructor(
 
         canvas.drawRect(0f, 0f, w, h, bgPaint)
 
-        for (db in listOf(10f, 0f, -10f, -20f, -30f, -40f, -50f, -60f, -70f)) {
+        for (db in listOf(10f, 0f, -10f, -20f, -30f)) {
             val y = dbToY(db, h)
             canvas.drawLine(0f, y, w, y, gridPaint)
             val label = if (db > 0) "+${db.toInt()}" else if (db == 0f) "0" else "${db.toInt()}"
