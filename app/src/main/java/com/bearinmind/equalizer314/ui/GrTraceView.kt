@@ -56,7 +56,7 @@ class GrTraceView @JvmOverloads constructor(
     var crossoverFreqs: FloatArray? = null
 
     private val defaultBandColors = intArrayOf(
-        0xFF90CAF9.toInt(), 0xFFA5D6A7.toInt(), 0xFFEF9A9A.toInt(),
+        0xFFAAAAAA.toInt(), 0xFFAAAAAA.toInt(), 0xFFAAAAAA.toInt(),
         0xFFAAAAAA.toInt(), 0xFFAAAAAA.toInt(), 0xFFAAAAAA.toInt()
     )
 

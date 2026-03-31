@@ -18,6 +18,7 @@ class LimiterWaveformView @JvmOverloads constructor(
     private var writeIdx = 0
     private val inputHistory = FloatArray(bufferSize) { -80f }
     private val grHistory = FloatArray(bufferSize)
+    private val lufsHistory = FloatArray(bufferSize) { -80f }
 
     var ceilingDb: Float = -0.5f
 
@@ -58,12 +59,19 @@ class LimiterWaveformView @JvmOverloads constructor(
     private val grFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFFE57373.toInt(); style = Paint.Style.FILL; alpha = 25
     }
+    private val lufsLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF666666.toInt(); strokeWidth = 1.5f; style = Paint.Style.STROKE
+    }
+    private val lufsFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF666666.toInt(); style = Paint.Style.FILL; alpha = 15
+    }
 
     /** Called from activity's 33ms timer — one value per frame, exactly like MBC GrTraceView */
-    fun pushFrame(inputDb: Float, grDb: Float) {
+    fun pushFrame(inputDb: Float, grDb: Float, lufsDb: Float = -80f) {
         val idx = writeIdx % bufferSize
         inputHistory[idx] = inputDb.coerceIn(-80f, 10f)
         grHistory[idx] = grDb.coerceIn(-30f, 0f)
+        lufsHistory[idx] = lufsDb.coerceIn(-80f, 10f)
         writeIdx++
     }
 
@@ -121,6 +129,16 @@ class LimiterWaveformView @JvmOverloads constructor(
         grFillPath.lineTo(w, 0f); grFillPath.close()
         canvas.drawPath(grFillPath, grFillPaint)
         canvas.drawPath(grLinePath, grTracePaint)
+
+        // ── LUFS LOUDNESS (line only, no fill) ──
+        val lufsPath = Path()
+        for (s in 0 until bufferSize) {
+            val idx = ringIdx(s)
+            val x = s * pxPerSample
+            val y = dbToY(lufsHistory[idx], h)
+            if (s == 0) lufsPath.moveTo(x, y) else lufsPath.lineTo(x, y)
+        }
+        canvas.drawPath(lufsPath, lufsLinePaint)
 
         // Dragging glow
         if (draggingCeiling) {

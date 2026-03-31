@@ -266,6 +266,8 @@ class LimiterActivity : AppCompatActivity() {
     private var visualizer: android.media.audiofx.Visualizer? = null
     @Volatile private var latestPeakDb = -96f
     @Volatile private var latestGrDb = 0f
+    @Volatile private var latestLufsDb = -80f
+    private val lufsProcessor = com.bearinmind.equalizer314.audio.LufsProcessor()
 
     private fun startMetering() {
         if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
@@ -312,6 +314,8 @@ class LimiterActivity : AppCompatActivity() {
                             val threshold = eqPrefs.getLimiterThreshold()
                             latestPeakDb = peakDb
                             latestGrDb = if (peakDb > threshold) -(peakDb - threshold) else 0f
+                            // K-weighted LUFS from the same waveform
+                            latestLufsDb = lufsProcessor.processWaveform(waveform)
                         }
                     }
                     override fun onFftDataCapture(v: android.media.audiofx.Visualizer?, fft: ByteArray?, samplingRate: Int) {}
@@ -338,7 +342,8 @@ class LimiterActivity : AppCompatActivity() {
                 } else {
                     val peakDb = latestPeakDb
                     val gr = latestGrDb
-                    waveformView.pushFrame(peakDb, gr)
+                    val lufs = latestLufsDb
+                    waveformView.pushFrame(peakDb, gr, lufs)
                     ceilingView.inputDb = peakDb
                     ceilingView.grDb = gr
                 }
