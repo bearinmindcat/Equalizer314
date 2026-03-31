@@ -65,10 +65,10 @@
         <item name="cornerSizeBottomRight">8dp</item>
     </style>
 
-    <!-- MBC GR button: normal rounding all corners -->
+    <!-- MBC GR button: top-right extra rounded to match EQ button -->
     <style name="ShapeAppearance.MbcGrButton" parent="">
         <item name="cornerSizeTopLeft">8dp</item>
-        <item name="cornerSizeTopRight">8dp</item>
+        <item name="cornerSizeTopRight">16dp</item>
         <item name="cornerSizeBottomLeft">8dp</item>
         <item name="cornerSizeBottomRight">8dp</item>
     </style>
