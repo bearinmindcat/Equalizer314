@@ -31,7 +31,7 @@ class LimiterCeilingView @JvmOverloads constructor(
 
     var onCeilingChanged: ((Float) -> Unit)? = null
 
-    private val dbMin = -30f
+    private val dbMin = -40f
     private val dbMax = 0f
     private val dbRange = dbMax - dbMin
 
@@ -139,7 +139,7 @@ class LimiterCeilingView @JvmOverloads constructor(
         canvas.drawRoundRect(grLeft, mt, grRight, mb, cornerR, cornerR, columnBgPaint)
 
         // Grid lines on both columns + dB labels BETWEEN columns (centered in gap)
-        for (db in listOf(0f, -6f, -12f, -18f, -24f, -30f)) {
+        for (db in listOf(0f, -10f, -20f, -30f)) {
             val y = dbToY(db, h)
             canvas.drawLine(ceilingLeft, y, ceilingRight, y, gridPaint)
             canvas.drawLine(grLeft, y, grRight, y, gridPaint)
@@ -222,8 +222,8 @@ class LimiterCeilingView @JvmOverloads constructor(
             )
         }
 
-        // ── GR fill (orange, from top down — uses smoothed value, tighter 0 to -12 dB scale) ──
-        val grScaleMin = -12f
+        // ── GR fill (from top down — 0 to -40 dB, matching ceiling scale) ──
+        val grScaleMin = -40f
         val displayGr = smoothedGr.coerceIn(grScaleMin, 0f)
         fun grToY(gr: Float): Float {
             val norm = (0f - gr) / (0f - grScaleMin)
