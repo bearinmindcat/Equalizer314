@@ -286,15 +286,13 @@ class LimiterActivity : AppCompatActivity() {
             audioManager?.registerAudioPlaybackCallback(playbackCallback!!, null)
         }
 
-        // Visualizer with waveform capture — 32 sub-blocks per callback = 640 peaks/sec
-        // View handles staging queue + peak tracking + rendering internally
-        latestPeakDb = -96f
+        // Visualizer — waveform callback stores latest peak
+        latestPeakDb = -80f
         latestGrDb = 0f
 
         try {
             visualizer = android.media.audiofx.Visualizer(0).apply {
                 captureSize = android.media.audiofx.Visualizer.getCaptureSizeRange()[1]
-                // AS_PLAYED = bytes represent actual amplitude, not auto-scaled
                 scalingMode = android.media.audiofx.Visualizer.SCALING_MODE_AS_PLAYED
                 measurementMode = android.media.audiofx.Visualizer.MEASUREMENT_MODE_PEAK_RMS
 
@@ -304,18 +302,13 @@ class LimiterActivity : AppCompatActivity() {
                     ) {
                         if (waveform == null || waveform.size < 32) return
                         if (isMusicPlaying) {
-                            // Push 32 sub-block peaks into the view's staging queue
-                            // With AS_PLAYED, these are REAL levels — no calibration needed
-                            waveformView.pushWaveformData(waveform)
-
-                            // Compute overall peak for the ceiling meter from the same real data
                             var maxSample = 0f
                             for (b in waveform) {
                                 val sample = kotlin.math.abs(((b.toInt() and 0xFF) - 128) / 128f)
                                 if (sample > maxSample) maxSample = sample
                             }
                             val peakDb = if (maxSample > 0.0001f)
-                                (20f * kotlin.math.log10(maxSample)).coerceIn(-96f, 10f) else -96f
+                                (20f * kotlin.math.log10(maxSample)).coerceIn(-80f, 10f) else -80f
                             val threshold = eqPrefs.getLimiterThreshold()
                             latestPeakDb = peakDb
                             latestGrDb = if (peakDb > threshold) -(peakDb - threshold) else 0f
@@ -328,24 +321,28 @@ class LimiterActivity : AppCompatActivity() {
             }
         } catch (_: Exception) {}
 
-        // 33ms timer — just updates the ceiling/GR meter (waveform has its own drain timer)
+        // Single 33ms timer — pushes same data to BOTH graph AND ceiling (like MBC)
         meterRunnable?.let { meterHandler.removeCallbacks(it) }
         wasMusicPlaying = true
         val runnable = object : Runnable {
             override fun run() {
-                // Edge detect: flush waveform on pause transition
                 if (!isMusicPlaying && wasMusicPlaying) {
-                    waveformView.flushToSilence()
+                    for (i in 0 until 5) waveformView.pushFrame(-80f, 0f)
                 }
                 wasMusicPlaying = isMusicPlaying
 
                 if (!isMusicPlaying) {
-                    ceilingView.inputDb = -24f
+                    waveformView.pushFrame(-80f, 0f)
+                    ceilingView.inputDb = -40f
                     ceilingView.grDb = 0f
                 } else {
-                    ceilingView.inputDb = latestPeakDb
-                    ceilingView.grDb = latestGrDb
+                    val peakDb = latestPeakDb
+                    val gr = latestGrDb
+                    waveformView.pushFrame(peakDb, gr)
+                    ceilingView.inputDb = peakDb
+                    ceilingView.grDb = gr
                 }
+                waveformView.invalidate()
                 ceilingView.invalidate()
                 meterHandler.postDelayed(this, 33)
             }
