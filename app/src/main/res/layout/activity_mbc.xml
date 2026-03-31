@@ -893,4 +893,86 @@
         </LinearLayout>
     </ScrollView>
 
+    <!-- Bottom Bar (same IDs as main EQ) -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:clipChildren="false"
+        android:clipToPadding="false">
+
+        <LinearLayout
+            android:id="@+id/bottomBar"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_gravity="bottom"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="?attr/colorSurfaceContainerHigh"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp">
+
+            <ImageButton
+                android:id="@+id/navPresetsButton"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:src="@drawable/ic_nav_equalizer"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="EQ"
+                android:scaleType="centerInside"
+                app:tint="?attr/colorOnSurface" />
+
+            <ImageButton
+                android:id="@+id/navMbcButton"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="8dp"
+                android:src="@drawable/ic_nav_compress"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Multiband Compression"
+                android:scaleType="centerInside"
+                app:tint="?attr/colorOnSurface" />
+
+            <ImageButton
+                android:id="@+id/navLimiterButton"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="8dp"
+                android:src="@drawable/ic_nav_limiter"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Limiter"
+                android:scaleType="centerInside"
+                app:tint="?attr/colorOnSurface" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <ImageButton
+                android:id="@+id/navSettingsButton"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:src="@drawable/ic_nav_settings"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Settings"
+                android:scaleType="centerInside"
+                app:tint="?attr/colorOnSurface" />
+
+        </LinearLayout>
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/powerFab"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="28dp"
+            android:src="@drawable/ic_nav_power"
+            android:contentDescription="Power"
+            app:fabSize="normal"
+            app:backgroundTint="?attr/colorPrimaryContainer"
+            app:tint="?attr/colorOnPrimaryContainer"
+            app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.Equalizer314.FAB"
+            app:elevation="6dp" />
+    </FrameLayout>
+
 </LinearLayout>

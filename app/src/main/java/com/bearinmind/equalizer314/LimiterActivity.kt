@@ -10,8 +10,6 @@ import android.widget.EditText
 import androidx.appcompat.app.AppCompatActivity
 import com.bearinmind.equalizer314.audio.EqService
 import com.bearinmind.equalizer314.state.EqPreferencesManager
-import com.bearinmind.equalizer314.ui.AttackReleaseView
-import com.bearinmind.equalizer314.ui.CompressorCurveView
 import com.bearinmind.equalizer314.ui.LimiterCeilingView
 import com.bearinmind.equalizer314.ui.LimiterWaveformView
 import com.google.android.material.materialswitch.MaterialSwitch
@@ -38,8 +36,6 @@ class LimiterActivity : AppCompatActivity() {
     // Visualizations
     private lateinit var waveformView: LimiterWaveformView
     private lateinit var ceilingView: LimiterCeilingView
-    private lateinit var limiterCurve: CompressorCurveView
-    private lateinit var attackReleaseView: AttackReleaseView
 
     // Metering — same pattern as MBC: Visualizer + AudioPlaybackCallback + 33ms timer
     private val meterHandler = Handler(Looper.getMainLooper())
@@ -59,7 +55,12 @@ class LimiterActivity : AppCompatActivity() {
             val binder = service as EqService.EqBinder
             eqService = binder.service
             serviceBound = true
-            pushToService()
+            // Check DP state BEFORE pushToService (which only updates if DP is already running)
+            val wasActive = eqService?.dynamicsManager?.isActive == true
+            if (wasActive) pushToService()
+            val fab = findViewById<com.google.android.material.floatingactionbutton.FloatingActionButton>(R.id.powerFab)
+            fab.backgroundTintList = android.content.res.ColorStateList.valueOf(if (wasActive) 0xFFFFFFFF.toInt() else 0xFF2A2A2A.toInt())
+            fab.imageTintList = android.content.res.ColorStateList.valueOf(if (wasActive) 0xFF000000.toInt() else 0xFF555555.toInt())
         }
         override fun onServiceDisconnected(name: ComponentName?) {
             eqService = null
@@ -75,6 +76,12 @@ class LimiterActivity : AppCompatActivity() {
         initViews()
         loadState()
         setupListeners()
+        // Refresh nav icon after loadState sets the switch
+        val limIcon = findViewById<android.widget.ImageButton>(R.id.navLimiterButton)
+        limIcon.imageTintList = android.content.res.ColorStateList.valueOf(
+            if (masterSwitch.isChecked) com.google.android.material.color.MaterialColors.getColor(limIcon, com.google.android.material.R.attr.colorPrimary, 0xFFBB86FC.toInt())
+            else 0xFF555555.toInt()
+        )
         startMetering()
 
         val intent = android.content.Intent(this, EqService::class.java)
@@ -83,7 +90,7 @@ class LimiterActivity : AppCompatActivity() {
 
     private fun initViews() {
         masterSwitch = findViewById(R.id.limiterMasterSwitch)
-        findViewById<android.widget.ImageButton>(R.id.limiterBackButton).setOnClickListener { finish() }
+        findViewById<android.widget.ImageButton>(R.id.limiterBackButton).setOnClickListener { finish(); overridePendingTransition(0, 0) }
 
         thresholdSlider = findViewById(R.id.limiterThresholdSlider)
         thresholdText = findViewById(R.id.limiterThresholdText)
@@ -96,6 +103,63 @@ class LimiterActivity : AppCompatActivity() {
         postGainSlider = findViewById(R.id.limiterPostGainSlider)
         postGainText = findViewById(R.id.limiterPostGainText)
 
+        // Bottom nav — icons reflect saved preference state for each module
+        val limiterNavIcon = findViewById<android.widget.ImageButton>(R.id.navLimiterButton)
+        val mbcNavIcon = findViewById<android.widget.ImageButton>(R.id.navMbcButton)
+        fun updateIconTint(icon: android.widget.ImageButton, enabled: Boolean) {
+            val tint = if (enabled)
+                com.google.android.material.color.MaterialColors.getColor(icon, com.google.android.material.R.attr.colorPrimary, 0xFFBB86FC.toInt())
+            else
+                0xFF555555.toInt()
+            icon.imageTintList = android.content.res.ColorStateList.valueOf(tint)
+        }
+        updateIconTint(limiterNavIcon, eqPrefs.getLimiterEnabled())
+        updateIconTint(mbcNavIcon, eqPrefs.getMbcEnabled())
+
+        findViewById<android.widget.ImageButton>(R.id.navPresetsButton).setOnClickListener {
+            finish(); overridePendingTransition(0, 0)
+        }
+        mbcNavIcon.setOnClickListener {
+            finish()
+            startActivity(android.content.Intent(this, MbcActivity::class.java))
+            overridePendingTransition(0, 0)
+        }
+        findViewById<android.widget.ImageButton>(R.id.navSettingsButton).setOnClickListener {
+            val intent = android.content.Intent(this, MainActivity::class.java)
+            intent.putExtra("showSettings", true)
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            startActivity(intent)
+            overridePendingTransition(0, 0)
+        }
+        // Power FAB toggles DynamicsProcessing on/off (same as main EQ)
+        val powerFab = findViewById<com.google.android.material.floatingactionbutton.FloatingActionButton>(R.id.powerFab)
+        fun updateFabStyle() {
+            val svc = eqService
+            val isOn = svc != null && svc.dynamicsManager.isActive
+            if (isOn) {
+                powerFab.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFFFFFFF.toInt())
+                powerFab.imageTintList = android.content.res.ColorStateList.valueOf(0xFF000000.toInt())
+            } else {
+                powerFab.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF2A2A2A.toInt())
+                powerFab.imageTintList = android.content.res.ColorStateList.valueOf(0xFF555555.toInt())
+            }
+        }
+        powerFab.setOnClickListener {
+            val svc = eqService ?: return@setOnClickListener
+            if (svc.dynamicsManager.isActive) {
+                svc.dynamicsManager.stop()
+            } else {
+                val tempEq = com.bearinmind.equalizer314.dsp.ParametricEqualizer()
+                eqPrefs.restoreState(tempEq)
+                svc.dynamicsManager.start(tempEq)
+                pushToService()
+            }
+            updateFabStyle()
+        }
+        // Default to "off" style — onServiceConnected will update if DP is active
+        powerFab.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF2A2A2A.toInt())
+        powerFab.imageTintList = android.content.res.ColorStateList.valueOf(0xFF555555.toInt())
+
         // Waveform / level meter
         waveformView = findViewById(R.id.limiterWaveform)
         waveformView.ceilingDb = eqPrefs.getLimiterThreshold()
@@ -103,11 +167,6 @@ class LimiterActivity : AppCompatActivity() {
         // Ceiling + GR view
         ceilingView = findViewById(R.id.limiterCeilingView)
 
-        // Transfer function curve
-        limiterCurve = findViewById(R.id.limiterCurve)
-
-        // Attack/Release envelope
-        attackReleaseView = findViewById(R.id.limiterAttackReleaseView)
     }
 
     private fun loadState() {
@@ -145,14 +204,6 @@ class LimiterActivity : AppCompatActivity() {
         val threshold = eqPrefs.getLimiterThreshold()
         val ratio = eqPrefs.getLimiterRatio()
 
-        // Transfer curve
-        limiterCurve.threshold = threshold
-        limiterCurve.ratio = ratio
-        limiterCurve.kneeWidth = 0f  // limiters typically have no knee (hard knee)
-
-        // Attack/Release view
-        attackReleaseView.attackMs = eqPrefs.getLimiterAttack()
-        attackReleaseView.releaseMs = eqPrefs.getLimiterRelease()
 
         // Ceiling view
         ceilingView.ceilingDb = threshold
@@ -162,52 +213,33 @@ class LimiterActivity : AppCompatActivity() {
         masterSwitch.setOnCheckedChangeListener { _, checked ->
             eqPrefs.saveLimiterEnabled(checked)
             pushToService()
+            val icon = findViewById<android.widget.ImageButton>(R.id.navLimiterButton)
+            val tint = if (checked)
+                com.google.android.material.color.MaterialColors.getColor(icon, com.google.android.material.R.attr.colorPrimary, 0xFFBB86FC.toInt())
+            else 0xFF555555.toInt()
+            icon.imageTintList = android.content.res.ColorStateList.valueOf(tint)
         }
 
         setupSlider(thresholdSlider, thresholdText, "%.1f") {
             eqPrefs.saveLimiterThreshold(it)
-            limiterCurve.threshold = it
             ceilingView.ceilingDb = it
             waveformView.ceilingDb =it
             pushToService()
         }
         setupSlider(ratioSlider, ratioText, "%.1f") {
             eqPrefs.saveLimiterRatio(it)
-            limiterCurve.ratio = it
             pushToService()
         }
         setupSlider(attackSlider, attackText, "%.2f") {
             eqPrefs.saveLimiterAttack(it)
-            attackReleaseView.attackMs = it
             pushToService()
         }
         setupSlider(releaseSlider, releaseText, "%.0f") {
             eqPrefs.saveLimiterRelease(it)
-            attackReleaseView.releaseMs = it
             pushToService()
         }
         setupSlider(postGainSlider, postGainText, "%.1f") {
             eqPrefs.saveLimiterPostGain(it); pushToService()
-        }
-
-        // Transfer curve callbacks
-        limiterCurve.onThresholdChanged = { value ->
-            eqPrefs.saveLimiterThreshold(value)
-            isUpdating = true
-            thresholdSlider.value = value.coerceIn(-30f, 0f)
-            thresholdText.setText(String.format("%.1f", value))
-            ceilingView.ceilingDb = value
-            waveformView.ceilingDb =value
-            isUpdating = false
-            pushToService()
-        }
-        limiterCurve.onRatioChanged = { value ->
-            eqPrefs.saveLimiterRatio(value)
-            isUpdating = true
-            ratioSlider.value = value.coerceIn(1f, 50f)
-            ratioText.setText(String.format("%.1f", value))
-            isUpdating = false
-            pushToService()
         }
 
         // Ceiling view drag callback
@@ -216,26 +248,7 @@ class LimiterActivity : AppCompatActivity() {
             isUpdating = true
             thresholdSlider.value = value.coerceIn(-30f, 0f)
             thresholdText.setText(String.format("%.1f", value))
-            limiterCurve.threshold = value
-            waveformView.ceilingDb =value
-            isUpdating = false
-            pushToService()
-        }
-
-        // Attack/Release callbacks
-        attackReleaseView.onAttackChanged = { value ->
-            eqPrefs.saveLimiterAttack(value)
-            isUpdating = true
-            attackSlider.value = value.coerceIn(0.01f, 100f)
-            attackText.setText(String.format("%.2f", value))
-            isUpdating = false
-            pushToService()
-        }
-        attackReleaseView.onReleaseChanged = { value ->
-            eqPrefs.saveLimiterRelease(value)
-            isUpdating = true
-            releaseSlider.value = value.coerceIn(1f, 500f)
-            releaseText.setText(String.format("%.0f", value))
+            waveformView.ceilingDb = value
             isUpdating = false
             pushToService()
         }

@@ -57,8 +57,13 @@ class MbcActivity : AppCompatActivity() {
         override fun onServiceConnected(name: android.content.ComponentName?, binder: android.os.IBinder?) {
             eqService = (binder as com.bearinmind.equalizer314.audio.EqService.EqBinder).service
             serviceBound = true
-            // Apply MBC settings now that we have the service
-            pushMbcToService()
+            // Check DP state BEFORE pushMbcToService (which can start DP)
+            val wasActive = eqService?.dynamicsManager?.isActive == true
+            if (wasActive) pushMbcToService()
+            // Show FAB based on whether DP was already running, not whether pushMbc just started it
+            val fab = findViewById<com.google.android.material.floatingactionbutton.FloatingActionButton>(R.id.powerFab)
+            fab.backgroundTintList = android.content.res.ColorStateList.valueOf(if (wasActive) 0xFFFFFFFF.toInt() else 0xFF2A2A2A.toInt())
+            fab.imageTintList = android.content.res.ColorStateList.valueOf(if (wasActive) 0xFF000000.toInt() else 0xFF555555.toInt())
         }
         override fun onServiceDisconnected(name: android.content.ComponentName?) {
             eqService = null
@@ -111,6 +116,15 @@ class MbcActivity : AppCompatActivity() {
     private var selectedBand = 0
     private var bandCount = DEFAULT_BAND_COUNT
     private var isUpdating = false
+    private var mbcNavIconRef: android.widget.ImageButton? = null
+
+    private fun updateNavIconTint(icon: android.widget.ImageButton, enabled: Boolean) {
+        val tint = if (enabled)
+            com.google.android.material.color.MaterialColors.getColor(icon, com.google.android.material.R.attr.colorPrimary, 0xFFBB86FC.toInt())
+        else
+            0xFF555555.toInt()
+        icon.imageTintList = android.content.res.ColorStateList.valueOf(tint)
+    }
     private var isAnimating = false
 
     // Per-band data
@@ -471,7 +485,61 @@ class MbcActivity : AppCompatActivity() {
     }
 
     private fun initViews() {
-        findViewById<android.widget.ImageButton>(R.id.mbcBackButton).setOnClickListener { finish() }
+        findViewById<android.widget.ImageButton>(R.id.mbcBackButton).setOnClickListener { finish(); overridePendingTransition(0, 0) }
+
+        // masterSwitch must be initialized before bottom nav references it
+        masterSwitch = findViewById(R.id.mbcMasterSwitch)
+
+        // Bottom nav — icons reflect saved preference state for each module
+        val mbcNavIcon = findViewById<android.widget.ImageButton>(R.id.navMbcButton)
+        val limiterNavIcon = findViewById<android.widget.ImageButton>(R.id.navLimiterButton)
+        mbcNavIconRef = mbcNavIcon
+        updateNavIconTint(mbcNavIcon, eqPrefs.getMbcEnabled())
+        updateNavIconTint(limiterNavIcon, eqPrefs.getLimiterEnabled())
+
+        findViewById<android.widget.ImageButton>(R.id.navPresetsButton).setOnClickListener { finish(); overridePendingTransition(0, 0) }
+        limiterNavIcon.setOnClickListener {
+            finish()
+            startActivity(android.content.Intent(this, LimiterActivity::class.java))
+            overridePendingTransition(0, 0)
+        }
+        findViewById<android.widget.ImageButton>(R.id.navSettingsButton).setOnClickListener {
+            val intent = android.content.Intent(this, MainActivity::class.java)
+            intent.putExtra("showSettings", true)
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            startActivity(intent)
+            overridePendingTransition(0, 0)
+        }
+        // Power FAB toggles DynamicsProcessing on/off (same as main EQ)
+        val powerFab = findViewById<com.google.android.material.floatingactionbutton.FloatingActionButton>(R.id.powerFab)
+        fun updateFabStyle() {
+            val svc = eqService
+            val isOn = svc != null && svc.dynamicsManager.isActive
+            if (isOn) {
+                powerFab.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFFFFFFF.toInt())
+                powerFab.imageTintList = android.content.res.ColorStateList.valueOf(0xFF000000.toInt())
+            } else {
+                powerFab.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF2A2A2A.toInt())
+                powerFab.imageTintList = android.content.res.ColorStateList.valueOf(0xFF555555.toInt())
+            }
+        }
+        powerFab.setOnClickListener {
+            val svc = eqService ?: return@setOnClickListener
+            if (svc.dynamicsManager.isActive) {
+                svc.dynamicsManager.stop()
+            } else {
+                val tempEq = com.bearinmind.equalizer314.dsp.ParametricEqualizer()
+                eqPrefs.restoreState(tempEq)
+                svc.dynamicsManager.mbcEnabled = eqPrefs.getMbcEnabled()
+                svc.dynamicsManager.mbcBandCount = bandCount
+                svc.dynamicsManager.start(tempEq)
+                pushMbcToService()
+            }
+            updateFabStyle()
+        }
+        // Default to "off" style — onServiceConnected will update if DP is active
+        powerFab.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF2A2A2A.toInt())
+        powerFab.imageTintList = android.content.res.ColorStateList.valueOf(0xFF555555.toInt())
 
         // Graph with MBC band visualization
         graphView = findViewById(R.id.mbcGraphView)
@@ -481,8 +549,6 @@ class MbcActivity : AppCompatActivity() {
         val eq = ParametricEqualizer()
         eqPrefs.restoreState(eq)
         graphView.setParametricEqualizer(eq)
-
-        masterSwitch = findViewById(R.id.mbcMasterSwitch)
         bandTabs = findViewById(R.id.mbcBandTabs)
         bandTitle = findViewById(R.id.mbcBandTitle)
         bandColorBox = findViewById(R.id.mbcBandColorBox)
@@ -791,6 +857,7 @@ class MbcActivity : AppCompatActivity() {
         masterSwitch.setOnCheckedChangeListener { _, checked ->
             eqPrefs.saveMbcEnabled(checked)
             pushMbcToService()
+            mbcNavIconRef?.let { updateNavIconTint(it, checked) }
         }
 
         bandSwitch.setOnCheckedChangeListener { _, checked ->

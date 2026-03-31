@@ -41,21 +41,26 @@ class LimiterCeilingView @JvmOverloads constructor(
     private var touchStartY = 0f
     private var hasDragged = false
 
-    // Peak hold for input
+    // Peak hold for input (2 second hold at ~30fps = 60 frames)
     private var peakDb = -60f
     private var peakHoldFrames = 0
-    private val peakHoldMax = 30
+    private val peakHoldMax = 60
+
+    // Peak hold for GR (same timing)
+    private var grPeakDb = 0f
+    private var grPeakHoldFrames = 0
 
     companion object {
         const val DEFAULT_CEILING = -0.5f
     }
 
-    private val bgPaint = Paint().apply { color = 0xFF1E1E1E.toInt() }
-    private val columnBgPaint = Paint().apply { color = 0xFF2A2A2A.toInt() }
+    private val bgPaint = Paint().apply { color = 0x00000000 }  // transparent — waveform shows through
+    private val columnBgPaint = Paint().apply { color = 0xCC2A2A2A.toInt() }  // semi-transparent columns
     private val inputBelowPaint = Paint().apply { color = 0xFFBBBBBB.toInt() } // grey
-    private val inputAbovePaint = Paint().apply { color = 0xFF999999.toInt() } // darker grey (above ceiling)
+    private val inputAbovePaint = Paint().apply { color = 0xFFBBBBBB.toInt() } // same grey
     private val ceilingLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFFBBBBBB.toInt(); strokeWidth = 3f
+        color = 0xFFBBBBBB.toInt(); strokeWidth = 2f
+        pathEffect = DashPathEffect(floatArrayOf(8f, 5f), 0f)
     }
     private val grFillPaint = Paint().apply { color = 0xFFAAAAAA.toInt() }
     private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -76,7 +81,7 @@ class LimiterCeilingView @JvmOverloads constructor(
         typeface = Typeface.DEFAULT_BOLD
     }
     private val peakLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFFFFFFFF.toInt(); strokeWidth = 2f
+        color = 0xFFBBBBBB.toInt(); strokeWidth = 2f  // same grey as graph input trace
     }
     private val haloPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0x30FFFFFF.toInt(); style = Paint.Style.FILL
@@ -84,7 +89,7 @@ class LimiterCeilingView @JvmOverloads constructor(
 
     private val topPad = 50f
     private val bottomPad = 40f
-    private val sidePad = 16f
+    private val sidePad = 8f  // tighter padding
 
     private fun meterTop() = topPad
     private fun meterBottom(h: Float) = h - bottomPad
@@ -115,11 +120,14 @@ class LimiterCeilingView @JvmOverloads constructor(
 
         canvas.drawRect(0f, 0f, w, h, bgPaint)
 
-        val colWidth = (w - sidePad * 2) * 0.3f
-        val ceilingLeft = sidePad
+        val gap = 36f  // gap between columns for dB labels
+        val colWidth = (w - sidePad * 2 - gap) / 2f * 0.7f  // thinner columns
+        val totalWidth = colWidth * 2 + gap
+        val startX = (w - totalWidth) / 2f  // center both columns
+        val ceilingLeft = startX
         val ceilingRight = ceilingLeft + colWidth
-        val grLeft = w - sidePad - colWidth
-        val grRight = w - sidePad
+        val grLeft = ceilingRight + gap
+        val grRight = grLeft + colWidth
         val labelCenterX = (ceilingRight + grLeft) / 2f
 
         val mt = meterTop()
@@ -130,26 +138,15 @@ class LimiterCeilingView @JvmOverloads constructor(
         canvas.drawRoundRect(ceilingLeft, mt, ceilingRight, mb, cornerR, cornerR, columnBgPaint)
         canvas.drawRoundRect(grLeft, mt, grRight, mb, cornerR, cornerR, columnBgPaint)
 
-        // Grid lines + dB labels
-        // Ceiling column labels (0 to -30)
-        for (db in listOf(0f, -6f, -12f, -18f, -24f, -30f)) {
-            val y = dbToY(db, h)
-            val label = if (db == 0f) "0" else "${db.toInt()}"
-            canvas.drawText(label, ceilingLeft - 4f, y + 7f, labelPaint.apply { textAlign = Paint.Align.RIGHT })
-        }
-        // GR column labels (0 to -12, tighter scale)
-        for (db in listOf(0f, -3f, -6f, -9f, -12f)) {
-            // Map GR dB to Y position using the GR's own scale
-            val norm = (0f - db) / 12f
-            val y = meterTop() + meterHeight(h) * norm
-            canvas.drawLine(grLeft, y, grRight, y, gridPaint)
-            val label = if (db == 0f) "0" else "${db.toInt()}"
-            canvas.drawText(label, grRight + 4f, y + 7f, labelPaint.apply { textAlign = Paint.Align.LEFT })
-        }
-        // Grid on ceiling column (same positions)
+        // Grid lines on both columns + dB labels BETWEEN columns (centered in gap)
         for (db in listOf(0f, -6f, -12f, -18f, -24f, -30f)) {
             val y = dbToY(db, h)
             canvas.drawLine(ceilingLeft, y, ceilingRight, y, gridPaint)
+            canvas.drawLine(grLeft, y, grRight, y, gridPaint)
+            val label = if (db == 0f) "0" else "${db.toInt()}"
+            labelPaint.textAlign = Paint.Align.CENTER
+            labelPaint.textSize = 16f
+            canvas.drawText(label, labelCenterX, y + 5f, labelPaint)
         }
 
         // ── Input level in ceiling column (uses smoothed value) ──
@@ -161,18 +158,39 @@ class LimiterCeilingView @JvmOverloads constructor(
         canvas.clipRoundRect(ceilingLeft, mt, ceilingRight, mb, cornerR, cornerR)
 
         if (displayInput > ceilingDb) {
-            inputBelowPaint.alpha = 160
+            inputBelowPaint.alpha = 50
             canvas.drawRect(ceilingLeft, ceilingY, ceilingRight, mb, inputBelowPaint)
-            inputAbovePaint.alpha = 200
+            inputAbovePaint.alpha = 70
             canvas.drawRect(ceilingLeft, inputY, ceilingRight, ceilingY, inputAbovePaint)
         } else {
-            inputBelowPaint.alpha = 160
+            inputBelowPaint.alpha = 50
             canvas.drawRect(ceilingLeft, inputY, ceilingRight, mb, inputBelowPaint)
         }
         canvas.restore()
 
-        // Ceiling line (draggable)
-        canvas.drawLine(ceilingLeft - 4f, ceilingY, ceilingRight + 4f, ceilingY, ceilingLinePaint)
+        // Ceiling line (draggable, clipped to column)
+        canvas.drawLine(ceilingLeft, ceilingY, ceilingRight, ceilingY, ceilingLinePaint)
+
+        // Triangle handle to the left of ceiling column (▼ pointing right)
+        val triR = 16f
+        val triCorner = 5f
+        val triX = ceilingLeft - 4f  // just left of column
+        val triPath = Path()
+        triPath.moveTo(triX, ceilingY)                          // tip pointing right at the line
+        triPath.lineTo(triX - triR * 1.5f, ceilingY - triR)    // top-left
+        triPath.lineTo(triX - triR * 1.5f, ceilingY + triR)    // bottom-left
+        triPath.close()
+
+        val triBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFF1E1E1E.toInt(); style = Paint.Style.FILL
+            pathEffect = CornerPathEffect(triCorner)
+        }
+        val triOutlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFFBBBBBB.toInt(); style = Paint.Style.STROKE; strokeWidth = 2f
+            pathEffect = CornerPathEffect(triCorner)
+        }
+        canvas.drawPath(triPath, triBgPaint)
+        canvas.drawPath(triPath, triOutlinePaint)
 
         // Peak hold line
         if (displayInput > peakDb) {
@@ -211,6 +229,20 @@ class LimiterCeilingView @JvmOverloads constructor(
             grFillPaint.alpha = 180
             canvas.drawRect(grLeft, mt, grRight, grToY(displayGr), grFillPaint)
         }
+
+        // GR peak hold line (tracks deepest GR, same 2-second hold + decay)
+        if (displayGr < grPeakDb) {
+            grPeakDb = displayGr; grPeakHoldFrames = 0
+        } else {
+            grPeakHoldFrames++
+            if (grPeakHoldFrames > peakHoldMax) {
+                grPeakDb = (grPeakDb + 0.5f).coerceAtMost(0f)
+            }
+        }
+        if (grPeakDb < -0.1f) {
+            val grPeakY = grToY(grPeakDb)
+            canvas.drawLine(grLeft + 2f, grPeakY, grRight - 2f, grPeakY, peakLinePaint)
+        }
         canvas.restore()
 
         // ── Titles ──
@@ -230,13 +262,17 @@ class LimiterCeilingView @JvmOverloads constructor(
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val w = width.toFloat()
-        val colWidth = (w - sidePad * 2) * 0.3f
-        val ceilingLeft = sidePad
+        val gap = 36f
+        val colWidth = (w - sidePad * 2 - gap) / 2f * 0.7f
+        val totalWidth = colWidth * 2 + gap
+        val startX = (w - totalWidth) / 2f
+        val ceilingLeft = startX
         val ceilingRight = ceilingLeft + colWidth
 
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
-                if (event.x >= ceilingLeft - 20f && event.x <= ceilingRight + 20f) {
+                // Hit area includes triangle to the left (extra 30px)
+                if (event.x >= ceilingLeft - 30f && event.x <= ceilingRight + 10f) {
                     val now = System.currentTimeMillis()
                     if (now - lastTapTime < doubleTapTimeout) {
                         ceilingDb = DEFAULT_CEILING

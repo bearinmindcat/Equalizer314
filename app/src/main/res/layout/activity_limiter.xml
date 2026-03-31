@@ -45,7 +45,8 @@
 
     <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:fillViewport="true"
         android:scrollbars="none">
 
@@ -57,71 +58,52 @@
             android:paddingEnd="16dp"
             android:paddingBottom="24dp">
 
-            <!-- Scrolling Waveform + GR Trace -->
-            <com.google.android.material.card.MaterialCardView
+            <!-- Waveform (70%) + Ceiling/GR (30%) side by side -->
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                app:cardBackgroundColor="@android:color/transparent"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp"
-                app:strokeWidth="0dp">
+                android:orientation="horizontal"
+                android:layout_marginBottom="12dp">
 
-                <com.bearinmind.equalizer314.ui.LimiterWaveformView
-                    android:id="@+id/limiterWaveform"
-                    android:layout_width="match_parent"
-                    android:layout_height="180dp" />
-            </com.google.android.material.card.MaterialCardView>
+                <!-- Waveform graph card — 70% -->
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="0dp"
+                    android:layout_height="220dp"
+                    android:layout_weight="0.7"
+                    android:layout_marginEnd="6dp"
+                    app:cardBackgroundColor="#FF1A1A1A"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="0dp"
+                    app:strokeWidth="1dp"
+                    app:strokeColor="#FF333333">
 
-            <!-- Ceiling + GR Columns (Ableton-style) -->
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                app:cardBackgroundColor="@android:color/transparent"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp"
-                app:strokeWidth="0dp">
+                    <com.bearinmind.equalizer314.ui.LimiterWaveformView
+                        android:id="@+id/limiterWaveform"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent" />
+                </com.google.android.material.card.MaterialCardView>
 
-                <com.bearinmind.equalizer314.ui.LimiterCeilingView
-                    android:id="@+id/limiterCeilingView"
-                    android:layout_width="match_parent"
-                    android:layout_height="280dp" />
-            </com.google.android.material.card.MaterialCardView>
+                <!-- Ceiling + GR columns card — 30% -->
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="0dp"
+                    android:layout_height="220dp"
+                    android:layout_weight="0.3"
+                    android:layout_marginStart="6dp"
+                    app:cardBackgroundColor="#FF1A1A1A"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="0dp"
+                    app:strokeWidth="1dp"
+                    app:strokeColor="#FF333333">
 
-            <!-- Transfer Function Curve -->
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                app:cardBackgroundColor="@android:color/transparent"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp"
-                app:strokeWidth="0dp">
+                    <com.bearinmind.equalizer314.ui.LimiterCeilingView
+                        android:id="@+id/limiterCeilingView"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent" />
+                </com.google.android.material.card.MaterialCardView>
 
-                <com.bearinmind.equalizer314.ui.CompressorCurveView
-                    android:id="@+id/limiterCurve"
-                    android:layout_width="match_parent"
-                    android:layout_height="200dp" />
-            </com.google.android.material.card.MaterialCardView>
+            </LinearLayout>
 
-            <!-- Attack / Release Envelope -->
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                app:cardBackgroundColor="@android:color/transparent"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp"
-                app:strokeWidth="0dp">
-
-                <com.bearinmind.equalizer314.ui.AttackReleaseView
-                    android:id="@+id/limiterAttackReleaseView"
-                    android:layout_width="match_parent"
-                    android:layout_height="100dp" />
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- Threshold -->
+            <!-- All limiter controls in one card (MBC style) -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -137,260 +119,195 @@
                     android:orientation="vertical"
                     android:padding="16dp">
 
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Threshold (dB)"
-                        android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
-                        android:textColor="?attr/colorOnSurface" />
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical"
-                        android:paddingTop="8dp">
-
-                        <com.google.android.material.slider.Slider
-                            android:id="@+id/limiterThresholdSlider"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:valueFrom="-30"
-                            android:valueTo="0"
-                            />
-
-                        <EditText
-                            android:id="@+id/limiterThresholdText"
-                            android:layout_width="72dp"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
-                            android:inputType="numberDecimal|numberSigned"
-                            android:textSize="14sp"
-                            android:textAlignment="center"
-                            android:background="#FF2A2A2A"
-                            android:padding="8dp"
-                            android:textColor="?attr/colorOnSurface" />
+                    <!-- Threshold -->
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="4dp">
+                        <TextView android:layout_width="96dp" android:layout_height="wrap_content"
+                            android:text="Thresh (dB)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                            android:textColor="?attr/colorOnSurfaceVariant" />
+                        <com.google.android.material.slider.Slider android:id="@+id/limiterThresholdSlider"
+                            android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                            android:valueFrom="-30" android:valueTo="0" android:value="0" app:labelBehavior="gone" />
+                        <com.google.android.material.textfield.TextInputLayout android:layout_width="64dp"
+                            android:layout_height="wrap_content" android:layout_marginStart="4dp"
+                            app:boxCornerRadiusTopStart="8dp" app:boxCornerRadiusTopEnd="8dp"
+                            app:boxCornerRadiusBottomStart="8dp" app:boxCornerRadiusBottomEnd="8dp"
+                            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense">
+                            <com.google.android.material.textfield.TextInputEditText android:id="@+id/limiterThresholdText"
+                                android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:inputType="numberDecimal|numberSigned" android:textSize="12sp"
+                                android:gravity="center" android:imeOptions="actionDone" />
+                        </com.google.android.material.textfield.TextInputLayout>
                     </LinearLayout>
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
 
-            <!-- Ratio -->
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp"
-                app:strokeWidth="0dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Ratio"
-                        android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
-                        android:textColor="?attr/colorOnSurface" />
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical"
-                        android:paddingTop="8dp">
-
-                        <com.google.android.material.slider.Slider
-                            android:id="@+id/limiterRatioSlider"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:valueFrom="1"
-                            android:valueTo="50"
-                            />
-
-                        <EditText
-                            android:id="@+id/limiterRatioText"
-                            android:layout_width="72dp"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
-                            android:inputType="numberDecimal"
-                            android:textSize="14sp"
-                            android:textAlignment="center"
-                            android:background="#FF2A2A2A"
-                            android:padding="8dp"
-                            android:textColor="?attr/colorOnSurface" />
+                    <!-- Ratio -->
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="4dp">
+                        <TextView android:layout_width="96dp" android:layout_height="wrap_content"
+                            android:text="Ratio (X:1)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                            android:textColor="?attr/colorOnSurfaceVariant" />
+                        <com.google.android.material.slider.Slider android:id="@+id/limiterRatioSlider"
+                            android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                            android:valueFrom="1" android:valueTo="50" android:value="10" app:labelBehavior="gone" />
+                        <com.google.android.material.textfield.TextInputLayout android:layout_width="64dp"
+                            android:layout_height="wrap_content" android:layout_marginStart="4dp"
+                            app:boxCornerRadiusTopStart="8dp" app:boxCornerRadiusTopEnd="8dp"
+                            app:boxCornerRadiusBottomStart="8dp" app:boxCornerRadiusBottomEnd="8dp"
+                            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense">
+                            <com.google.android.material.textfield.TextInputEditText android:id="@+id/limiterRatioText"
+                                android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:inputType="numberDecimal" android:textSize="12sp"
+                                android:gravity="center" android:imeOptions="actionDone" />
+                        </com.google.android.material.textfield.TextInputLayout>
                     </LinearLayout>
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
 
-            <!-- Attack -->
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp"
-                app:strokeWidth="0dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Attack (ms)"
-                        android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
-                        android:textColor="?attr/colorOnSurface" />
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical"
-                        android:paddingTop="8dp">
-
-                        <com.google.android.material.slider.Slider
-                            android:id="@+id/limiterAttackSlider"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:valueFrom="0.01"
-                            android:valueTo="100"
-                            />
-
-                        <EditText
-                            android:id="@+id/limiterAttackText"
-                            android:layout_width="72dp"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
-                            android:inputType="numberDecimal"
-                            android:textSize="14sp"
-                            android:textAlignment="center"
-                            android:background="#FF2A2A2A"
-                            android:padding="8dp"
-                            android:textColor="?attr/colorOnSurface" />
+                    <!-- Attack -->
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="4dp">
+                        <TextView android:layout_width="96dp" android:layout_height="wrap_content"
+                            android:text="Attack (ms)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                            android:textColor="?attr/colorOnSurfaceVariant" />
+                        <com.google.android.material.slider.Slider android:id="@+id/limiterAttackSlider"
+                            android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                            android:valueFrom="0.01" android:valueTo="100" android:value="1" app:labelBehavior="gone" />
+                        <com.google.android.material.textfield.TextInputLayout android:layout_width="64dp"
+                            android:layout_height="wrap_content" android:layout_marginStart="4dp"
+                            app:boxCornerRadiusTopStart="8dp" app:boxCornerRadiusTopEnd="8dp"
+                            app:boxCornerRadiusBottomStart="8dp" app:boxCornerRadiusBottomEnd="8dp"
+                            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense">
+                            <com.google.android.material.textfield.TextInputEditText android:id="@+id/limiterAttackText"
+                                android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:inputType="numberDecimal" android:textSize="12sp"
+                                android:gravity="center" android:imeOptions="actionDone" />
+                        </com.google.android.material.textfield.TextInputLayout>
                     </LinearLayout>
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
 
-            <!-- Release -->
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp"
-                app:strokeWidth="0dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Release (ms)"
-                        android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
-                        android:textColor="?attr/colorOnSurface" />
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical"
-                        android:paddingTop="8dp">
-
-                        <com.google.android.material.slider.Slider
-                            android:id="@+id/limiterReleaseSlider"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:valueFrom="1"
-                            android:valueTo="500"
-                            />
-
-                        <EditText
-                            android:id="@+id/limiterReleaseText"
-                            android:layout_width="72dp"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
-                            android:inputType="numberDecimal"
-                            android:textSize="14sp"
-                            android:textAlignment="center"
-                            android:background="#FF2A2A2A"
-                            android:padding="8dp"
-                            android:textColor="?attr/colorOnSurface" />
+                    <!-- Release -->
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="4dp">
+                        <TextView android:layout_width="96dp" android:layout_height="wrap_content"
+                            android:text="Release (ms)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                            android:textColor="?attr/colorOnSurfaceVariant" />
+                        <com.google.android.material.slider.Slider android:id="@+id/limiterReleaseSlider"
+                            android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                            android:valueFrom="1" android:valueTo="500" android:value="50" app:labelBehavior="gone" />
+                        <com.google.android.material.textfield.TextInputLayout android:layout_width="64dp"
+                            android:layout_height="wrap_content" android:layout_marginStart="4dp"
+                            app:boxCornerRadiusTopStart="8dp" app:boxCornerRadiusTopEnd="8dp"
+                            app:boxCornerRadiusBottomStart="8dp" app:boxCornerRadiusBottomEnd="8dp"
+                            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense">
+                            <com.google.android.material.textfield.TextInputEditText android:id="@+id/limiterReleaseText"
+                                android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:inputType="numberDecimal" android:textSize="12sp"
+                                android:gravity="center" android:imeOptions="actionDone" />
+                        </com.google.android.material.textfield.TextInputLayout>
                     </LinearLayout>
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
 
-            <!-- Post Gain -->
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp"
-                app:strokeWidth="0dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Post Gain (dB)"
-                        android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
-                        android:textColor="?attr/colorOnSurface" />
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical"
-                        android:paddingTop="8dp">
-
-                        <com.google.android.material.slider.Slider
-                            android:id="@+id/limiterPostGainSlider"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:valueFrom="-12"
-                            android:valueTo="12"
-                            />
-
-                        <EditText
-                            android:id="@+id/limiterPostGainText"
-                            android:layout_width="72dp"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
-                            android:inputType="numberDecimal|numberSigned"
-                            android:textSize="14sp"
-                            android:textAlignment="center"
-                            android:background="#FF2A2A2A"
-                            android:padding="8dp"
-                            android:textColor="?attr/colorOnSurface" />
+                    <!-- Post Gain -->
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical">
+                        <TextView android:layout_width="96dp" android:layout_height="wrap_content"
+                            android:text="Post Gain (dB)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                            android:textColor="?attr/colorOnSurfaceVariant" />
+                        <com.google.android.material.slider.Slider android:id="@+id/limiterPostGainSlider"
+                            android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                            android:valueFrom="-12" android:valueTo="12" android:value="0" app:labelBehavior="gone" />
+                        <com.google.android.material.textfield.TextInputLayout android:layout_width="64dp"
+                            android:layout_height="wrap_content" android:layout_marginStart="4dp"
+                            app:boxCornerRadiusTopStart="8dp" app:boxCornerRadiusTopEnd="8dp"
+                            app:boxCornerRadiusBottomStart="8dp" app:boxCornerRadiusBottomEnd="8dp"
+                            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense">
+                            <com.google.android.material.textfield.TextInputEditText android:id="@+id/limiterPostGainText"
+                                android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:inputType="numberDecimal|numberSigned" android:textSize="12sp"
+                                android:gravity="center" android:imeOptions="actionDone" />
+                        </com.google.android.material.textfield.TextInputLayout>
                     </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
         </LinearLayout>
     </ScrollView>
+
+    <!-- Bottom Bar (same IDs as main EQ) -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:clipChildren="false"
+        android:clipToPadding="false">
+
+        <LinearLayout
+            android:id="@+id/bottomBar"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_gravity="bottom"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="?attr/colorSurfaceContainerHigh"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp">
+
+            <ImageButton
+                android:id="@+id/navPresetsButton"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:src="@drawable/ic_nav_equalizer"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="EQ"
+                android:scaleType="centerInside"
+                app:tint="?attr/colorOnSurface" />
+
+            <ImageButton
+                android:id="@+id/navMbcButton"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="8dp"
+                android:src="@drawable/ic_nav_compress"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Multiband Compression"
+                android:scaleType="centerInside"
+                app:tint="?attr/colorOnSurface" />
+
+            <ImageButton
+                android:id="@+id/navLimiterButton"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="8dp"
+                android:src="@drawable/ic_nav_limiter"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Limiter"
+                android:scaleType="centerInside"
+                app:tint="?attr/colorOnSurface" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <ImageButton
+                android:id="@+id/navSettingsButton"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:src="@drawable/ic_nav_settings"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Settings"
+                android:scaleType="centerInside"
+                app:tint="?attr/colorOnSurface" />
+
+        </LinearLayout>
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/powerFab"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="28dp"
+            android:src="@drawable/ic_nav_power"
+            android:contentDescription="Power"
+            app:fabSize="normal"
+            app:backgroundTint="?attr/colorPrimaryContainer"
+            app:tint="?attr/colorOnPrimaryContainer"
+            app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.Equalizer314.FAB"
+            app:elevation="6dp" />
+    </FrameLayout>
 </LinearLayout>

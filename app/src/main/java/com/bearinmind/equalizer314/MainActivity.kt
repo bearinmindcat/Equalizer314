@@ -85,17 +85,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var preampText: EditText
     private lateinit var autoGainSwitch: MaterialSwitch
     private lateinit var autoGainOffsetText: TextView
-    private lateinit var limiterSwitch: MaterialSwitch
-    private lateinit var limiterAttackSlider: Slider
-    private lateinit var limiterAttackText: EditText
-    private lateinit var limiterReleaseSlider: Slider
-    private lateinit var limiterReleaseText: EditText
-    private lateinit var limiterRatioSlider: Slider
-    private lateinit var limiterRatioText: EditText
-    private lateinit var limiterThresholdSlider: Slider
-    private lateinit var limiterThresholdText: EditText
-    private lateinit var limiterPostGainSlider: Slider
-    private lateinit var limiterPostGainText: EditText
+    // Old inline limiter controls removed — now in LimiterActivity
 
     // EQ UI mode
     private lateinit var modeParametricBtn: MaterialButton
@@ -195,17 +185,6 @@ class MainActivity : AppCompatActivity() {
         preampText = findViewById(R.id.preampText)
         autoGainSwitch = findViewById(R.id.autoGainSwitch)
         autoGainOffsetText = findViewById(R.id.autoGainOffsetText)
-        limiterSwitch = findViewById(R.id.limiterSwitch)
-        limiterAttackSlider = findViewById(R.id.limiterAttackSlider)
-        limiterAttackText = findViewById(R.id.limiterAttackText)
-        limiterReleaseSlider = findViewById(R.id.limiterReleaseSlider)
-        limiterReleaseText = findViewById(R.id.limiterReleaseText)
-        limiterRatioSlider = findViewById(R.id.limiterRatioSlider)
-        limiterRatioText = findViewById(R.id.limiterRatioText)
-        limiterThresholdSlider = findViewById(R.id.limiterThresholdSlider)
-        limiterThresholdText = findViewById(R.id.limiterThresholdText)
-        limiterPostGainSlider = findViewById(R.id.limiterPostGainSlider)
-        limiterPostGainText = findViewById(R.id.limiterPostGainText)
         bandHzSlider = findViewById(R.id.bandHzSlider)
         bandDbSlider = findViewById(R.id.bandDbSlider)
         bandHzInput = findViewById(R.id.bandHzInput)
@@ -241,18 +220,6 @@ class MainActivity : AppCompatActivity() {
         preampText.setText(String.format("%.1f", stateManager.preampGainDb))
         autoGainSwitch.isChecked = stateManager.autoGainEnabled
         updateAutoGainOffsetText()
-        limiterSwitch.isChecked = stateManager.limiterEnabled
-        limiterAttackSlider.value = stateManager.limiterAttackMs.coerceIn(0.1f, 50f)
-        limiterAttackText.setText(String.format("%.1f", stateManager.limiterAttackMs))
-        limiterReleaseSlider.value = stateManager.limiterReleaseMs.coerceIn(10f, 500f)
-        limiterReleaseText.setText(String.format("%.0f", stateManager.limiterReleaseMs))
-        limiterRatioSlider.value = stateManager.limiterRatio.coerceIn(1f, 50f)
-        limiterRatioText.setText(String.format("%.0f", stateManager.limiterRatio))
-        limiterThresholdSlider.value = stateManager.limiterThresholdDb.coerceIn(-30f, 0f)
-        limiterThresholdText.setText(String.format("%.1f", stateManager.limiterThresholdDb))
-        limiterPostGainSlider.value = stateManager.limiterPostGainDb.coerceIn(-12f, 12f)
-        limiterPostGainText.setText(String.format("%.1f", stateManager.limiterPostGainDb))
-        updateLimiterRowsEnabled(stateManager.limiterEnabled)
 
         updateBottomBarHighlight(isEqPage = true)
     }
@@ -342,8 +309,24 @@ class MainActivity : AppCompatActivity() {
             pageSettings.visibility = View.GONE
             updateBottomBarHighlight(isEqPage = true)
         }
-        findViewById<ImageButton>(R.id.navMbcButton).setOnClickListener {
+        val navMbcBtn = findViewById<ImageButton>(R.id.navMbcButton)
+        val navLimiterBtn = findViewById<ImageButton>(R.id.navLimiterButton)
+        // Set icon tints based on saved enabled state
+        navMbcBtn.imageTintList = android.content.res.ColorStateList.valueOf(
+            if (eqPrefs.getMbcEnabled()) com.google.android.material.color.MaterialColors.getColor(navMbcBtn, com.google.android.material.R.attr.colorPrimary, 0xFFBB86FC.toInt())
+            else 0xFF555555.toInt()
+        )
+        navLimiterBtn.imageTintList = android.content.res.ColorStateList.valueOf(
+            if (eqPrefs.getLimiterEnabled()) com.google.android.material.color.MaterialColors.getColor(navLimiterBtn, com.google.android.material.R.attr.colorPrimary, 0xFFBB86FC.toInt())
+            else 0xFF555555.toInt()
+        )
+        navMbcBtn.setOnClickListener {
             startActivity(Intent(this, MbcActivity::class.java))
+            overridePendingTransition(0, 0)
+        }
+        navLimiterBtn.setOnClickListener {
+            startActivity(Intent(this, LimiterActivity::class.java))
+            overridePendingTransition(0, 0)
         }
         powerFab.setOnClickListener {
             if (stateManager.isProcessing) stopProcessing() else startProcessing()
@@ -517,10 +500,12 @@ class MainActivity : AppCompatActivity() {
         // MBC card (settings page)
         findViewById<View>(R.id.mbcCard).setOnClickListener {
             startActivity(Intent(this, MbcActivity::class.java))
+            overridePendingTransition(0, 0)
         }
         // Limiter card (settings page)
         findViewById<View>(R.id.limiterCard).setOnClickListener {
             startActivity(Intent(this, LimiterActivity::class.java))
+            overridePendingTransition(0, 0)
         }
         findViewById<View>(R.id.experimentalCard).setOnClickListener {
             startActivity(Intent(this, ExperimentalActivity::class.java))
@@ -558,142 +543,12 @@ class MainActivity : AppCompatActivity() {
             updateAutoGainOffsetText()
         }
 
-        // Limiter switch
-        limiterSwitch.setOnCheckedChangeListener { _, isChecked ->
-            stateManager.limiterEnabled = isChecked
-            eqPrefs.saveLimiterEnabled(isChecked)
-            stateManager.pushLimiterUpdate()
-            updateLimiterRowsEnabled(isChecked)
-        }
-
-        // Limiter Attack
-        limiterAttackSlider.addOnChangeListener { _, value, fromUser ->
-            if (!fromUser) return@addOnChangeListener
-            limiterAttackText.setText(String.format("%.1f", value))
-            stateManager.limiterAttackMs = value
-            eqPrefs.saveLimiterAttack(value)
-            stateManager.pushLimiterUpdate()
-        }
-        limiterAttackText.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
-                val ms = limiterAttackText.text.toString().toFloatOrNull()?.coerceIn(0.1f, 50f) ?: 1f
-                limiterAttackText.setText(String.format("%.1f", ms))
-                limiterAttackSlider.value = ms
-                stateManager.limiterAttackMs = ms
-                eqPrefs.saveLimiterAttack(ms)
-                stateManager.pushLimiterUpdate()
-                limiterAttackText.clearFocus()
-            }
-            true
-        }
-
-        // Limiter Release
-        limiterReleaseSlider.addOnChangeListener { _, value, fromUser ->
-            if (!fromUser) return@addOnChangeListener
-            limiterReleaseText.setText(String.format("%.0f", value))
-            stateManager.limiterReleaseMs = value
-            eqPrefs.saveLimiterRelease(value)
-            stateManager.pushLimiterUpdate()
-        }
-        limiterReleaseText.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
-                val ms = limiterReleaseText.text.toString().toFloatOrNull()?.coerceIn(10f, 500f) ?: 50f
-                limiterReleaseText.setText(String.format("%.0f", ms))
-                limiterReleaseSlider.value = ms
-                stateManager.limiterReleaseMs = ms
-                eqPrefs.saveLimiterRelease(ms)
-                stateManager.pushLimiterUpdate()
-                limiterReleaseText.clearFocus()
-            }
-            true
-        }
-
-        // Limiter Ratio
-        limiterRatioSlider.addOnChangeListener { _, value, fromUser ->
-            if (!fromUser) return@addOnChangeListener
-            limiterRatioText.setText(String.format("%.0f", value))
-            stateManager.limiterRatio = value
-            eqPrefs.saveLimiterRatio(value)
-            stateManager.pushLimiterUpdate()
-        }
-        limiterRatioText.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
-                val ratio = limiterRatioText.text.toString().toFloatOrNull()?.coerceIn(1f, 50f) ?: 10f
-                limiterRatioText.setText(String.format("%.0f", ratio))
-                limiterRatioSlider.value = ratio
-                stateManager.limiterRatio = ratio
-                eqPrefs.saveLimiterRatio(ratio)
-                stateManager.pushLimiterUpdate()
-                limiterRatioText.clearFocus()
-            }
-            true
-        }
-
-        // Limiter Threshold
-        limiterThresholdSlider.addOnChangeListener { _, value, fromUser ->
-            if (!fromUser) return@addOnChangeListener
-            limiterThresholdText.setText(String.format("%.1f", value))
-            stateManager.limiterThresholdDb = value
-            eqPrefs.saveLimiterThreshold(value)
-            stateManager.pushLimiterUpdate()
-        }
-        limiterThresholdText.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
-                val db = limiterThresholdText.text.toString().toFloatOrNull()?.coerceIn(-30f, 0f) ?: -0.5f
-                limiterThresholdText.setText(String.format("%.1f", db))
-                limiterThresholdSlider.value = db
-                stateManager.limiterThresholdDb = db
-                eqPrefs.saveLimiterThreshold(db)
-                stateManager.pushLimiterUpdate()
-                limiterThresholdText.clearFocus()
-            }
-            true
-        }
-
-        // Limiter Post-Gain
-        limiterPostGainSlider.addOnChangeListener { _, value, fromUser ->
-            if (!fromUser) return@addOnChangeListener
-            limiterPostGainText.setText(String.format("%.1f", value))
-            stateManager.limiterPostGainDb = value
-            eqPrefs.saveLimiterPostGain(value)
-            stateManager.pushLimiterUpdate()
-        }
-        limiterPostGainText.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
-                val db = limiterPostGainText.text.toString().toFloatOrNull()?.coerceIn(-12f, 12f) ?: 0f
-                limiterPostGainText.setText(String.format("%.1f", db))
-                limiterPostGainSlider.value = db
-                stateManager.limiterPostGainDb = db
-                eqPrefs.saveLimiterPostGain(db)
-                stateManager.pushLimiterUpdate()
-                limiterPostGainText.clearFocus()
-            }
-            true
-        }
+        // Old inline limiter controls removed — now in LimiterActivity
     }
 
     private fun updateAutoGainOffsetText() {
         val offset = stateManager.getAutoGainOffset()
         autoGainOffsetText.text = String.format("Offset: %.1f dB", offset)
-    }
-
-    private fun updateLimiterRowsEnabled(enabled: Boolean) {
-        val alpha = if (enabled) 1f else 0.4f
-        findViewById<View>(R.id.limiterAttackRow).alpha = alpha
-        findViewById<View>(R.id.limiterReleaseRow).alpha = alpha
-        findViewById<View>(R.id.limiterRatioRow).alpha = alpha
-        findViewById<View>(R.id.limiterThresholdRow).alpha = alpha
-        findViewById<View>(R.id.limiterPostGainRow).alpha = alpha
-        limiterAttackSlider.isEnabled = enabled
-        limiterReleaseSlider.isEnabled = enabled
-        limiterRatioSlider.isEnabled = enabled
-        limiterThresholdSlider.isEnabled = enabled
-        limiterPostGainSlider.isEnabled = enabled
-        limiterAttackText.isEnabled = enabled
-        limiterReleaseText.isEnabled = enabled
-        limiterRatioText.isEnabled = enabled
-        limiterThresholdText.isEnabled = enabled
-        limiterPostGainText.isEnabled = enabled
     }
 
     // ---- EQ UI Mode Switching ----
@@ -1283,11 +1138,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateBottomBarHighlight(isEqPage: Boolean) {
         val activeColor = 0xFFDDDDDD.toInt()
-        val inactiveColor = 0xFF666666.toInt()
-        navPresetsButton.setColorFilter(if (isEqPage) activeColor else inactiveColor)
-        navSettingsButton.setColorFilter(if (isEqPage) inactiveColor else activeColor)
-        // MBC button always inactive color (it launches a separate activity)
-        findViewById<ImageButton>(R.id.navMbcButton).setColorFilter(inactiveColor)
+        // EQ icon always bright
+        navPresetsButton.setColorFilter(activeColor)
+        // Settings icon highlights when on settings page
+        navSettingsButton.setColorFilter(if (isEqPage) 0xFF666666.toInt() else activeColor)
+        // MBC and Limiter — clear color filter so imageTintList takes effect
+        findViewById<ImageButton>(R.id.navMbcButton).clearColorFilter()
+        findViewById<ImageButton>(R.id.navLimiterButton).clearColorFilter()
     }
 
     private fun updateEqToggleUI() {
@@ -1412,7 +1269,17 @@ class MainActivity : AppCompatActivity() {
         } else {
             stateManager.isProcessing = false
         }
-        updatePowerUI()
+        // Set power FAB immediately (no animation) to avoid flicker
+        if (stateManager.isProcessing) {
+            powerFab.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFFFFFFF.toInt())
+            powerFab.imageTintList = android.content.res.ColorStateList.valueOf(0xFF000000.toInt())
+        } else {
+            powerFab.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF2A2A2A.toInt())
+            powerFab.imageTintList = android.content.res.ColorStateList.valueOf(0xFF555555.toInt())
+        }
+        // Restore EQ/Settings page highlight
+        val isEqPage = findViewById<View>(R.id.pageEq).visibility == View.VISIBLE
+        updateBottomBarHighlight(isEqPage)
         // Restart visualizer if it was enabled (may have been stopped in onPause)
         if (eqPrefs.getSpectrumEnabled() && !visualizerHelper.isRunning &&
             checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
@@ -1420,6 +1287,17 @@ class MainActivity : AppCompatActivity() {
             visualizerHelper.start(eqGraphView)
             eqGraphView.spectrumRenderer = visualizerHelper.renderer
         }
+        // Refresh MBC/Limiter nav icon tints
+        val navMbc = findViewById<ImageButton>(R.id.navMbcButton)
+        val navLimiter = findViewById<ImageButton>(R.id.navLimiterButton)
+        navMbc.imageTintList = android.content.res.ColorStateList.valueOf(
+            if (eqPrefs.getMbcEnabled()) com.google.android.material.color.MaterialColors.getColor(navMbc, com.google.android.material.R.attr.colorPrimary, 0xFFBB86FC.toInt())
+            else 0xFF555555.toInt()
+        )
+        navLimiter.imageTintList = android.content.res.ColorStateList.valueOf(
+            if (eqPrefs.getLimiterEnabled()) com.google.android.material.color.MaterialColors.getColor(navLimiter, com.google.android.material.R.attr.colorPrimary, 0xFFBB86FC.toInt())
+            else 0xFF555555.toInt()
+        )
     }
 
     override fun onPause() {
@@ -1465,11 +1343,17 @@ class MainActivity : AppCompatActivity() {
 
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
+        setIntent(intent)
         if (stateManager.serviceBound && stateManager.eqService != null) {
             stateManager.isProcessing = stateManager.eqService!!.dynamicsManager.isActive
         } else {
             stateManager.isProcessing = false
         }
-        updatePowerUI()
+        // Check if we should show settings page
+        if (intent?.getBooleanExtra("showSettings", false) == true) {
+            pageEq.visibility = View.GONE
+            pageSettings.visibility = View.VISIBLE
+            updateBottomBarHighlight(isEqPage = false)
+        }
     }
 }

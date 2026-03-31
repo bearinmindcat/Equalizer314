@@ -266,8 +266,8 @@ class EqGraphView @JvmOverloads constructor(
     private val graphMinFreq = 10f
     private val graphMaxFreq = 20000f
 
-    private val minGain = -12f
-    private val maxGain = 12f
+    private val minGain = -30f
+    private val maxGain = 30f
 
     var onBandChangedListener: ((bandIndex: Int, frequency: Float, gain: Float) -> Unit)? = null
     var onBandSelectedListener: ((bandIndex: Int?) -> Unit)? = null
@@ -449,17 +449,15 @@ class EqGraphView @JvmOverloads constructor(
     }
 
     private fun drawGrid(canvas: Canvas, vPad: Float, graphWidth: Float, graphHeight: Float) {
-        val dbSteps = 8
+        val dbSteps = 4  // +30, +15, 0, -15, -30
         for (i in 0..dbSteps) {
             val y = vPad + (graphHeight * i / dbSteps)
             val db = maxGain - (maxGain - minGain) * i / dbSteps
 
             canvas.drawLine(0f, y, width.toFloat(), y, gridPaint)
 
-            if (i % 2 == 0) {
-                val dbLabel = if (db > 0) "+${db.toInt()}" else "${db.toInt()}"
-                canvas.drawText(dbLabel, 10f, y + 8f, textPaint)
-            }
+            val dbLabel = if (db > 0) "+${db.toInt()}" else "${db.toInt()}"
+            canvas.drawText(dbLabel, 10f, y + 8f, textPaint)
         }
 
         val freqMarkers = listOf(100f, 1000f, 10000f)

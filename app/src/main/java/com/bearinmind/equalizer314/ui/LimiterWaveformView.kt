@@ -36,8 +36,8 @@ class LimiterWaveformView @JvmOverloads constructor(
     private val peakAttack = 0.97f
     private val peakRelease = 0.15f
 
-    // dB scale: +20 at top, -40 at bottom
-    private val dbMax = 20f
+    // dB scale: +10 at top, -40 at bottom
+    private val dbMax = 10f
     private val dbMin = -40f
     private val dbRange = dbMax - dbMin
 
@@ -108,10 +108,10 @@ class LimiterWaveformView @JvmOverloads constructor(
         color = levelColor; style = Paint.Style.STROKE; strokeWidth = 1f; alpha = 35
     }
     private val outputFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = levelColor; style = Paint.Style.FILL; alpha = 40
+        color = levelColor; style = Paint.Style.FILL; alpha = 15
     }
     private val outputStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = levelColor; style = Paint.Style.STROKE; strokeWidth = 1f; alpha = 70
+        color = levelColor; style = Paint.Style.STROKE; strokeWidth = 1f; alpha = 35
     }
     private val grTracePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFFE57373.toInt(); strokeWidth = 2.5f; style = Paint.Style.STROKE
@@ -165,7 +165,7 @@ class LimiterWaveformView @JvmOverloads constructor(
 
         canvas.drawRect(0f, 0f, w, h, bgPaint)
 
-        for (db in listOf(10f, 0f, -10f, -20f, -30f)) {
+        for (db in listOf(0f, -10f, -20f, -30f)) {
             val y = dbToY(db, h)
             canvas.drawLine(0f, y, w, y, gridPaint)
             val label = if (db > 0) "+${db.toInt()}" else if (db == 0f) "0" else "${db.toInt()}"
@@ -188,21 +188,6 @@ class LimiterWaveformView @JvmOverloads constructor(
         inputFillPath.lineTo(w, h); inputFillPath.close()
         canvas.drawPath(inputFillPath, inputFillPaint)
         canvas.drawPath(inputStrokePath, inputStrokePaint)
-
-        // ── OUTPUT LEVEL (brighter, capped at ceiling) ──
-        outputFillPath.reset(); outputStrokePath.reset()
-        outputFillPath.moveTo(0f, h)
-        for (s in 0 until bufferSize) {
-            val idx = ((head - bufferSize + s) % bufferSize + bufferSize) % bufferSize
-            val outDb = (inputLevels[idx] + grLevels[idx]).coerceAtMost(ceilingDb)
-            val x = s * pxPerCol
-            val y = dbToY(outDb, h)
-            outputFillPath.lineTo(x, y)
-            if (s == 0) outputStrokePath.moveTo(x, y) else outputStrokePath.lineTo(x, y)
-        }
-        outputFillPath.lineTo(w, h); outputFillPath.close()
-        canvas.drawPath(outputFillPath, outputFillPaint)
-        canvas.drawPath(outputStrokePath, outputStrokePaint)
 
         // ── GR TRACE (red from top) ──
         grLinePath.reset(); grFillPath.reset()
