@@ -126,13 +126,13 @@ class EqPreferencesManager(context: Context) {
     fun saveLimiterEnabled(enabled: Boolean) { prefs.edit().putBoolean("limiterEnabled", enabled).apply() }
     fun getLimiterEnabled(): Boolean = prefs.getBoolean("limiterEnabled", true)
     fun saveLimiterAttack(ms: Float) { prefs.edit().putFloat("limiterAttack", ms).apply() }
-    fun getLimiterAttack(): Float = prefs.getFloat("limiterAttack", 1f)
+    fun getLimiterAttack(): Float = prefs.getFloat("limiterAttack", 0.01f)
     fun saveLimiterRelease(ms: Float) { prefs.edit().putFloat("limiterRelease", ms).apply() }
-    fun getLimiterRelease(): Float = prefs.getFloat("limiterRelease", 50f)
+    fun getLimiterRelease(): Float = prefs.getFloat("limiterRelease", 1f)
     fun saveLimiterRatio(ratio: Float) { prefs.edit().putFloat("limiterRatio", ratio).apply() }
-    fun getLimiterRatio(): Float = prefs.getFloat("limiterRatio", 10f)
+    fun getLimiterRatio(): Float = prefs.getFloat("limiterRatio", 2f)
     fun saveLimiterThreshold(db: Float) { prefs.edit().putFloat("limiterThreshold", db).apply() }
-    fun getLimiterThreshold(): Float = prefs.getFloat("limiterThreshold", -0.5f)
+    fun getLimiterThreshold(): Float = prefs.getFloat("limiterThreshold", 0f)
     fun saveLimiterPostGain(db: Float) { prefs.edit().putFloat("limiterPostGain", db).apply() }
     fun getLimiterPostGain(): Float = prefs.getFloat("limiterPostGain", 0f)
 

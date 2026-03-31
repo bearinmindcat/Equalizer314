@@ -245,11 +245,11 @@ class MbcActivity : AppCompatActivity() {
                 btn.minimumHeight = 0
                 btn.setPadding(0, 0, 0, 0)
             }
-            // Position between left border and 100 Hz grid line (centered)
+            // Center between left border (0) and 100 Hz grid line
             val gridLine100 = (viewWidth * (kotlin.math.log10(100f) - kotlin.math.log10(10f)) /
                 (kotlin.math.log10(20000f) - kotlin.math.log10(10f))).toInt()
-            val toggleWidth = toggleGroup.measuredWidth.takeIf { it > 0 }
-                ?: (specBtnWidth * 2 + (4 * density).toInt()) // estimate if not measured yet
+            // Total toggle width = 2 buttons + 4dp gap between them
+            val toggleWidth = specBtnWidth * 2 + (4 * density).toInt()
             val centerX = (gridLine100 - toggleWidth) / 2
             val groupLp = toggleGroup.layoutParams as android.widget.FrameLayout.LayoutParams
             groupLp.topMargin = gapPx

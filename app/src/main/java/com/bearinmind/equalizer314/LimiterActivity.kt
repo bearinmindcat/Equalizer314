@@ -163,6 +163,15 @@ class LimiterActivity : AppCompatActivity() {
         // Waveform / level meter
         waveformView = findViewById(R.id.limiterWaveform)
         waveformView.ceilingDb = eqPrefs.getLimiterThreshold()
+        waveformView.onCeilingChanged = { value ->
+            eqPrefs.saveLimiterThreshold(value)
+            isUpdating = true
+            thresholdSlider.value = value.coerceIn(-30f, 0f)
+            thresholdText.setText(String.format("%.1f", value))
+            ceilingView.ceilingDb = value
+            isUpdating = false
+            pushToService()
+        }
 
         // Ceiling + GR view
         ceilingView = findViewById(R.id.limiterCeilingView)

@@ -97,8 +97,11 @@ class LimiterWaveformView @JvmOverloads constructor(
         color = 0xFF888888.toInt(); textSize = 24f
     }
     private val ceilingLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xAAFF6666.toInt(); strokeWidth = 1.5f
+        color = 0xAAFF6666.toInt(); strokeWidth = 1.5f; style = Paint.Style.STROKE
         pathEffect = DashPathEffect(floatArrayOf(8f, 5f), 0f)
+    }
+    private val ceilingTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFAAAAAA.toInt(); textSize = 20f; textAlign = Paint.Align.CENTER
     }
     private val levelColor = 0xFFBBBBBB.toInt()
     private val inputFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -203,11 +206,72 @@ class LimiterWaveformView @JvmOverloads constructor(
         canvas.drawPath(grFillPath, grFillPaint)
         canvas.drawPath(grLinePath, grTracePaint)
 
-        // Ceiling line
-        canvas.drawLine(0f, dbToY(ceilingDb, h), w, dbToY(ceilingDb, h), ceilingLinePaint)
+        // Dragging glow on ceiling line (same as MBC threshold glow)
+        if (draggingCeiling) {
+            val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = 0xFFFF6666.toInt(); alpha = 40; style = Paint.Style.FILL
+            }
+            val ceilGlowY = dbToY(ceilingDb, h)
+            val glowPad = 24f
+            canvas.drawRoundRect(0f, ceilGlowY - glowPad, w, ceilGlowY + glowPad, 10f, 10f, glowPaint)
+        }
+
+        // Ceiling line with centered dB label (line breaks around text, same as MBC)
+        val ceilY = dbToY(ceilingDb, h)
+        val ceilText = String.format("%.1f", ceilingDb)
+        val ceilTextWidth = ceilingTextPaint.measureText(ceilText)
+        val ceilCenterX = w / 2f
+        val gapPad = 8f
+        val gapLeft = ceilCenterX - ceilTextWidth / 2f - gapPad
+        val gapRight = ceilCenterX + ceilTextWidth / 2f + gapPad
+        if (gapLeft > 0f) canvas.drawLine(0f, ceilY, gapLeft, ceilY, ceilingLinePaint)
+        if (gapRight < w) canvas.drawLine(gapRight, ceilY, w, ceilY, ceilingLinePaint)
+        canvas.drawText(ceilText, ceilCenterX, ceilY + 7f, ceilingTextPaint)
     }
 
-    override fun onTouchEvent(event: android.view.MotionEvent): Boolean = true
+    var onCeilingChanged: ((Float) -> Unit)? = null
+    private var draggingCeiling = false
+    private var lastCeilingTapTime = 0L
+
+    override fun onTouchEvent(event: android.view.MotionEvent): Boolean {
+        val h = height.toFloat()
+        if (h <= 0) return true
+
+        when (event.action) {
+            android.view.MotionEvent.ACTION_DOWN -> {
+                val ceilY = dbToY(ceilingDb, h)
+                if (kotlin.math.abs(event.y - ceilY) < 40f) {
+                    // Double-tap to reset
+                    val now = System.currentTimeMillis()
+                    if (now - lastCeilingTapTime < 300L) {
+                        ceilingDb = 0f
+                        onCeilingChanged?.invoke(ceilingDb)
+                        lastCeilingTapTime = 0L
+                        invalidate()
+                        return true
+                    }
+                    lastCeilingTapTime = now
+                    draggingCeiling = true
+                    parent?.requestDisallowInterceptTouchEvent(true)
+                    return true
+                }
+            }
+            android.view.MotionEvent.ACTION_MOVE -> {
+                if (draggingCeiling) {
+                    val newDb = dbMax - (event.y / h) * dbRange
+                    ceilingDb = (Math.round(newDb * 2f) / 2f).coerceIn(dbMin, dbMax)
+                    onCeilingChanged?.invoke(ceilingDb)
+                    invalidate()
+                    return true
+                }
+            }
+            android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                parent?.requestDisallowInterceptTouchEvent(false)
+                draggingCeiling = false
+            }
+        }
+        return true
+    }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()

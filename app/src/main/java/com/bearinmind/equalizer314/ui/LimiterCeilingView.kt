@@ -51,7 +51,7 @@ class LimiterCeilingView @JvmOverloads constructor(
     private var grPeakHoldFrames = 0
 
     companion object {
-        const val DEFAULT_CEILING = -0.5f
+        const val DEFAULT_CEILING = 0f
     }
 
     private val bgPaint = Paint().apply { color = 0x00000000 }  // transparent — waveform shows through
@@ -62,7 +62,7 @@ class LimiterCeilingView @JvmOverloads constructor(
         color = 0xFFBBBBBB.toInt(); strokeWidth = 2f
         pathEffect = DashPathEffect(floatArrayOf(8f, 5f), 0f)
     }
-    private val grFillPaint = Paint().apply { color = 0xFFAAAAAA.toInt() }
+    private val grFillPaint = Paint().apply { color = 0xFFBBBBBB.toInt() }
     private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFF3A3A3A.toInt(); strokeWidth = 1f
     }
@@ -189,6 +189,12 @@ class LimiterCeilingView @JvmOverloads constructor(
             color = 0xFFBBBBBB.toInt(); style = Paint.Style.STROKE; strokeWidth = 2f
             pathEffect = CornerPathEffect(triCorner)
         }
+        // Triangle halo when dragging
+        if (dragging) {
+            val triCenterX = triX - triR * 0.75f
+            val haloDp = 12f * resources.displayMetrics.density
+            canvas.drawCircle(triCenterX, ceilingY, haloDp, haloPaint)
+        }
         canvas.drawPath(triPath, triBgPaint)
         canvas.drawPath(triPath, triOutlinePaint)
 
@@ -226,7 +232,7 @@ class LimiterCeilingView @JvmOverloads constructor(
         canvas.save()
         canvas.clipRoundRect(grLeft, mt, grRight, mb, cornerR, cornerR)
         if (displayGr < -0.1f) {
-            grFillPaint.alpha = 180
+            grFillPaint.alpha = 50
             canvas.drawRect(grLeft, mt, grRight, grToY(displayGr), grFillPaint)
         }
 
@@ -271,8 +277,8 @@ class LimiterCeilingView @JvmOverloads constructor(
 
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
-                // Hit area includes triangle to the left (extra 30px)
-                if (event.x >= ceilingLeft - 30f && event.x <= ceilingRight + 10f) {
+                // Hit area includes triangle to the left (triR * 1.5 + margin)
+                if (event.x >= ceilingLeft - 40f && event.x <= ceilingRight + 10f) {
                     val now = System.currentTimeMillis()
                     if (now - lastTapTime < doubleTapTimeout) {
                         ceilingDb = DEFAULT_CEILING

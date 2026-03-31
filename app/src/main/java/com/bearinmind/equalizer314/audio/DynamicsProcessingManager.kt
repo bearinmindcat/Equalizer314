@@ -37,10 +37,10 @@ class DynamicsProcessingManager {
 
     // Limiter
     var limiterEnabled: Boolean = true
-    var limiterAttackMs: Float = 1f
-    var limiterReleaseMs: Float = 50f
-    var limiterRatio: Float = 10f
-    var limiterThresholdDb: Float = -0.5f
+    var limiterAttackMs: Float = 0.01f
+    var limiterReleaseMs: Float = 1f
+    var limiterRatio: Float = 2f
+    var limiterThresholdDb: Float = 0f
     var limiterPostGainDb: Float = 0f
 
     fun start(eq: ParametricEqualizer) {
