@@ -22,6 +22,12 @@ class LimiterWaveformView @JvmOverloads constructor(
 
     var ceilingDb: Float = -0.5f
 
+    // Attack/release for GR trace envelope follower
+    // alpha = 1 - exp(-dt / timeMs), dt = 33ms at 30fps
+    var attackMs: Float = 0.01f
+    var releaseMs: Float = 1f
+    private var smoothedGr = 0f
+
     // dB scale: +10 at top, -40 at bottom
     private val dbMax = 10f
     private val dbMin = -40f
@@ -68,9 +74,16 @@ class LimiterWaveformView @JvmOverloads constructor(
 
     /** Called from activity's 33ms timer — one value per frame, exactly like MBC GrTraceView */
     fun pushFrame(inputDb: Float, grDb: Float, lufsDb: Float = -80f) {
+        // Smooth GR with attack/release envelope follower (same formula as MBC)
+        val dt = 33f
+        val atkAlpha = (1f - kotlin.math.exp(-dt / attackMs.coerceAtLeast(0.01f))).coerceIn(0.0001f, 1f)
+        val relAlpha = (1f - kotlin.math.exp(-dt / releaseMs.coerceAtLeast(1f))).coerceIn(0.0001f, 1f)
+        val grAlpha = if (grDb < smoothedGr) atkAlpha else relAlpha
+        smoothedGr = grAlpha * grDb + (1f - grAlpha) * smoothedGr
+
         val idx = writeIdx % bufferSize
         inputHistory[idx] = inputDb.coerceIn(-80f, 10f)
-        grHistory[idx] = grDb.coerceIn(-30f, 0f)
+        grHistory[idx] = smoothedGr.coerceIn(-30f, 0f)
         lufsHistory[idx] = lufsDb.coerceIn(-80f, 10f)
         writeIdx++
     }

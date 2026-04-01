@@ -163,6 +163,8 @@ class LimiterActivity : AppCompatActivity() {
         // Waveform / level meter
         waveformView = findViewById(R.id.limiterWaveform)
         waveformView.ceilingDb = eqPrefs.getLimiterThreshold()
+        waveformView.attackMs = eqPrefs.getLimiterAttack()
+        waveformView.releaseMs = eqPrefs.getLimiterRelease()
         waveformView.onCeilingChanged = { value ->
             eqPrefs.saveLimiterThreshold(value)
             isUpdating = true
@@ -241,10 +243,12 @@ class LimiterActivity : AppCompatActivity() {
         }
         setupSlider(attackSlider, attackText, "%.2f") {
             eqPrefs.saveLimiterAttack(it)
+            waveformView.attackMs = it
             pushToService()
         }
         setupSlider(releaseSlider, releaseText, "%.0f") {
             eqPrefs.saveLimiterRelease(it)
+            waveformView.releaseMs = it
             pushToService()
         }
         setupSlider(postGainSlider, postGainText, "%.1f") {

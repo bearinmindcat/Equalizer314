@@ -341,6 +341,7 @@ class MbcActivity : AppCompatActivity() {
                             preGain = b.preGain, postGain = b.postGain,
                             threshold = b.threshold, ratio = b.ratio, kneeWidth = b.kneeWidth,
                             noiseGateThreshold = b.noiseGateThreshold, expanderRatio = b.expanderRatio,
+                            attackMs = b.attack, releaseMs = b.release,
                             lowCutoff = if (i == 0) 20f else crossoverFreqs[i - 1],
                             highCutoff = if (i >= crossoverFreqs.size) 20000f else crossoverFreqs[i]
                         )
@@ -1244,6 +1245,8 @@ class MbcActivity : AppCompatActivity() {
                     kneeWidth = b.kneeWidth,
                     noiseGateThreshold = b.noiseGateThreshold,
                     expanderRatio = b.expanderRatio,
+                    attackMs = b.attack,
+                    releaseMs = b.release,
                     lowCutoff = if (i == 0) 20f else crossoverFreqs[i - 1],
                     highCutoff = if (i >= crossoverFreqs.size) 20000f else crossoverFreqs[i]
                 )

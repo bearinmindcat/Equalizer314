@@ -1,5 +1,6 @@
 package com.bearinmind.equalizer314.audio
 
+import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.log10
 import kotlin.math.pow
@@ -41,6 +42,8 @@ class MbcGainComputer(private val numBands: Int) {
         val kneeWidth: Float,          // dB
         val noiseGateThreshold: Float, // dB
         val expanderRatio: Float,      // e.g. 2.0
+        val attackMs: Float = 1f,      // attack time in ms (for GR trace display)
+        val releaseMs: Float = 100f,   // release time in ms (for GR trace display)
         val lowCutoff: Float,          // Hz (20 for first band)
         val highCutoff: Float          // Hz (20000 for last band)
     )
@@ -177,20 +180,23 @@ class MbcGainComputer(private val numBands: Int) {
             // Step 5: Total GR is the sum of compressor and expander
             val totalGR = compressorGR + expanderGR
 
-            // Step 6: Smooth GR for animation (asymmetric: fast attack, slow release)
-            val alpha = if (totalGR < smoothedGR[i]) {
-                0.35f   // GR increasing (more negative) → fast attack
-            } else {
-                0.06f   // GR decreasing (returning toward 0) → slow release
-            }
+            // Step 6: Smooth GR for animation using actual attack/release times
+            // Formula: alpha = 1 - exp(-dt / timeMs)
+            // dt = 33ms (30fps display), timeMs = attack or release in ms
+            // Reference: ITU-R BS.1770, JUCE CompressorBand, standard EMA envelope follower
+            val dt = 33f  // ~30fps frame interval
+            val attackAlpha = (1f - exp(-dt / s.attackMs.coerceAtLeast(0.01f))).coerceIn(0.0001f, 1f)
+            val releaseAlpha = (1f - exp(-dt / s.releaseMs.coerceAtLeast(1f))).coerceIn(0.0001f, 1f)
+
+            val alpha = if (totalGR < smoothedGR[i]) attackAlpha else releaseAlpha
             smoothedGR[i] = alpha * totalGR + (1f - alpha) * smoothedGR[i]
 
             // Smooth compressor-only GR separately (for trace display)
-            val compAlpha = if (compressorGR < smoothedCompressorGR[i]) 0.35f else 0.06f
+            val compAlpha = if (compressorGR < smoothedCompressorGR[i]) attackAlpha else releaseAlpha
             smoothedCompressorGR[i] = compAlpha * compressorGR + (1f - compAlpha) * smoothedCompressorGR[i]
 
             // Smooth expander/gate GR separately (for input fill dimming)
-            val expAlpha = if (expanderGR < smoothedExpanderGR[i]) 0.35f else 0.06f
+            val expAlpha = if (expanderGR < smoothedExpanderGR[i]) attackAlpha else releaseAlpha
             smoothedExpanderGR[i] = expAlpha * expanderGR + (1f - expAlpha) * smoothedExpanderGR[i]
 
             // Step 7: Total gain = preGain + smoothed GR + postGain
