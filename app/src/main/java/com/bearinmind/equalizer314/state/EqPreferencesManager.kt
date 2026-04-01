@@ -149,6 +149,12 @@ class EqPreferencesManager(context: Context) {
     fun saveSpectrumEnabled(enabled: Boolean) { prefs.edit().putBoolean("spectrumEnabled", enabled).apply() }
     fun getSpectrumEnabled(): Boolean = prefs.getBoolean("spectrumEnabled", false)
 
+    // AutoEQ
+    fun saveAutoEqName(name: String) { prefs.edit().putString("autoEqName", name).apply() }
+    fun getAutoEqName(): String? = prefs.getString("autoEqName", null)
+    fun saveAutoEqSource(source: String) { prefs.edit().putString("autoEqSource", source).apply() }
+    fun getAutoEqSource(): String? = prefs.getString("autoEqSource", null)
+
     // MBC
     fun saveMbcEnabled(enabled: Boolean) { prefs.edit().putBoolean("mbcEnabled", enabled).apply() }
     fun getMbcEnabled(): Boolean = prefs.getBoolean("mbcEnabled", false)

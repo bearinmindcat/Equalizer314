@@ -27,6 +27,7 @@ import com.bearinmind.equalizer314.ui.EqGraphView
 import com.bearinmind.equalizer314.ui.GraphicEqController
 import com.bearinmind.equalizer314.ui.TableEqController
 
+import androidx.activity.result.contract.ActivityResultContracts
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.slider.Slider
@@ -48,6 +49,23 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tableController: TableEqController
     private lateinit var bandToggleManager: BandToggleManager
     private val visualizerHelper = com.bearinmind.equalizer314.audio.VisualizerHelper()
+
+    private val autoEqLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) {
+            // Reload EQ state from preferences (AutoEqActivity saved the profile)
+            stateManager.initEq(eqGraphView)
+            stateManager.preampGainDb = eqPrefs.getPreampGain()
+            preampSlider.value = stateManager.preampGainDb.coerceIn(-12f, 12f)
+            preampText.setText(String.format("%.1f", stateManager.preampGainDb))
+            eqGraphView.updateBandLevels()
+            bandToggleManager.setupToggles()
+            stateManager.updateDpBandVisualization(eqGraphView)
+            stateManager.pushEqUpdate()
+            val preset = eqPrefs.getPresetName()
+            presetDropdown.setText(preset, false)
+            updateAutoEqStatus()
+        }
+    }
 
     // Views
     private lateinit var eqGraphView: EqGraphView
@@ -496,6 +514,20 @@ class MainActivity : AppCompatActivity() {
 
     // ---- Settings ----
 
+    private fun updateAutoEqStatus() {
+        val name = eqPrefs.getAutoEqName()
+        val statusText = findViewById<TextView>(R.id.autoEqStatusText)
+        if (!name.isNullOrBlank()) {
+            val source = eqPrefs.getAutoEqSource() ?: ""
+            statusText.text = "$name by $source"
+            statusText.setTextColor(com.google.android.material.color.MaterialColors.getColor(
+                statusText, com.google.android.material.R.attr.colorPrimary, 0xFFBB86FC.toInt()))
+        } else {
+            statusText.text = "Select a headphone profile for frequency response correction"
+            statusText.setTextColor(resources.getColor(com.google.android.material.R.color.material_on_surface_disabled, theme))
+        }
+    }
+
     private fun setupSettingsListeners() {
         // MBC card (settings page)
         findViewById<View>(R.id.mbcCard).setOnClickListener {
@@ -509,6 +541,11 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<View>(R.id.experimentalCard).setOnClickListener {
             startActivity(Intent(this, ExperimentalActivity::class.java))
+        }
+        // AutoEQ card (settings page)
+        findViewById<View>(R.id.autoEqCard).setOnClickListener {
+            autoEqLauncher.launch(Intent(this, AutoEqActivity::class.java))
+            overridePendingTransition(0, 0)
         }
 
         // Preamp slider
@@ -1298,6 +1335,7 @@ class MainActivity : AppCompatActivity() {
             if (eqPrefs.getLimiterEnabled()) com.google.android.material.color.MaterialColors.getColor(navLimiter, com.google.android.material.R.attr.colorPrimary, 0xFFBB86FC.toInt())
             else 0xFF555555.toInt()
         )
+        updateAutoEqStatus()
     }
 
     override fun onPause() {
