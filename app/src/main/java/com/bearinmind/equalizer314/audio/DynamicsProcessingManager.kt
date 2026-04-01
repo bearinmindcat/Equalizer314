@@ -77,6 +77,7 @@ class DynamicsProcessingManager {
                 )
                 setLimiterByChannelIndex(0, limiter)
                 setLimiterByChannelIndex(1, limiter)
+                Log.d(TAG, "Limiter config: enabled=$limiterEnabled thresh=$limiterThresholdDb ratio=$limiterRatio attack=$limiterAttackMs release=$limiterReleaseMs postGain=$limiterPostGainDb")
 
                 // Apply parametric response sampled at N frequencies
                 applyParametricResponse(this, eq)

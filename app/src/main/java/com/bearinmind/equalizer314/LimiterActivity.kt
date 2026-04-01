@@ -456,13 +456,19 @@ class LimiterActivity : AppCompatActivity() {
     private fun pushToService() {
         val svc = eqService ?: return
         if (!svc.dynamicsManager.isActive) return
+        // Update limiter fields then recreate DP to apply them
+        // (updateLimiter fails with "invalid parameter operation" on Samsung —
+        //  limiter params can only be set during DP construction)
         svc.dynamicsManager.limiterEnabled = eqPrefs.getLimiterEnabled()
         svc.dynamicsManager.limiterAttackMs = eqPrefs.getLimiterAttack()
         svc.dynamicsManager.limiterReleaseMs = eqPrefs.getLimiterRelease()
         svc.dynamicsManager.limiterRatio = eqPrefs.getLimiterRatio()
         svc.dynamicsManager.limiterThresholdDb = eqPrefs.getLimiterThreshold()
         svc.dynamicsManager.limiterPostGainDb = eqPrefs.getLimiterPostGain()
-        svc.dynamicsManager.updateLimiter()
+        // Recreate DP with updated limiter config
+        val tempEq = com.bearinmind.equalizer314.dsp.ParametricEqualizer()
+        eqPrefs.restoreState(tempEq)
+        svc.dynamicsManager.start(tempEq)
     }
 
     override fun onPause() {
