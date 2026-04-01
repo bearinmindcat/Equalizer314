@@ -261,6 +261,61 @@ class LimiterActivity : AppCompatActivity() {
             isUpdating = false
             pushToService()
         }
+
+        // Double-tap slider thumbs to reset to defaults
+        addDoubleTapReset(thresholdSlider) {
+            eqPrefs.saveLimiterThreshold(0f)
+            thresholdSlider.value = 0f; thresholdText.setText("0.0")
+            ceilingView.ceilingDb = 0f; waveformView.ceilingDb = 0f
+            pushToService()
+        }
+        addDoubleTapReset(ratioSlider) {
+            eqPrefs.saveLimiterRatio(2f)
+            ratioSlider.value = 2f; ratioText.setText("2.0")
+            pushToService()
+        }
+        addDoubleTapReset(attackSlider) {
+            eqPrefs.saveLimiterAttack(0.01f)
+            attackSlider.value = 0.01f; attackText.setText("0.01")
+            pushToService()
+        }
+        addDoubleTapReset(releaseSlider) {
+            eqPrefs.saveLimiterRelease(1f)
+            releaseSlider.value = 1f; releaseText.setText("1")
+            pushToService()
+        }
+        addDoubleTapReset(postGainSlider) {
+            eqPrefs.saveLimiterPostGain(0f)
+            postGainSlider.value = 0f; postGainText.setText("0.0")
+            pushToService()
+        }
+    }
+
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    private fun addDoubleTapReset(slider: com.google.android.material.slider.Slider, onReset: () -> Unit) {
+        var lastTapTime = 0L
+        var consumeUntilUp = false
+        slider.setOnTouchListener { _, event ->
+            if (consumeUntilUp) {
+                if (event.action == android.view.MotionEvent.ACTION_UP || event.action == android.view.MotionEvent.ACTION_CANCEL) {
+                    consumeUntilUp = false
+                }
+                return@setOnTouchListener true
+            }
+            if (event.action == android.view.MotionEvent.ACTION_DOWN) {
+                val now = System.currentTimeMillis()
+                if (now - lastTapTime < 300) {
+                    isUpdating = true
+                    onReset()
+                    isUpdating = false
+                    lastTapTime = 0L
+                    consumeUntilUp = true
+                    return@setOnTouchListener true
+                }
+                lastTapTime = now
+            }
+            false
+        }
     }
 
     private var visualizer: android.media.audiofx.Visualizer? = null
