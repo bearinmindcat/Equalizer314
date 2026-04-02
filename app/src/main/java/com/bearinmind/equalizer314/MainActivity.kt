@@ -669,6 +669,10 @@ class MainActivity : AppCompatActivity() {
         when (mode) {
             EqUiMode.PARAMETRIC -> {
                 tableEqCard.setOnTouchListener(null)
+                // Restore preamp margin
+                val contentLayout0 = (pageEq as ScrollView).getChildAt(0) as LinearLayout
+                val preampCard0 = contentLayout0.getChildAt(contentLayout0.childCount - 1)
+                (preampCard0.layoutParams as? LinearLayout.LayoutParams)?.topMargin = (8 * resources.displayMetrics.density).toInt()
                 parametricControlsCard.visibility = View.VISIBLE
                 graphicScrollView.visibility = View.GONE
                 filterTypeGroup.visibility = View.VISIBLE
@@ -693,6 +697,10 @@ class MainActivity : AppCompatActivity() {
             }
             EqUiMode.GRAPHIC -> {
                 tableEqCard.setOnTouchListener(null)
+                // Restore preamp margin
+                val contentLayoutG = (pageEq as ScrollView).getChildAt(0) as LinearLayout
+                val preampCardG = contentLayoutG.getChildAt(contentLayoutG.childCount - 1)
+                (preampCardG.layoutParams as? LinearLayout.LayoutParams)?.topMargin = (8 * resources.displayMetrics.density).toInt()
                 parametricControlsCard.measure(
                     View.MeasureSpec.makeMeasureSpec(parametricControlsCard.width.takeIf { it > 0 }
                         ?: resources.displayMetrics.widthPixels, View.MeasureSpec.EXACTLY),
@@ -731,13 +739,29 @@ class MainActivity : AppCompatActivity() {
                     val graphCardH = graphCard.height + (graphCard.layoutParams as? LinearLayout.LayoutParams)?.let { it.topMargin + it.bottomMargin } .let { it ?: 0 }
                     val tableMargin = (tableEqCard.layoutParams as? LinearLayout.LayoutParams)?.let { it.topMargin + it.bottomMargin } ?: 0
 
-                    // Account for preamp card below the table + its top margin
-                    val density = resources.displayMetrics.density
-                    val preampH = (56 * density).toInt()  // preamp card height (~48dp) + 8dp margin
+                    // Match preamp card position to parametric/graphic mode:
+                    // In parametric mode, the preamp card Y = pageH - preampCardHeight - gapToFab
+                    // The graph height (246dp) was tuned so preamp sits with 8dp gap to FAB
+                    // So table bottom should be at the same Y as where the band toggles end
+                    // = pageH - graphCardH - modeSelectorH - padding = space for controls + preamp
+                    // The parametric controls + band toggles + preamp fill this space exactly
+                    // For table mode, table + preamp must fill the same space
+                    val controlsSpace = pageH - padding - modeSelectorH - graphCardH
+                    // Measure preamp card
+                    val preampCard = contentLayout.getChildAt(contentLayout.childCount - 1)
+                    preampCard.measure(
+                        View.MeasureSpec.makeMeasureSpec(pageScrollView.width, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+                    val preampH = preampCard.measuredHeight +
+                        (preampCard.layoutParams as? LinearLayout.LayoutParams)?.let { it.topMargin + it.bottomMargin } .let { it ?: 0 }
 
-                    val fabOverlap = (20 * density).toInt()
-                    val tableHeight = pageH - padding - modeSelectorH - graphCardH - tableMargin - preampH - fabOverlap
+                    val density = resources.displayMetrics.density
+                    val adjustment = (8 * density).toInt()
+                    val tableHeight = controlsSpace - preampH - tableMargin - adjustment
                     tableEqCard.layoutParams = tableEqCard.layoutParams.apply { height = tableHeight }
+
+                    // Tighten preamp top margin in table mode
+                    (preampCard.layoutParams as? LinearLayout.LayoutParams)?.topMargin = (7 * density).toInt()
                 }
 
                 // Let table card's inner ScrollView handle touches, block outer scroll
