@@ -31,7 +31,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Target Curve"
+            android:text="Generate Custom EQ"
             android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
             android:textColor="?attr/colorOnSurface"
             android:paddingStart="8dp" />
@@ -50,8 +50,9 @@
             android:paddingEnd="16dp"
             android:paddingBottom="32dp">
 
-            <!-- Measurement Import Card -->
+            <!-- Measurement Card (clickable, opens MeasurementSelectActivity) -->
             <com.google.android.material.card.MaterialCardView
+                android:id="@+id/measurementSelectCard"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
@@ -63,42 +64,35 @@
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
+                    android:orientation="vertical"
                     android:padding="16dp">
 
-                    <LinearLayout
-                        android:layout_width="0dp"
+                    <TextView
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
+                        android:text="Measurement"
+                        android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
+                        android:textColor="?attr/colorOnSurface" />
 
-                        <TextView
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="Measurement"
-                            android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
-                            android:textColor="?attr/colorOnSurface" />
-
-                        <TextView
-                            android:id="@+id/measurementStatus"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="No measurement selected"
-                            android:textAppearance="@style/TextAppearance.Material3.BodySmall"
-                            android:textColor="?attr/colorOnSurfaceVariant"
-                            android:paddingTop="4dp" />
-                    </LinearLayout>
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/importFileButton"
-                        style="@style/Widget.Material3.Button.TonalButton"
-                        android:layout_width="wrap_content"
+                    <TextView
+                        android:id="@+id/measurementStatus"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:text="Import" />
+                        android:text="No measurement selected"
+                        android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                        android:textColor="?attr/colorOnSurfaceVariant"
+                        android:paddingTop="4dp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
+
+            <!-- Old measurement import button (commented out)
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/importFileButton"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Import" />
+            -->
 
             <!-- Target Selection Card (clickable, opens TargetSelectActivity) -->
             <com.google.android.material.card.MaterialCardView
@@ -204,7 +198,7 @@
                 android:id="@+id/computeButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Compute EQ"
+                android:text="Generate EQ"
                 android:enabled="false" />
 
             <!-- Result info -->
@@ -215,6 +209,16 @@
                 android:paddingTop="8dp"
                 android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                 android:textColor="?attr/colorOnSurfaceVariant"
+                android:visibility="gone" />
+
+            <!-- Export button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/exportButton"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Export as APO"
                 android:visibility="gone" />
 
         </LinearLayout>

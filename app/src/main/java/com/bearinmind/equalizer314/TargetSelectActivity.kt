@@ -50,7 +50,7 @@ class TargetSelectActivity : AppCompatActivity() {
                 setResult(Activity.RESULT_OK)
                 updateActiveCard()
                 performSearch(searchInput.text?.toString() ?: "")
-                android.widget.Toast.makeText(this, "Custom target loaded (${fr.frequencies.size} points)", android.widget.Toast.LENGTH_SHORT).show()
+                // Custom target loaded
             } else {
                 android.widget.Toast.makeText(this, "Could not parse target file", android.widget.Toast.LENGTH_LONG).show()
             }
@@ -149,8 +149,8 @@ class TargetSelectActivity : AppCompatActivity() {
         eqPrefs.saveSelectedTargetName(entry.name)
         eqPrefs.saveSelectedTargetType(entry.type)
         setResult(Activity.RESULT_OK)
-        updateActiveCard()
         android.widget.Toast.makeText(this, "Target: ${entry.name}", android.widget.Toast.LENGTH_SHORT).show()
+        updateActiveCard()
     }
 
     private fun clearTarget() {
@@ -164,11 +164,25 @@ class TargetSelectActivity : AppCompatActivity() {
     private fun updateActiveCard() {
         val name = eqPrefs.getSelectedTargetName()
         if (name.isNullOrBlank()) {
-            activeCard.visibility = View.GONE
+            if (activeCard.visibility == android.view.View.VISIBLE) {
+                activeCard.animate().alpha(0f).setDuration(200).withEndAction {
+                    activeCard.visibility = android.view.View.GONE
+                }.start()
+            }
         } else {
-            activeCard.visibility = View.VISIBLE
-            activeName.text = name
-            activeType.text = eqPrefs.getSelectedTargetType() ?: ""
+            if (activeCard.visibility == android.view.View.VISIBLE) {
+                activeCard.animate().alpha(0f).setDuration(120).withEndAction {
+                    activeName.text = name
+                    activeType.text = eqPrefs.getSelectedTargetType() ?: ""
+                    activeCard.animate().alpha(1f).setDuration(120).start()
+                }.start()
+            } else {
+                activeName.text = name
+                activeType.text = eqPrefs.getSelectedTargetType() ?: ""
+                activeCard.alpha = 0f
+                activeCard.visibility = android.view.View.VISIBLE
+                activeCard.animate().alpha(1f).setDuration(200).start()
+            }
         }
     }
 

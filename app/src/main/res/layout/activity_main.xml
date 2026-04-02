@@ -967,51 +967,90 @@
             android:paddingStart="24dp"
             android:paddingEnd="24dp">
 
-            <!-- EQ button (left) -->
-            <ImageButton
-                android:id="@+id/navPresetsButton"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:src="@drawable/ic_nav_equalizer"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="EQ"
-                android:scaleType="centerInside"
-                app:tint="?attr/colorOnSurface" />
+            <!-- EQ -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:orientation="vertical"
+                android:gravity="center">
+                <ImageButton
+                    android:id="@+id/navPresetsButton"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:src="@drawable/ic_nav_equalizer"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="EQ"
+                    android:scaleType="centerInside"
+                    app:tint="?attr/colorOnSurface" />
+                <TextView
+                    android:id="@+id/navEqStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="ON"
+                    android:textSize="8sp"
+                    android:textColor="#FF888888" />
+            </LinearLayout>
 
-            <!-- MBC button (next to EQ) -->
-            <ImageButton
-                android:id="@+id/navMbcButton"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:layout_marginStart="8dp"
-                android:src="@drawable/ic_nav_compress"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Multiband Compression"
-                android:scaleType="centerInside"
-                app:tint="?attr/colorOnSurface" />
+            <!-- MBC -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:layout_marginStart="12dp"
+                android:orientation="vertical"
+                android:gravity="center">
+                <ImageButton
+                    android:id="@+id/navMbcButton"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:src="@drawable/ic_nav_compress"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Multiband Compression"
+                    android:scaleType="centerInside"
+                    app:tint="?attr/colorOnSurface" />
+                <TextView
+                    android:id="@+id/navMbcStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="OFF"
+                    android:textSize="8sp"
+                    android:textColor="#FF888888" />
+            </LinearLayout>
 
-            <!-- Limiter button -->
-            <ImageButton
-                android:id="@+id/navLimiterButton"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:layout_marginStart="8dp"
-                android:src="@drawable/ic_nav_limiter"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Limiter"
-                android:scaleType="centerInside"
-                app:tint="?attr/colorOnSurface" />
+            <!-- Limiter -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:layout_marginStart="12dp"
+                android:orientation="vertical"
+                android:gravity="center">
+                <ImageButton
+                    android:id="@+id/navLimiterButton"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:src="@drawable/ic_nav_limiter"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Limiter"
+                    android:scaleType="centerInside"
+                    app:tint="?attr/colorOnSurface" />
+                <TextView
+                    android:id="@+id/navLimiterStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="ON"
+                    android:textSize="8sp"
+                    android:textColor="#FF888888" />
+            </LinearLayout>
 
             <View
                 android:layout_width="0dp"
                 android:layout_height="0dp"
                 android:layout_weight="1" />
 
-            <!-- Settings button (right) -->
+            <!-- Settings -->
             <ImageButton
                 android:id="@+id/navSettingsButton"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
                 android:src="@drawable/ic_nav_settings"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="Settings"
@@ -1027,6 +1066,8 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal|bottom"
             android:layout_marginBottom="28dp"
+            android:clickable="true"
+            android:focusable="true"
             android:src="@drawable/ic_nav_power"
             android:contentDescription="Power"
             app:fabSize="normal"

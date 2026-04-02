@@ -50,7 +50,7 @@ class AutoEqActivity : AppCompatActivity() {
             }
             val fileName = uri.lastPathSegment?.substringAfterLast("/")?.substringBeforeLast(".") ?: "APO Import"
             eqPrefs.addImportedPreset(fileName, text)
-            Toast.makeText(this, "Imported: $fileName", Toast.LENGTH_SHORT).show()
+            // Imported successfully
             performSearch(searchInput.text?.toString() ?: "")
         } catch (e: Exception) {
             Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -163,17 +163,32 @@ class AutoEqActivity : AppCompatActivity() {
         eqPrefs.saveAutoEqName("")
         eqPrefs.saveAutoEqSource("")
         updateActiveCard()
-        Toast.makeText(this, "AutoEQ cleared", Toast.LENGTH_SHORT).show()
+        // Cleared
     }
 
     private fun updateActiveCard() {
         val name = eqPrefs.getAutoEqName()
         if (name.isNullOrBlank()) {
-            activeCard.visibility = View.GONE
+            if (activeCard.visibility == View.VISIBLE) {
+                activeCard.animate().alpha(0f).setDuration(200).withEndAction {
+                    activeCard.visibility = View.GONE
+                }.start()
+            }
         } else {
-            activeCard.visibility = View.VISIBLE
-            activeName.text = name
-            activeSource.text = "by ${eqPrefs.getAutoEqSource()}"
+            if (activeCard.visibility == View.VISIBLE) {
+                // Already showing — crossfade the text
+                activeCard.animate().alpha(0f).setDuration(120).withEndAction {
+                    activeName.text = name
+                    activeSource.text = "by ${eqPrefs.getAutoEqSource()}"
+                    activeCard.animate().alpha(1f).setDuration(120).start()
+                }.start()
+            } else {
+                activeName.text = name
+                activeSource.text = "by ${eqPrefs.getAutoEqSource()}"
+                activeCard.alpha = 0f
+                activeCard.visibility = View.VISIBLE
+                activeCard.animate().alpha(1f).setDuration(200).start()
+            }
         }
     }
 

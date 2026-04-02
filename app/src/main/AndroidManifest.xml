@@ -50,6 +50,11 @@
             android:theme="@style/Theme.Equalizer314" />
 
         <activity
+            android:name="com.bearinmind.equalizer314.MeasurementSelectActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Equalizer314" />
+
+        <activity
             android:name="com.bearinmind.equalizer314.TargetSelectActivity"
             android:exported="false"
             android:theme="@style/Theme.Equalizer314" />

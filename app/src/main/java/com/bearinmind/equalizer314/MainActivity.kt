@@ -198,6 +198,7 @@ class MainActivity : AppCompatActivity() {
         initViews()
         initControllers()
         initEQ()
+        syncPreampUI()
         setupListeners()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -278,13 +279,15 @@ class MainActivity : AppCompatActivity() {
         eqGraphView.showDpBands = true
         eqGraphView.showSaturationCurve = false
 
-        // Init settings controls from saved state
+        updateBottomBarHighlight(isEqPage = true)
+    }
+
+    /** Called after initEQ() to sync preamp UI with restored state */
+    private fun syncPreampUI() {
         preampSlider.value = stateManager.preampGainDb.coerceIn(-12f, 12f)
         preampText.setText(String.format("%.1f", stateManager.preampGainDb))
         autoGainSwitch.isChecked = stateManager.autoGainEnabled
         updateAutoGainOffsetText()
-
-        updateBottomBarHighlight(isEqPage = true)
     }
 
     private fun initControllers() {
@@ -374,15 +377,6 @@ class MainActivity : AppCompatActivity() {
         }
         val navMbcBtn = findViewById<ImageButton>(R.id.navMbcButton)
         val navLimiterBtn = findViewById<ImageButton>(R.id.navLimiterButton)
-        // Set icon tints based on saved enabled state
-        navMbcBtn.imageTintList = android.content.res.ColorStateList.valueOf(
-            if (eqPrefs.getMbcEnabled()) com.google.android.material.color.MaterialColors.getColor(navMbcBtn, com.google.android.material.R.attr.colorPrimary, 0xFFBB86FC.toInt())
-            else 0xFF555555.toInt()
-        )
-        navLimiterBtn.imageTintList = android.content.res.ColorStateList.valueOf(
-            if (eqPrefs.getLimiterEnabled()) com.google.android.material.color.MaterialColors.getColor(navLimiterBtn, com.google.android.material.R.attr.colorPrimary, 0xFFBB86FC.toInt())
-            else 0xFF555555.toInt()
-        )
         navMbcBtn.setOnClickListener {
             startActivity(Intent(this, MbcActivity::class.java))
             overridePendingTransition(0, 0)
@@ -1270,13 +1264,35 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateBottomBarHighlight(isEqPage: Boolean) {
         val activeColor = 0xFFDDDDDD.toInt()
-        // EQ icon always bright
-        navPresetsButton.setColorFilter(activeColor)
-        // Settings icon highlights when on settings page
-        navSettingsButton.setColorFilter(if (isEqPage) 0xFF666666.toInt() else activeColor)
-        // MBC and Limiter — clear color filter so imageTintList takes effect
-        findViewById<ImageButton>(R.id.navMbcButton).clearColorFilter()
-        findViewById<ImageButton>(R.id.navLimiterButton).clearColorFilter()
+        val dimColor = 0xFF666666.toInt()
+        // EQ is the current screen when isEqPage is true
+        navPresetsButton.setColorFilter(if (isEqPage) activeColor else dimColor)
+        navSettingsButton.setColorFilter(if (isEqPage) dimColor else activeColor)
+        // MBC and Limiter are always dim on this screen (they're separate Activities)
+        findViewById<ImageButton>(R.id.navMbcButton).setColorFilter(dimColor)
+        findViewById<ImageButton>(R.id.navLimiterButton).setColorFilter(dimColor)
+        // Update ON/OFF status text
+        updateNavStatusTexts()
+    }
+
+    private fun updateNavStatusTexts() {
+        val eqOn = stateManager.parametricEq.isEnabled
+        val mbcOn = eqPrefs.getMbcEnabled()
+        val limiterOn = eqPrefs.getLimiterEnabled()
+        val onColor = 0xFFDDDDDD.toInt()
+        val offColor = 0xFF888888.toInt()
+        findViewById<TextView>(R.id.navEqStatus).apply {
+            text = if (eqOn) "ON" else "OFF"
+            setTextColor(if (eqOn) onColor else offColor)
+        }
+        findViewById<TextView>(R.id.navMbcStatus).apply {
+            text = if (mbcOn) "ON" else "OFF"
+            setTextColor(if (mbcOn) onColor else offColor)
+        }
+        findViewById<TextView>(R.id.navLimiterStatus).apply {
+            text = if (limiterOn) "ON" else "OFF"
+            setTextColor(if (limiterOn) onColor else offColor)
+        }
     }
 
     private fun updateEqToggleUI() {
@@ -1399,7 +1415,12 @@ class MainActivity : AppCompatActivity() {
         if (stateManager.serviceBound && stateManager.eqService != null) {
             stateManager.isProcessing = stateManager.eqService!!.dynamicsManager.isActive
         } else {
-            stateManager.isProcessing = false
+            // Try to rebind the service in case it was started by another screen
+            try {
+                val intent = Intent(this, EqService::class.java)
+                bindService(intent, stateManager.serviceConnection, BIND_AUTO_CREATE)
+                // onServiceConnected will update isProcessing and FAB via onProcessingChanged
+            } catch (_: Exception) {}
         }
         // Set power FAB immediately (no animation) to avoid flicker
         if (stateManager.isProcessing) {
@@ -1419,17 +1440,8 @@ class MainActivity : AppCompatActivity() {
             visualizerHelper.start(eqGraphView)
             eqGraphView.spectrumRenderer = visualizerHelper.renderer
         }
-        // Refresh MBC/Limiter nav icon tints
-        val navMbc = findViewById<ImageButton>(R.id.navMbcButton)
-        val navLimiter = findViewById<ImageButton>(R.id.navLimiterButton)
-        navMbc.imageTintList = android.content.res.ColorStateList.valueOf(
-            if (eqPrefs.getMbcEnabled()) com.google.android.material.color.MaterialColors.getColor(navMbc, com.google.android.material.R.attr.colorPrimary, 0xFFBB86FC.toInt())
-            else 0xFF555555.toInt()
-        )
-        navLimiter.imageTintList = android.content.res.ColorStateList.valueOf(
-            if (eqPrefs.getLimiterEnabled()) com.google.android.material.color.MaterialColors.getColor(navLimiter, com.google.android.material.R.attr.colorPrimary, 0xFFBB86FC.toInt())
-            else 0xFF555555.toInt()
-        )
+        // Refresh ON/OFF status under nav icons
+        updateNavStatusTexts()
         updateAutoEqStatus()
         updateTargetStatus()
     }

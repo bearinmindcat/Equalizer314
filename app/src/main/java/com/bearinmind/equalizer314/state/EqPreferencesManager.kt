@@ -85,7 +85,7 @@ class EqPreferencesManager(context: Context) {
         prefs.edit().putInt("dpBandCount", count).apply()
     }
 
-    fun getDpBandCount(): Int = prefs.getInt("dpBandCount", 31)
+    fun getDpBandCount(): Int = prefs.getInt("dpBandCount", 128)
 
     fun saveEqUiMode(mode: String) {
         prefs.edit().putString("eqUiMode", mode).apply()
@@ -178,6 +178,29 @@ class EqPreferencesManager(context: Context) {
         val arr = org.json.JSONArray(str)
         return (0 until arr.length()).map { arr.getString(it) }
     }
+
+    // Imported measurements
+    fun addImportedMeasurement(name: String, rawText: String) {
+        val list = getImportedMeasurements().toMutableList()
+        list.removeAll { it == name }
+        list.add(0, name)
+        prefs.edit()
+            .putString("importedMeasurements", org.json.JSONArray(list).toString())
+            .putString("importedMeas_$name", rawText)
+            .apply()
+    }
+    fun getImportedMeasurementText(name: String): String? = prefs.getString("importedMeas_$name", null)
+    fun getImportedMeasurements(): List<String> {
+        val str = prefs.getString("importedMeasurements", null) ?: return emptyList()
+        val arr = org.json.JSONArray(str)
+        return (0 until arr.length()).map { arr.getString(it) }
+    }
+
+    // Selected measurement
+    fun saveSelectedMeasurement(name: String) { prefs.edit().putString("selectedMeasurement", name).apply() }
+    fun getSelectedMeasurement(): String? = prefs.getString("selectedMeasurement", null)
+    fun saveSelectedMeasurementInfo(info: String) { prefs.edit().putString("selectedMeasurementInfo", info).apply() }
+    fun getSelectedMeasurementInfo(): String? = prefs.getString("selectedMeasurementInfo", null)
 
     // Target
     fun saveSelectedTarget(file: String) { prefs.edit().putString("selectedTarget", file).apply() }

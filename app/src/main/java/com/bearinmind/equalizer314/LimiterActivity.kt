@@ -155,6 +155,8 @@ class LimiterActivity : AppCompatActivity() {
                 pushToService()
             }
             updateFabStyle()
+            val on = svc.dynamicsManager.isActive
+            android.widget.Toast.makeText(this, if (on) "Equalizer314 is On" else "Equalizer314 is Off", android.widget.Toast.LENGTH_SHORT).show()
         }
         // Default to "off" style — onServiceConnected will update if DP is active
         powerFab.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF2A2A2A.toInt())
@@ -482,6 +484,31 @@ class LimiterActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Update power FAB to match current state
+        val powerFab = findViewById<com.google.android.material.floatingactionbutton.FloatingActionButton>(R.id.powerFab)
+        val isOn = eqService != null && eqService!!.dynamicsManager.isActive
+        if (isOn) {
+            powerFab.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFFFFFFF.toInt())
+            powerFab.imageTintList = android.content.res.ColorStateList.valueOf(0xFF000000.toInt())
+        } else {
+            powerFab.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF2A2A2A.toInt())
+            powerFab.imageTintList = android.content.res.ColorStateList.valueOf(0xFF555555.toInt())
+        }
+        // Update nav icon highlights — Limiter is the current screen
+        val dimColor = 0xFF666666.toInt()
+        val activeColor = 0xFFDDDDDD.toInt()
+        findViewById<android.widget.ImageButton>(R.id.navPresetsButton).setColorFilter(dimColor)
+        findViewById<android.widget.ImageButton>(R.id.navMbcButton).setColorFilter(dimColor)
+        findViewById<android.widget.ImageButton>(R.id.navLimiterButton).setColorFilter(activeColor)
+        findViewById<android.widget.ImageButton>(R.id.navSettingsButton).setColorFilter(dimColor)
+        // Update ON/OFF status
+        val onColor = 0xFFDDDDDD.toInt()
+        val offColor = 0xFF888888.toInt()
+        val mbcOn = eqPrefs.getMbcEnabled()
+        val limiterOn = eqPrefs.getLimiterEnabled()
+        findViewById<android.widget.TextView>(R.id.navEqStatus).apply { text = "ON"; setTextColor(onColor) }
+        findViewById<android.widget.TextView>(R.id.navMbcStatus).apply { text = if (mbcOn) "ON" else "OFF"; setTextColor(if (mbcOn) onColor else offColor) }
+        findViewById<android.widget.TextView>(R.id.navLimiterStatus).apply { text = if (limiterOn) "ON" else "OFF"; setTextColor(if (limiterOn) onColor else offColor) }
         if (visualizer == null) startMetering()
     }
 
