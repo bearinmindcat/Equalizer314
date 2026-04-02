@@ -149,6 +149,44 @@ class EqPreferencesManager(context: Context) {
     fun saveSpectrumEnabled(enabled: Boolean) { prefs.edit().putBoolean("spectrumEnabled", enabled).apply() }
     fun getSpectrumEnabled(): Boolean = prefs.getBoolean("spectrumEnabled", false)
 
+    // Imported presets (stored as JSON array of names + raw text stored per preset)
+    fun addImportedPreset(name: String, rawText: String) {
+        val list = getImportedPresets().toMutableList()
+        list.removeAll { it == name }
+        list.add(0, name)
+        prefs.edit()
+            .putString("importedPresets", org.json.JSONArray(list).toString())
+            .putString("importedPreset_$name", rawText)
+            .apply()
+    }
+    fun getImportedPresetText(name: String): String? = prefs.getString("importedPreset_$name", null)
+    fun getImportedPresets(): List<String> {
+        val str = prefs.getString("importedPresets", null) ?: return emptyList()
+        val arr = org.json.JSONArray(str)
+        return (0 until arr.length()).map { arr.getString(it) }
+    }
+
+    // Imported targets (stored as JSON array of names)
+    fun addImportedTarget(name: String) {
+        val list = getImportedTargets().toMutableList()
+        list.removeAll { it == name }
+        list.add(0, name)
+        prefs.edit().putString("importedTargets", org.json.JSONArray(list).toString()).apply()
+    }
+    fun getImportedTargets(): List<String> {
+        val str = prefs.getString("importedTargets", null) ?: return emptyList()
+        val arr = org.json.JSONArray(str)
+        return (0 until arr.length()).map { arr.getString(it) }
+    }
+
+    // Target
+    fun saveSelectedTarget(file: String) { prefs.edit().putString("selectedTarget", file).apply() }
+    fun getSelectedTarget(): String? = prefs.getString("selectedTarget", null)
+    fun saveSelectedTargetName(name: String) { prefs.edit().putString("selectedTargetName", name).apply() }
+    fun getSelectedTargetName(): String? = prefs.getString("selectedTargetName", null)
+    fun saveSelectedTargetType(type: String) { prefs.edit().putString("selectedTargetType", type).apply() }
+    fun getSelectedTargetType(): String? = prefs.getString("selectedTargetType", null)
+
     // AutoEQ
     fun saveAutoEqName(name: String) { prefs.edit().putString("autoEqName", name).apply() }
     fun getAutoEqName(): String? = prefs.getString("autoEqName", null)

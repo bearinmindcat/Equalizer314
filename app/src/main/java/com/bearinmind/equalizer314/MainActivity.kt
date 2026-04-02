@@ -50,20 +50,65 @@ class MainActivity : AppCompatActivity() {
     private lateinit var bandToggleManager: BandToggleManager
     private val visualizerHelper = com.bearinmind.equalizer314.audio.VisualizerHelper()
 
+    private fun reloadEqFromPrefs() {
+        stateManager.initEq(eqGraphView)
+        stateManager.preampGainDb = eqPrefs.getPreampGain()
+        preampSlider.value = stateManager.preampGainDb.coerceIn(-12f, 12f)
+        preampText.setText(String.format("%.1f", stateManager.preampGainDb))
+        eqGraphView.updateBandLevels()
+        bandToggleManager.setupToggles()
+        stateManager.updateDpBandVisualization(eqGraphView)
+        stateManager.pushEqUpdate()
+        val preset = eqPrefs.getPresetName()
+        presetDropdown.setText(preset, false)
+        updateAutoEqStatus()
+        // Re-apply current mode visibility (toggles may have been rebuilt)
+        if (stateManager.currentEqUiMode == EqUiMode.TABLE) {
+            bandToggleGroup.visibility = View.GONE
+            bandToggleGroup2.visibility = View.GONE
+            tableController.buildTable()
+        }
+    }
+
     private val autoEqLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == RESULT_OK) {
-            // Reload EQ state from preferences (AutoEqActivity saved the profile)
-            stateManager.initEq(eqGraphView)
-            stateManager.preampGainDb = eqPrefs.getPreampGain()
-            preampSlider.value = stateManager.preampGainDb.coerceIn(-12f, 12f)
-            preampText.setText(String.format("%.1f", stateManager.preampGainDb))
-            eqGraphView.updateBandLevels()
-            bandToggleManager.setupToggles()
-            stateManager.updateDpBandVisualization(eqGraphView)
-            stateManager.pushEqUpdate()
-            val preset = eqPrefs.getPresetName()
-            presetDropdown.setText(preset, false)
-            updateAutoEqStatus()
+        if (result.resultCode == RESULT_OK) reloadEqFromPrefs()
+    }
+
+    private val targetCurveLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) reloadEqFromPrefs()
+    }
+
+    private val apoImportLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri == null) return@registerForActivityResult
+        try {
+            val text = contentResolver.openInputStream(uri)?.bufferedReader()?.readText() ?: return@registerForActivityResult
+            val profile = com.bearinmind.equalizer314.autoeq.AutoEqParser.parse(text)
+            if (profile == null || profile.filters.isEmpty()) {
+                android.widget.Toast.makeText(this, "Could not parse APO preset", android.widget.Toast.LENGTH_LONG).show()
+                return@registerForActivityResult
+            }
+            // Apply profile
+            val eq = com.bearinmind.equalizer314.dsp.ParametricEqualizer()
+            eq.clearBands()
+            for (filter in profile.filters) {
+                val filterType = when (filter.filterType) {
+                    "LSC" -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.LOW_SHELF
+                    "HSC" -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.HIGH_SHELF
+                    else -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.BELL
+                }
+                eq.addBand(filter.frequency, filter.gain, filterType, filter.q.toDouble())
+            }
+            eq.isEnabled = true
+            val slots = (0 until eq.getBandCount()).toList()
+            eqPrefs.saveState(eq, slots)
+            eqPrefs.savePreampGain(profile.preampDb)
+            eqPrefs.savePresetName("APO Import")
+            eqPrefs.saveAutoEqName("")
+            eqPrefs.saveAutoEqSource("")
+            reloadEqFromPrefs()
+            android.widget.Toast.makeText(this, "Applied ${profile.filters.size} filters", android.widget.Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            android.widget.Toast.makeText(this, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -523,8 +568,24 @@ class MainActivity : AppCompatActivity() {
             statusText.setTextColor(com.google.android.material.color.MaterialColors.getColor(
                 statusText, com.google.android.material.R.attr.colorPrimary, 0xFFBB86FC.toInt()))
         } else {
-            statusText.text = "Select a headphone profile for frequency response correction"
-            statusText.setTextColor(resources.getColor(com.google.android.material.R.color.material_on_surface_disabled, theme))
+            statusText.text = "Select or import a preset"
+            statusText.setTextColor(com.google.android.material.color.MaterialColors.getColor(
+                statusText, com.google.android.material.R.attr.colorOnSurfaceVariant, 0xFF888888.toInt()))
+        }
+    }
+
+    private fun updateTargetStatus() {
+        val name = eqPrefs.getSelectedTargetName()
+        val statusText = findViewById<TextView>(R.id.targetStatusText)
+        if (!name.isNullOrBlank()) {
+            val type = eqPrefs.getSelectedTargetType() ?: ""
+            statusText.text = if (type.isNotBlank()) "$name \u00B7 $type" else name
+            statusText.setTextColor(com.google.android.material.color.MaterialColors.getColor(
+                statusText, com.google.android.material.R.attr.colorPrimary, 0xFFBB86FC.toInt()))
+        } else {
+            statusText.text = "Import a measurement and match to a specific target"
+            statusText.setTextColor(com.google.android.material.color.MaterialColors.getColor(
+                statusText, com.google.android.material.R.attr.colorOnSurfaceVariant, 0xFF888888.toInt()))
         }
     }
 
@@ -545,6 +606,11 @@ class MainActivity : AppCompatActivity() {
         // AutoEQ card (settings page)
         findViewById<View>(R.id.autoEqCard).setOnClickListener {
             autoEqLauncher.launch(Intent(this, AutoEqActivity::class.java))
+            overridePendingTransition(0, 0)
+        }
+        // Target card (settings page) — opens Target Curve screen
+        findViewById<View>(R.id.targetCard).setOnClickListener {
+            targetCurveLauncher.launch(Intent(this, TargetCurveActivity::class.java))
             overridePendingTransition(0, 0)
         }
 
@@ -1336,6 +1402,7 @@ class MainActivity : AppCompatActivity() {
             else 0xFF555555.toInt()
         )
         updateAutoEqStatus()
+        updateTargetStatus()
     }
 
     override fun onPause() {

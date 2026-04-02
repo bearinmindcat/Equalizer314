@@ -1,0 +1,387 @@
+[
+  {
+    "file": "711_5128_delta",
+    "name": "711 5128 Delta",
+    "type": "Rig-Specific"
+  },
+  {
+    "file": "all_harman_targets",
+    "name": "All Harman Targets",
+    "type": "Preference"
+  },
+  {
+    "file": "antdroid_target",
+    "name": "Antdroid Target",
+    "type": "Reviewer"
+  },
+  {
+    "file": "autoeq_in-ear",
+    "name": "AUTOEQ In Ear",
+    "type": "Neutral"
+  },
+  {
+    "file": "bad_guy_target",
+    "name": "Bad Guy Target",
+    "type": "Reviewer"
+  },
+  {
+    "file": "banbeucmas_target",
+    "name": "Banbeucmas Target",
+    "type": "Reviewer"
+  },
+  {
+    "file": "crinacle_ears___711_harman_over-ear_2018",
+    "name": "Crinacle Ears 711 Harman Over Ear 2018",
+    "type": "Preference"
+  },
+  {
+    "file": "crinacle_ears___711_harman_over-ear_2018_without_bass",
+    "name": "Crinacle Ears 711 Harman Over Ear 2018 Without Bass",
+    "type": "Preference"
+  },
+  {
+    "file": "crinacle_target",
+    "name": "Crinacle Target",
+    "type": "Reviewer"
+  },
+  {
+    "file": "diffuse_field_5128",
+    "name": "Diffuse Field 5128",
+    "type": "Neutral"
+  },
+  {
+    "file": "diffuse_field_5128_-1db_per_octave",
+    "name": "Diffuse Field 5128 1db Per Octave",
+    "type": "Neutral"
+  },
+  {
+    "file": "diffuse_field_gras_kemar",
+    "name": "Diffuse Field GRAS KEMAR",
+    "type": "Neutral"
+  },
+  {
+    "file": "diffuse_field_iso_11904-1",
+    "name": "Diffuse Field ISO 11904 1",
+    "type": "Neutral"
+  },
+  {
+    "file": "diffuse_field_target",
+    "name": "Diffuse Field Target",
+    "type": "Neutral"
+  },
+  {
+    "file": "etymotic_target",
+    "name": "Etymotic Target",
+    "type": "Neutral"
+  },
+  {
+    "file": "flat",
+    "name": "Flat",
+    "type": "Neutral"
+  },
+  {
+    "file": "free_field_target",
+    "name": "Free Field Target",
+    "type": "Neutral"
+  },
+  {
+    "file": "harman_in-ear_2016",
+    "name": "Harman In Ear 2016",
+    "type": "Preference"
+  },
+  {
+    "file": "harman_in-ear_2016_without_bass",
+    "name": "Harman In Ear 2016 Without Bass",
+    "type": "Preference"
+  },
+  {
+    "file": "harman_in-ear_2017-1",
+    "name": "Harman In Ear 2017 1",
+    "type": "Preference"
+  },
+  {
+    "file": "harman_in-ear_2017-1_without_bass",
+    "name": "Harman In Ear 2017 1 Without Bass",
+    "type": "Preference"
+  },
+  {
+    "file": "harman_in-ear_2017-2",
+    "name": "Harman In Ear 2017 2",
+    "type": "Preference"
+  },
+  {
+    "file": "harman_in-ear_2017-2_without_bass",
+    "name": "Harman In Ear 2017 2 Without Bass",
+    "type": "Preference"
+  },
+  {
+    "file": "harman_in-ear_2019",
+    "name": "Harman In Ear 2019",
+    "type": "Preference"
+  },
+  {
+    "file": "harman_in-ear_2019_without_bass",
+    "name": "Harman In Ear 2019 Without Bass",
+    "type": "Preference"
+  },
+  {
+    "file": "harman_loudspeaker_in-room_flat_2013",
+    "name": "Harman Loudspeaker In Room Flat 2013",
+    "type": "Preference"
+  },
+  {
+    "file": "harman_over-ear_2013",
+    "name": "Harman Over Ear 2013",
+    "type": "Preference"
+  },
+  {
+    "file": "harman_over-ear_2013_without_bass",
+    "name": "Harman Over Ear 2013 Without Bass",
+    "type": "Preference"
+  },
+  {
+    "file": "harman_over-ear_2015",
+    "name": "Harman Over Ear 2015",
+    "type": "Preference"
+  },
+  {
+    "file": "harman_over-ear_2015_without_bass",
+    "name": "Harman Over Ear 2015 Without Bass",
+    "type": "Preference"
+  },
+  {
+    "file": "harman_over-ear_2018",
+    "name": "Harman Over Ear 2018",
+    "type": "Preference"
+  },
+  {
+    "file": "harman_over-ear_2018_without_bass",
+    "name": "Harman Over Ear 2018 Without Bass",
+    "type": "Preference"
+  },
+  {
+    "file": "harman_target",
+    "name": "Harman Target",
+    "type": "Preference"
+  },
+  {
+    "file": "headphone_com_legacy_autoeq_in-ear",
+    "name": "Headphone Com Legacy AUTOEQ In Ear",
+    "type": "Neutral"
+  },
+  {
+    "file": "headphone_com_legacy_harman_in-ear_2019",
+    "name": "Headphone Com Legacy Harman In Ear 2019",
+    "type": "Preference"
+  },
+  {
+    "file": "headphone_com_legacy_harman_in-ear_2019_without_bass",
+    "name": "Headphone Com Legacy Harman In Ear 2019 Without Bass",
+    "type": "Preference"
+  },
+  {
+    "file": "headphone_com_legacy_harman_over-ear_2018",
+    "name": "Headphone Com Legacy Harman Over Ear 2018",
+    "type": "Preference"
+  },
+  {
+    "file": "headphone_com_legacy_harman_over-ear_2018_without_bass",
+    "name": "Headphone Com Legacy Harman Over Ear 2018 Without Bass",
+    "type": "Preference"
+  },
+  {
+    "file": "headphone_com_legacy_original",
+    "name": "Headphone Com Legacy Original",
+    "type": "Rig-Specific"
+  },
+  {
+    "file": "headphone_com_legacy_sbaf-serious",
+    "name": "Headphone Com Legacy SBAF Serious",
+    "type": "Preference"
+  },
+  {
+    "file": "hms_ii_3_autoeq_in-ear",
+    "name": "HMS II 3 AUTOEQ In Ear",
+    "type": "Neutral"
+  },
+  {
+    "file": "hms_ii_3_harman_in-ear_2019_without_bass",
+    "name": "HMS II 3 Harman In Ear 2019 Without Bass",
+    "type": "Preference"
+  },
+  {
+    "file": "hms_ii_3_harman_over-ear_2018_without_bass",
+    "name": "HMS II 3 Harman Over Ear 2018 Without Bass",
+    "type": "Preference"
+  },
+  {
+    "file": "ief_harman_target",
+    "name": "IEF Harman Target",
+    "type": "Preference"
+  },
+  {
+    "file": "ief_neutral_target",
+    "name": "IEF Neutral Target",
+    "type": "Reviewer"
+  },
+  {
+    "file": "innerfidelity_2016",
+    "name": "Innerfidelity 2016",
+    "type": "Reviewer"
+  },
+  {
+    "file": "innerfidelity_2017",
+    "name": "Innerfidelity 2017",
+    "type": "Reviewer"
+  },
+  {
+    "file": "innerfidelity_autoeq_in-ear",
+    "name": "Innerfidelity AUTOEQ In Ear",
+    "type": "Reviewer"
+  },
+  {
+    "file": "innerfidelity_harman_in-ear_2019",
+    "name": "Innerfidelity Harman In Ear 2019",
+    "type": "Preference"
+  },
+  {
+    "file": "innerfidelity_harman_in-ear_2019_without_bass",
+    "name": "Innerfidelity Harman In Ear 2019 Without Bass",
+    "type": "Preference"
+  },
+  {
+    "file": "innerfidelity_harman_over-ear_2018",
+    "name": "Innerfidelity Harman Over Ear 2018",
+    "type": "Preference"
+  },
+  {
+    "file": "innerfidelity_harman_over-ear_2018_without_bass",
+    "name": "Innerfidelity Harman Over Ear 2018 Without Bass",
+    "type": "Preference"
+  },
+  {
+    "file": "innerfidelity_id_target",
+    "name": "Innerfidelity ID Target",
+    "type": "Reviewer"
+  },
+  {
+    "file": "innerfidelity_sbaf_serious",
+    "name": "Innerfidelity SBAF Serious",
+    "type": "Reviewer"
+  },
+  {
+    "file": "innerfidelity_transformation_2016_to_2017",
+    "name": "Innerfidelity Transformation 2016 To 2017",
+    "type": "Reviewer"
+  },
+  {
+    "file": "jm-1_with_harman_filters",
+    "name": "JM 1 With Harman Filters",
+    "type": "Preference"
+  },
+  {
+    "file": "jm-1_with_harman_treble_filter",
+    "name": "JM 1 With Harman Treble Filter",
+    "type": "Preference"
+  },
+  {
+    "file": "lmg_5128_0_6",
+    "name": "LMG 5128 0 6",
+    "type": "Preference"
+  },
+  {
+    "file": "lmg_5128_0_6_without_bass",
+    "name": "LMG 5128 0 6 Without Bass",
+    "type": "Preference"
+  },
+  {
+    "file": "oratory1990_in-ear",
+    "name": "Oratory1990 In Ear",
+    "type": "Reviewer"
+  },
+  {
+    "file": "oratory1990_in-ear_without_bass",
+    "name": "Oratory1990 In Ear Without Bass",
+    "type": "Reviewer"
+  },
+  {
+    "file": "oratory1990_optimum_hifi_over-ear",
+    "name": "Oratory1990 Optimum Hifi Over Ear",
+    "type": "Reviewer"
+  },
+  {
+    "file": "precogvision_target",
+    "name": "Precogvision Target",
+    "type": "Reviewer"
+  },
+  {
+    "file": "rtings_autoeq_in-ear",
+    "name": "RTINGS AUTOEQ In Ear",
+    "type": "Reviewer"
+  },
+  {
+    "file": "rtings_harman_in-ear_2019",
+    "name": "RTINGS Harman In Ear 2019",
+    "type": "Preference"
+  },
+  {
+    "file": "rtings_harman_in-ear_2019_without_bass",
+    "name": "RTINGS Harman In Ear 2019 Without Bass",
+    "type": "Preference"
+  },
+  {
+    "file": "rtings_harman_over-ear_2018",
+    "name": "RTINGS Harman Over Ear 2018",
+    "type": "Preference"
+  },
+  {
+    "file": "rtings_harman_over-ear_2018_without_bass",
+    "name": "RTINGS Harman Over Ear 2018 Without Bass",
+    "type": "Preference"
+  },
+  {
+    "file": "rtings_in-ear_origianl_with_bass",
+    "name": "RTINGS In Ear Origianl With Bass",
+    "type": "Reviewer"
+  },
+  {
+    "file": "rtings_orginal_average",
+    "name": "RTINGS Orginal Average",
+    "type": "Reviewer"
+  },
+  {
+    "file": "rtings_original",
+    "name": "RTINGS Original",
+    "type": "Reviewer"
+  },
+  {
+    "file": "rtings_original_with_bass",
+    "name": "RTINGS Original With Bass",
+    "type": "Reviewer"
+  },
+  {
+    "file": "rtings_sbaf-serious",
+    "name": "RTINGS SBAF Serious",
+    "type": "Reviewer"
+  },
+  {
+    "file": "rtings_target",
+    "name": "RTINGS Target",
+    "type": "Reviewer"
+  },
+  {
+    "file": "sonarworks_target",
+    "name": "Sonarworks Target",
+    "type": "Preference"
+  },
+  {
+    "file": "super_review_target",
+    "name": "Super Review Target",
+    "type": "Reviewer"
+  },
+  {
+    "file": "zero",
+    "name": "Zero",
+    "type": "Neutral"
+  }
+]

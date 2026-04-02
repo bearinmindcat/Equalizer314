@@ -19,7 +19,7 @@
         android:paddingBottom="8dp">
 
         <ImageButton
-            android:id="@+id/autoEqBackButton"
+            android:id="@+id/targetBackButton"
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:src="@drawable/ic_arrow_back"
@@ -31,7 +31,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="AutoEQ"
+            android:text="Target"
             android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
             android:textColor="?attr/colorOnSurface"
             android:paddingStart="8dp" />
@@ -57,7 +57,7 @@
             style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
 
             <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/autoEqSearchInput"
+                android:id="@+id/targetSearchInput"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:hint="Search..."
@@ -68,7 +68,7 @@
         </com.google.android.material.textfield.TextInputLayout>
 
         <TextView
-            android:id="@+id/autoEqImportButton"
+            android:id="@+id/targetImportButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_vertical|end"
@@ -85,7 +85,7 @@
 
     <!-- Result count -->
     <TextView
-        android:id="@+id/autoEqResultCount"
+        android:id="@+id/targetResultCount"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:paddingStart="20dp"
@@ -95,11 +95,11 @@
         android:gravity="end"
         android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
         android:textColor="#FF555555"
-        android:text="8850 presets" />
+        android:text="77 targets" />
 
-    <!-- Currently active profile -->
+    <!-- Currently active target -->
     <LinearLayout
-        android:id="@+id/autoEqActiveCard"
+        android:id="@+id/targetActiveCard"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
@@ -118,14 +118,14 @@
             android:orientation="vertical">
 
             <TextView
-                android:id="@+id/autoEqActiveName"
+                android:id="@+id/targetActiveName"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textAppearance="@style/TextAppearance.Material3.TitleSmall"
                 android:textColor="?attr/colorOnSurface" />
 
             <TextView
-                android:id="@+id/autoEqActiveSource"
+                android:id="@+id/targetActiveType"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
@@ -133,18 +133,18 @@
         </LinearLayout>
 
         <ImageButton
-            android:id="@+id/autoEqClearButton"
+            android:id="@+id/targetClearButton"
             android:layout_width="36dp"
             android:layout_height="36dp"
             android:src="@android:drawable/ic_menu_close_clear_cancel"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Clear AutoEQ"
+            android:contentDescription="Clear target"
             app:tint="?attr/colorOnSurfaceVariant" />
     </LinearLayout>
 
     <!-- Results list -->
     <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/autoEqRecyclerView"
+        android:id="@+id/targetRecyclerView"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"

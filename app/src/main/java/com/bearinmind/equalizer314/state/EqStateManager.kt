@@ -115,16 +115,9 @@ class EqStateManager(
             bandSlots.addAll(savedSlots)
             return
         }
-        val defaults = allDefaultFrequencies
-        val usedSlots = mutableSetOf<Int>()
+        // Default: sequential slots 0, 1, 2, ...
         for (i in 0 until eq.getBandCount()) {
-            val freq = eq.getBand(i)?.frequency ?: 0f
-            val slot = defaults.indices
-                .filter { it !in usedSlots }
-                .minByOrNull { kotlin.math.abs(defaults[it] - freq) }
-                ?: i
-            bandSlots.add(slot)
-            usedSlots.add(slot)
+            bandSlots.add(i)
         }
     }
 

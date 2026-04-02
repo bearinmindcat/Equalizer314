@@ -45,6 +45,16 @@
             android:theme="@style/Theme.Equalizer314" />
 
         <activity
+            android:name="com.bearinmind.equalizer314.TargetCurveActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Equalizer314" />
+
+        <activity
+            android:name="com.bearinmind.equalizer314.TargetSelectActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Equalizer314" />
+
+        <activity
             android:name="com.bearinmind.equalizer314.ExperimentalActivity"
             android:exported="false"
             android:theme="@style/Theme.Equalizer314" />

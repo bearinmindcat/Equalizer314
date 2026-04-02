@@ -14,6 +14,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bearinmind.equalizer314.autoeq.AutoEqDatabase
 import com.bearinmind.equalizer314.autoeq.AutoEqEntry
+import com.bearinmind.equalizer314.autoeq.AutoEqParser
 import com.bearinmind.equalizer314.autoeq.AutoEqProfile
 import com.bearinmind.equalizer314.dsp.BiquadFilter
 import com.bearinmind.equalizer314.dsp.ParametricEqualizer
@@ -35,6 +36,26 @@ class AutoEqActivity : AppCompatActivity() {
 
     private var searchRunnable: Runnable? = null
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+
+    private val importLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri == null) return@registerForActivityResult
+        try {
+            val text = contentResolver.openInputStream(uri)?.bufferedReader()?.readText() ?: return@registerForActivityResult
+            val profile = AutoEqParser.parse(text)
+            if (profile == null || profile.filters.isEmpty()) {
+                Toast.makeText(this, "Could not parse APO preset", Toast.LENGTH_LONG).show()
+                return@registerForActivityResult
+            }
+            val fileName = uri.lastPathSegment?.substringAfterLast("/")?.substringBeforeLast(".") ?: "APO Import"
+            eqPrefs.addImportedPreset(fileName, text)
+            Toast.makeText(this, "Imported: $fileName", Toast.LENGTH_SHORT).show()
+            performSearch(searchInput.text?.toString() ?: "")
+        } catch (e: Exception) {
+            Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -59,6 +80,10 @@ class AutoEqActivity : AppCompatActivity() {
 
         clearButton.setOnClickListener { clearAutoEq() }
 
+        findViewById<android.view.View>(R.id.autoEqImportButton).setOnClickListener {
+            importLauncher.launch("*/*")
+        }
+
         updateActiveCard()
         performSearch("")
 
@@ -74,17 +99,31 @@ class AutoEqActivity : AppCompatActivity() {
     }
 
     private fun performSearch(query: String) {
-        val results = database.search(query)
+        val dbResults = database.search(query)
+        // Prepend imported presets at top
+        val imported = eqPrefs.getImportedPresets()
+        val importedEntries = imported
+            .filter { name ->
+                query.isBlank() || name.lowercase().contains(query.trim().lowercase())
+            }
+            .map { AutoEqEntry(it, "Imported", "", "", "") }
+        val results = importedEntries + dbResults
         adapter.submitList(results)
         resultCount.text = if (query.isBlank()) {
-            "${database.totalCount()} presets"
+            "${database.totalCount() + imported.size} presets"
         } else {
             "${results.size} presets"
         }
     }
 
     private fun onHeadphoneSelected(entry: AutoEqEntry) {
-        val profile = database.loadProfile(entry)
+        val profile = if (entry.source == "Imported") {
+            val text = eqPrefs.getImportedPresetText(entry.name)
+            if (text != null) AutoEqParser.parse(text) else null
+        } else {
+            database.loadProfile(entry)
+        }
+
         if (profile == null) {
             Toast.makeText(this, "Failed to load profile", Toast.LENGTH_SHORT).show()
             return
@@ -109,7 +148,9 @@ class AutoEqActivity : AppCompatActivity() {
         }
         eq.isEnabled = true
 
-        eqPrefs.saveState(eq)
+        // Sequential band slots: 0, 1, 2, 3, ...
+        val slots = (0 until eq.getBandCount()).toList()
+        eqPrefs.saveState(eq, slots)
         eqPrefs.savePreampGain(profile.preampDb)
         eqPrefs.saveAutoEqName(entry.name)
         eqPrefs.saveAutoEqSource(entry.source)
@@ -168,6 +209,7 @@ class AutoEqActivity : AppCompatActivity() {
             val parts = mutableListOf<String>()
             parts.add("Source: ${entry.source}")
             if (entry.rig.isNotBlank()) parts.add("Rig: ${entry.rig}")
+            parts.add("10 filters")
             holder.text2.text = parts.joinToString(" \u00B7 ")
             holder.text1.setTextColor(0xFFE2E2E2.toInt())
             holder.text2.setTextColor(0xFF888888.toInt())
