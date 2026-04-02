@@ -244,8 +244,8 @@ class MainActivity : AppCompatActivity() {
         dpBandCountGroup = findViewById(R.id.dpBandCountGroup)
         dpBandCountSlider = findViewById(R.id.dpBandCountSlider)
         dpBandCountText = findViewById(R.id.dpBandCountText)
-        preampSlider = findViewById(R.id.preampSlider)
-        preampText = findViewById(R.id.preampText)
+        preampSlider = findViewById(R.id.preampSliderBar)
+        preampText = findViewById(R.id.preampTextBar)
         autoGainSwitch = findViewById(R.id.autoGainSwitch)
         autoGainOffsetText = findViewById(R.id.autoGainOffsetText)
         bandHzSlider = findViewById(R.id.bandHzSlider)
@@ -731,7 +731,12 @@ class MainActivity : AppCompatActivity() {
                     val graphCardH = graphCard.height + (graphCard.layoutParams as? LinearLayout.LayoutParams)?.let { it.topMargin + it.bottomMargin } .let { it ?: 0 }
                     val tableMargin = (tableEqCard.layoutParams as? LinearLayout.LayoutParams)?.let { it.topMargin + it.bottomMargin } ?: 0
 
-                    val tableHeight = pageH - padding - modeSelectorH - graphCardH - tableMargin
+                    // Account for preamp card below the table + its top margin
+                    val density = resources.displayMetrics.density
+                    val preampH = (56 * density).toInt()  // preamp card height (~48dp) + 8dp margin
+
+                    val fabOverlap = (20 * density).toInt()
+                    val tableHeight = pageH - padding - modeSelectorH - graphCardH - tableMargin - preampH - fabOverlap
                     tableEqCard.layoutParams = tableEqCard.layoutParams.apply { height = tableHeight }
                 }
 

@@ -46,7 +46,7 @@
     <!-- Rounded FAB -->
     <style name="ShapeAppearanceOverlay.Equalizer314.FAB" parent="">
         <item name="cornerFamily">rounded</item>
-        <item name="cornerSize">50%</item>
+        <item name="cornerSize">12dp</item>
     </style>
 
     <!-- Spectrum button: all corners rounded, top-right extra to follow card curve -->

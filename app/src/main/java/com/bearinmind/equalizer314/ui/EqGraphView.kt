@@ -266,8 +266,8 @@ class EqGraphView @JvmOverloads constructor(
     private val graphMinFreq = 10f
     private val graphMaxFreq = 20000f
 
-    private val minGain = -30f
-    private val maxGain = 30f
+    private val minGain = -20f
+    private val maxGain = 20f
 
     var onBandChangedListener: ((bandIndex: Int, frequency: Float, gain: Float) -> Unit)? = null
     var onBandSelectedListener: ((bandIndex: Int?) -> Unit)? = null
