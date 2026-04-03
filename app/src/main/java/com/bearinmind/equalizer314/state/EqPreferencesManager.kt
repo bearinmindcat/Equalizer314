@@ -124,7 +124,7 @@ class EqPreferencesManager(context: Context) {
 
     // Limiter
     fun saveLimiterEnabled(enabled: Boolean) { prefs.edit().putBoolean("limiterEnabled", enabled).apply() }
-    fun getLimiterEnabled(): Boolean = prefs.getBoolean("limiterEnabled", true)
+    fun getLimiterEnabled(): Boolean = prefs.getBoolean("limiterEnabled", false)
     fun saveLimiterAttack(ms: Float) { prefs.edit().putFloat("limiterAttack", ms).apply() }
     fun getLimiterAttack(): Float = prefs.getFloat("limiterAttack", 0.01f)
     fun saveLimiterRelease(ms: Float) { prefs.edit().putFloat("limiterRelease", ms).apply() }

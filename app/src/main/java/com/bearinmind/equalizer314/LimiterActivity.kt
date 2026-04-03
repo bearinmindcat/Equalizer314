@@ -57,9 +57,8 @@ class LimiterActivity : AppCompatActivity() {
             serviceBound = true
             // Check DP state BEFORE pushToService (which only updates if DP is already running)
             val wasActive = eqService?.dynamicsManager?.isActive == true
-            android.util.Log.d("LimiterActivity", "onServiceConnected: wasActive=$wasActive")
-            if (wasActive) pushToService()
-            // Just sync FAB visual — don't save power state (only power button click should)
+            // Don't pushToService on screen entry — causes audio dropout from DP recreation
+            // Settings are already applied from when DP was started
             com.bearinmind.equalizer314.ui.BottomNavHelper.updatePowerFab(this@LimiterActivity, wasActive)
         }
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -186,11 +185,7 @@ class LimiterActivity : AppCompatActivity() {
         masterSwitch.setOnCheckedChangeListener { _, checked ->
             eqPrefs.saveLimiterEnabled(checked)
             pushToService()
-            val icon = findViewById<android.widget.ImageButton>(R.id.navLimiterButton)
-            val tint = if (checked)
-                com.google.android.material.color.MaterialColors.getColor(icon, com.google.android.material.R.attr.colorPrimary, 0xFFBB86FC.toInt())
-            else 0xFF555555.toInt()
-            icon.imageTintList = android.content.res.ColorStateList.valueOf(tint)
+            com.bearinmind.equalizer314.ui.BottomNavHelper.updateStatus(this, eqPrefs)
         }
 
         setupSlider(thresholdSlider, thresholdText, "%.1f") {

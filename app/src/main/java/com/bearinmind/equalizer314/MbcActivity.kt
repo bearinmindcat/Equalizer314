@@ -59,8 +59,8 @@ class MbcActivity : AppCompatActivity() {
             serviceBound = true
             // Check DP state BEFORE pushMbcToService (which can start DP)
             val wasActive = eqService?.dynamicsManager?.isActive == true
-            android.util.Log.d("MbcActivity", "onServiceConnected: wasActive=$wasActive")
-            if (wasActive) pushMbcToService()
+            // Don't pushMbcToService on screen entry — causes audio dropout from DP recreation
+            // MBC settings are already applied from when DP was started
             com.bearinmind.equalizer314.ui.BottomNavHelper.updatePowerFab(this@MbcActivity, wasActive)
         }
         override fun onServiceDisconnected(name: android.content.ComponentName?) {
@@ -828,7 +828,7 @@ class MbcActivity : AppCompatActivity() {
         masterSwitch.setOnCheckedChangeListener { _, checked ->
             eqPrefs.saveMbcEnabled(checked)
             pushMbcToService()
-            mbcNavIconRef?.let { updateNavIconTint(it, checked) }
+            com.bearinmind.equalizer314.ui.BottomNavHelper.updateStatus(this, eqPrefs)
         }
 
         bandSwitch.setOnCheckedChangeListener { _, checked ->
