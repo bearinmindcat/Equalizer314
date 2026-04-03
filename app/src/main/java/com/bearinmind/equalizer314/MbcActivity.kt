@@ -243,16 +243,13 @@ class MbcActivity : AppCompatActivity() {
                 btn.minimumHeight = 0
                 btn.setPadding(0, 0, 0, 0)
             }
-            // Center between left border (0) and 100 Hz grid line
-            val gridLine100 = (viewWidth * (kotlin.math.log10(100f) - kotlin.math.log10(10f)) /
-                (kotlin.math.log10(20000f) - kotlin.math.log10(10f))).toInt()
-            // Total toggle width = 2 buttons + 4dp gap between them
-            val toggleWidth = specBtnWidth * 2 + (4 * density).toInt()
-            val centerX = (gridLine100 - toggleWidth) / 2
             val groupLp = toggleGroup.layoutParams as android.widget.FrameLayout.LayoutParams
             groupLp.topMargin = gapPx
-            groupLp.leftMargin = centerX.coerceAtLeast(gapPx)
+            groupLp.leftMargin = gapPx
             toggleGroup.layoutParams = groupLp
+
+            // Force redraw after sibling layout changes (software layer may not auto-invalidate)
+            graphView.invalidate()
         }
         fun updateGraphToggleStyle(freqActive: Boolean) {
             if (freqActive) {
@@ -418,6 +415,8 @@ class MbcActivity : AppCompatActivity() {
             vizToggle.minimumWidth = 0
             vizToggle.minimumHeight = 0
             vizToggle.setPadding(0, 0, 0, 0)
+
+            graphView.invalidate()
         }
 
         fun updateVizStyle(active: Boolean) {
@@ -817,6 +816,9 @@ class MbcActivity : AppCompatActivity() {
         gateCurve.gateThreshold = b.noiseGateThreshold
         gateCurve.expanderRatio = b.expanderRatio
         gateCurve.compressorThreshold = b.threshold  // for dulled dot reference
+        // Force redraw after all properties set (software layer may cache stale frame)
+        compressorCurve.post { compressorCurve.invalidate() }
+        gateCurve.post { gateCurve.invalidate() }
         attackReleaseView.attackMs = b.attack
         attackReleaseView.releaseMs = b.release
         // RANGE FEATURE COMMENTED OUT — updateRangeHint() call in loadBandToUI

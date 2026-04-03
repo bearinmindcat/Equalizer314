@@ -24,6 +24,10 @@ class CompressorCurveView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
 ) : View(context, attrs) {
 
+    init {
+        setLayerType(LAYER_TYPE_SOFTWARE, null)
+    }
+
     var threshold: Float = -2f
         set(value) { field = value; invalidate() }
     var ratio: Float = 10f
@@ -151,16 +155,12 @@ class CompressorCurveView @JvmOverloads constructor(
         val titleY = (dbToY(10f) + dbToY(20f)) / 2f + 8f
         canvas.drawText("Compressor (above threshold)", w / 2f, titleY, titlePaint)
 
-        // Grid every 10 dB with labels (skip 0 and -60)
+        // Grid every 10 dB (labels drawn at end of onDraw)
         for (db in minDb.toInt()..maxDb.toInt() step 10) {
             val x = dbToX(db.toFloat())
             val y = dbToY(db.toFloat())
             canvas.drawLine(x, 0f, x, h, gridPaint)
             canvas.drawLine(0f, y, w, y, gridPaint)
-
-            if (db > minDb.toInt() && db < maxDb.toInt()) {
-                canvas.drawText("$db", 10f, y + 8f, labelPaint)
-            }
         }
 
         // Unity diagonal
@@ -334,6 +334,13 @@ class CompressorCurveView @JvmOverloads constructor(
         canvas.drawCircle(gateRefX, gateRefY, 20f, ghostRingPaint)
         canvas.drawText(bandNumber, gateRefX, gateRefY + ghostTextPaint.textSize / 3f, ghostTextPaint)
 
+        // Grid dB labels — drawn last to ensure visibility
+        for (db in minDb.toInt()..maxDb.toInt() step 10) {
+            if (db > minDb.toInt() && db < maxDb.toInt()) {
+                val y = dbToY(db.toFloat())
+                canvas.drawText("$db", 10f, y + 8f, labelPaint)
+            }
+        }
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {

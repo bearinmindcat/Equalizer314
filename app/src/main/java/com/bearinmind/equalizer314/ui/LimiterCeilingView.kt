@@ -16,6 +16,10 @@ class LimiterCeilingView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
 ) : View(context, attrs) {
 
+    init {
+        setLayerType(LAYER_TYPE_SOFTWARE, null)
+    }
+
     var ceilingDb: Float = -0.5f
         set(value) { field = value.coerceIn(dbMin, dbMax); invalidate() }
 

@@ -26,6 +26,10 @@ class EqGraphView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : View(context, attrs, defStyleAttr) {
 
+    init {
+        setLayerType(LAYER_TYPE_SOFTWARE, null)
+    }
+
     private var parametricEq: ParametricEqualizer? = null
     private val bandPoints = mutableListOf<BandPoint>()
     private var activeBandIndex: Int? = null
@@ -446,10 +450,12 @@ class EqGraphView @JvmOverloads constructor(
                 }
             }
         }
+
+        drawGridLabels(canvas, vPad, graphWidth, graphHeight)
     }
 
     private fun drawGrid(canvas: Canvas, vPad: Float, graphWidth: Float, graphHeight: Float) {
-        val dbSteps = 4  // +30, +15, 0, -15, -30
+        val dbSteps = 4
         for (i in 0..dbSteps) {
             val y = vPad + (graphHeight * i / dbSteps)
             val db = maxGain - (maxGain - minGain) * i / dbSteps
@@ -459,13 +465,6 @@ class EqGraphView @JvmOverloads constructor(
             val lineStartX = 10f + labelWidth + 6f
 
             canvas.drawLine(lineStartX, y, width.toFloat(), y, gridPaint)
-
-            val textY = if (i == 0) {
-                val bounds = android.graphics.Rect()
-                textPaint.getTextBounds(dbLabel, 0, dbLabel.length, bounds)
-                y - bounds.top.toFloat() - 3f
-            } else y + 8f
-            canvas.drawText(dbLabel, 10f, textY, textPaint)
         }
 
         val freqMarkers = listOf(100f, 1000f, 10000f)
@@ -473,13 +472,6 @@ class EqGraphView @JvmOverloads constructor(
             if (freq >= graphMinFreq && freq <= graphMaxFreq) {
                 val x = freqToX(freq, graphWidth)
                 canvas.drawLine(x, 0f, x, height.toFloat(), gridPaint)
-
-                val freqLabel = when {
-                    freq >= 1000f -> "${(freq / 1000).toInt()}k"
-                    else -> "${freq.toInt()}"
-                }
-                val labelWidth = textPaint.measureText(freqLabel)
-                canvas.drawText(freqLabel, x - labelWidth / 2f, vPad + graphHeight + 30f, textPaint)
             }
         }
 
@@ -490,6 +482,39 @@ class EqGraphView @JvmOverloads constructor(
         val topLabelEnd = 10f + textPaint.measureText(topLabel) + 6f
         canvas.drawLine(topLabelEnd, vPad, graphWidth, vPad, gridPaint)                   // top edge
         canvas.drawLine(0f, vPad + graphHeight, graphWidth, vPad + graphHeight, gridPaint) // bottom edge
+    }
+
+    private fun drawGridLabels(canvas: Canvas, vPad: Float, graphWidth: Float, graphHeight: Float) {
+        val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFF888888.toInt()
+            textSize = 24f
+        }
+
+        val dbSteps = 4
+        for (i in 0..dbSteps) {
+            val y = vPad + (graphHeight * i / dbSteps)
+            val db = maxGain - (maxGain - minGain) * i / dbSteps
+            val dbLabel = if (db > 0) "+${db.toInt()}" else "${db.toInt()}"
+            val textY = if (i == 0) {
+                val bounds = android.graphics.Rect()
+                labelPaint.getTextBounds(dbLabel, 0, dbLabel.length, bounds)
+                y - bounds.top.toFloat() - 3f
+            } else y + 8f
+            canvas.drawText(dbLabel, 10f, textY, labelPaint)
+        }
+
+        val freqMarkers = listOf(100f, 1000f, 10000f)
+        for (freq in freqMarkers) {
+            if (freq >= graphMinFreq && freq <= graphMaxFreq) {
+                val x = freqToX(freq, graphWidth)
+                val freqLabel = when {
+                    freq >= 1000f -> "${(freq / 1000).toInt()}k"
+                    else -> "${freq.toInt()}"
+                }
+                val labelWidth = labelPaint.measureText(freqLabel)
+                canvas.drawText(freqLabel, x - labelWidth / 2f, vPad + graphHeight + 30f, labelPaint)
+            }
+        }
     }
 
     private var cachedSpectrumHash = 0

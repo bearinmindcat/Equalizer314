@@ -15,6 +15,10 @@ class LimiterMeterView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
 ) : View(context, attrs) {
 
+    init {
+        setLayerType(LAYER_TYPE_SOFTWARE, null)
+    }
+
     enum class Mode { LEVEL, GR }
 
     var mode: Mode = Mode.LEVEL

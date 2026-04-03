@@ -14,6 +14,10 @@ class LimiterWaveformView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
 ) : View(context, attrs) {
 
+    init {
+        setLayerType(LAYER_TYPE_SOFTWARE, null)
+    }
+
     private val bufferSize = 450
     private var writeIdx = 0
     private val inputHistory = FloatArray(bufferSize) { -80f }

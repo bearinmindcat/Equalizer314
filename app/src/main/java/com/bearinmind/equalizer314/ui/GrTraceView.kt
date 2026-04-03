@@ -24,6 +24,10 @@ class GrTraceView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
 ) : View(context, attrs, defStyleAttr) {
 
+    init {
+        setLayerType(LAYER_TYPE_SOFTWARE, null)
+    }
+
     private val maxBands = 6
     var numBands = 3
     var selectedBand = 0
@@ -139,6 +143,16 @@ class GrTraceView @JvmOverloads constructor(
             val label = if (freq >= 1000) "${(freq / 1000).toInt()}k" else "${freq.toInt()}"
             val labelWidth = hzTextPaint.measureText(label)
             canvas.drawText(label, x - labelWidth / 2f, gBottom + 30f, hzTextPaint)
+        }
+
+        // dB labels — draw before crossover check so they always show
+        val dbTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFF888888.toInt(); textSize = 24f
+        }
+        for (db in listOf(10f, 0f, -10f, -20f, -30f, -40f, -50f, -60f, -70f)) {
+            val y = dbToY(db, h)
+            val label = if (db > 0) "+${db.toInt()}" else "${db.toInt()}"
+            canvas.drawText(label, 10f, y + 8f, dbTextPaint)
         }
 
         val xovers = crossoverFreqs ?: return
@@ -319,15 +333,7 @@ class GrTraceView @JvmOverloads constructor(
             }
         }
 
-        // dB labels (matching EqGraphView: left side, 0xFF888888, 24f, at x=10, y+8)
-        val dbTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFF888888.toInt(); textSize = 24f
-        }
-        for (db in listOf(10f, 0f, -10f, -20f, -30f, -40f, -50f, -60f, -70f)) {
-            val y = dbToY(db, h)
-            val label = if (db > 0) "+${db.toInt()}" else "${db.toInt()}"
-            canvas.drawText(label, 10f, y + 8f, dbTextPaint)
-        }
+        // dB labels already drawn above (before crossover check)
 
         // Dragging: highlight the threshold line with a glowing rounded rect around it
         if (draggingThresholdBand >= 0) {

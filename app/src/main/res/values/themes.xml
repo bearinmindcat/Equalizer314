@@ -57,9 +57,12 @@
         <item name="cornerSizeBottomRight">8dp</item>
     </style>
 
-    <!-- MBC EQ button: uniform rounding -->
+    <!-- MBC EQ button: top-left rounded to follow card curve -->
     <style name="ShapeAppearance.MbcEqButton" parent="">
-        <item name="cornerSize">8dp</item>
+        <item name="cornerSizeTopLeft">16dp</item>
+        <item name="cornerSizeTopRight">8dp</item>
+        <item name="cornerSizeBottomLeft">8dp</item>
+        <item name="cornerSizeBottomRight">8dp</item>
     </style>
 
     <!-- MBC GR button: uniform rounding -->
