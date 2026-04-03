@@ -153,7 +153,7 @@ class EqService : Service() {
         val volumePercent = if (maxVol > 0) (currentVol * 100 / maxVol) else 0
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_nav_power)
+            .setSmallIcon(R.drawable.ic_nav_equalizer)
             .setContentTitle("Equalizer314 Online")
             .setContentText("Volume: $volumePercent%")
             .setContentIntent(openPending)

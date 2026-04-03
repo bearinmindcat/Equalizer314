@@ -20,6 +20,9 @@ class DynamicsProcessingManager {
 
     private var dynamicsProcessing: DynamicsProcessing? = null
     private var currentBandCount = 0
+    private var lastEq: com.bearinmind.equalizer314.dsp.ParametricEqualizer? = null
+    private var lastReclaimTime = 0L
+    private val reclaimCooldownMs = 2000L  // Don't reclaim more than once every 2 seconds
     var isActive = false
         private set
 
@@ -66,6 +69,7 @@ class DynamicsProcessingManager {
         ).build()
 
         try {
+            lastEq = eq
             dynamicsProcessing = DynamicsProcessing(Int.MAX_VALUE, 0, config).apply {
                 enabled = true
 
@@ -81,6 +85,20 @@ class DynamicsProcessingManager {
 
                 // Apply parametric response sampled at N frequencies
                 applyParametricResponse(this, eq)
+
+                // Detect when another app disables/overrides our DP and re-attach
+                setEnableStatusListener(android.media.audiofx.AudioEffect.OnEnableStatusChangeListener { _, enabled ->
+                    if (!enabled && isActive) {
+                        reclaimSession()
+                    }
+                })
+
+                // Detect control status changes (another app taking over session 0)
+                setControlStatusListener(android.media.audiofx.AudioEffect.OnControlStatusChangeListener { _, controlGranted ->
+                    if (!controlGranted && isActive) {
+                        reclaimSession()
+                    }
+                })
             }
             currentBandCount = bandCount
             isActive = true
@@ -90,6 +108,19 @@ class DynamicsProcessingManager {
             dynamicsProcessing = null
             isActive = false
         }
+    }
+
+    private fun reclaimSession() {
+        val now = System.currentTimeMillis()
+        if (now - lastReclaimTime < reclaimCooldownMs) return  // Cooldown — don't fight endlessly
+        lastReclaimTime = now
+        Log.w(TAG, "DynamicsProcessing overridden by another app — reclaiming")
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            if (isActive && lastEq != null) {
+                Log.d(TAG, "Reclaiming DynamicsProcessing")
+                start(lastEq!!)
+            }
+        }, 100)
     }
 
     fun updateFromEqualizer(eq: ParametricEqualizer) {

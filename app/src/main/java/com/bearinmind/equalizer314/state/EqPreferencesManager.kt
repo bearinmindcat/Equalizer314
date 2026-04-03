@@ -202,6 +202,10 @@ class EqPreferencesManager(context: Context) {
     fun saveSelectedMeasurementInfo(info: String) { prefs.edit().putString("selectedMeasurementInfo", info).apply() }
     fun getSelectedMeasurementInfo(): String? = prefs.getString("selectedMeasurementInfo", null)
 
+    // Power state (for instant FAB sync across screens)
+    fun savePowerState(on: Boolean) { prefs.edit().putBoolean("powerOn", on).apply() }
+    fun getPowerState(): Boolean = prefs.getBoolean("powerOn", false)
+
     // Target
     fun saveSelectedTarget(file: String) { prefs.edit().putString("selectedTarget", file).apply() }
     fun getSelectedTarget(): String? = prefs.getString("selectedTarget", null)

@@ -195,6 +195,12 @@ class MainActivity : AppCompatActivity() {
         eqPrefs = EqPreferencesManager(this)
         stateManager = EqStateManager(this, eqPrefs)
 
+        // On fresh app launch, reset power state — user must explicitly turn on
+        if (savedInstanceState == null) {
+            eqPrefs.savePowerState(false)
+            stateManager.pendingStartEq = false
+        }
+
         initViews()
         initControllers()
         initEQ()
@@ -385,9 +391,15 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, LimiterActivity::class.java))
             overridePendingTransition(0, 0)
         }
-        powerFab.setOnClickListener {
-            if (stateManager.isProcessing) stopProcessing() else startProcessing()
+        // Only respond to actual touch taps — ignore hardware key triggers (volume keys cause false clicks)
+        powerFab.setOnTouchListener { v, event ->
+            if (event.action == android.view.MotionEvent.ACTION_UP) {
+                if (stateManager.isProcessing) stopProcessing() else startProcessing()
+            }
+            true  // consume all touch events
         }
+        // Remove the default click listener — we handle it via touch
+        powerFab.isClickable = false
 
         // Visualizer toggle — positioned exactly between grid lines with 2dp gap
         val vizToggle = findViewById<com.google.android.material.button.MaterialButton>(R.id.visualizerToggle)
@@ -1209,6 +1221,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showPowerSnackbar(on: Boolean) {
+        eqPrefs.savePowerState(on)
+        com.bearinmind.equalizer314.ui.BottomNavHelper.updatePowerFab(this, on)
         val message = if (on) "Equalizer314 is On" else "Equalizer314 is Off"
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
@@ -1218,6 +1232,7 @@ class MainActivity : AppCompatActivity() {
     private var powerAnimator: android.animation.ValueAnimator? = null
 
     private fun animatePowerFab(on: Boolean) {
+        eqPrefs.savePowerState(on)
         powerAnimator?.cancel()
 
         val fromBg = (powerFab.backgroundTintList?.defaultColor ?: 0xFF2A2A2A.toInt())
@@ -1263,36 +1278,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateBottomBarHighlight(isEqPage: Boolean) {
-        val activeColor = 0xFFDDDDDD.toInt()
-        val dimColor = 0xFF666666.toInt()
-        // EQ is the current screen when isEqPage is true
-        navPresetsButton.setColorFilter(if (isEqPage) activeColor else dimColor)
-        navSettingsButton.setColorFilter(if (isEqPage) dimColor else activeColor)
-        // MBC and Limiter are always dim on this screen (they're separate Activities)
-        findViewById<ImageButton>(R.id.navMbcButton).setColorFilter(dimColor)
-        findViewById<ImageButton>(R.id.navLimiterButton).setColorFilter(dimColor)
-        // Update ON/OFF status text
-        updateNavStatusTexts()
-    }
-
-    private fun updateNavStatusTexts() {
-        val eqOn = stateManager.parametricEq.isEnabled
-        val mbcOn = eqPrefs.getMbcEnabled()
-        val limiterOn = eqPrefs.getLimiterEnabled()
-        val onColor = 0xFFDDDDDD.toInt()
-        val offColor = 0xFF888888.toInt()
-        findViewById<TextView>(R.id.navEqStatus).apply {
-            text = if (eqOn) "ON" else "OFF"
-            setTextColor(if (eqOn) onColor else offColor)
-        }
-        findViewById<TextView>(R.id.navMbcStatus).apply {
-            text = if (mbcOn) "ON" else "OFF"
-            setTextColor(if (mbcOn) onColor else offColor)
-        }
-        findViewById<TextView>(R.id.navLimiterStatus).apply {
-            text = if (limiterOn) "ON" else "OFF"
-            setTextColor(if (limiterOn) onColor else offColor)
-        }
+        val screen = if (isEqPage) com.bearinmind.equalizer314.ui.NavScreen.EQ else com.bearinmind.equalizer314.ui.NavScreen.SETTINGS
+        com.bearinmind.equalizer314.ui.BottomNavHelper.updateHighlight(this, screen)
+        com.bearinmind.equalizer314.ui.BottomNavHelper.updateStatus(this, eqPrefs)
     }
 
     private fun updateEqToggleUI() {
@@ -1412,23 +1400,13 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Set FAB from saved power state — source of truth
+        val savedPower = eqPrefs.getPowerState()
+        com.bearinmind.equalizer314.ui.BottomNavHelper.updatePowerFab(this, savedPower)
         if (stateManager.serviceBound && stateManager.eqService != null) {
             stateManager.isProcessing = stateManager.eqService!!.dynamicsManager.isActive
         } else {
-            // Try to rebind the service in case it was started by another screen
-            try {
-                val intent = Intent(this, EqService::class.java)
-                bindService(intent, stateManager.serviceConnection, BIND_AUTO_CREATE)
-                // onServiceConnected will update isProcessing and FAB via onProcessingChanged
-            } catch (_: Exception) {}
-        }
-        // Set power FAB immediately (no animation) to avoid flicker
-        if (stateManager.isProcessing) {
-            powerFab.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFFFFFFF.toInt())
-            powerFab.imageTintList = android.content.res.ColorStateList.valueOf(0xFF000000.toInt())
-        } else {
-            powerFab.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF2A2A2A.toInt())
-            powerFab.imageTintList = android.content.res.ColorStateList.valueOf(0xFF555555.toInt())
+            stateManager.isProcessing = savedPower
         }
         // Restore EQ/Settings page highlight
         val isEqPage = findViewById<View>(R.id.pageEq).visibility == View.VISIBLE
@@ -1441,7 +1419,7 @@ class MainActivity : AppCompatActivity() {
             eqGraphView.spectrumRenderer = visualizerHelper.renderer
         }
         // Refresh ON/OFF status under nav icons
-        updateNavStatusTexts()
+        com.bearinmind.equalizer314.ui.BottomNavHelper.updateStatus(this, eqPrefs)
         updateAutoEqStatus()
         updateTargetStatus()
     }
@@ -1500,6 +1478,10 @@ class MainActivity : AppCompatActivity() {
             pageEq.visibility = View.GONE
             pageSettings.visibility = View.VISIBLE
             updateBottomBarHighlight(isEqPage = false)
+        } else {
+            pageEq.visibility = View.VISIBLE
+            pageSettings.visibility = View.GONE
+            updateBottomBarHighlight(isEqPage = true)
         }
     }
 }

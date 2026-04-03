@@ -57,10 +57,10 @@ class LimiterActivity : AppCompatActivity() {
             serviceBound = true
             // Check DP state BEFORE pushToService (which only updates if DP is already running)
             val wasActive = eqService?.dynamicsManager?.isActive == true
+            android.util.Log.d("LimiterActivity", "onServiceConnected: wasActive=$wasActive")
             if (wasActive) pushToService()
-            val fab = findViewById<com.google.android.material.floatingactionbutton.FloatingActionButton>(R.id.powerFab)
-            fab.backgroundTintList = android.content.res.ColorStateList.valueOf(if (wasActive) 0xFFFFFFFF.toInt() else 0xFF2A2A2A.toInt())
-            fab.imageTintList = android.content.res.ColorStateList.valueOf(if (wasActive) 0xFF000000.toInt() else 0xFF555555.toInt())
+            // Just sync FAB visual — don't save power state (only power button click should)
+            com.bearinmind.equalizer314.ui.BottomNavHelper.updatePowerFab(this@LimiterActivity, wasActive)
         }
         override fun onServiceDisconnected(name: ComponentName?) {
             eqService = null
@@ -103,47 +103,10 @@ class LimiterActivity : AppCompatActivity() {
         postGainSlider = findViewById(R.id.limiterPostGainSlider)
         postGainText = findViewById(R.id.limiterPostGainText)
 
-        // Bottom nav — icons reflect saved preference state for each module
-        val limiterNavIcon = findViewById<android.widget.ImageButton>(R.id.navLimiterButton)
-        val mbcNavIcon = findViewById<android.widget.ImageButton>(R.id.navMbcButton)
-        fun updateIconTint(icon: android.widget.ImageButton, enabled: Boolean) {
-            val tint = if (enabled)
-                com.google.android.material.color.MaterialColors.getColor(icon, com.google.android.material.R.attr.colorPrimary, 0xFFBB86FC.toInt())
-            else
-                0xFF555555.toInt()
-            icon.imageTintList = android.content.res.ColorStateList.valueOf(tint)
-        }
-        updateIconTint(limiterNavIcon, eqPrefs.getLimiterEnabled())
-        updateIconTint(mbcNavIcon, eqPrefs.getMbcEnabled())
-
-        findViewById<android.widget.ImageButton>(R.id.navPresetsButton).setOnClickListener {
-            finish(); overridePendingTransition(0, 0)
-        }
-        mbcNavIcon.setOnClickListener {
-            finish()
-            startActivity(android.content.Intent(this, MbcActivity::class.java))
-            overridePendingTransition(0, 0)
-        }
-        findViewById<android.widget.ImageButton>(R.id.navSettingsButton).setOnClickListener {
-            val intent = android.content.Intent(this, MainActivity::class.java)
-            intent.putExtra("showSettings", true)
-            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            startActivity(intent)
-            overridePendingTransition(0, 0)
-        }
-        // Power FAB toggles DynamicsProcessing on/off (same as main EQ)
+        // Bottom nav — shared helper handles icons, status, and navigation
+        com.bearinmind.equalizer314.ui.BottomNavHelper.setup(this, com.bearinmind.equalizer314.ui.NavScreen.LIMITER, eqPrefs)
+        // Power FAB toggles DynamicsProcessing on/off
         val powerFab = findViewById<com.google.android.material.floatingactionbutton.FloatingActionButton>(R.id.powerFab)
-        fun updateFabStyle() {
-            val svc = eqService
-            val isOn = svc != null && svc.dynamicsManager.isActive
-            if (isOn) {
-                powerFab.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFFFFFFF.toInt())
-                powerFab.imageTintList = android.content.res.ColorStateList.valueOf(0xFF000000.toInt())
-            } else {
-                powerFab.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF2A2A2A.toInt())
-                powerFab.imageTintList = android.content.res.ColorStateList.valueOf(0xFF555555.toInt())
-            }
-        }
         powerFab.setOnClickListener {
             val svc = eqService ?: return@setOnClickListener
             if (svc.dynamicsManager.isActive) {
@@ -154,13 +117,10 @@ class LimiterActivity : AppCompatActivity() {
                 svc.dynamicsManager.start(tempEq)
                 pushToService()
             }
-            updateFabStyle()
             val on = svc.dynamicsManager.isActive
+            com.bearinmind.equalizer314.ui.BottomNavHelper.setPowerState(this, eqPrefs, on)
             android.widget.Toast.makeText(this, if (on) "Equalizer314 is On" else "Equalizer314 is Off", android.widget.Toast.LENGTH_SHORT).show()
         }
-        // Default to "off" style — onServiceConnected will update if DP is active
-        powerFab.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF2A2A2A.toInt())
-        powerFab.imageTintList = android.content.res.ColorStateList.valueOf(0xFF555555.toInt())
 
         // Waveform / level meter
         waveformView = findViewById(R.id.limiterWaveform)
@@ -484,31 +444,10 @@ class LimiterActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Update power FAB to match current state
-        val powerFab = findViewById<com.google.android.material.floatingactionbutton.FloatingActionButton>(R.id.powerFab)
-        val isOn = eqService != null && eqService!!.dynamicsManager.isActive
-        if (isOn) {
-            powerFab.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFFFFFFF.toInt())
-            powerFab.imageTintList = android.content.res.ColorStateList.valueOf(0xFF000000.toInt())
-        } else {
-            powerFab.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF2A2A2A.toInt())
-            powerFab.imageTintList = android.content.res.ColorStateList.valueOf(0xFF555555.toInt())
-        }
-        // Update nav icon highlights — Limiter is the current screen
-        val dimColor = 0xFF666666.toInt()
-        val activeColor = 0xFFDDDDDD.toInt()
-        findViewById<android.widget.ImageButton>(R.id.navPresetsButton).setColorFilter(dimColor)
-        findViewById<android.widget.ImageButton>(R.id.navMbcButton).setColorFilter(dimColor)
-        findViewById<android.widget.ImageButton>(R.id.navLimiterButton).setColorFilter(activeColor)
-        findViewById<android.widget.ImageButton>(R.id.navSettingsButton).setColorFilter(dimColor)
-        // Update ON/OFF status
-        val onColor = 0xFFDDDDDD.toInt()
-        val offColor = 0xFF888888.toInt()
-        val mbcOn = eqPrefs.getMbcEnabled()
-        val limiterOn = eqPrefs.getLimiterEnabled()
-        findViewById<android.widget.TextView>(R.id.navEqStatus).apply { text = "ON"; setTextColor(onColor) }
-        findViewById<android.widget.TextView>(R.id.navMbcStatus).apply { text = if (mbcOn) "ON" else "OFF"; setTextColor(if (mbcOn) onColor else offColor) }
-        findViewById<android.widget.TextView>(R.id.navLimiterStatus).apply { text = if (limiterOn) "ON" else "OFF"; setTextColor(if (limiterOn) onColor else offColor) }
+        // Sync nav bar from saved state
+        com.bearinmind.equalizer314.ui.BottomNavHelper.updatePowerFab(this, eqPrefs.getPowerState())
+        com.bearinmind.equalizer314.ui.BottomNavHelper.updateHighlight(this, com.bearinmind.equalizer314.ui.NavScreen.LIMITER)
+        com.bearinmind.equalizer314.ui.BottomNavHelper.updateStatus(this, eqPrefs)
         if (visualizer == null) startMetering()
     }
 

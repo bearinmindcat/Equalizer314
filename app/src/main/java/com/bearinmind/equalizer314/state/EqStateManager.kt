@@ -63,8 +63,10 @@ class EqStateManager(
             val service = (binder as EqService.EqBinder).service
             eqService = service
             serviceBound = true
+            android.util.Log.d("EqStateManager", "onServiceConnected: pendingStartEq=$pendingStartEq isActive=${service.dynamicsManager.isActive}")
             if (pendingStartEq) {
                 pendingStartEq = false
+                android.util.Log.d("EqStateManager", "Calling doStartEq via onServiceConnected callback!")
                 onServiceConnected?.invoke()
             } else {
                 isProcessing = service.dynamicsManager.isActive
