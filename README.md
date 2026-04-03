@@ -13,4 +13,9 @@ Equalizer314 uses Android's DynamicsProcessing API on audio session 0 for system
 
 Equalizer314 includes an auto-reclaim feature that will attempt to reclaim session 0 if another app takes it over, but this cannot fully prevent brief audio dropouts when two apps are competing.
 
-This is a limitation of the Android audio framework, not specific to Equalizer314. Wavelet, Poweramp EQ, and all other system-wide EQ apps have the same limitation.
+This is a limitation of the Android audio framework, not specific to Equalizer314. Other apps that are known to have the same limitation:
+
+- **Wavelet** — uses DynamicsProcessing on session 0. Their FAQ states: *"Wavelet will often not function as expected if other equalizer/hearing aid applications are installed. Freezing or uninstalling the offending application + rebooting your device will resolve issues caused by this."*
+- **RootlessJamesDSP** — uses internal audio capture instead of DynamicsProcessing, but still conflicts. Their README states: *"Cannot coexist with (some) other audio effect apps (e.g., Wavelet and other apps that make use of the DynamicsProcessing Android API)."* This is because RootlessJamesDSP captures audio after DynamicsProcessing has already modified it, then outputs processed audio back through session 0 — resulting in double processing.
+- **Poweramp EQ** — uses DynamicsProcessing on session 0 for system-wide mode.
+- **Precise Volume** — uses DynamicsProcessing on session 0 for volume processing. Recreates its instance on every volume change, which disconnects other apps.
