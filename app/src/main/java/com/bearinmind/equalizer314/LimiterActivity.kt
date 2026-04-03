@@ -139,6 +139,51 @@ class LimiterActivity : AppCompatActivity() {
         // Ceiling + GR view
         ceilingView = findViewById(R.id.limiterCeilingView)
 
+        // Spectrum toggle button — use full-screen-width calculation for sizing (same as EQ/MBC)
+        val vizToggle = findViewById<com.google.android.material.button.MaterialButton>(R.id.limiterVisualizerToggle)
+        val density = resources.displayMetrics.density
+        val gapPx = (2 * density).toInt()
+        val vPadPx = 80
+        // Calculate button size based on full-width graph (same as main EQ), not the narrower waveform card
+        val fullGraphWidth = resources.displayMetrics.widthPixels - (32 * density).toInt() // 16dp margins each side
+        val gridLine10k = (fullGraphWidth * 3.0 / 3.301).toInt()
+        val btnWidth = (fullGraphWidth - gapPx) - (gridLine10k + gapPx)
+        val btnHeight = vPadPx - 2 * gapPx
+        waveformView.post {
+            val lp = vizToggle.layoutParams as android.widget.FrameLayout.LayoutParams
+            lp.width = btnWidth
+            lp.height = btnHeight
+            lp.gravity = android.view.Gravity.TOP or android.view.Gravity.END
+            lp.topMargin = gapPx
+            lp.rightMargin = gapPx
+            vizToggle.layoutParams = lp
+            vizToggle.minimumWidth = 0
+            vizToggle.minimumHeight = 0
+            vizToggle.setPadding(0, 0, 0, 0)
+        }
+        vizToggle.setOnClickListener {
+            if (visualizer != null) {
+                stopMetering()
+                vizToggle.alpha = 1.0f
+                vizToggle.setBackgroundColor(0x00000000)
+                vizToggle.strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                vizToggle.strokeWidth = (1 * density).toInt()
+                vizToggle.iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+            } else {
+                startMetering()
+                vizToggle.alpha = 1.0f
+                vizToggle.setBackgroundColor(0xFF555555.toInt())
+                vizToggle.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+                vizToggle.strokeWidth = (2 * density).toInt()
+                vizToggle.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
+            }
+        }
+        // Start active since metering starts automatically
+        vizToggle.alpha = 1.0f
+        vizToggle.setBackgroundColor(0xFF555555.toInt())
+        vizToggle.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+        vizToggle.strokeWidth = (2 * density).toInt()
+        vizToggle.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
     }
 
     private fun loadState() {

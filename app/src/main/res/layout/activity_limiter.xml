@@ -77,10 +77,35 @@
                     app:strokeWidth="1dp"
                     app:strokeColor="#FF333333">
 
-                    <com.bearinmind.equalizer314.ui.LimiterWaveformView
-                        android:id="@+id/limiterWaveform"
+                    <FrameLayout
                         android:layout_width="match_parent"
-                        android:layout_height="match_parent" />
+                        android:layout_height="match_parent">
+
+                        <com.bearinmind.equalizer314.ui.LimiterWaveformView
+                            android:id="@+id/limiterWaveform"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/limiterVisualizerToggle"
+                            style="?attr/materialButtonOutlinedStyle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="top|end"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            android:padding="3dp"
+                            app:icon="@drawable/ic_spectrum"
+                            app:iconGravity="textStart"
+                            app:iconPadding="0dp"
+                            app:iconTint="@null"
+                            app:shapeAppearanceOverlay="@style/ShapeAppearance.SpectrumButton"
+                            app:strokeColor="#FF444444"
+                            app:strokeWidth="1dp"
+                            android:contentDescription="Toggle visualizer" />
+                    </FrameLayout>
                 </com.google.android.material.card.MaterialCardView>
 
                 <!-- Ceiling + GR columns card — 30% -->

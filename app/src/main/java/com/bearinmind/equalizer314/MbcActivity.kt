@@ -287,6 +287,14 @@ class MbcActivity : AppCompatActivity() {
                 graphView.visibility = android.view.View.GONE
                 grTraceView.visibility = android.view.View.VISIBLE
                 updateGraphToggleStyle(false)
+                // Set crossovers + thresholds so grid elements render even without spectrum
+                grTraceView.crossoverFreqs = crossoverFreqs.copyOf()
+                grTraceView.numBands = bandCount
+                grTraceView.selectedBand = selectedBand
+                for (i in 0 until bandCount) {
+                    grTraceView.setThreshold(i, bands[i].threshold)
+                }
+                grTraceView.invalidate()
                 startGrTraceUpdates()
             }
         }
