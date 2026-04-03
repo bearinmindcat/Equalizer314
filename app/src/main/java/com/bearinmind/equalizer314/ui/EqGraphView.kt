@@ -454,10 +454,18 @@ class EqGraphView @JvmOverloads constructor(
             val y = vPad + (graphHeight * i / dbSteps)
             val db = maxGain - (maxGain - minGain) * i / dbSteps
 
-            canvas.drawLine(0f, y, width.toFloat(), y, gridPaint)
-
             val dbLabel = if (db > 0) "+${db.toInt()}" else "${db.toInt()}"
-            canvas.drawText(dbLabel, 10f, y + 8f, textPaint)
+            val labelWidth = textPaint.measureText(dbLabel)
+            val lineStartX = 10f + labelWidth + 6f
+
+            canvas.drawLine(lineStartX, y, width.toFloat(), y, gridPaint)
+
+            val textY = if (i == 0) {
+                val bounds = android.graphics.Rect()
+                textPaint.getTextBounds(dbLabel, 0, dbLabel.length, bounds)
+                y - bounds.top.toFloat() - 3f
+            } else y + 8f
+            canvas.drawText(dbLabel, 10f, textY, textPaint)
         }
 
         val freqMarkers = listOf(100f, 1000f, 10000f)
@@ -478,7 +486,9 @@ class EqGraphView @JvmOverloads constructor(
         // Draw graph border
         canvas.drawLine(0f, 0f, 0f, height.toFloat(), gridPaint)                         // left edge
         canvas.drawLine(graphWidth, 0f, graphWidth, height.toFloat(), gridPaint)           // right edge
-        canvas.drawLine(0f, vPad, graphWidth, vPad, gridPaint)                             // top edge
+        val topLabel = "+${maxGain.toInt()}"
+        val topLabelEnd = 10f + textPaint.measureText(topLabel) + 6f
+        canvas.drawLine(topLabelEnd, vPad, graphWidth, vPad, gridPaint)                   // top edge
         canvas.drawLine(0f, vPad + graphHeight, graphWidth, vPad + graphHeight, gridPaint) // bottom edge
     }
 
