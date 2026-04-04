@@ -401,34 +401,102 @@ class MainActivity : AppCompatActivity() {
         // Remove the default click listener — we handle it via touch
         powerFab.isClickable = false
 
-        // Visualizer toggle — positioned exactly between grid lines with 2dp gap
+        // Visualizer toggle + Reset button + Band points toggle
         val vizToggle = findViewById<com.google.android.material.button.MaterialButton>(R.id.visualizerToggle)
+        val resetBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.resetButton)
+        val bandPtsBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.bandPointsToggle)
         val vizDensity = resources.displayMetrics.density
         val gapPx = (2 * vizDensity).toInt()
         eqGraphView.post {
             val viewWidth = eqGraphView.width
-            val vPadPx = 80  // +12 dB grid line y position
-            // 10kHz vertical grid line: x = viewWidth * (log10(10000)-log10(10))/(log10(20000)-log10(10))
+            val vPadPx = 80
             val gridLine10k = (viewWidth * 3.0 / 3.301).toInt()
-            // Right grid line = viewWidth
-            // Button bounds: 2dp inside from each grid line
-            val btnLeft = gridLine10k + gapPx
             val btnTop = gapPx
-            val btnRight = viewWidth - gapPx
             val btnBottom = vPadPx - gapPx
-            val btnWidth = btnRight - btnLeft
             val btnHeight = btnBottom - btnTop
-            val lp = vizToggle.layoutParams as android.widget.FrameLayout.LayoutParams
-            lp.width = btnWidth
-            lp.height = btnHeight
-            lp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
-            lp.leftMargin = btnLeft
-            lp.topMargin = btnTop
-            lp.rightMargin = 0
-            vizToggle.layoutParams = lp
-            vizToggle.minimumWidth = 0
-            vizToggle.minimumHeight = 0
+            val specWidth = (viewWidth - gapPx) - (gridLine10k + gapPx)
+
+            // Spectrum button: between 10kHz line and right edge
+            val specLeft = gridLine10k + gapPx
+            val specLp = vizToggle.layoutParams as android.widget.FrameLayout.LayoutParams
+            specLp.width = specWidth
+            specLp.height = btnHeight
+            specLp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+            specLp.leftMargin = specLeft
+            specLp.topMargin = btnTop
+            vizToggle.layoutParams = specLp
+            vizToggle.minimumWidth = 0; vizToggle.minimumHeight = 0
             vizToggle.setPadding(0, 0, 0, 0)
+
+            // Reset button: same size as spectrum, to its left
+            val resetLeft = specLeft - gapPx - specWidth
+            val resetLp = resetBtn.layoutParams as android.widget.FrameLayout.LayoutParams
+            resetLp.width = specWidth
+            resetLp.height = btnHeight
+            resetLp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+            resetLp.leftMargin = resetLeft.coerceAtLeast(gapPx)
+            resetLp.topMargin = btnTop
+            resetBtn.layoutParams = resetLp
+            resetBtn.minimumWidth = 0; resetBtn.minimumHeight = 0
+            resetBtn.setPadding(0, 0, 0, 0)
+
+            // Band points toggle: top-left, same size
+            val bpLp = bandPtsBtn.layoutParams as android.widget.FrameLayout.LayoutParams
+            bpLp.width = specWidth
+            bpLp.height = btnHeight
+            bpLp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+            bpLp.leftMargin = gapPx
+            bpLp.topMargin = btnTop
+            bandPtsBtn.layoutParams = bpLp
+            bandPtsBtn.minimumWidth = 0; bandPtsBtn.minimumHeight = 0
+            bandPtsBtn.setPadding(0, 0, 0, 0)
+        }
+        // Band points toggle: active by default (points shown)
+        var bandPointsVisible = true
+        bandPtsBtn.setBackgroundColor(0xFF555555.toInt())
+        bandPtsBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+        bandPtsBtn.strokeWidth = (2 * vizDensity).toInt()
+        bandPtsBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
+        bandPtsBtn.setOnClickListener {
+            bandPointsVisible = !bandPointsVisible
+            eqGraphView.showBandPoints = bandPointsVisible
+            eqGraphView.invalidate()
+            if (bandPointsVisible) {
+                bandPtsBtn.setIconResource(R.drawable.ic_visibility)
+                bandPtsBtn.setBackgroundColor(0xFF555555.toInt())
+                bandPtsBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+                bandPtsBtn.strokeWidth = (2 * vizDensity).toInt()
+                bandPtsBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
+            } else {
+                bandPtsBtn.setIconResource(R.drawable.ic_visibility_off)
+                bandPtsBtn.setBackgroundColor(0x00000000)
+                bandPtsBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                bandPtsBtn.strokeWidth = (1 * vizDensity).toInt()
+                bandPtsBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+            }
+        }
+        // Reset button: reset EQ to flat
+        resetBtn.setOnClickListener {
+            // Fully reset EQ: clear all bands and recreate defaults (freq, gain, Q, filter type)
+            val eq = stateManager.parametricEq ?: return@setOnClickListener
+            eq.clearBands()
+            val defaultFreqs = com.bearinmind.equalizer314.dsp.ParametricEqualizer.logSpacedFrequencies(16)
+            for (i in 0..3) {
+                eq.addBand(defaultFreqs[i], 0f, com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.BELL)
+            }
+            eqGraphView.setParametricEqualizer(eq)
+            stateManager.eqPrefs.saveState(eq)
+            stateManager.initBandSlots()
+            // Rebuild band toggle buttons
+            bandToggleManager.setupToggles()
+            // Push to DynamicsProcessing
+            if (stateManager.isProcessing) {
+                stateManager.eqService?.let { svc ->
+                    svc.dynamicsManager.stop()
+                    svc.dynamicsManager.start(eq)
+                }
+            }
+            android.widget.Toast.makeText(this, "EQ reset to defaults", android.widget.Toast.LENGTH_SHORT).show()
         }
         fun updateVizToggleStyle(active: Boolean) {
             if (active) {

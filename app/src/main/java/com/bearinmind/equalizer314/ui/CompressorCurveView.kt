@@ -338,7 +338,8 @@ class CompressorCurveView @JvmOverloads constructor(
         for (db in minDb.toInt()..maxDb.toInt() step 10) {
             if (db > minDb.toInt() && db < maxDb.toInt()) {
                 val y = dbToY(db.toFloat())
-                canvas.drawText("$db", 10f, y + 8f, labelPaint)
+                val label = if (db > 0) "+$db" else "$db"
+                canvas.drawText(label, 10f, y + 8f, labelPaint)
             }
         }
     }

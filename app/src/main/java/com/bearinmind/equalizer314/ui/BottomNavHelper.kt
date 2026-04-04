@@ -67,10 +67,25 @@ object BottomNavHelper {
         val navLimiter = activity.findViewById<ImageButton>(R.id.navLimiterButton)
         val navSettings = activity.findViewById<ImageButton>(R.id.navSettingsButton)
 
-        navEq.setColorFilter(if (currentScreen == NavScreen.EQ) ACTIVE_COLOR else DIM_COLOR)
-        navMbc.setColorFilter(if (currentScreen == NavScreen.MBC) ACTIVE_COLOR else DIM_COLOR)
-        navLimiter.setColorFilter(if (currentScreen == NavScreen.LIMITER) ACTIVE_COLOR else DIM_COLOR)
-        navSettings.setColorFilter(if (currentScreen == NavScreen.SETTINGS) ACTIVE_COLOR else DIM_COLOR)
+        val density = activity.resources.displayMetrics.density
+        val buttons = listOf(
+            navEq to (currentScreen == NavScreen.EQ),
+            navMbc to (currentScreen == NavScreen.MBC),
+            navLimiter to (currentScreen == NavScreen.LIMITER),
+            navSettings to (currentScreen == NavScreen.SETTINGS)
+        )
+        for ((btn, isActive) in buttons) {
+            btn.setColorFilter(if (isActive) ACTIVE_COLOR else DIM_COLOR)
+            val targetScale = if (isActive) 1.25f else 1.0f
+            val targetTransY = if (isActive) -3f * density else 0f
+            btn.animate()
+                .scaleX(targetScale)
+                .scaleY(targetScale)
+                .translationY(targetTransY)
+                .setDuration(350)
+                .setInterpolator(android.view.animation.DecelerateInterpolator(1.5f))
+                .start()
+        }
     }
 
     fun updateStatus(activity: Activity, eqPrefs: EqPreferencesManager) {

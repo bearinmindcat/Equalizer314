@@ -400,29 +400,44 @@ class MbcActivity : AppCompatActivity() {
 
     private fun startVisualizer() {
         val vizToggle = findViewById<com.google.android.material.button.MaterialButton>(R.id.mbcVisualizerToggle)
+        val mbcResetBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.mbcResetButton)
         val density = resources.displayMetrics.density
 
-        // Position button in top-right corner of graph (same as main EQ)
+        // Position buttons in top-right corner of graph (same as main EQ)
         val gapPx = (2 * density).toInt()
         val vPadPx = 80
         graphView.post {
             val viewWidth = graphView.width
             val gridLine10k = (viewWidth * 3.0 / 3.301).toInt()
-            val btnLeft = gridLine10k + gapPx
             val btnTop = gapPx
-            val btnRight = viewWidth - gapPx
-            val btnBottom = vPadPx - gapPx
+            val btnHeight = vPadPx - 2 * gapPx
+
+            // Spectrum button: between 10kHz line and right edge
+            val specLeft = gridLine10k + gapPx
+            val specRight = viewWidth - gapPx
+            val specWidth = specRight - specLeft
             val lp = vizToggle.layoutParams as android.widget.FrameLayout.LayoutParams
-            lp.width = btnRight - btnLeft
-            lp.height = btnBottom - btnTop
+            lp.width = specWidth
+            lp.height = btnHeight
             lp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
-            lp.leftMargin = btnLeft
+            lp.leftMargin = specLeft
             lp.topMargin = btnTop
             lp.rightMargin = 0
             vizToggle.layoutParams = lp
             vizToggle.minimumWidth = 0
             vizToggle.minimumHeight = 0
             vizToggle.setPadding(0, 0, 0, 0)
+
+            // Reset button: same size, to left of spectrum
+            val resetLp = mbcResetBtn.layoutParams as android.widget.FrameLayout.LayoutParams
+            resetLp.width = specWidth
+            resetLp.height = btnHeight
+            resetLp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+            resetLp.leftMargin = (specLeft - gapPx - specWidth).coerceAtLeast(gapPx)
+            resetLp.topMargin = btnTop
+            mbcResetBtn.layoutParams = resetLp
+            mbcResetBtn.minimumWidth = 0; mbcResetBtn.minimumHeight = 0
+            mbcResetBtn.setPadding(0, 0, 0, 0)
 
             graphView.invalidate()
         }
@@ -441,6 +456,27 @@ class MbcActivity : AppCompatActivity() {
                 vizToggle.strokeWidth = (1 * density).toInt()
                 vizToggle.iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
             }
+        }
+
+        // Reset button: reset all MBC bands to defaults
+        mbcResetBtn.setOnClickListener {
+            for (i in 0 until bandCount) {
+                bands[i].threshold = 0f
+                bands[i].ratio = 2f
+                bands[i].kneeWidth = 8f
+                bands[i].attack = 1f
+                bands[i].release = 100f
+                bands[i].noiseGateThreshold = -60f
+                bands[i].expanderRatio = 1f
+                bands[i].preGain = 0f
+                bands[i].postGain = 0f
+                saveBand(i)
+            }
+            graphView.mbcBandGains?.let { for (i in it.indices) it[i] = 0f }
+            graphView.invalidate()
+            loadBandToUI()
+            pushMbcToService()
+            android.widget.Toast.makeText(this, "MBC reset to defaults", android.widget.Toast.LENGTH_SHORT).show()
         }
 
         vizToggle.setOnClickListener {

@@ -69,4 +69,12 @@
     <style name="ShapeAppearance.MbcGrButton" parent="">
         <item name="cornerSize">8dp</item>
     </style>
+
+    <!-- Reset button: no top-right rounding (sits left of spectrum button) -->
+    <style name="ShapeAppearance.ResetButton" parent="">
+        <item name="cornerSizeTopLeft">8dp</item>
+        <item name="cornerSizeTopRight">8dp</item>
+        <item name="cornerSizeBottomLeft">8dp</item>
+        <item name="cornerSizeBottomRight">8dp</item>
+    </style>
 </resources>

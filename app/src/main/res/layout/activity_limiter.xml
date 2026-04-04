@@ -87,6 +87,27 @@
                             android:layout_height="match_parent" />
 
                         <com.google.android.material.button.MaterialButton
+                            android:id="@+id/limiterResetButton"
+                            style="?attr/materialButtonOutlinedStyle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="top|end"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            android:padding="3dp"
+                            app:icon="@drawable/ic_reset"
+                            app:iconSize="16dp"
+                            app:iconGravity="textStart"
+                            app:iconPadding="0dp"
+                            app:iconTint="@null"
+                            app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
+                            app:strokeColor="#FF444444"
+                            app:strokeWidth="1dp"
+                            android:contentDescription="Reset to defaults" />
+
+                        <com.google.android.material.button.MaterialButton
                             android:id="@+id/limiterVisualizerToggle"
                             style="?attr/materialButtonOutlinedStyle"
                             android:layout_width="wrap_content"

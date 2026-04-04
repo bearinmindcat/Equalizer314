@@ -127,7 +127,7 @@ class GrTraceView @JvmOverloads constructor(
         canvas.drawRect(0f, 0f, w, h, bgPaint)
 
         // Horizontal grid
-        for (db in listOf(10f, 0f, -10f, -20f, -30f, -40f, -50f, -60f, -70f)) {
+        for (db in listOf(0f, -10f, -20f, -30f, -40f, -50f, -60f, -70f)) {
             val y = dbToY(db, h)
             canvas.drawLine(0f, y, w, y, gridPaint)
         }
@@ -149,7 +149,7 @@ class GrTraceView @JvmOverloads constructor(
         val dbTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = 0xFF888888.toInt(); textSize = 24f
         }
-        for (db in listOf(10f, 0f, -10f, -20f, -30f, -40f, -50f, -60f, -70f)) {
+        for (db in listOf(0f, -10f, -20f, -30f, -40f, -50f, -60f, -70f)) {
             val y = dbToY(db, h)
             val label = if (db > 0) "+${db.toInt()}" else "${db.toInt()}"
             canvas.drawText(label, 10f, y + 8f, dbTextPaint)

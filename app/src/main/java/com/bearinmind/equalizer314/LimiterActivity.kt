@@ -139,17 +139,18 @@ class LimiterActivity : AppCompatActivity() {
         // Ceiling + GR view
         ceilingView = findViewById(R.id.limiterCeilingView)
 
-        // Spectrum toggle button — use full-screen-width calculation for sizing (same as EQ/MBC)
+        // Spectrum toggle + Reset button — use full-screen-width calculation for sizing
         val vizToggle = findViewById<com.google.android.material.button.MaterialButton>(R.id.limiterVisualizerToggle)
+        val limResetBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.limiterResetButton)
         val density = resources.displayMetrics.density
         val gapPx = (2 * density).toInt()
         val vPadPx = 80
-        // Calculate button size based on full-width graph (same as main EQ), not the narrower waveform card
-        val fullGraphWidth = resources.displayMetrics.widthPixels - (32 * density).toInt() // 16dp margins each side
+        val fullGraphWidth = resources.displayMetrics.widthPixels - (32 * density).toInt()
         val gridLine10k = (fullGraphWidth * 3.0 / 3.301).toInt()
         val btnWidth = (fullGraphWidth - gapPx) - (gridLine10k + gapPx)
         val btnHeight = vPadPx - 2 * gapPx
         waveformView.post {
+            // Spectrum button
             val lp = vizToggle.layoutParams as android.widget.FrameLayout.LayoutParams
             lp.width = btnWidth
             lp.height = btnHeight
@@ -157,9 +158,38 @@ class LimiterActivity : AppCompatActivity() {
             lp.topMargin = gapPx
             lp.rightMargin = gapPx
             vizToggle.layoutParams = lp
-            vizToggle.minimumWidth = 0
-            vizToggle.minimumHeight = 0
+            vizToggle.minimumWidth = 0; vizToggle.minimumHeight = 0
             vizToggle.setPadding(0, 0, 0, 0)
+
+            // Reset button: same size, to left of spectrum
+            val resetLp = limResetBtn.layoutParams as android.widget.FrameLayout.LayoutParams
+            resetLp.width = btnWidth
+            resetLp.height = btnHeight
+            resetLp.gravity = android.view.Gravity.TOP or android.view.Gravity.END
+            resetLp.topMargin = gapPx
+            resetLp.rightMargin = gapPx + btnWidth + gapPx
+            limResetBtn.layoutParams = resetLp
+            limResetBtn.minimumWidth = 0; limResetBtn.minimumHeight = 0
+            limResetBtn.setPadding(0, 0, 0, 0)
+        }
+        // Reset button: reset limiter to defaults
+        limResetBtn.setOnClickListener {
+            isUpdating = true
+            eqPrefs.saveLimiterThreshold(0f)
+            eqPrefs.saveLimiterRatio(2f)
+            eqPrefs.saveLimiterAttack(0.01f)
+            eqPrefs.saveLimiterRelease(1f)
+            eqPrefs.saveLimiterPostGain(0f)
+            thresholdSlider.value = 0f; thresholdText.setText("0.0")
+            ratioSlider.value = 2f; ratioText.setText("2.0")
+            attackSlider.value = 0.01f; attackText.setText("0.01")
+            releaseSlider.value = 1f; releaseText.setText("1")
+            postGainSlider.value = 0f; postGainText.setText("0.0")
+            waveformView.ceilingDb = 0f
+            ceilingView.ceilingDb = 0f
+            isUpdating = false
+            pushToService()
+            android.widget.Toast.makeText(this, "Limiter reset to defaults", android.widget.Toast.LENGTH_SHORT).show()
         }
         vizToggle.setOnClickListener {
             if (visualizer != null) {
