@@ -38,6 +38,30 @@
         <item name="android:windowLightStatusBar">false</item>
     </style>
 
+    <!-- Rounded dialog -->
+    <style name="Theme.Equalizer314.Dialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+        <item name="android:windowBackground">@drawable/bg_dialog_rounded</item>
+        <item name="android:backgroundDimAmount">0.6</item>
+        <item name="android:textColorPrimary">#FFE2E2E2</item>
+        <item name="android:textColorSecondary">#FFBBBBBB</item>
+        <item name="buttonBarPositiveButtonStyle">@style/Widget.Equalizer314.DialogButtonNegative</item>
+        <item name="buttonBarNegativeButtonStyle">@style/Widget.Equalizer314.DialogButtonReset</item>
+    </style>
+
+    <style name="Widget.Equalizer314.DialogButtonReset" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="android:textColor">#FFEF9A9A</item>
+        <item name="strokeColor">#FF444444</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="cornerRadius">8dp</item>
+    </style>
+
+    <style name="Widget.Equalizer314.DialogButtonNegative" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="android:textColor">#FFDDDDDD</item>
+        <item name="strokeColor">#FF444444</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="cornerRadius">8dp</item>
+    </style>
+
     <!-- Suffix text matching input text -->
     <style name="TextAppearance.Equalizer314.Suffix" parent="TextAppearance.Material3.BodySmall">
         <item name="android:textSize">12sp</item>
@@ -47,6 +71,12 @@
     <style name="ShapeAppearanceOverlay.Equalizer314.FAB" parent="">
         <item name="cornerFamily">rounded</item>
         <item name="cornerSize">12dp</item>
+    </style>
+
+    <!-- Pill-shaped FAB (wider than tall) -->
+    <style name="ShapeAppearanceOverlay.Equalizer314.FAB.Pill" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">50%</item>
     </style>
 
     <!-- Spectrum button: all corners rounded, top-right extra to follow card curve -->

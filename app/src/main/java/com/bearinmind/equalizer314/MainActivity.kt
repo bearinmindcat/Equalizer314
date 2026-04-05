@@ -391,15 +391,9 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, LimiterActivity::class.java))
             overridePendingTransition(0, 0)
         }
-        // Only respond to actual touch taps — ignore hardware key triggers (volume keys cause false clicks)
-        powerFab.setOnTouchListener { v, event ->
-            if (event.action == android.view.MotionEvent.ACTION_UP) {
-                if (stateManager.isProcessing) stopProcessing() else startProcessing()
-            }
-            true  // consume all touch events
+        powerFab.setOnClickListener {
+            if (stateManager.isProcessing) stopProcessing() else startProcessing()
         }
-        // Remove the default click listener — we handle it via touch
-        powerFab.isClickable = false
 
         // Visualizer toggle + Reset button + Band points toggle
         val vizToggle = findViewById<com.google.android.material.button.MaterialButton>(R.id.visualizerToggle)
@@ -477,26 +471,30 @@ class MainActivity : AppCompatActivity() {
         }
         // Reset button: reset EQ to flat
         resetBtn.setOnClickListener {
-            // Fully reset EQ: clear all bands and recreate defaults (freq, gain, Q, filter type)
-            val eq = stateManager.parametricEq ?: return@setOnClickListener
-            eq.clearBands()
-            val defaultFreqs = com.bearinmind.equalizer314.dsp.ParametricEqualizer.logSpacedFrequencies(16)
-            for (i in 0..3) {
-                eq.addBand(defaultFreqs[i], 0f, com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.BELL)
-            }
-            eqGraphView.setParametricEqualizer(eq)
-            stateManager.eqPrefs.saveState(eq)
-            stateManager.initBandSlots()
-            // Rebuild band toggle buttons
-            bandToggleManager.setupToggles()
-            // Push to DynamicsProcessing
-            if (stateManager.isProcessing) {
-                stateManager.eqService?.let { svc ->
-                    svc.dynamicsManager.stop()
-                    svc.dynamicsManager.start(eq)
+            com.google.android.material.dialog.MaterialAlertDialogBuilder(this, R.style.Theme_Equalizer314_Dialog)
+                .setTitle("Reset")
+                .setMessage("Reset all values in this screen to their defaults?")
+                .setNegativeButton("Reset") { _, _ ->
+                    val eq = stateManager.parametricEq ?: return@setNegativeButton
+                    eq.clearBands()
+                    val defaultFreqs = com.bearinmind.equalizer314.dsp.ParametricEqualizer.logSpacedFrequencies(16)
+                    for (i in 0..3) {
+                        eq.addBand(defaultFreqs[i], 0f, com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.BELL)
+                    }
+                    eqGraphView.setParametricEqualizer(eq)
+                    stateManager.eqPrefs.saveState(eq)
+                    stateManager.initBandSlots()
+                    bandToggleManager.setupToggles()
+                    if (stateManager.isProcessing) {
+                        stateManager.eqService?.let { svc ->
+                            svc.dynamicsManager.stop()
+                            svc.dynamicsManager.start(eq)
+                        }
+                    }
+                    android.widget.Toast.makeText(this, "EQ reset to defaults", android.widget.Toast.LENGTH_SHORT).show()
                 }
-            }
-            android.widget.Toast.makeText(this, "EQ reset to defaults", android.widget.Toast.LENGTH_SHORT).show()
+                .setPositiveButton("Cancel", null)
+                .show()
         }
         fun updateVizToggleStyle(active: Boolean) {
             if (active) {
@@ -664,16 +662,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupSettingsListeners() {
-        // MBC card (settings page)
-        findViewById<View>(R.id.mbcCard).setOnClickListener {
-            startActivity(Intent(this, MbcActivity::class.java))
-            overridePendingTransition(0, 0)
-        }
-        // Limiter card (settings page)
-        findViewById<View>(R.id.limiterCard).setOnClickListener {
-            startActivity(Intent(this, LimiterActivity::class.java))
-            overridePendingTransition(0, 0)
-        }
         findViewById<View>(R.id.experimentalCard).setOnClickListener {
             startActivity(Intent(this, ExperimentalActivity::class.java))
         }

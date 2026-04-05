@@ -1427,7 +1427,7 @@ class EqGraphView @JvmOverloads constructor(
             return handleMbcTouch(event, crossovers)
         }
 
-        if (eqUiMode == EqUiMode.TABLE) {
+        if (eqUiMode == EqUiMode.TABLE || !showBandPoints) {
             return super.onTouchEvent(event)
         }
 

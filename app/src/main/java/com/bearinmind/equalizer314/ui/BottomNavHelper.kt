@@ -22,8 +22,15 @@ object BottomNavHelper {
         val navLimiter = activity.findViewById<ImageButton>(R.id.navLimiterButton)
         val navSettings = activity.findViewById<ImageButton>(R.id.navSettingsButton)
 
+        fun navigateWithAnimation(targetScreen: NavScreen, navigate: () -> Unit) {
+            if (currentScreen == targetScreen) return
+            // Animate current icon down and new icon up, then navigate
+            updateHighlight(activity, targetScreen)
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ navigate() }, 200)
+        }
+
         navEq.setOnClickListener {
-            if (currentScreen != NavScreen.EQ) {
+            navigateWithAnimation(NavScreen.EQ) {
                 activity.startActivity(Intent(activity, MainActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
                     putExtra("showSettings", false)
@@ -32,19 +39,19 @@ object BottomNavHelper {
             }
         }
         navMbc.setOnClickListener {
-            if (currentScreen != NavScreen.MBC) {
+            navigateWithAnimation(NavScreen.MBC) {
                 activity.startActivity(Intent(activity, MbcActivity::class.java))
                 activity.overridePendingTransition(0, 0)
             }
         }
         navLimiter.setOnClickListener {
-            if (currentScreen != NavScreen.LIMITER) {
+            navigateWithAnimation(NavScreen.LIMITER) {
                 activity.startActivity(Intent(activity, LimiterActivity::class.java))
                 activity.overridePendingTransition(0, 0)
             }
         }
         navSettings.setOnClickListener {
-            if (currentScreen != NavScreen.SETTINGS) {
+            navigateWithAnimation(NavScreen.SETTINGS) {
                 activity.startActivity(Intent(activity, MainActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
                     putExtra("showSettings", true)

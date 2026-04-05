@@ -460,23 +460,30 @@ class MbcActivity : AppCompatActivity() {
 
         // Reset button: reset all MBC bands to defaults
         mbcResetBtn.setOnClickListener {
-            for (i in 0 until bandCount) {
-                bands[i].threshold = 0f
-                bands[i].ratio = 2f
-                bands[i].kneeWidth = 8f
-                bands[i].attack = 1f
-                bands[i].release = 100f
-                bands[i].noiseGateThreshold = -60f
-                bands[i].expanderRatio = 1f
-                bands[i].preGain = 0f
-                bands[i].postGain = 0f
-                saveBand(i)
-            }
-            graphView.mbcBandGains?.let { for (i in it.indices) it[i] = 0f }
-            graphView.invalidate()
-            loadBandToUI()
-            pushMbcToService()
-            android.widget.Toast.makeText(this, "MBC reset to defaults", android.widget.Toast.LENGTH_SHORT).show()
+            com.google.android.material.dialog.MaterialAlertDialogBuilder(this, R.style.Theme_Equalizer314_Dialog)
+                .setTitle("Reset")
+                .setMessage("Reset all values in this screen to their defaults?")
+                .setNegativeButton("Reset") { _, _ ->
+                    for (i in 0 until bandCount) {
+                        bands[i].threshold = 0f
+                        bands[i].ratio = 2f
+                        bands[i].kneeWidth = 8f
+                        bands[i].attack = 1f
+                        bands[i].release = 100f
+                        bands[i].noiseGateThreshold = -60f
+                        bands[i].expanderRatio = 1f
+                        bands[i].preGain = 0f
+                        bands[i].postGain = 0f
+                        saveBand(i)
+                    }
+                    graphView.mbcBandGains?.let { for (i in it.indices) it[i] = 0f }
+                    graphView.invalidate()
+                    loadBandToUI()
+                    pushMbcToService()
+                    android.widget.Toast.makeText(this, "MBC reset to defaults", android.widget.Toast.LENGTH_SHORT).show()
+                }
+                .setPositiveButton("Cancel", null)
+                .show()
         }
 
         vizToggle.setOnClickListener {

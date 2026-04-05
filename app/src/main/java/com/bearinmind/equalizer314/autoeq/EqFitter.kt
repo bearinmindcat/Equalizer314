@@ -5,27 +5,26 @@ import kotlin.math.*
 /**
  * Computes parametric EQ filters to match a measurement to a target curve.
  *
- * Ported from Squiglink's equalizer.js algorithm:
- * - 2-stage candidate search (sub-7kHz first, then treble)
- * - Grid-search optimization with 3 delta iterations, bidirectional
- * - Biquad coefficient magnitude response calculation
- * - Filter merging and pruning
+ * Based on AutoEQ (jaakkopasanen/AutoEq) algorithm:
+ * - Peak detection by width × height (largest deviation region)
+ * - High shelf filter for treble correction
+ * - Above 10kHz: both target and FR collapsed to mean (energy matching)
+ * - Sharpness penalty prevents unrealistically steep filters
+ * - Greedy initialization with residual subtraction
+ * - Grid-search optimization (mobile-friendly alternative to SLSQP)
  *
- * Reference: https://github.com/squiglink/lab/blob/main/equalizer.js
+ * Reference: https://github.com/jaakkopasanen/AutoEq
  */
 object EqFitter {
 
     private const val SAMPLE_RATE = 48000
-    private const val TREBLE_START = 7000f
-    private val AUTO_EQ_RANGE = floatArrayOf(20f, 15000f)
-    private val Q_RANGE = floatArrayOf(0.5f, 2.0f)
+    private const val LOW_SHELF_FC_MIN = 40f
+    private const val LOW_SHELF_FC_MAX = 400f
+    private const val HIGH_SHELF_FC_MIN = 2000f
+    private const val HIGH_SHELF_FC_MAX = 12000f
+    private val Q_RANGE = floatArrayOf(0.5f, 10.0f)
     private val GAIN_RANGE = floatArrayOf(-12f, 12f)
-
-    // [maxDF, maxDQ, maxDG, stepDF, stepDQ, stepDG] — reduced from Squiglink for mobile perf
-    private val OPTIMIZE_DELTAS = arrayOf(
-        floatArrayOf(5f, 5f, 8f, 5f, 0.1f, 0.5f),
-        floatArrayOf(5f, 5f, 8f, 1f, 0.1f, 0.2f)
-    )
+    private val FREQ_RANGE = floatArrayOf(20f, 20000f)
 
     data class Filter(val type: String, val freq: Float, val q: Float, val gain: Float)
 
@@ -34,98 +33,71 @@ object EqFitter {
         target: FreqResponse,
         numBands: Int = 10
     ): AutoEqProfile {
-        // Build common frequency grid (~1/24 octave for mobile performance)
-        val step = 1.029  // ~1/24 octave (~240 points from 20-20kHz)
+        // Build common frequency grid (~1/24 octave)
+        val step = 1.029
         val gridSize = ceil(ln(20000.0 / 20.0) / ln(step)).toInt()
         val grid = FloatArray(gridSize) { i -> (20.0 * step.pow(i)).toFloat() }
 
-        // Resample both curves onto the grid
         val measLevels = FreqResponseParser.interpolateAt(measurement, grid)
         val targetLevels = FreqResponseParser.interpolateAt(target, grid)
 
-        // Build FR and target as [freq, dB] arrays
         val fr = Array(gridSize) { floatArrayOf(grid[it], measLevels[it]) }
         val frTarget = Array(gridSize) { floatArrayOf(grid[it], targetLevels[it]) }
 
-        // Normalize: align measurement to target at 1kHz region
+        // Normalize at 1kHz region
         val norm1k = grid.indices.filter { grid[it] in 800f..1200f }
         if (norm1k.isNotEmpty()) {
-            val measMean = norm1k.map { measLevels[it] }.average().toFloat()
-            val targetMean = norm1k.map { targetLevels[it] }.average().toFloat()
-            val offset = targetMean - measMean
+            val offset = norm1k.map { targetLevels[it] }.average().toFloat() -
+                         norm1k.map { measLevels[it] }.average().toFloat()
             for (i in fr.indices) fr[i][1] += offset
         }
 
-        // Run AutoEQ algorithm
         val filters = autoeq(fr, frTarget, numBands)
-
-        // Convert to AutoEqProfile
-        val autoEqFilters = filters.map { f ->
-            AutoEqFilter(f.type, f.freq, f.gain, f.q)
-        }
-
-        // Compute preamp
-        val preamp = calcPreamp(fr, frTarget, filters)
-
+        val autoEqFilters = filters.map { AutoEqFilter(it.type, it.freq, it.gain, it.q) }
+        val preamp = calcPreamp(fr, filters)
         return AutoEqProfile(preamp, autoEqFilters)
     }
 
-    // ---- Biquad coefficient calculations (cookbook formulas) ----
+    // ---- Biquad coefficients (RBJ cookbook) ----
 
     private fun peakingCoeffs(freq: Float, q: Float, gain: Float): FloatArray {
-        val f = (freq / SAMPLE_RATE).coerceIn(1e-6f, 1f)
-        val qc = q.coerceIn(1e-4f, 1000f)
-        val gc = gain.coerceIn(-40f, 40f)
-        val w0 = 2.0 * PI * f
-        val sinW = sin(w0)
-        val cosW = cos(w0)
-        val a = 10.0.pow(gc / 40.0)
-        val alpha = sinW / (2.0 * qc)
+        val w0 = 2.0 * PI * freq / SAMPLE_RATE
+        val sinW = sin(w0); val cosW = cos(w0)
+        val a = 10.0.pow(gain / 40.0)
+        val alpha = sinW / (2.0 * q)
         val a0 = 1.0 + alpha / a
-        val a1 = -2.0 * cosW
-        val a2 = 1.0 - alpha / a
-        val b0 = 1.0 + alpha * a
-        val b1 = -2.0 * cosW
-        val b2 = 1.0 - alpha * a
-        return floatArrayOf(1f, (a1 / a0).toFloat(), (a2 / a0).toFloat(), (b0 / a0).toFloat(), (b1 / a0).toFloat(), (b2 / a0).toFloat())
-    }
-
-    private fun lowShelfCoeffs(freq: Float, q: Float, gain: Float): FloatArray {
-        val f = (freq / SAMPLE_RATE).coerceIn(1e-6f, 1f)
-        val qc = q.coerceIn(1e-4f, 1000f)
-        val gc = gain.coerceIn(-40f, 40f)
-        val w0 = 2.0 * PI * f
-        val sinW = sin(w0)
-        val cosW = cos(w0)
-        val a = 10.0.pow(gc / 40.0)
-        val alpha = sinW / (2.0 * qc)
-        val alphamod = 2.0 * sqrt(a) * alpha
-        val a0 = (a + 1) + (a - 1) * cosW + alphamod
-        val a1 = -2.0 * ((a - 1) + (a + 1) * cosW)
-        val a2 = (a + 1) + (a - 1) * cosW - alphamod
-        val b0 = a * ((a + 1) - (a - 1) * cosW + alphamod)
-        val b1 = 2.0 * a * ((a - 1) - (a + 1) * cosW)
-        val b2 = a * ((a + 1) - (a - 1) * cosW - alphamod)
-        return floatArrayOf(1f, (a1 / a0).toFloat(), (a2 / a0).toFloat(), (b0 / a0).toFloat(), (b1 / a0).toFloat(), (b2 / a0).toFloat())
+        return floatArrayOf(1f, (-2.0 * cosW / a0).toFloat(), ((1.0 - alpha / a) / a0).toFloat(),
+            ((1.0 + alpha * a) / a0).toFloat(), (-2.0 * cosW / a0).toFloat(), ((1.0 - alpha * a) / a0).toFloat())
     }
 
     private fun highShelfCoeffs(freq: Float, q: Float, gain: Float): FloatArray {
-        val f = (freq / SAMPLE_RATE).coerceIn(1e-6f, 1f)
-        val qc = q.coerceIn(1e-4f, 1000f)
-        val gc = gain.coerceIn(-40f, 40f)
-        val w0 = 2.0 * PI * f
-        val sinW = sin(w0)
-        val cosW = cos(w0)
-        val a = 10.0.pow(gc / 40.0)
-        val alpha = sinW / (2.0 * qc)
-        val alphamod = 2.0 * sqrt(a) * alpha
-        val a0 = (a + 1) - (a - 1) * cosW + alphamod
-        val a1 = 2.0 * ((a - 1) - (a + 1) * cosW)
-        val a2 = (a + 1) - (a - 1) * cosW - alphamod
-        val b0 = a * ((a + 1) + (a - 1) * cosW + alphamod)
-        val b1 = -2.0 * a * ((a - 1) + (a + 1) * cosW)
-        val b2 = a * ((a + 1) + (a - 1) * cosW - alphamod)
-        return floatArrayOf(1f, (a1 / a0).toFloat(), (a2 / a0).toFloat(), (b0 / a0).toFloat(), (b1 / a0).toFloat(), (b2 / a0).toFloat())
+        val w0 = 2.0 * PI * freq / SAMPLE_RATE
+        val sinW = sin(w0); val cosW = cos(w0)
+        val a = 10.0.pow(gain / 40.0)
+        val alpha = sinW / (2.0 * q)
+        val am = 2.0 * sqrt(a) * alpha
+        val a0 = (a + 1) - (a - 1) * cosW + am
+        return floatArrayOf(1f,
+            (2.0 * ((a - 1) - (a + 1) * cosW) / a0).toFloat(),
+            (((a + 1) - (a - 1) * cosW - am) / a0).toFloat(),
+            (a * ((a + 1) + (a - 1) * cosW + am) / a0).toFloat(),
+            (-2.0 * a * ((a - 1) + (a + 1) * cosW) / a0).toFloat(),
+            (a * ((a + 1) + (a - 1) * cosW - am) / a0).toFloat())
+    }
+
+    private fun lowShelfCoeffs(freq: Float, q: Float, gain: Float): FloatArray {
+        val w0 = 2.0 * PI * freq / SAMPLE_RATE
+        val sinW = sin(w0); val cosW = cos(w0)
+        val a = 10.0.pow(gain / 40.0)
+        val alpha = sinW / (2.0 * q)
+        val am = 2.0 * sqrt(a) * alpha
+        val a0 = (a + 1) + (a - 1) * cosW + am
+        return floatArrayOf(1f,
+            (-2.0 * ((a - 1) + (a + 1) * cosW) / a0).toFloat(),
+            (((a + 1) + (a - 1) * cosW - am) / a0).toFloat(),
+            (a * ((a + 1) - (a - 1) * cosW + am) / a0).toFloat(),
+            (2.0 * a * ((a - 1) - (a + 1) * cosW) / a0).toFloat(),
+            (a * ((a + 1) - (a - 1) * cosW - am) / a0).toFloat())
     }
 
     private fun filterToCoeffs(f: Filter): FloatArray? {
@@ -138,21 +110,19 @@ object EqFitter {
         }
     }
 
-    // ---- Magnitude response from biquad coefficients ----
+    // ---- Magnitude response ----
 
     private fun calcGains(freqs: FloatArray, filters: List<Filter>): FloatArray {
         val gains = FloatArray(freqs.size)
-        val coeffsList = filters.mapNotNull { filterToCoeffs(it) }
-        for (coeffs in coeffsList) {
+        for (filt in filters) {
+            val coeffs = filterToCoeffs(filt) ?: continue
             val (a0, a1, a2, b0, b1, b2) = coeffs
             for (j in freqs.indices) {
                 val w = 2.0 * PI * freqs[j] / SAMPLE_RATE
                 val phi = 4.0 * sin(w / 2.0).pow(2)
                 val num = (b0 + b1 + b2).pow(2) + (b0 * b2 * phi - (b1 * (b0 + b2) + 4 * b0 * b2)) * phi
                 val den = (a0 + a1 + a2).pow(2) + (a0 * a2 * phi - (a1 * (a0 + a2) + 4 * a0 * a2)) * phi
-                if (den > 0 && num > 0) {
-                    gains[j] += (10.0 * log10(num / den)).toFloat()
-                }
+                if (den > 0 && num > 0) gains[j] += (10.0 * log10(num / den)).toFloat()
             }
         }
         return gains
@@ -160,263 +130,310 @@ object EqFitter {
 
     private operator fun FloatArray.component6() = this[5]
 
-    // ---- Apply filters to FR ----
-
     private fun apply(fr: Array<FloatArray>, filters: List<Filter>): Array<FloatArray> {
         val freqs = FloatArray(fr.size) { fr[it][0] }
         val gains = calcGains(freqs, filters)
         return Array(fr.size) { floatArrayOf(fr[it][0], fr[it][1] + gains[it]) }
     }
 
-    // ---- Distance (mean absolute error, ignoring < 0.1dB) ----
+    // ---- Loss function (AutoEQ-style: MSE with 10kHz+ energy matching + sharpness penalty) ----
 
-    private fun calcDistance(fr1: Array<FloatArray>, fr2: Array<FloatArray>): Float {
-        var distance = 0f
-        for (i in fr1.indices) {
-            val d = abs(fr1[i][1] - fr2[i][1])
-            distance += if (d >= 0.1f) d else 0f
+    private fun calcLoss(fr: Array<FloatArray>, frTarget: Array<FloatArray>, filters: List<Filter>): Float {
+        val eqFr = apply(fr, filters)
+        val freqs = FloatArray(fr.size) { fr[it][0] }
+        val ix10k = freqs.indexOfFirst { it >= 10000f }.let { if (it < 0) freqs.size else it }
+
+        // Collapse above 10kHz to mean (AutoEQ: only total energy matters there)
+        val targetAbove10kMean = if (ix10k < frTarget.size) (ix10k until frTarget.size).map { frTarget[it][1] }.average().toFloat() else 0f
+        val frAbove10kMean = if (ix10k < eqFr.size) (ix10k until eqFr.size).map { eqFr[it][1] }.average().toFloat() else 0f
+
+        var mse = 0f
+        var count = 0
+        for (i in fr.indices) {
+            val t = if (i >= ix10k) targetAbove10kMean else frTarget[i][1]
+            val v = if (i >= ix10k) frAbove10kMean else eqFr[i][1]
+            mse += (t - v).pow(2)
+            count++
         }
-        return distance / fr1.size
+        mse /= count
+
+        // Sharpness penalty (AutoEQ: prevents > ~18 dB/octave slopes)
+        for (filt in filters) {
+            if (filt.type == "PK") {
+                val gainLimit = -0.095f + 20.575f * (1f / filt.q)
+                if (gainLimit > 0f) {
+                    val x = abs(filt.gain) / gainLimit - 1f
+                    val sigmoid = 1f / (1f + exp(-x * 100f))
+                    mse += filt.gain.pow(2) * sigmoid * 0.01f
+                }
+            }
+        }
+
+        return sqrt(mse)
     }
 
     // ---- Preamp ----
 
-    private fun calcPreamp(fr: Array<FloatArray>, frTarget: Array<FloatArray>, filters: List<Filter>): Float {
-        val eqFr = apply(fr, filters)
-        var maxGain = Float.NEGATIVE_INFINITY
-        for (i in eqFr.indices) {
-            maxGain = max(maxGain, eqFr[i][1] - fr[i][1])
+    private fun calcPreamp(fr: Array<FloatArray>, filters: List<Filter>): Float {
+        val freqs = FloatArray(fr.size) { fr[it][0] }
+        val gains = calcGains(freqs, filters)
+        return -(gains.maxOrNull() ?: 0f)
+    }
+
+    // ---- Peak detection (AutoEQ-style: find peaks/dips by width × height) ----
+
+    private data class Peak(val index: Int, val width: Float, val height: Float, val isPositive: Boolean)
+
+    private fun findPeaks(error: FloatArray, freqs: FloatArray): List<Peak> {
+        val peaks = mutableListOf<Peak>()
+        // Find local maxima and minima
+        for (i in 1 until error.size - 1) {
+            val isMax = error[i] > error[i - 1] && error[i] > error[i + 1] && error[i] > 0.5f
+            val isMin = error[i] < error[i - 1] && error[i] < error[i + 1] && error[i] < -0.5f
+            if (!isMax && !isMin) continue
+
+            // Measure width at half height
+            val halfH = abs(error[i]) / 2f
+            var left = i; var right = i
+            while (left > 0 && abs(error[left]) > halfH) left--
+            while (right < error.size - 1 && abs(error[right]) > halfH) right++
+
+            val widthOctaves = if (right > left) ln(freqs[right] / freqs[left]) / ln(2f) else 0.1f
+            peaks.add(Peak(i, widthOctaves, abs(error[i]), isMax))
         }
-        return -maxGain
+        return peaks
     }
 
-    // ---- Frequency unit for rounding ----
+    // ---- Initialize high shelf (AutoEQ-style: dot product projection) ----
 
-    private fun freqUnit(freq: Float): Float = when {
-        freq < 100f -> 1f
-        freq < 1000f -> 10f
-        freq < 10000f -> 100f
-        else -> 1000f
-    }
+    private fun initHighShelf(error: FloatArray, freqs: FloatArray, fr: Array<FloatArray>): Filter {
+        val minIdx = freqs.indexOfFirst { it >= HIGH_SHELF_FC_MIN }.coerceAtLeast(0)
+        val maxIdx = freqs.indexOfLast { it <= HIGH_SHELF_FC_MAX }.let { if (it < 0) freqs.size - 1 else it }
 
-    // ---- Strip: round values for cleaner output ----
-
-    private fun strip(filters: List<Filter>): List<Filter> {
-        return filters.map { f ->
-            Filter(
-                f.type,
-                floor(f.freq - f.freq % freqUnit(f.freq)),
-                min(max(floor(f.q * 10f) / 10f, Q_RANGE[0]), Q_RANGE[1]),
-                min(max(floor(f.gain * 10f) / 10f, GAIN_RANGE[0]), GAIN_RANGE[1])
-            )
-        }
-    }
-
-    // ---- Interpolation helper ----
-
-    private fun interp(fv: FloatArray, fr: Array<FloatArray>): Array<FloatArray> {
-        var i = 0
-        return Array(fv.size) { idx ->
-            val f = fv[idx]
-            var result = floatArrayOf(f, fr.last()[1])
-            for (j in i until fr.size - 1) {
-                val (f0, v0) = fr[j]
-                val (f1, v1) = fr[j + 1]
-                if (j == 0 && f < f0) {
-                    result = floatArrayOf(f, v0)
-                    break
-                } else if (f >= f0 && f < f1) {
-                    val v = v0 + (v1 - v0) * (f - f0) / (f1 - f0)
-                    result = floatArrayOf(f, v)
-                    i = j
-                    break
-                }
+        // Find fc where |mean(error[fc:])| is greatest
+        var bestIdx = minIdx
+        var bestAbsAvg = 0f
+        for (i in minIdx..maxIdx) {
+            val avg = (i until error.size).map { error[it] }.average().toFloat()
+            if (abs(avg) > bestAbsAvg) {
+                bestAbsAvg = abs(avg)
+                bestIdx = i
             }
-            result
         }
+
+        val fc = freqs[bestIdx]
+        // Compute gain via dot product projection (AutoEQ style)
+        val shelfFilter = Filter("HSC", fc, 0.7f, 1f)
+        val shelfFR = calcGains(freqs, listOf(shelfFilter))
+        val dot = (error.indices).sumOf { (error[it] * shelfFR[it]).toDouble() }.toFloat()
+        val norm = shelfFR.sumOf { (it * it).toDouble() }.toFloat()
+        val gain = if (norm > 0.001f) (dot / norm).coerceIn(GAIN_RANGE[0], GAIN_RANGE[1]) else 0f
+
+        return Filter("HSC", fc, 0.7f, gain)
     }
 
-    // ---- Search for peak/dip candidates ----
+    // ---- Initialize low shelf for bass (AutoEQ-style: dot product projection) ----
 
-    private fun searchCandidates(fr: Array<FloatArray>, frTarget: Array<FloatArray>, threshold: Float): List<Filter> {
-        var state = 0  // 1: peak, 0: matched, -1: dip
-        var startIndex = -1
-        val candidates = mutableListOf<Filter>()
-        val (minFreq, maxFreq) = AUTO_EQ_RANGE
+    private fun initLowShelf(error: FloatArray, freqs: FloatArray): Filter {
+        val minIdx = freqs.indexOfFirst { it >= LOW_SHELF_FC_MIN }.coerceAtLeast(0)
+        val maxIdx = freqs.indexOfLast { it <= LOW_SHELF_FC_MAX }.let { if (it < 0) freqs.size - 1 else it }
 
-        for (i in fr.indices) {
-            val f = fr[i][0]
-            val v0 = fr[i][1]
-            val v1 = frTarget[i][1]
-            val delta = v0 - v1
-            val deltaAbs = abs(delta)
-            val nextState = if (deltaAbs < threshold) 0 else if (delta > 0) 1 else -1
-
-            if (nextState == state) continue
-
-            if (startIndex >= 0) {
-                if (state != 0) {
-                    val start = fr[startIndex][0]
-                    val end = f
-                    val center = sqrt(start * end)
-                    val centerArr = floatArrayOf(center)
-                    val targetSlice = frTarget.sliceArray(startIndex until i)
-                    val frSlice = fr.sliceArray(startIndex until i)
-                    val gain = interp(centerArr, targetSlice)[0][1] - interp(centerArr, frSlice)[0][1]
-                    val q = center / (end - start)
-                    if (center in minFreq..maxFreq) {
-                        candidates.add(Filter("PK", center, q, gain))
-                    }
-                }
-                startIndex = -1
-            } else {
-                startIndex = i
+        // Find fc where |mean(error[:fc])| is greatest (AutoEQ: average before the point)
+        var bestIdx = minIdx
+        var bestAbsAvg = 0f
+        for (i in minIdx..maxIdx) {
+            val avg = (0..i).map { error[it] }.average().toFloat()
+            if (abs(avg) > bestAbsAvg) {
+                bestAbsAvg = abs(avg)
+                bestIdx = i
             }
-            state = nextState
         }
-        return candidates
+
+        val fc = freqs[bestIdx]
+        val shelfFilter = Filter("LSC", fc, 0.7f, 1f)
+        val shelfFR = calcGains(freqs, listOf(shelfFilter))
+        val dot = (error.indices).sumOf { (error[it] * shelfFR[it]).toDouble() }.toFloat()
+        val norm = shelfFR.sumOf { (it * it).toDouble() }.toFloat()
+        val gain = if (norm > 0.001f) (dot / norm).coerceIn(GAIN_RANGE[0], GAIN_RANGE[1]) else 0f
+
+        return Filter("LSC", fc, 0.7f, gain)
     }
 
-    // ---- Optimize filters ----
+    // ---- Fast error calculation against pre-computed residual ----
 
-    private fun optimize(
+    private fun calcResidualError(residual: Array<FloatArray>, frTarget: Array<FloatArray>,
+                                   candidateGains: FloatArray, ix10k: Int): Float {
+        var mse = 0f
+        // Below 10kHz: per-point MSE
+        for (i in 0 until ix10k) {
+            val v = residual[i][1] + candidateGains[i]
+            val d = frTarget[i][1] - v
+            mse += d * d
+        }
+        // Above 10kHz: energy matching (collapse to mean)
+        if (ix10k < residual.size) {
+            var tSum = 0f; var vSum = 0f; var cnt = 0
+            for (i in ix10k until residual.size) {
+                tSum += frTarget[i][1]
+                vSum += residual[i][1] + candidateGains[i]
+                cnt++
+            }
+            if (cnt > 0) {
+                val d = tSum / cnt - vSum / cnt
+                mse += d * d * cnt
+            }
+        }
+        return mse / residual.size
+    }
+
+    // ---- Optimize a single filter via grid search (pre-computed residual for speed) ----
+
+    private fun optimizeFilter(
         fr: Array<FloatArray>, frTarget: Array<FloatArray>,
-        inputFilters: List<Filter>, iteration: Int, dir: Int = 0
-    ): List<Filter> {
-        val filters = strip(inputFilters).toMutableList()
-        val (minFreq, maxFreq) = AUTO_EQ_RANGE
-        val (minQ, maxQ) = Q_RANGE
-        val (minGain, maxGain) = GAIN_RANGE
-        val deltas = OPTIMIZE_DELTAS[iteration]
-        val maxDF = deltas[0].toInt()
-        val maxDQ = deltas[1].toInt()
-        val maxDG = deltas[2].toInt()
-        val stepDF = deltas[3]
-        val stepDQ = deltas[4]
-        val stepDG = deltas[5]
+        filter: Filter, otherFilters: List<Filter>
+    ): Filter {
+        // Pre-compute residual (FR with all other filters applied) — only done once
+        val residual = apply(fr, otherFilters)
+        val freqs = FloatArray(fr.size) { fr[it][0] }
+        val ix10k = freqs.indexOfFirst { it >= 10000f }.let { if (it < 0) freqs.size else it }
 
-        val indices = if (dir == 1) (filters.size - 1 downTo 0) else (0 until filters.size)
+        var best = filter
+        val bestGains = calcGains(freqs, listOf(best))
+        var bestError = calcResidualError(residual, frTarget, bestGains, ix10k)
 
-        for (i in indices) {
-            val f = filters[i]
-            // FR with all filters except this one
-            val otherFilters = filters.filterIndexed { idx, _ -> idx != i }
-            val fr1 = apply(fr, otherFilters)
-            val fr2 = apply(fr1, listOf(f))
-            var bestFilter = f
-            var bestDistance = calcDistance(fr2, frTarget)
+        // Coarse search
+        val fcRange = if (filter.type == "HSC") {
+            generateSequence(HIGH_SHELF_FC_MIN.toDouble()) { it * 1.15 }
+                .takeWhile { it <= HIGH_SHELF_FC_MAX }.map { it.toFloat() }.toList()
+        } else if (filter.type == "LSC") {
+            generateSequence(LOW_SHELF_FC_MIN.toDouble()) { it * 1.15 }
+                .takeWhile { it <= LOW_SHELF_FC_MAX }.map { it.toFloat() }.toList()
+        } else {
+            val minF = (filter.freq / 2f).coerceAtLeast(FREQ_RANGE[0]).toDouble()
+            val maxF = (filter.freq * 2f).coerceAtMost(FREQ_RANGE[1]).toDouble()
+            generateSequence(minF) { it * 1.08 }.takeWhile { it <= maxF }.map { it.toFloat() }.toList()
+        }
 
-            for (df in -maxDF until maxDF) {
-                for (dq in maxDQ - 1 downTo -maxDQ) {
-                    // Test positive gains
-                    for (dg in 1 until maxDG) {
-                        val freq = f.freq + df * freqUnit(f.freq) * stepDF
-                        val q = f.q + dq * stepDQ
-                        val gain = f.gain + dg * stepDG
-                        if (freq < minFreq || freq > maxFreq || q < minQ || q > maxQ || gain < minGain || gain > maxGain) break
-                        val newFilter = Filter(f.type, freq, q, gain)
-                        val newFR = apply(fr1, listOf(newFilter))
-                        val newDistance = calcDistance(newFR, frTarget)
-                        if (newDistance < bestDistance) {
-                            bestFilter = newFilter
-                            bestDistance = newDistance
-                        } else break
-                    }
-                    // Test negative gains
-                    for (dg in -1 downTo -maxDG) {
-                        val freq = f.freq + df * freqUnit(f.freq) * stepDF
-                        val q = f.q + dq * stepDQ
-                        val gain = f.gain + dg * stepDG
-                        if (freq < minFreq || freq > maxFreq || q < minQ || q > maxQ || gain < minGain || gain > maxGain) break
-                        val newFilter = Filter(f.type, freq, q, gain)
-                        val newFR = apply(fr1, listOf(newFilter))
-                        val newDistance = calcDistance(newFR, frTarget)
-                        if (newDistance < bestDistance) {
-                            bestFilter = newFilter
-                            bestDistance = newDistance
-                        } else break
-                    }
+        val qRange = if (filter.type == "HSC" || filter.type == "LSC") {
+            listOf(0.5f, 0.7f, 1.0f)
+        } else {
+            listOf(0.5f, 1.0f, 2.0f, 4.0f, 8.0f)
+        }
+
+        for (fc in fcRange) {
+            for (q in qRange) {
+                for (gStep in -12..12) {
+                    val g = gStep * 1.0f
+                    if (g == 0f) continue
+                    val candidate = Filter(filter.type, fc, q, g)
+                    val gains = calcGains(freqs, listOf(candidate))
+                    val error = calcResidualError(residual, frTarget, gains, ix10k)
+                    if (error < bestError) { best = candidate; bestError = error }
                 }
             }
-            filters[i] = bestFilter
         }
 
-        if (dir == 0) {
-            return optimize(fr, frTarget, filters, iteration, 1)
-        }
+        // Fine search around best
+        val fineFcRange = generateSequence((best.freq * 0.94f).toDouble()) { it * 1.02 }
+            .takeWhile { it <= best.freq * 1.06f }.map { it.toFloat() }.toList()
+        val fineQRange = listOf(best.q * 0.8f, best.q * 0.9f, best.q, best.q * 1.1f, best.q * 1.2f)
+            .map { it.coerceIn(Q_RANGE[0], Q_RANGE[1]) }
 
-        // Sort by frequency
-        filters.sortBy { it.freq }
-
-        // Merge adjacent filters with similar freq and Q
-        var i = 0
-        while (i < filters.size - 1) {
-            val f1 = filters[i]
-            val f2 = filters[i + 1]
-            if (abs(f1.freq - f2.freq) <= freqUnit(f1.freq) && abs(f1.q - f2.q) <= 0.1f) {
-                filters[i] = Filter(f1.type, f1.freq, f1.q, f1.gain + f2.gain)
-                filters.removeAt(i + 1)
-            } else {
-                i++
+        for (fc in fineFcRange) {
+            for (q in fineQRange) {
+                for (gStep in -5..5) {
+                    val g = (best.gain + gStep * 0.2f).coerceIn(GAIN_RANGE[0], GAIN_RANGE[1])
+                    if (g == 0f) continue
+                    val candidate = Filter(best.type, fc, q, g)
+                    val gains = calcGains(freqs, listOf(candidate))
+                    val error = calcResidualError(residual, frTarget, gains, ix10k)
+                    if (error < bestError) { best = candidate; bestError = error }
+                }
             }
         }
 
-        // Remove unnecessary filters
-        var bestDistance = calcDistance(apply(fr, filters), frTarget)
-        i = 0
-        while (i < filters.size) {
-            if (abs(filters[i].gain) <= 0.1f) {
-                filters.removeAt(i)
-                continue
-            }
-            val withoutThis = filters.filterIndexed { idx, _ -> idx != i }
-            val newDistance = calcDistance(apply(fr, withoutThis), frTarget)
-            if (newDistance < bestDistance) {
-                filters.removeAt(i)
-                bestDistance = newDistance
-            } else {
-                i++
-            }
-        }
-
-        return filters
+        return best
     }
 
-    // ---- Main AutoEQ algorithm (2-stage) ----
+    // ---- Main AutoEQ-style algorithm ----
 
     private fun autoeq(fr: Array<FloatArray>, frTarget: Array<FloatArray>, maxFilters: Int): List<Filter> {
-        // First batch: sub-7kHz, wider bandwidth first
-        val firstBatchSize = max(maxFilters / 2 - 1, 1)
-        val firstCandidates = searchCandidates(fr, frTarget, 1f)
-        var firstFilters = firstCandidates
-            .filter { it.freq <= TREBLE_START }
-            .sortedBy { it.q }
-            .take(firstBatchSize)
-            .sortedBy { it.freq }
+        val freqs = FloatArray(fr.size) { fr[it][0] }
+        val filters = mutableListOf<Filter>()
+        val peakingSlots = maxFilters - 2  // Reserve 2 for low shelf + high shelf
 
-        for (i in OPTIMIZE_DELTAS.indices) {
-            firstFilters = optimize(fr, frTarget, firstFilters, i)
+        // Step 1: Greedy peaking filter initialization (AutoEQ: biggest peak by width × height)
+        var currentFR = fr.map { it.clone() }.toTypedArray()
+        for (n in 0 until peakingSlots) {
+            val error = FloatArray(freqs.size) { frTarget[it][1] - currentFR[it][1] }
+            val peaks = findPeaks(error, freqs)
+            if (peaks.isEmpty()) break
+
+            // Select peak with largest width × height (AutoEQ approach)
+            val bestPeak = peaks.maxByOrNull { it.width * it.height } ?: break
+            if (bestPeak.height < 0.5f) break
+
+            val fc = freqs[bestPeak.index]
+            val gain = if (bestPeak.isPositive) bestPeak.height else -bestPeak.height
+            // Q from bandwidth
+            val bw = bestPeak.width.coerceAtLeast(0.1f)
+            val q = (sqrt(2f.pow(bw)) / (2f.pow(bw) - 1f)).coerceIn(Q_RANGE[0], Q_RANGE[1])
+
+            val initial = Filter("PK", fc, q, gain.coerceIn(GAIN_RANGE[0], GAIN_RANGE[1]))
+            filters.add(initial)
+            currentFR = apply(currentFR, listOf(initial))
         }
 
-        // Second batch: remaining filters on the residual
-        val secondFR = apply(fr, firstFilters)
-        val secondBatchSize = maxFilters - firstFilters.size
-        val secondCandidates = searchCandidates(secondFR, frTarget, 0.5f)
-        var secondFilters = secondCandidates
-            .sortedBy { it.q }
-            .take(secondBatchSize)
-            .sortedBy { it.freq }
-
-        for (i in OPTIMIZE_DELTAS.indices) {
-            secondFilters = optimize(secondFR, frTarget, secondFilters, i)
+        // Step 2: Low shelf for bass + High shelf for treble (AutoEQ style)
+        val errorAfterPeaking = FloatArray(freqs.size) { frTarget[it][1] - currentFR[it][1] }
+        val lowShelf = initLowShelf(errorAfterPeaking, freqs)
+        if (abs(lowShelf.gain) > 0.3f) {
+            filters.add(lowShelf)
+            currentFR = apply(currentFR, listOf(lowShelf))
+        }
+        val errorAfterLowShelf = FloatArray(freqs.size) { frTarget[it][1] - currentFR[it][1] }
+        val highShelf = initHighShelf(errorAfterLowShelf, freqs, fr)
+        if (abs(highShelf.gain) > 0.3f) {
+            filters.add(highShelf)
         }
 
-        // Final: optimize all filters together
-        var allFilters = firstFilters + secondFilters
-        for (i in OPTIMIZE_DELTAS.indices) {
-            allFilters = optimize(fr, frTarget, allFilters, i)
+        // Step 3: Optimize each filter (2 passes, AutoEQ uses SLSQP — we use grid search)
+        for (pass in 0..1) {
+            for (i in filters.indices) {
+                val others = filters.filterIndexed { idx, _ -> idx != i }
+                filters[i] = optimizeFilter(fr, frTarget, filters[i], others)
+            }
         }
 
-        return strip(allFilters)
+        // Step 4: Prune negligible filters
+        val pruned = filters.filter { abs(it.gain) > 0.3f }.toMutableList()
+
+        // Step 5: Remove any filter that doesn't improve the loss
+        var bestLoss = calcLoss(fr, frTarget, pruned)
+        var i = 0
+        while (i < pruned.size) {
+            val without = pruned.filterIndexed { idx, _ -> idx != i }
+            val newLoss = calcLoss(fr, frTarget, without)
+            if (newLoss <= bestLoss) {
+                pruned.removeAt(i)
+                bestLoss = newLoss
+            } else i++
+        }
+
+        return pruned.map { f ->
+            Filter(f.type, roundFreq(f.freq),
+                (round(f.q * 10f) / 10f).coerceIn(Q_RANGE[0], Q_RANGE[1]),
+                (round(f.gain * 10f) / 10f).coerceIn(GAIN_RANGE[0], GAIN_RANGE[1]))
+        }.sortedBy { it.freq }
+    }
+
+    private fun roundFreq(freq: Float): Float {
+        val unit = when {
+            freq < 100f -> 1f
+            freq < 1000f -> 10f
+            freq < 10000f -> 100f
+            else -> 1000f
+        }
+        return round(freq / unit) * unit
     }
 }

@@ -166,9 +166,21 @@ class TargetCurveActivity : AppCompatActivity() {
 
         val numBands = bandCountSlider.value.toInt()
         computeButton.isEnabled = false
-        computeButton.text = "Generating EQ..."
+
+        // Animate "Generating" "Generating." "Generating.." "Generating..."
+        val dotHandler = android.os.Handler(android.os.Looper.getMainLooper())
+        var dotCount = 0
+        val dotRunnable = object : Runnable {
+            override fun run() {
+                dotCount = (dotCount + 1) % 4
+                computeButton.text = "Generating" + ".".repeat(dotCount)
+                dotHandler.postDelayed(this, 400)
+            }
+        }
+        dotHandler.post(dotRunnable)
 
         Thread {
+            try {
             val profile = EqFitter.computeCorrection(meas, target, numBands)
 
             runOnUiThread {
@@ -198,9 +210,18 @@ class TargetCurveActivity : AppCompatActivity() {
                 resultText.text = profileToApoText(profile)
 
                 exportButton.visibility = android.view.View.VISIBLE
+                dotHandler.removeCallbacks(dotRunnable)
                 computeButton.text = "Generate EQ"
                 computeButton.isEnabled = true
                 setResult(Activity.RESULT_OK)
+            }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    dotHandler.removeCallbacks(dotRunnable)
+                    computeButton.text = "Generate EQ"
+                    computeButton.isEnabled = true
+                    android.widget.Toast.makeText(this, "EQ generation failed: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                }
             }
         }.start()
     }

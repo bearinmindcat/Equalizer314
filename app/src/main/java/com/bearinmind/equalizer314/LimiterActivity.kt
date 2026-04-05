@@ -174,22 +174,29 @@ class LimiterActivity : AppCompatActivity() {
         }
         // Reset button: reset limiter to defaults
         limResetBtn.setOnClickListener {
-            isUpdating = true
-            eqPrefs.saveLimiterThreshold(0f)
-            eqPrefs.saveLimiterRatio(2f)
-            eqPrefs.saveLimiterAttack(0.01f)
-            eqPrefs.saveLimiterRelease(1f)
-            eqPrefs.saveLimiterPostGain(0f)
-            thresholdSlider.value = 0f; thresholdText.setText("0.0")
-            ratioSlider.value = 2f; ratioText.setText("2.0")
-            attackSlider.value = 0.01f; attackText.setText("0.01")
-            releaseSlider.value = 1f; releaseText.setText("1")
-            postGainSlider.value = 0f; postGainText.setText("0.0")
-            waveformView.ceilingDb = 0f
-            ceilingView.ceilingDb = 0f
-            isUpdating = false
-            pushToService()
-            android.widget.Toast.makeText(this, "Limiter reset to defaults", android.widget.Toast.LENGTH_SHORT).show()
+            com.google.android.material.dialog.MaterialAlertDialogBuilder(this, R.style.Theme_Equalizer314_Dialog)
+                .setTitle("Reset")
+                .setMessage("Reset all values in this screen to their defaults?")
+                .setNegativeButton("Reset") { _, _ ->
+                    isUpdating = true
+                    eqPrefs.saveLimiterThreshold(0f)
+                    eqPrefs.saveLimiterRatio(2f)
+                    eqPrefs.saveLimiterAttack(0.01f)
+                    eqPrefs.saveLimiterRelease(1f)
+                    eqPrefs.saveLimiterPostGain(0f)
+                    thresholdSlider.value = 0f; thresholdText.setText("0.0")
+                    ratioSlider.value = 2f; ratioText.setText("2.0")
+                    attackSlider.value = 0.01f; attackText.setText("0.01")
+                    releaseSlider.value = 1f; releaseText.setText("1")
+                    postGainSlider.value = 0f; postGainText.setText("0.0")
+                    waveformView.ceilingDb = 0f
+                    ceilingView.ceilingDb = 0f
+                    isUpdating = false
+                    pushToService()
+                    android.widget.Toast.makeText(this, "Limiter reset to defaults", android.widget.Toast.LENGTH_SHORT).show()
+                }
+                .setPositiveButton("Cancel", null)
+                .show()
         }
         vizToggle.setOnClickListener {
             if (visualizer != null) {

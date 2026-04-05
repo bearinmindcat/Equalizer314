@@ -10,98 +10,115 @@
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:background="?attr/colorSurfaceContainerHigh"
-        android:paddingStart="24dp"
-        android:paddingEnd="24dp">
+        android:paddingStart="4dp"
+        android:paddingEnd="4dp">
 
-        <!-- EQ -->
+        <!-- Left group: EQ + MBC -->
         <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:orientation="vertical"
-            android:gravity="center">
-            <ImageButton
-                android:id="@+id/navPresetsButton"
-                android:layout_width="28dp"
-                android:layout_height="28dp"
-                android:src="@drawable/ic_nav_equalizer"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="EQ"
-                android:scaleType="centerInside"
-                app:tint="?attr/colorOnSurface" />
-            <TextView
-                android:id="@+id/navEqStatus"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="ON"
-                android:textSize="8sp"
-                android:textColor="#FF888888" />
-        </LinearLayout>
-
-        <!-- MBC -->
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:layout_marginStart="12dp"
-            android:orientation="vertical"
-            android:gravity="center">
-            <ImageButton
-                android:id="@+id/navMbcButton"
-                android:layout_width="28dp"
-                android:layout_height="28dp"
-                android:src="@drawable/ic_nav_compress"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Multiband Compression"
-                android:scaleType="centerInside"
-                app:tint="?attr/colorOnSurface" />
-            <TextView
-                android:id="@+id/navMbcStatus"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="OFF"
-                android:textSize="8sp"
-                android:textColor="#FF888888" />
-        </LinearLayout>
-
-        <!-- Limiter -->
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:layout_marginStart="12dp"
-            android:orientation="vertical"
-            android:gravity="center">
-            <ImageButton
-                android:id="@+id/navLimiterButton"
-                android:layout_width="28dp"
-                android:layout_height="28dp"
-                android:src="@drawable/ic_nav_limiter"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Limiter"
-                android:scaleType="centerInside"
-                app:tint="?attr/colorOnSurface" />
-            <TextView
-                android:id="@+id/navLimiterStatus"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="ON"
-                android:textSize="8sp"
-                android:textColor="#FF888888" />
-        </LinearLayout>
-
-        <View
             android:layout_width="0dp"
-            android:layout_height="0dp"
-            android:layout_weight="1" />
+            android:layout_weight="1"
+            android:layout_height="match_parent"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:paddingEnd="22dp">
 
-        <!-- Settings -->
-        <ImageButton
-            android:id="@+id/navSettingsButton"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:src="@drawable/ic_nav_settings"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Settings"
-            android:scaleType="centerInside"
-            app:tint="?attr/colorOnSurface" />
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_marginEnd="36dp">
+                <ImageButton
+                    android:id="@+id/navPresetsButton"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:src="@drawable/ic_nav_equalizer"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="EQ"
+                    android:scaleType="centerInside"
+                    app:tint="?attr/colorOnSurface" />
+                <TextView
+                    android:id="@+id/navEqStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="ON"
+                    android:textSize="8sp"
+                    android:textColor="#FF888888" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:orientation="vertical"
+                android:gravity="center">
+                <ImageButton
+                    android:id="@+id/navMbcButton"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:src="@drawable/ic_nav_compress"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Multiband Compression"
+                    android:scaleType="centerInside"
+                    app:tint="?attr/colorOnSurface" />
+                <TextView
+                    android:id="@+id/navMbcStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="OFF"
+                    android:textSize="8sp"
+                    android:textColor="#FF888888" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Right group: Limiter + Settings -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="match_parent"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:paddingStart="22dp">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_marginEnd="36dp">
+                <ImageButton
+                    android:id="@+id/navLimiterButton"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:src="@drawable/ic_nav_limiter"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Limiter"
+                    android:scaleType="centerInside"
+                    app:tint="?attr/colorOnSurface" />
+                <TextView
+                    android:id="@+id/navLimiterStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="ON"
+                    android:textSize="8sp"
+                    android:textColor="#FF888888" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:orientation="vertical"
+                android:gravity="center">
+                <ImageButton
+                    android:id="@+id/navSettingsButton"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:src="@drawable/ic_nav_settings"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Settings"
+                    android:scaleType="centerInside"
+                    app:tint="?attr/colorOnSurface" />
+            </LinearLayout>
+        </LinearLayout>
     </LinearLayout>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -109,13 +126,14 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center_horizontal|bottom"
-        android:layout_marginBottom="28dp"
+        android:layout_marginBottom="36dp"
         android:focusable="false"
         android:focusableInTouchMode="false"
         android:defaultFocusHighlightEnabled="false"
         android:src="@drawable/ic_nav_power"
         android:contentDescription="Power"
-        app:fabSize="normal"
+        app:fabCustomSize="44dp"
+        app:maxImageSize="24dp"
         app:backgroundTint="#FF2A2A2A"
         app:tint="#FF555555"
         app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.Equalizer314.FAB"
