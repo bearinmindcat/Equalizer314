@@ -14,11 +14,13 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingStart="8dp"
+        android:paddingStart="16dp"
         android:paddingEnd="16dp"
         android:paddingTop="8dp"
         android:paddingBottom="8dp">
 
+        <!-- Back button removed — navigable via bottom nav -->
+        <!--
         <ImageButton
             android:id="@+id/limiterBackButton"
             android:layout_width="48dp"
@@ -27,6 +29,7 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Back"
             app:tint="?attr/colorOnSurface" />
+        -->
 
         <TextView
             android:layout_width="0dp"
@@ -34,8 +37,7 @@
             android:layout_weight="1"
             android:text="Limiter"
             android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
-            android:textColor="?attr/colorOnSurface"
-            android:paddingStart="8dp" />
+            android:textColor="?attr/colorOnSurface" />
 
         <com.google.android.material.materialswitch.MaterialSwitch
             android:id="@+id/limiterMasterSwitch"

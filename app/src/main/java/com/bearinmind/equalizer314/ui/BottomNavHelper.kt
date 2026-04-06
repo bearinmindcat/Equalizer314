@@ -24,9 +24,7 @@ object BottomNavHelper {
 
         fun navigateWithAnimation(targetScreen: NavScreen, navigate: () -> Unit) {
             if (currentScreen == targetScreen) return
-            // Animate current icon down and new icon up, then navigate
-            updateHighlight(activity, targetScreen)
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ navigate() }, 200)
+            navigate()
         }
 
         navEq.setOnClickListener {
@@ -35,19 +33,19 @@ object BottomNavHelper {
                     flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
                     putExtra("showSettings", false)
                 })
-                activity.overridePendingTransition(0, 0)
+                activity.overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
             }
         }
         navMbc.setOnClickListener {
             navigateWithAnimation(NavScreen.MBC) {
                 activity.startActivity(Intent(activity, MbcActivity::class.java))
-                activity.overridePendingTransition(0, 0)
+                activity.overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
             }
         }
         navLimiter.setOnClickListener {
             navigateWithAnimation(NavScreen.LIMITER) {
                 activity.startActivity(Intent(activity, LimiterActivity::class.java))
-                activity.overridePendingTransition(0, 0)
+                activity.overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
             }
         }
         navSettings.setOnClickListener {
@@ -56,16 +54,47 @@ object BottomNavHelper {
                     flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
                     putExtra("showSettings", true)
                 })
-                activity.overridePendingTransition(0, 0)
+                activity.overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
             }
         }
 
-        updateHighlight(activity, currentScreen)
+        setHighlightInstant(activity, currentScreen)
         updateStatus(activity, eqPrefs)
         // Set FAB from saved power state instantly — no waiting for service
         val savedPower = eqPrefs.getPowerState()
         android.util.Log.d("BottomNavHelper", "setup: screen=$currentScreen savedPower=$savedPower")
         updatePowerFab(activity, savedPower)
+    }
+
+    private fun setHighlightInstant(activity: Activity, currentScreen: NavScreen) {
+        val navEq = activity.findViewById<ImageButton>(R.id.navPresetsButton)
+        val navMbc = activity.findViewById<ImageButton>(R.id.navMbcButton)
+        val navLimiter = activity.findViewById<ImageButton>(R.id.navLimiterButton)
+        val navSettings = activity.findViewById<ImageButton>(R.id.navSettingsButton)
+
+        val density = activity.resources.displayMetrics.density
+        val buttons = listOf(
+            navEq to (currentScreen == NavScreen.EQ),
+            navMbc to (currentScreen == NavScreen.MBC),
+            navLimiter to (currentScreen == NavScreen.LIMITER),
+            navSettings to (currentScreen == NavScreen.SETTINGS)
+        )
+        for ((btn, isActive) in buttons) {
+            btn.setColorFilter(if (isActive) ACTIVE_COLOR else DIM_COLOR)
+            // Start from default state and animate to active
+            btn.scaleX = 1.0f
+            btn.scaleY = 1.0f
+            btn.translationY = 0f
+            if (isActive) {
+                btn.animate()
+                    .scaleX(1.25f)
+                    .scaleY(1.25f)
+                    .translationY(-3f * density)
+                    .setDuration(200)
+                    .setInterpolator(android.view.animation.DecelerateInterpolator(1.5f))
+                    .start()
+            }
+        }
     }
 
     fun updateHighlight(activity: Activity, currentScreen: NavScreen) {
@@ -89,7 +118,7 @@ object BottomNavHelper {
                 .scaleX(targetScale)
                 .scaleY(targetScale)
                 .translationY(targetTransY)
-                .setDuration(350)
+                .setDuration(200)
                 .setInterpolator(android.view.animation.DecelerateInterpolator(1.5f))
                 .start()
         }

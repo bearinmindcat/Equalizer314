@@ -534,7 +534,8 @@ class MbcActivity : AppCompatActivity() {
     }
 
     private fun initViews() {
-        findViewById<android.widget.ImageButton>(R.id.mbcBackButton).setOnClickListener { finish(); overridePendingTransition(0, 0) }
+        // Back button removed — navigable via bottom nav
+        // findViewById<android.widget.ImageButton>(R.id.mbcBackButton).setOnClickListener { finish(); overridePendingTransition(0, 0) }
 
         // masterSwitch must be initialized before bottom nav references it
         masterSwitch = findViewById(R.id.mbcMasterSwitch)

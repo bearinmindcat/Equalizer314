@@ -385,20 +385,21 @@ class MainActivity : AppCompatActivity() {
         val navLimiterBtn = findViewById<ImageButton>(R.id.navLimiterButton)
         navMbcBtn.setOnClickListener {
             startActivity(Intent(this, MbcActivity::class.java))
-            overridePendingTransition(0, 0)
+            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
         }
         navLimiterBtn.setOnClickListener {
             startActivity(Intent(this, LimiterActivity::class.java))
-            overridePendingTransition(0, 0)
+            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
         }
         powerFab.setOnClickListener {
             if (stateManager.isProcessing) stopProcessing() else startProcessing()
         }
 
-        // Visualizer toggle + Reset button + Band points toggle
+        // Visualizer toggle + Reset button + Band points toggle + Save preset
         val vizToggle = findViewById<com.google.android.material.button.MaterialButton>(R.id.visualizerToggle)
         val resetBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.resetButton)
         val bandPtsBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.bandPointsToggle)
+        val saveBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.savePresetButton)
         val vizDensity = resources.displayMetrics.density
         val gapPx = (2 * vizDensity).toInt()
         eqGraphView.post {
@@ -444,6 +445,372 @@ class MainActivity : AppCompatActivity() {
             bandPtsBtn.layoutParams = bpLp
             bandPtsBtn.minimumWidth = 0; bandPtsBtn.minimumHeight = 0
             bandPtsBtn.setPadding(0, 0, 0, 0)
+
+            // Save preset button: right next to eye button
+            val saveLp = saveBtn.layoutParams as android.widget.FrameLayout.LayoutParams
+            saveLp.width = specWidth
+            saveLp.height = btnHeight
+            saveLp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+            saveLp.leftMargin = gapPx + specWidth + gapPx
+            saveLp.topMargin = btnTop
+            saveBtn.layoutParams = saveLp
+            saveBtn.minimumWidth = 0; saveBtn.minimumHeight = 0
+            saveBtn.setPadding(0, 0, 0, 0)
+        }
+        // Save preset button — toggle between controls and preset picker
+        val eqControlsContainer = findViewById<android.view.View>(R.id.eqControlsContainer)
+        val presetPickerScroll = findViewById<android.widget.ScrollView>(R.id.presetPickerScroll)
+        val presetPickerContainer = findViewById<android.widget.LinearLayout>(R.id.presetPickerContainer)
+        var presetPickerOpen = false
+
+        fun populatePresetPicker() {
+            presetPickerContainer.removeAllViews()
+            val prefs = getSharedPreferences("custom_presets", MODE_PRIVATE)
+            val presetNames = prefs.getStringSet("preset_names", emptySet())?.sorted() ?: emptyList()
+
+            val density = resources.displayMetrics.density
+
+            // "+" button at top — exact copy of the band add button style, full width
+            val saveCurrentBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                text = "+"
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                    setMargins(0, 0, 0, (4 * density).toInt())
+                }
+                cornerRadius = (12 * density).toInt()
+                textSize = 11f
+                val vertPad = (6 * density).toInt()
+                setPadding(0, vertPad, 0, vertPad)
+                insetTop = 0; insetBottom = 0
+                minWidth = 0; minimumWidth = 0
+                gravity = android.view.Gravity.CENTER
+                setBackgroundColor(0x00000000)
+                setTextColor(0xFF888888.toInt())
+                strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                strokeWidth = (1 * density).toInt()
+            }
+            saveCurrentBtn.setOnClickListener {
+                // Find next Custom # number
+                var nextNum = 1
+                for (n in presetNames) {
+                    val match = Regex("Custom #(\\d+)").find(n)
+                    if (match != null) nextNum = maxOf(nextNum, match.groupValues[1].toInt() + 1)
+                }
+                // Build custom dialog layout (Launcher314 style: side-by-side Cancel/Save)
+                val dialogView = android.widget.LinearLayout(this).apply {
+                    orientation = android.widget.LinearLayout.VERTICAL
+                    setPadding((24 * density).toInt(), (20 * density).toInt(), (24 * density).toInt(), (16 * density).toInt())
+                }
+                val title = android.widget.TextView(this).apply {
+                    text = "Save Custom Preset"
+                    setTextColor(0xFFE2E2E2.toInt())
+                    textSize = 20f
+                    setPadding(0, 0, 0, (12 * density).toInt())
+                }
+                val inputBox = android.widget.FrameLayout(this).apply {
+                    layoutParams = android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                        bottomMargin = (16 * density).toInt()
+                    }
+                    background = android.graphics.drawable.GradientDrawable().apply {
+                        setColor(0x00000000)
+                        setStroke((1 * density).toInt(), 0xFF555555.toInt())
+                        cornerRadius = 12 * density
+                    }
+                }
+                val defaultName = "Custom #$nextNum"
+                val input = android.widget.EditText(this).apply {
+                    hint = defaultName
+                    setTextColor(0xFFFFFFFF.toInt())
+                    setHintTextColor(0xFF888888.toInt())
+                    inputType = android.text.InputType.TYPE_CLASS_TEXT
+                    background = null
+                    val pad = (14 * density).toInt()
+                    setPadding(pad, pad, pad, pad)
+                    isSingleLine = true
+                }
+                inputBox.addView(input)
+                val btnRow = android.widget.LinearLayout(this).apply {
+                    orientation = android.widget.LinearLayout.HORIZONTAL
+                    layoutParams = android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
+                }
+                val cancelBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                    text = "Cancel"
+                    layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                        marginEnd = (3 * density).toInt()
+                    }
+                    cornerRadius = (12 * density).toInt()
+                    setTextColor(0xFFEF9A9A.toInt())
+                    strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                    strokeWidth = (1 * density).toInt()
+                    setBackgroundColor(0x00000000)
+                    insetTop = 0; insetBottom = 0
+                }
+                val saveDialogBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                    text = "OK"
+                    layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                        marginStart = (3 * density).toInt()
+                    }
+                    cornerRadius = (12 * density).toInt()
+                    setTextColor(0xFFDDDDDD.toInt())
+                    setBackgroundColor(0x00000000)
+                    strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                    strokeWidth = (1 * density).toInt()
+                    insetTop = 0; insetBottom = 0
+                }
+                btnRow.addView(cancelBtn)
+                btnRow.addView(saveDialogBtn)
+                val divider = android.view.View(this).apply {
+                    layoutParams = android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT, (1 * density).toInt()).apply {
+                        bottomMargin = (12 * density).toInt()
+                    }
+                    setBackgroundColor(0xFF444444.toInt())
+                }
+                dialogView.addView(title)
+                dialogView.addView(inputBox)
+                dialogView.addView(divider)
+                dialogView.addView(btnRow)
+
+                val dialog = android.app.AlertDialog.Builder(this, R.style.Theme_Equalizer314_Dialog)
+                    .setView(dialogView)
+                    .create()
+                cancelBtn.setOnClickListener { dialog.dismiss() }
+                saveDialogBtn.setOnClickListener {
+                    val name = input.text.toString().trim().ifEmpty { defaultName }
+                    if (name.isNotEmpty()) {
+                        val eq = stateManager.parametricEq
+                        stateManager.eqPrefs.saveState(eq)
+                        val json = org.json.JSONObject()
+                        json.put("preamp", stateManager.preampGainDb)
+                        val bands = org.json.JSONArray()
+                        for (b in eq.getAllBands()) {
+                            val bj = org.json.JSONObject()
+                            bj.put("frequency", b.frequency)
+                            bj.put("gain", b.gain)
+                            bj.put("q", b.q)
+                            bj.put("filterType", b.filterType.name)
+                            bj.put("enabled", b.enabled)
+                            bands.put(bj)
+                        }
+                        json.put("bands", bands)
+                        prefs.edit()
+                            .putString("preset_$name", json.toString())
+                            .putStringSet("preset_names", (presetNames.toMutableSet() + name))
+                            .apply()
+                        populatePresetPicker()
+                        android.widget.Toast.makeText(this, "Saved \"$name\"", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                    dialog.dismiss()
+                }
+                dialog.show()
+            }
+            presetPickerContainer.addView(saveCurrentBtn)
+
+            // List saved presets — styled like (+) band buttons
+            for (name in presetNames) {
+                // Parse preset data for thumbnail
+                val presetJson = prefs.getString("preset_$name", null)
+                val bandCount = try {
+                    org.json.JSONObject(presetJson ?: "{}").getJSONArray("bands").length()
+                } catch (_: Exception) { 0 }
+
+                val presetRow = android.widget.LinearLayout(this).apply {
+                    orientation = android.widget.LinearLayout.HORIZONTAL
+                    layoutParams = android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                        setMargins(0, 0, 0, (4 * density).toInt())
+                    }
+                    gravity = android.view.Gravity.CENTER_VERTICAL
+                    background = android.graphics.drawable.GradientDrawable().apply {
+                        setColor(0x00000000)
+                        setStroke((1 * density).toInt(), 0xFF444444.toInt())
+                        cornerRadius = 12 * density
+                    }
+                    val hPad = (12 * density).toInt()
+                    val vPad = (10 * density).toInt()
+                    setPadding(hPad, vPad, hPad, vPad)
+                }
+
+                // Mini EQ curve thumbnail
+                val thumbW = (48 * density).toInt()
+                val thumbH = (24 * density).toInt()
+                val thumbnail = object : android.view.View(this) {
+                    override fun onDraw(canvas: android.graphics.Canvas) {
+                        super.onDraw(canvas)
+                        val w = width.toFloat(); val h = height.toFloat()
+                        if (w <= 0 || h <= 0 || presetJson == null) return
+                        try {
+                            val obj = org.json.JSONObject(presetJson)
+                            val bands = obj.getJSONArray("bands")
+                            val eq = com.bearinmind.equalizer314.dsp.ParametricEqualizer()
+                            eq.clearBands()
+                            for (i in 0 until bands.length()) {
+                                val b = bands.getJSONObject(i)
+                                val ft = try { com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.valueOf(b.getString("filterType")) }
+                                         catch (_: Exception) { com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.BELL }
+                                eq.addBand(b.getDouble("frequency").toFloat(), b.getDouble("gain").toFloat(), ft, b.getDouble("q"))
+                            }
+                            val path = android.graphics.Path()
+                            val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                                color = 0xFFAAAAAA.toInt(); strokeWidth = 1f * density; style = android.graphics.Paint.Style.STROKE
+                            }
+                            val gridPaint = android.graphics.Paint().apply { color = 0xFF6A6A6A.toInt(); strokeWidth = 1f }
+                            canvas.drawLine(0f, h / 2f, w, h / 2f, gridPaint)
+                            canvas.drawLine(0f, 0f, 0f, h, gridPaint)
+                            val maxDb = 15f; val steps = 50
+                            for (s in 0..steps) {
+                                val logF = 1.301f + (s.toFloat() / steps) * (4.342f - 1.301f)
+                                val freq = 10f.pow(logF)
+                                val db = eq.getFrequencyResponse(freq)
+                                val x = w * s / steps; val y = (h / 2f - (db / maxDb) * (h / 2f)).coerceIn(0f, h)
+                                if (s == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                            }
+                            canvas.drawPath(path, paint)
+                        } catch (_: Exception) {}
+                    }
+                }.apply {
+                    layoutParams = android.widget.LinearLayout.LayoutParams(thumbW, thumbH)
+                }
+
+                // Left side: preset name
+                val nameText = android.widget.TextView(this).apply {
+                    text = name
+                    setTextColor(0xFFE2E2E2.toInt())
+                    textSize = 14f
+                    isSingleLine = true
+                    layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                    gravity = android.view.Gravity.CENTER_VERTICAL
+                }
+
+                // Right side: graph + filters count stacked vertically
+                val rightCol = android.widget.LinearLayout(this).apply {
+                    orientation = android.widget.LinearLayout.VERTICAL
+                    gravity = android.view.Gravity.CENTER_HORIZONTAL or android.view.Gravity.CENTER_VERTICAL
+                    layoutParams = android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                        android.widget.LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                        marginEnd = (8 * density).toInt()
+                    }
+                }
+                val filtersText = android.widget.TextView(this).apply {
+                    text = "$bandCount filters"
+                    setTextColor(0xFF888888.toInt())
+                    textSize = 10f
+                    gravity = android.view.Gravity.CENTER
+                }
+
+                // × delete button
+                val deleteBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                    text = "×"
+                    layoutParams = android.widget.LinearLayout.LayoutParams(
+                        (36 * density).toInt(), (36 * density).toInt()).apply {
+                        marginStart = (8 * density).toInt()
+                    }
+                    cornerRadius = (12 * density).toInt()
+                    textSize = 16f
+                    setPadding(0, 0, 0, 0)
+                    insetTop = 0; insetBottom = 0
+                    minWidth = 0; minimumWidth = 0; minHeight = 0; minimumHeight = 0
+                    gravity = android.view.Gravity.CENTER
+                    setBackgroundColor(0x00000000)
+                    setTextColor(0xFFEF9A9A.toInt())
+                    strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                    strokeWidth = (1 * density).toInt()
+                }
+                deleteBtn.setOnClickListener {
+                    com.google.android.material.dialog.MaterialAlertDialogBuilder(this, R.style.Theme_Equalizer314_Dialog)
+                        .setTitle("Delete")
+                        .setMessage("Delete preset \"$name\"?")
+                        .setNegativeButton("Delete") { _, _ ->
+                            prefs.edit()
+                                .remove("preset_$name")
+                                .putStringSet("preset_names", (presetNames.toMutableSet() - name))
+                                .apply()
+                            populatePresetPicker()
+                        }
+                        .setPositiveButton("Cancel", null)
+                        .show()
+                }
+                rightCol.addView(thumbnail)
+                rightCol.addView(filtersText)
+                presetRow.addView(nameText)
+                presetRow.addView(rightCol)
+                presetRow.addView(deleteBtn)
+                // Tap to load preset
+                presetRow.setOnClickListener {
+                    val json = prefs.getString("preset_$name", null) ?: return@setOnClickListener
+                    val obj = org.json.JSONObject(json)
+                    val eq = stateManager.parametricEq ?: return@setOnClickListener
+                    eq.clearBands()
+                    val bandsArr = obj.getJSONArray("bands")
+                    for (i in 0 until bandsArr.length()) {
+                        val bj = bandsArr.getJSONObject(i)
+                        val ft = try { com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.valueOf(bj.getString("filterType")) }
+                                 catch (_: Exception) { com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.BELL }
+                        eq.addBand(bj.getDouble("frequency").toFloat(), bj.getDouble("gain").toFloat(), ft, bj.getDouble("q"))
+                        if (bj.has("enabled")) eq.setBandEnabled(i, bj.getBoolean("enabled"))
+                    }
+                    eqGraphView.setParametricEqualizer(eq)
+                    stateManager.eqPrefs.saveState(eq)
+                    stateManager.initBandSlots()
+                    bandToggleManager.setupToggles()
+                    if (obj.has("preamp")) {
+                        stateManager.preampGainDb = obj.getDouble("preamp").toFloat()
+                        stateManager.eqPrefs.savePreampGain(stateManager.preampGainDb)
+                    }
+                    if (stateManager.isProcessing) {
+                        stateManager.eqService?.let { svc -> svc.dynamicsManager.stop(); svc.dynamicsManager.start(eq) }
+                    }
+                    // Close picker with animation
+                    presetPickerOpen = false
+                    eqControlsContainer.visibility = android.view.View.VISIBLE
+                    eqControlsContainer.alpha = 0f
+                    eqControlsContainer.animate().alpha(1f).setDuration(200).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+                    presetPickerScroll.animate().alpha(0f).setDuration(200).setInterpolator(android.view.animation.DecelerateInterpolator()).withEndAction {
+                        presetPickerScroll.visibility = android.view.View.GONE
+                        presetPickerScroll.alpha = 1f
+                    }.start()
+                    saveBtn.setBackgroundColor(0x00000000)
+                    saveBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                    saveBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+                    android.widget.Toast.makeText(this, "Loaded \"$name\"", android.widget.Toast.LENGTH_SHORT).show()
+                }
+                presetPickerContainer.addView(presetRow)
+            }
+        }
+
+        saveBtn.setOnClickListener {
+            presetPickerOpen = !presetPickerOpen
+            if (presetPickerOpen) {
+                populatePresetPicker()
+                presetPickerScroll.visibility = android.view.View.VISIBLE
+                presetPickerScroll.alpha = 0f
+                presetPickerScroll.animate().alpha(1f).setDuration(200).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+                eqControlsContainer.animate().alpha(0f).setDuration(200).setInterpolator(android.view.animation.DecelerateInterpolator()).withEndAction {
+                    eqControlsContainer.visibility = android.view.View.GONE
+                    eqControlsContainer.alpha = 1f
+                }.start()
+                saveBtn.setBackgroundColor(0xFF555555.toInt())
+                saveBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+                saveBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
+            } else {
+                eqControlsContainer.visibility = android.view.View.VISIBLE
+                eqControlsContainer.alpha = 0f
+                eqControlsContainer.animate().alpha(1f).setDuration(200).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+                presetPickerScroll.animate().alpha(0f).setDuration(200).setInterpolator(android.view.animation.DecelerateInterpolator()).withEndAction {
+                    presetPickerScroll.visibility = android.view.View.GONE
+                    presetPickerScroll.alpha = 1f
+                }.start()
+                saveBtn.setBackgroundColor(0x00000000)
+                saveBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                saveBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+            }
         }
         // Band points toggle: active by default (points shown)
         var bandPointsVisible = true
@@ -840,7 +1207,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun reorderToggleRows(animate: Boolean = true) {
         if (stateManager.currentEqUiMode == EqUiMode.TABLE) return
-        val parent = (pageEq as ScrollView).getChildAt(0) as LinearLayout
+        val parent = findViewById<LinearLayout>(R.id.eqControlsContainer)
         val triContainer = findViewById<View>(R.id.triangleIndicatorContainer)
 
         // Determine which page the selected band is on
@@ -850,9 +1217,8 @@ class MainActivity : AppCompatActivity() {
         val activeRow = if (activePage == 0) bandToggleGroup else bandToggleGroup2
         val inactiveRow = if (activePage == 0) bandToggleGroup2 else bandToggleGroup
 
-        // Check if both rows are already in correct positions
-        val graphCard = (eqGraphView.parent as? View)?.parent as? View ?: eqGraphView.parent as View
-        val graphIdx = parent.indexOfChild(graphCard)
+        // Check if both rows are already in correct positions — use index 0 as base since controls container starts with toggle groups
+        val graphIdx = -1  // graph is outside eqControlsContainer
         val currentActiveIdx = parent.indexOfChild(activeRow)
         val controlsView = when (stateManager.currentEqUiMode) {
             EqUiMode.PARAMETRIC -> parametricControlsCard
@@ -877,23 +1243,20 @@ class MainActivity : AppCompatActivity() {
         parent.removeView(bandToggleGroup2)
         parent.removeView(triContainer)
 
-        // Re-find graph index after removals
-        val newGraphIdx = parent.indexOfChild(graphCard)
-
-        // Active row right after graph (no extra margin — graph's marginBottom=8dp provides gap)
+        // Active row at top of controls container
         (activeRow.layoutParams as? LinearLayout.LayoutParams)?.topMargin = 0
-        parent.addView(activeRow, newGraphIdx + 1)
+        parent.addView(activeRow, 0)
 
         // Triangle indicator after active row
-        parent.addView(triContainer, newGraphIdx + 2)
+        parent.addView(triContainer, 1)
 
-        // Inactive row after controls (no extra margin — controls' marginBottom=8dp provides gap)
+        // Inactive row after controls
         (inactiveRow.layoutParams as? LinearLayout.LayoutParams)?.topMargin = 0
         if (controlsView != null) {
             val controlsIdx = parent.indexOfChild(controlsView)
             parent.addView(inactiveRow, controlsIdx + 1)
         } else {
-            parent.addView(inactiveRow, newGraphIdx + 3)
+            parent.addView(inactiveRow, 2)
         }
     }
 

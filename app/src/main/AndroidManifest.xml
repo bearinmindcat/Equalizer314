@@ -63,6 +63,10 @@
             android:name="com.bearinmind.equalizer314.ExperimentalActivity"
             android:exported="false"
             android:theme="@style/Theme.Equalizer314" />
+        <activity
+            android:name="com.bearinmind.equalizer314.CustomPresetsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Equalizer314" />
 
         <service
             android:name="com.bearinmind.equalizer314.audio.EqService"

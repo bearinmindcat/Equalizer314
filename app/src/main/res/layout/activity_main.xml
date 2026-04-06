@@ -118,6 +118,28 @@
                             android:contentDescription="Toggle band points" />
 
                         <com.google.android.material.button.MaterialButton
+                            android:id="@+id/savePresetButton"
+                            style="?attr/materialButtonOutlinedStyle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="top|start"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:insetLeft="0dp"
+                            android:insetRight="0dp"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            android:padding="3dp"
+                            app:icon="@drawable/ic_save"
+                            app:iconGravity="textStart"
+                            app:iconPadding="0dp"
+                            app:iconTint="@null"
+                            app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
+                            app:strokeColor="#FF444444"
+                            app:strokeWidth="1dp"
+                            android:contentDescription="Save preset" />
+
+                        <com.google.android.material.button.MaterialButton
                             android:id="@+id/resetButton"
                             style="?attr/materialButtonOutlinedStyle"
                             android:layout_width="wrap_content"
@@ -159,6 +181,18 @@
                             android:contentDescription="Toggle visualizer" />
                     </FrameLayout>
                 </com.google.android.material.card.MaterialCardView>
+
+                <!-- Controls / Preset picker overlay -->
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                <!-- EQ Controls container (hidden when preset picker is open) -->
+                <LinearLayout
+                    android:id="@+id/eqControlsContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
 
                 <!-- Per-band on/off toggles row 1 (1-8) -->
                 <LinearLayout
@@ -554,6 +588,26 @@
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
+                </LinearLayout> <!-- end eqControlsContainer -->
+
+                <!-- Preset picker (shown when save icon is tapped) -->
+                <ScrollView
+                    android:id="@+id/presetPickerScroll"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scrollbars="none"
+                    android:visibility="gone"
+                    android:background="?attr/colorSurface">
+
+                    <LinearLayout
+                        android:id="@+id/presetPickerContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical" />
+                </ScrollView>
+
+                </FrameLayout> <!-- end Controls / Preset picker overlay -->
+
             </LinearLayout>
         </ScrollView>
 
@@ -580,8 +634,8 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="Settings"
-                    android:textAppearance="@style/TextAppearance.Material3.HeadlineMedium"
-                    android:textColor="?attr/colorPrimary"
+                    android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
+                    android:textColor="?attr/colorOnSurface"
                     android:gravity="center"
                     android:paddingTop="8dp"
                     android:paddingBottom="16dp" />

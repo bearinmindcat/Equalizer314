@@ -89,7 +89,8 @@ class LimiterActivity : AppCompatActivity() {
 
     private fun initViews() {
         masterSwitch = findViewById(R.id.limiterMasterSwitch)
-        findViewById<android.widget.ImageButton>(R.id.limiterBackButton).setOnClickListener { finish(); overridePendingTransition(0, 0) }
+        // Back button removed — navigable via bottom nav
+        // findViewById<android.widget.ImageButton>(R.id.limiterBackButton).setOnClickListener { finish(); overridePendingTransition(0, 0) }
 
         thresholdSlider = findViewById(R.id.limiterThresholdSlider)
         thresholdText = findViewById(R.id.limiterThresholdText)
