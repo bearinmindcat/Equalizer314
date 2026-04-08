@@ -82,6 +82,7 @@
                         android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                         android:textColor="?attr/colorOnSurfaceVariant"
                         android:paddingTop="4dp" />
+
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
@@ -126,6 +127,7 @@
                         android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                         android:textColor="?attr/colorOnSurfaceVariant"
                         android:paddingTop="4dp" />
+
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
@@ -201,25 +203,57 @@
                 android:text="Generate EQ"
                 android:enabled="false" />
 
-            <!-- Result info -->
-            <TextView
-                android:id="@+id/resultText"
+            <!-- Result card (hidden until EQ generated) -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/resultCard"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingTop="8dp"
-                android:textAppearance="@style/TextAppearance.Material3.BodySmall"
-                android:textColor="?attr/colorOnSurfaceVariant"
-                android:visibility="gone" />
+                android:layout_marginTop="12dp"
+                app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp"
+                app:strokeWidth="0dp"
+                android:visibility="gone">
 
-            <!-- Export button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/exportButton"
-                style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="Export as APO"
-                android:visibility="gone" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Generated EQ"
+                        android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
+                        android:textColor="?attr/colorOnSurface" />
+
+                    <!-- Mini EQ graph for the generated result -->
+                    <FrameLayout
+                        android:id="@+id/resultGraphContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="80dp"
+                        android:layout_marginTop="8dp"
+                        android:layout_marginBottom="8dp" />
+
+                    <!-- Result info -->
+                    <TextView
+                        android:id="@+id/resultText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                        android:textColor="?attr/colorOnSurfaceVariant" />
+
+                    <!-- Export button -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/exportButton"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="Export as APO" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
 
         </LinearLayout>
     </ScrollView>

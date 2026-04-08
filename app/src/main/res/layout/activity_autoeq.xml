@@ -132,6 +132,12 @@
                 android:textColor="?attr/colorOnSurfaceVariant" />
         </LinearLayout>
 
+        <FrameLayout
+            android:id="@+id/autoEqActiveGraph"
+            android:layout_width="48dp"
+            android:layout_height="24dp"
+            android:layout_marginEnd="8dp" />
+
         <ImageButton
             android:id="@+id/autoEqClearButton"
             android:layout_width="36dp"

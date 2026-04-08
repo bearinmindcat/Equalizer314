@@ -131,7 +131,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var pageSettings: View
     private lateinit var navSettingsButton: ImageButton
     private lateinit var navPresetsButton: ImageButton
-    private lateinit var powerFab: com.google.android.material.floatingactionbutton.FloatingActionButton
+    private lateinit var powerFab: android.widget.ImageButton
     private lateinit var dpBandCountGroup: View
     private lateinit var dpBandCountSlider: Slider
     private lateinit var dpBandCountText: EditText
@@ -395,9 +395,12 @@ class MainActivity : AppCompatActivity() {
             if (stateManager.isProcessing) stopProcessing() else startProcessing()
         }
 
-        // Visualizer toggle + Reset button + Band points toggle + Save preset
+        // Visualizer toggle + Edit + Reset + Undo/Redo + Band points toggle + Save preset
         val vizToggle = findViewById<com.google.android.material.button.MaterialButton>(R.id.visualizerToggle)
+        val editBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.editButton)
         val resetBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.resetButton)
+        val undoBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.undoButton)
+        val redoBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.redoButton)
         val bandPtsBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.bandPointsToggle)
         val saveBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.savePresetButton)
         val vizDensity = resources.displayMetrics.density
@@ -423,8 +426,20 @@ class MainActivity : AppCompatActivity() {
             vizToggle.minimumWidth = 0; vizToggle.minimumHeight = 0
             vizToggle.setPadding(0, 0, 0, 0)
 
-            // Reset button: same size as spectrum, to its left
-            val resetLeft = specLeft - gapPx - specWidth
+            // Edit button: to the left of spectrum
+            val editLeft = specLeft - gapPx - specWidth
+            val editLp = editBtn.layoutParams as android.widget.FrameLayout.LayoutParams
+            editLp.width = specWidth
+            editLp.height = btnHeight
+            editLp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+            editLp.leftMargin = editLeft.coerceAtLeast(gapPx)
+            editLp.topMargin = btnTop
+            editBtn.layoutParams = editLp
+            editBtn.minimumWidth = 0; editBtn.minimumHeight = 0
+            editBtn.setPadding(0, 0, 0, 0)
+
+            // Reset button: to the left of edit
+            val resetLeft = editLeft - gapPx - specWidth
             val resetLp = resetBtn.layoutParams as android.widget.FrameLayout.LayoutParams
             resetLp.width = specWidth
             resetLp.height = btnHeight
@@ -434,6 +449,29 @@ class MainActivity : AppCompatActivity() {
             resetBtn.layoutParams = resetLp
             resetBtn.minimumWidth = 0; resetBtn.minimumHeight = 0
             resetBtn.setPadding(0, 0, 0, 0)
+            resetBtn.visibility = android.view.View.GONE
+
+            // Undo button: below reset
+            val undoLp = undoBtn.layoutParams as android.widget.FrameLayout.LayoutParams
+            undoLp.width = specWidth
+            undoLp.height = btnHeight
+            undoLp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+            undoLp.leftMargin = resetLeft.coerceAtLeast(gapPx)
+            undoLp.topMargin = btnTop + btnHeight + gapPx
+            undoBtn.layoutParams = undoLp
+            undoBtn.minimumWidth = 0; undoBtn.minimumHeight = 0
+            undoBtn.setPadding(0, 0, 0, 0)
+
+            // Redo button: below edit
+            val redoLp = redoBtn.layoutParams as android.widget.FrameLayout.LayoutParams
+            redoLp.width = specWidth
+            redoLp.height = btnHeight
+            redoLp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+            redoLp.leftMargin = editLeft.coerceAtLeast(gapPx)
+            redoLp.topMargin = btnTop + btnHeight + gapPx
+            redoBtn.layoutParams = redoLp
+            redoBtn.minimumWidth = 0; redoBtn.minimumHeight = 0
+            redoBtn.setPadding(0, 0, 0, 0)
 
             // Band points toggle: top-left, same size
             val bpLp = bandPtsBtn.layoutParams as android.widget.FrameLayout.LayoutParams
@@ -658,7 +696,7 @@ class MainActivity : AppCompatActivity() {
                             }
                             val path = android.graphics.Path()
                             val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                                color = 0xFFAAAAAA.toInt(); strokeWidth = 1f * density; style = android.graphics.Paint.Style.STROKE
+                                color = 0xFFAAAAAA.toInt(); strokeWidth = 0.5f * density; style = android.graphics.Paint.Style.STROKE
                             }
                             val gridPaint = android.graphics.Paint().apply { color = 0xFF6A6A6A.toInt(); strokeWidth = 1f }
                             canvas.drawLine(0f, h / 2f, w, h / 2f, gridPaint)
@@ -724,18 +762,78 @@ class MainActivity : AppCompatActivity() {
                     strokeWidth = (1 * density).toInt()
                 }
                 deleteBtn.setOnClickListener {
-                    com.google.android.material.dialog.MaterialAlertDialogBuilder(this, R.style.Theme_Equalizer314_Dialog)
-                        .setTitle("Delete")
-                        .setMessage("Delete preset \"$name\"?")
-                        .setNegativeButton("Delete") { _, _ ->
-                            prefs.edit()
-                                .remove("preset_$name")
-                                .putStringSet("preset_names", (presetNames.toMutableSet() - name))
-                                .apply()
-                            populatePresetPicker()
+                    val d = resources.displayMetrics.density
+                    val dlgView = android.widget.LinearLayout(this).apply {
+                        orientation = android.widget.LinearLayout.VERTICAL
+                        setPadding((24 * d).toInt(), (20 * d).toInt(), (24 * d).toInt(), (16 * d).toInt())
+                    }
+                    val dlgTitle = android.widget.TextView(this).apply {
+                        text = "Delete"
+                        setTextColor(0xFFE2E2E2.toInt())
+                        textSize = 20f
+                        setPadding(0, 0, 0, (12 * d).toInt())
+                    }
+                    val dlgMsg = android.widget.TextView(this).apply {
+                        text = "Delete preset \"$name\"?"
+                        setTextColor(0xFFAAAAAA.toInt())
+                        textSize = 14f
+                        setPadding(0, 0, 0, (16 * d).toInt())
+                    }
+                    val dlgDiv = android.view.View(this).apply {
+                        layoutParams = android.widget.LinearLayout.LayoutParams(
+                            android.widget.LinearLayout.LayoutParams.MATCH_PARENT, (1 * d).toInt()).apply {
+                            bottomMargin = (12 * d).toInt()
                         }
-                        .setPositiveButton("Cancel", null)
-                        .show()
+                        setBackgroundColor(0xFF444444.toInt())
+                    }
+                    val dlgBtnRow = android.widget.LinearLayout(this).apply {
+                        orientation = android.widget.LinearLayout.HORIZONTAL
+                        layoutParams = android.widget.LinearLayout.LayoutParams(
+                            android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
+                    }
+                    val dlgDeleteBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                        text = "Delete"
+                        layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                            marginEnd = (3 * d).toInt()
+                        }
+                        cornerRadius = (12 * d).toInt()
+                        setTextColor(0xFFEF9A9A.toInt())
+                        strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                        strokeWidth = (1 * d).toInt()
+                        setBackgroundColor(0x00000000)
+                        insetTop = 0; insetBottom = 0
+                    }
+                    val dlgCancelBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                        text = "Cancel"
+                        layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                            marginStart = (3 * d).toInt()
+                        }
+                        cornerRadius = (12 * d).toInt()
+                        setTextColor(0xFFDDDDDD.toInt())
+                        setBackgroundColor(0x00000000)
+                        strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                        strokeWidth = (1 * d).toInt()
+                        insetTop = 0; insetBottom = 0
+                    }
+                    dlgBtnRow.addView(dlgDeleteBtn)
+                    dlgBtnRow.addView(dlgCancelBtn)
+                    dlgView.addView(dlgTitle)
+                    dlgView.addView(dlgMsg)
+                    dlgView.addView(dlgDiv)
+                    dlgView.addView(dlgBtnRow)
+                    val dlg = android.app.AlertDialog.Builder(this, R.style.Theme_Equalizer314_Dialog)
+                        .setView(dlgView).create()
+                    dlgCancelBtn.setOnClickListener { dlg.dismiss() }
+                    dlgDeleteBtn.setOnClickListener {
+                        prefs.edit()
+                            .remove("preset_$name")
+                            .putStringSet("preset_names", (presetNames.toMutableSet() - name))
+                            .apply()
+                        populatePresetPicker()
+                        dlg.dismiss()
+                    }
+                    dlg.show()
                 }
                 rightCol.addView(thumbnail)
                 rightCol.addView(filtersText)
@@ -838,31 +936,194 @@ class MainActivity : AppCompatActivity() {
         }
         // Reset button: reset EQ to flat
         resetBtn.setOnClickListener {
-            com.google.android.material.dialog.MaterialAlertDialogBuilder(this, R.style.Theme_Equalizer314_Dialog)
-                .setTitle("Reset")
-                .setMessage("Reset all values in this screen to their defaults?")
-                .setNegativeButton("Reset") { _, _ ->
-                    val eq = stateManager.parametricEq ?: return@setNegativeButton
-                    eq.clearBands()
-                    val defaultFreqs = com.bearinmind.equalizer314.dsp.ParametricEqualizer.logSpacedFrequencies(16)
-                    for (i in 0..3) {
-                        eq.addBand(defaultFreqs[i], 0f, com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.BELL)
-                    }
-                    eqGraphView.setParametricEqualizer(eq)
-                    stateManager.eqPrefs.saveState(eq)
-                    stateManager.initBandSlots()
-                    bandToggleManager.setupToggles()
-                    if (stateManager.isProcessing) {
-                        stateManager.eqService?.let { svc ->
-                            svc.dynamicsManager.stop()
-                            svc.dynamicsManager.start(eq)
-                        }
-                    }
-                    android.widget.Toast.makeText(this, "EQ reset to defaults", android.widget.Toast.LENGTH_SHORT).show()
+            val density = resources.displayMetrics.density
+            val dialogView = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                setPadding((24 * density).toInt(), (20 * density).toInt(), (24 * density).toInt(), (16 * density).toInt())
+            }
+            val title = android.widget.TextView(this).apply {
+                text = "Reset"
+                setTextColor(0xFFE2E2E2.toInt())
+                textSize = 20f
+                setPadding(0, 0, 0, (12 * density).toInt())
+            }
+            val message = android.widget.TextView(this).apply {
+                text = "Reset all values in this screen to their defaults?"
+                setTextColor(0xFFAAAAAA.toInt())
+                textSize = 14f
+                setPadding(0, 0, 0, (16 * density).toInt())
+            }
+            val divider = android.view.View(this).apply {
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT, (1 * density).toInt()).apply {
+                    bottomMargin = (12 * density).toInt()
                 }
-                .setPositiveButton("Cancel", null)
-                .show()
+                setBackgroundColor(0xFF444444.toInt())
+            }
+            val btnRow = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
+            }
+            val resetDialogBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                text = "Reset"
+                layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    marginEnd = (3 * density).toInt()
+                }
+                cornerRadius = (12 * density).toInt()
+                setTextColor(0xFFEF9A9A.toInt())
+                strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                strokeWidth = (1 * density).toInt()
+                setBackgroundColor(0x00000000)
+                insetTop = 0; insetBottom = 0
+            }
+            val cancelBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                text = "Cancel"
+                layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    marginStart = (3 * density).toInt()
+                }
+                cornerRadius = (12 * density).toInt()
+                setTextColor(0xFFDDDDDD.toInt())
+                setBackgroundColor(0x00000000)
+                strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                strokeWidth = (1 * density).toInt()
+                insetTop = 0; insetBottom = 0
+            }
+            btnRow.addView(resetDialogBtn)
+            btnRow.addView(cancelBtn)
+            dialogView.addView(title)
+            dialogView.addView(message)
+            dialogView.addView(divider)
+            dialogView.addView(btnRow)
+
+            val dialog = android.app.AlertDialog.Builder(this, R.style.Theme_Equalizer314_Dialog)
+                .setView(dialogView)
+                .create()
+            cancelBtn.setOnClickListener { dialog.dismiss() }
+            resetDialogBtn.setOnClickListener {
+                val eq = stateManager.parametricEq ?: return@setOnClickListener
+                eq.clearBands()
+                val defaultFreqs = com.bearinmind.equalizer314.dsp.ParametricEqualizer.logSpacedFrequencies(16)
+                for (i in 0..3) {
+                    eq.addBand(defaultFreqs[i], 0f, com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.BELL)
+                }
+                eqGraphView.setParametricEqualizer(eq)
+                stateManager.eqPrefs.saveState(eq)
+                stateManager.initBandSlots()
+                bandToggleManager.setupToggles()
+                if (stateManager.isProcessing) {
+                    stateManager.eqService?.let { svc ->
+                        svc.dynamicsManager.stop()
+                        svc.dynamicsManager.start(eq)
+                    }
+                }
+                android.widget.Toast.makeText(this, "EQ reset to defaults", android.widget.Toast.LENGTH_SHORT).show()
+                dialog.dismiss()
+            }
+            dialog.show()
         }
+        // Edit mode toggle — undo/redo pop out from edit button position
+        var editMode = false
+        editBtn.setOnClickListener {
+            editMode = !editMode
+            val d = resources.displayMetrics.density
+            if (editMode) {
+                val offsetY = -(editBtn.height.toFloat() + gapPx)
+
+                // Show reset, undo, redo — all pop out from edit button
+                resetBtn.visibility = android.view.View.VISIBLE
+                undoBtn.visibility = android.view.View.VISIBLE
+                redoBtn.visibility = android.view.View.VISIBLE
+                resetBtn.alpha = 0f; resetBtn.scaleX = 0.3f; resetBtn.scaleY = 0.3f; resetBtn.translationY = offsetY
+                undoBtn.alpha = 0f; undoBtn.scaleX = 0.3f; undoBtn.scaleY = 0.3f; undoBtn.translationY = offsetY
+                redoBtn.alpha = 0f; redoBtn.scaleX = 0.3f; redoBtn.scaleY = 0.3f; redoBtn.translationY = offsetY
+
+                resetBtn.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f)
+                    .setDuration(250).setInterpolator(android.view.animation.OvershootInterpolator(1.0f)).start()
+                undoBtn.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f)
+                    .setDuration(250).setStartDelay(40).setInterpolator(android.view.animation.OvershootInterpolator(1.0f)).start()
+                redoBtn.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f)
+                    .setDuration(250).setStartDelay(80).setInterpolator(android.view.animation.OvershootInterpolator(1.0f)).start()
+
+                editBtn.setBackgroundColor(0xFF555555.toInt())
+                editBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+                editBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
+            } else {
+                val offsetY = -(editBtn.height.toFloat() + gapPx)
+
+                redoBtn.animate().alpha(0f).scaleX(0.3f).scaleY(0.3f).translationY(offsetY)
+                    .setDuration(200).setInterpolator(android.view.animation.AccelerateInterpolator())
+                    .withEndAction { redoBtn.visibility = android.view.View.GONE; redoBtn.translationY = 0f }.start()
+                undoBtn.animate().alpha(0f).scaleX(0.3f).scaleY(0.3f).translationY(offsetY)
+                    .setDuration(200).setStartDelay(40).setInterpolator(android.view.animation.AccelerateInterpolator())
+                    .withEndAction { undoBtn.visibility = android.view.View.GONE; undoBtn.translationY = 0f }.start()
+                resetBtn.animate().alpha(0f).scaleX(0.3f).scaleY(0.3f).translationY(offsetY)
+                    .setDuration(200).setStartDelay(80).setInterpolator(android.view.animation.AccelerateInterpolator())
+                    .withEndAction { resetBtn.visibility = android.view.View.GONE; resetBtn.translationY = 0f }.start()
+
+                editBtn.setBackgroundColor(0x00000000)
+                editBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                editBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+            }
+        }
+
+        // Undo/Redo — EQ state history
+        val eqHistory = mutableListOf<String>()
+        var historyIndex = -1
+        fun saveEqState() {
+            val eq = stateManager.parametricEq
+            val json = org.json.JSONObject()
+            val bands = org.json.JSONArray()
+            for (b in eq.getAllBands()) {
+                val bj = org.json.JSONObject()
+                bj.put("frequency", b.frequency); bj.put("gain", b.gain)
+                bj.put("q", b.q); bj.put("filterType", b.filterType.name)
+                bj.put("enabled", b.enabled)
+                bands.put(bj)
+            }
+            json.put("bands", bands)
+            // Trim future states if we're not at the end
+            while (eqHistory.size > historyIndex + 1) eqHistory.removeAt(eqHistory.size - 1)
+            eqHistory.add(json.toString())
+            historyIndex = eqHistory.size - 1
+        }
+        fun restoreEqState(jsonStr: String) {
+            val eq = stateManager.parametricEq
+            val obj = org.json.JSONObject(jsonStr)
+            val bandsArr = obj.getJSONArray("bands")
+            eq.clearBands()
+            for (i in 0 until bandsArr.length()) {
+                val bj = bandsArr.getJSONObject(i)
+                val ft = try { com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.valueOf(bj.getString("filterType")) }
+                         catch (_: Exception) { com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.BELL }
+                eq.addBand(bj.getDouble("frequency").toFloat(), bj.getDouble("gain").toFloat(), ft, bj.getDouble("q"))
+                if (bj.has("enabled")) eq.setBandEnabled(i, bj.getBoolean("enabled"))
+            }
+            eqGraphView.setParametricEqualizer(eq)
+            stateManager.eqPrefs.saveState(eq)
+            stateManager.initBandSlots()
+            bandToggleManager.setupToggles()
+            if (stateManager.isProcessing) {
+                stateManager.eqService?.let { svc -> svc.dynamicsManager.stop(); svc.dynamicsManager.start(eq) }
+            }
+        }
+        // Save initial state
+        saveEqState()
+
+        undoBtn.setOnClickListener {
+            if (historyIndex > 0) {
+                historyIndex--
+                restoreEqState(eqHistory[historyIndex])
+            }
+        }
+        redoBtn.setOnClickListener {
+            if (historyIndex < eqHistory.size - 1) {
+                historyIndex++
+                restoreEqState(eqHistory[historyIndex])
+            }
+        }
+
         fun updateVizToggleStyle(active: Boolean) {
             if (active) {
                 vizToggle.alpha = 1.0f
@@ -1616,18 +1877,20 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        animatePowerFab(true)
-        EqService.start(this)
-
-        if (stateManager.serviceBound) {
-            doStartEq()
-        } else {
-            stateManager.pendingStartEq = true
-            val intent = Intent(this, EqService::class.java)
-            bindService(intent, stateManager.serviceConnection, BIND_AUTO_CREATE)
-        }
-
+        // Start animation first, then do heavy work after a frame so animation plays smoothly
         showPowerSnackbar(true)
+        animatePowerFab(true)
+
+        powerFab.postDelayed({
+            EqService.start(this)
+            if (stateManager.serviceBound) {
+                doStartEq()
+            } else {
+                stateManager.pendingStartEq = true
+                val intent = Intent(this, EqService::class.java)
+                bindService(intent, stateManager.serviceConnection, BIND_AUTO_CREATE)
+            }
+        }, 280)
     }
 
     private fun doStartEq() {
@@ -1635,14 +1898,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun stopProcessing() {
-        stateManager.stopProcessing { on -> animatePowerFab(on) }
         showPowerSnackbar(false)
+        animatePowerFab(false)
+        powerFab.postDelayed({
+            stateManager.stopProcessing { on -> animatePowerFab(on) }
+        }, 280)
     }
 
     private fun showPowerSnackbar(on: Boolean) {
         eqPrefs.savePowerState(on)
         com.bearinmind.equalizer314.ui.BottomNavHelper.updatePowerFab(this, on)
-        val message = if (on) "Equalizer314 is On" else "Equalizer314 is Off"
+        val message = if (on) "DynamicsProcessing Start" else "DynamicsProcessing Stop"
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 
@@ -1651,27 +1917,8 @@ class MainActivity : AppCompatActivity() {
     private var powerAnimator: android.animation.ValueAnimator? = null
 
     private fun animatePowerFab(on: Boolean) {
-        eqPrefs.savePowerState(on)
-        powerAnimator?.cancel()
-
-        val fromBg = (powerFab.backgroundTintList?.defaultColor ?: 0xFF2A2A2A.toInt())
-        val fromIcon = (powerFab.imageTintList?.defaultColor ?: 0xFF555555.toInt())
-        val toBg = if (on) 0xFFFFFFFF.toInt() else 0xFF2A2A2A.toInt()
-        val toIcon = if (on) 0xFF000000.toInt() else 0xFF555555.toInt()
-
-        powerAnimator = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 200
-            interpolator = android.view.animation.AccelerateDecelerateInterpolator()
-            addUpdateListener { anim ->
-                val f = anim.animatedValue as Float
-                val bg = blendColor(fromBg, toBg, f)
-                val icon = blendColor(fromIcon, toIcon, f)
-                powerFab.backgroundTintList = android.content.res.ColorStateList.valueOf(bg)
-                powerFab.imageTintList = android.content.res.ColorStateList.valueOf(icon)
-            }
-            start()
-        }
-
+        // Don't duplicate — BottomNavHelper.updatePowerFab handles the full animation
+        // Just update the text label
         powerButton.text = if (on) "ON" else "OFF"
     }
 
@@ -1685,15 +1932,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updatePowerUI() {
-        if (stateManager.isProcessing) {
-            powerButton.text = "ON"
-            powerFab.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFFFFFFF.toInt())
-            powerFab.imageTintList = android.content.res.ColorStateList.valueOf(0xFF000000.toInt())
-        } else {
-            powerButton.text = "OFF"
-            powerFab.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF2A2A2A.toInt())
-            powerFab.imageTintList = android.content.res.ColorStateList.valueOf(0xFF555555.toInt())
-        }
+        powerButton.text = if (stateManager.isProcessing) "ON" else "OFF"
     }
 
     private fun updateBottomBarHighlight(isEqPage: Boolean) {
@@ -1819,9 +2058,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Set FAB from saved power state — source of truth
+        // Set FAB from saved power state — instant, no animation
         val savedPower = eqPrefs.getPowerState()
-        com.bearinmind.equalizer314.ui.BottomNavHelper.updatePowerFab(this, savedPower)
+        com.bearinmind.equalizer314.ui.BottomNavHelper.setPowerFabInstant(this, savedPower)
         if (stateManager.serviceBound && stateManager.eqService != null) {
             stateManager.isProcessing = stateManager.eqService!!.dynamicsManager.isActive
         } else {

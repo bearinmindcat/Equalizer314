@@ -61,7 +61,7 @@ class MbcActivity : AppCompatActivity() {
             val wasActive = eqService?.dynamicsManager?.isActive == true
             // Don't pushMbcToService on screen entry — causes audio dropout from DP recreation
             // MBC settings are already applied from when DP was started
-            com.bearinmind.equalizer314.ui.BottomNavHelper.updatePowerFab(this@MbcActivity, wasActive)
+            com.bearinmind.equalizer314.ui.BottomNavHelper.setPowerFabInstant(this@MbcActivity, wasActive)
         }
         override fun onServiceDisconnected(name: android.content.ComponentName?) {
             eqService = null
@@ -460,30 +460,91 @@ class MbcActivity : AppCompatActivity() {
 
         // Reset button: reset all MBC bands to defaults
         mbcResetBtn.setOnClickListener {
-            com.google.android.material.dialog.MaterialAlertDialogBuilder(this, R.style.Theme_Equalizer314_Dialog)
-                .setTitle("Reset")
-                .setMessage("Reset all values in this screen to their defaults?")
-                .setNegativeButton("Reset") { _, _ ->
-                    for (i in 0 until bandCount) {
-                        bands[i].threshold = 0f
-                        bands[i].ratio = 2f
-                        bands[i].kneeWidth = 8f
-                        bands[i].attack = 1f
-                        bands[i].release = 100f
-                        bands[i].noiseGateThreshold = -60f
-                        bands[i].expanderRatio = 1f
-                        bands[i].preGain = 0f
-                        bands[i].postGain = 0f
-                        saveBand(i)
-                    }
-                    graphView.mbcBandGains?.let { for (i in it.indices) it[i] = 0f }
-                    graphView.invalidate()
-                    loadBandToUI()
-                    pushMbcToService()
-                    android.widget.Toast.makeText(this, "MBC reset to defaults", android.widget.Toast.LENGTH_SHORT).show()
+            val dialogView = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                setPadding((24 * density).toInt(), (20 * density).toInt(), (24 * density).toInt(), (16 * density).toInt())
+            }
+            val titleTv = android.widget.TextView(this).apply {
+                text = "Reset"
+                setTextColor(0xFFE2E2E2.toInt())
+                textSize = 20f
+                setPadding(0, 0, 0, (12 * density).toInt())
+            }
+            val messageTv = android.widget.TextView(this).apply {
+                text = "Reset all values in this screen to their defaults?"
+                setTextColor(0xFFAAAAAA.toInt())
+                textSize = 14f
+                setPadding(0, 0, 0, (16 * density).toInt())
+            }
+            val divider = android.view.View(this).apply {
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT, (1 * density).toInt()).apply {
+                    bottomMargin = (12 * density).toInt()
                 }
-                .setPositiveButton("Cancel", null)
-                .show()
+                setBackgroundColor(0xFF444444.toInt())
+            }
+            val btnRow = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
+            }
+            val resetDialogBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                text = "Reset"
+                layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    marginEnd = (3 * density).toInt()
+                }
+                cornerRadius = (12 * density).toInt()
+                setTextColor(0xFFEF9A9A.toInt())
+                strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                strokeWidth = (1 * density).toInt()
+                setBackgroundColor(0x00000000)
+                insetTop = 0; insetBottom = 0
+            }
+            val cancelBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                text = "Cancel"
+                layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    marginStart = (3 * density).toInt()
+                }
+                cornerRadius = (12 * density).toInt()
+                setTextColor(0xFFDDDDDD.toInt())
+                setBackgroundColor(0x00000000)
+                strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                strokeWidth = (1 * density).toInt()
+                insetTop = 0; insetBottom = 0
+            }
+            btnRow.addView(resetDialogBtn)
+            btnRow.addView(cancelBtn)
+            dialogView.addView(titleTv)
+            dialogView.addView(messageTv)
+            dialogView.addView(divider)
+            dialogView.addView(btnRow)
+
+            val dialog = android.app.AlertDialog.Builder(this, R.style.Theme_Equalizer314_Dialog)
+                .setView(dialogView)
+                .create()
+            cancelBtn.setOnClickListener { dialog.dismiss() }
+            resetDialogBtn.setOnClickListener {
+                for (i in 0 until bandCount) {
+                    bands[i].threshold = 0f
+                    bands[i].ratio = 2f
+                    bands[i].kneeWidth = 8f
+                    bands[i].attack = 1f
+                    bands[i].release = 100f
+                    bands[i].noiseGateThreshold = -60f
+                    bands[i].expanderRatio = 1f
+                    bands[i].preGain = 0f
+                    bands[i].postGain = 0f
+                    saveBand(i)
+                }
+                graphView.mbcBandGains?.let { for (i in it.indices) it[i] = 0f }
+                graphView.invalidate()
+                loadBandToUI()
+                pushMbcToService()
+                android.widget.Toast.makeText(this, "MBC reset to defaults", android.widget.Toast.LENGTH_SHORT).show()
+                dialog.dismiss()
+            }
+            dialog.show()
         }
 
         vizToggle.setOnClickListener {
@@ -545,7 +606,7 @@ class MbcActivity : AppCompatActivity() {
         val mbcNavIcon = findViewById<android.widget.ImageButton>(R.id.navMbcButton)
         mbcNavIconRef = mbcNavIcon
         // Power FAB toggles DynamicsProcessing on/off
-        val powerFab = findViewById<com.google.android.material.floatingactionbutton.FloatingActionButton>(R.id.powerFab)
+        val powerFab = findViewById<android.widget.ImageButton>(R.id.powerFab)
         powerFab.setOnClickListener {
             val svc = eqService ?: return@setOnClickListener
             if (svc.dynamicsManager.isActive) {
@@ -560,7 +621,7 @@ class MbcActivity : AppCompatActivity() {
             }
             val on = svc.dynamicsManager.isActive
             com.bearinmind.equalizer314.ui.BottomNavHelper.setPowerState(this, eqPrefs, on)
-            android.widget.Toast.makeText(this, if (on) "Equalizer314 is On" else "Equalizer314 is Off", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(this, if (on) "DynamicsProcessing Start" else "DynamicsProcessing Stop", android.widget.Toast.LENGTH_SHORT).show()
         }
 
         // Graph with MBC band visualization
@@ -1331,7 +1392,7 @@ class MbcActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         // Sync nav bar from saved state
-        com.bearinmind.equalizer314.ui.BottomNavHelper.updatePowerFab(this, eqPrefs.getPowerState())
+        com.bearinmind.equalizer314.ui.BottomNavHelper.setPowerFabInstant(this, eqPrefs.getPowerState())
         com.bearinmind.equalizer314.ui.BottomNavHelper.updateHighlight(this, com.bearinmind.equalizer314.ui.NavScreen.MBC)
         com.bearinmind.equalizer314.ui.BottomNavHelper.updateStatus(this, eqPrefs)
         // Restart visualizer if it was enabled (may have been stopped in onPause)

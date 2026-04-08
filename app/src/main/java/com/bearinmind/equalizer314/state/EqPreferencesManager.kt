@@ -159,6 +159,14 @@ class EqPreferencesManager(context: Context) {
             .putString("importedPreset_$name", rawText)
             .apply()
     }
+    fun removeImportedPreset(name: String) {
+        val list = getImportedPresets().toMutableList()
+        list.remove(name)
+        prefs.edit()
+            .putString("importedPresets", org.json.JSONArray(list).toString())
+            .remove("importedPreset_$name")
+            .apply()
+    }
     fun getImportedPresetText(name: String): String? = prefs.getString("importedPreset_$name", null)
     fun getImportedPresets(): List<String> {
         val str = prefs.getString("importedPresets", null) ?: return emptyList()
@@ -167,11 +175,22 @@ class EqPreferencesManager(context: Context) {
     }
 
     // Imported targets (stored as JSON array of names)
-    fun addImportedTarget(name: String) {
+    fun addImportedTarget(name: String, rawText: String = "") {
         val list = getImportedTargets().toMutableList()
         list.removeAll { it == name }
         list.add(0, name)
-        prefs.edit().putString("importedTargets", org.json.JSONArray(list).toString()).apply()
+        val editor = prefs.edit().putString("importedTargets", org.json.JSONArray(list).toString())
+        if (rawText.isNotEmpty()) editor.putString("importedTarget_$name", rawText)
+        editor.apply()
+    }
+    fun getImportedTargetText(name: String): String? = prefs.getString("importedTarget_$name", null)
+    fun removeImportedTarget(name: String) {
+        val list = getImportedTargets().toMutableList()
+        list.remove(name)
+        prefs.edit()
+            .putString("importedTargets", org.json.JSONArray(list).toString())
+            .remove("importedTarget_$name")
+            .apply()
     }
     fun getImportedTargets(): List<String> {
         val str = prefs.getString("importedTargets", null) ?: return emptyList()
@@ -187,6 +206,14 @@ class EqPreferencesManager(context: Context) {
         prefs.edit()
             .putString("importedMeasurements", org.json.JSONArray(list).toString())
             .putString("importedMeas_$name", rawText)
+            .apply()
+    }
+    fun removeImportedMeasurement(name: String) {
+        val list = getImportedMeasurements().toMutableList()
+        list.remove(name)
+        prefs.edit()
+            .putString("importedMeasurements", org.json.JSONArray(list).toString())
+            .remove("importedMeas_$name")
             .apply()
     }
     fun getImportedMeasurementText(name: String): String? = prefs.getString("importedMeas_$name", null)

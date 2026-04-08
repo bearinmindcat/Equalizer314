@@ -19,8 +19,7 @@
             android:layout_weight="1"
             android:layout_height="match_parent"
             android:orientation="horizontal"
-            android:gravity="center"
-            android:paddingEnd="22dp">
+            android:gravity="center">
 
             <LinearLayout
                 android:layout_width="wrap_content"
@@ -70,14 +69,24 @@
             </LinearLayout>
         </LinearLayout>
 
+        <!-- Center: Power button inline -->
+        <ImageButton
+            android:id="@+id/powerFab"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_nav_power"
+            android:scaleType="centerInside"
+            android:background="@drawable/bg_power_button_ripple"
+            android:contentDescription="Power"
+            android:focusable="true" />
+
         <!-- Right group: Limiter + Settings -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="match_parent"
             android:orientation="horizontal"
-            android:gravity="center"
-            android:paddingStart="22dp">
+            android:gravity="center">
 
             <LinearLayout
                 android:layout_width="wrap_content"
@@ -120,23 +129,5 @@
             </LinearLayout>
         </LinearLayout>
     </LinearLayout>
-
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/powerFab"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center_horizontal|bottom"
-        android:layout_marginBottom="36dp"
-        android:focusable="false"
-        android:focusableInTouchMode="false"
-        android:defaultFocusHighlightEnabled="false"
-        android:src="@drawable/ic_nav_power"
-        android:contentDescription="Power"
-        app:fabCustomSize="44dp"
-        app:maxImageSize="24dp"
-        app:backgroundTint="#FF2A2A2A"
-        app:tint="#FF555555"
-        app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.Equalizer314.FAB"
-        app:elevation="6dp" />
 
 </merge>

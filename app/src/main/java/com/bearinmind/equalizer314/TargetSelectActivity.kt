@@ -12,6 +12,8 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.bearinmind.equalizer314.autoeq.FreqResponse
+import com.bearinmind.equalizer314.autoeq.FreqResponseParser
 import com.bearinmind.equalizer314.state.EqPreferencesManager
 import com.google.android.material.textfield.TextInputEditText
 import org.json.JSONArray
@@ -42,11 +44,13 @@ class TargetSelectActivity : AppCompatActivity() {
             val text = contentResolver.openInputStream(uri)?.bufferedReader()?.readText() ?: return@registerForActivityResult
             val fr = com.bearinmind.equalizer314.autoeq.FreqResponseParser.parse(text)
             if (fr != null) {
-                val fileName = uri.lastPathSegment?.substringAfterLast("/")?.substringBeforeLast(".") ?: "Custom Import"
+                val fileName = contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) cursor.getString(0) else null
+                } ?: uri.lastPathSegment?.substringAfterLast("/") ?: "Custom Import"
                 eqPrefs.saveSelectedTarget("__custom__")
                 eqPrefs.saveSelectedTargetName(fileName)
                 eqPrefs.saveSelectedTargetType("Imported")
-                eqPrefs.addImportedTarget(fileName)
+                eqPrefs.addImportedTarget(fileName, text)
                 setResult(Activity.RESULT_OK)
                 updateActiveCard()
                 performSearch(searchInput.text?.toString() ?: "")
@@ -75,7 +79,31 @@ class TargetSelectActivity : AppCompatActivity() {
 
         loadTargets()
 
-        adapter = TargetAdapter { entry -> onTargetSelected(entry) }
+        adapter = TargetAdapter(
+            onItemClick = { entry -> onTargetSelected(entry) },
+            onDeleteClick = { entry -> showDeleteDialog(entry.name) {
+                eqPrefs.removeImportedTarget(entry.name)
+                if (eqPrefs.getSelectedTargetName() == entry.name) {
+                    eqPrefs.saveSelectedTarget("")
+                    eqPrefs.saveSelectedTargetName("")
+                    eqPrefs.saveSelectedTargetType("")
+                    updateActiveCard()
+                    setResult(Activity.RESULT_OK)
+                }
+                performSearch(searchInput.text?.toString() ?: "")
+            } },
+            frLoader = { entry ->
+                try {
+                    if (entry.file != "__custom__") {
+                        val text = assets.open("targets/${entry.file}.csv").bufferedReader().readText()
+                        FreqResponseParser.parse(text)
+                    } else {
+                        val text = eqPrefs.getImportedTargetText(entry.name)
+                        if (text != null) FreqResponseParser.parse(text) else null
+                    }
+                } catch (_: Exception) { null }
+            }
+        )
         recyclerView.layoutManager = LinearLayoutManager(this)
         recyclerView.adapter = adapter
 
@@ -174,16 +202,89 @@ class TargetSelectActivity : AppCompatActivity() {
                 activeCard.animate().alpha(0f).setDuration(120).withEndAction {
                     activeName.text = name
                     activeType.text = eqPrefs.getSelectedTargetType() ?: ""
+                    updateActiveGraph()
                     activeCard.animate().alpha(1f).setDuration(120).start()
                 }.start()
             } else {
                 activeName.text = name
                 activeType.text = eqPrefs.getSelectedTargetType() ?: ""
+                updateActiveGraph()
                 activeCard.alpha = 0f
                 activeCard.visibility = android.view.View.VISIBLE
                 activeCard.animate().alpha(1f).setDuration(200).start()
             }
         }
+    }
+
+    private fun updateActiveGraph() {
+        val container = findViewById<android.widget.FrameLayout>(R.id.targetActiveGraph)
+        container.removeAllViews()
+        val targetFile = eqPrefs.getSelectedTarget()
+        val fr = try {
+            if (targetFile != null && targetFile != "__custom__") {
+                val text = assets.open("targets/${targetFile}.csv").bufferedReader().readText()
+                FreqResponseParser.parse(text)
+            } else {
+                val name = eqPrefs.getSelectedTargetName() ?: return
+                val text = eqPrefs.getImportedTargetText(name)
+                if (text != null) FreqResponseParser.parse(text) else null
+            }
+        } catch (_: Exception) { null }
+        if (fr != null) {
+            val view = MiniFrView(this)
+            view.setData(fr)
+            container.addView(view, android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT))
+        }
+    }
+
+    private fun showDeleteDialog(name: String, onConfirm: () -> Unit) {
+        val density = resources.displayMetrics.density
+        val dialogView = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding((24 * density).toInt(), (20 * density).toInt(), (24 * density).toInt(), (16 * density).toInt())
+        }
+        val title = android.widget.TextView(this).apply {
+            text = "Delete"
+            setTextColor(0xFFE2E2E2.toInt()); textSize = 20f
+            setPadding(0, 0, 0, (12 * density).toInt())
+        }
+        val message = android.widget.TextView(this).apply {
+            text = "Delete \"$name\"?"
+            setTextColor(0xFFAAAAAA.toInt()); textSize = 14f
+            setPadding(0, 0, 0, (16 * density).toInt())
+        }
+        val divider = android.view.View(this).apply {
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, (1 * density).toInt()).apply {
+                bottomMargin = (12 * density).toInt()
+            }
+            setBackgroundColor(0xFF444444.toInt())
+        }
+        val btnRow = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+        val deleteBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            text = "Delete"; layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = (3 * density).toInt() }
+            cornerRadius = (12 * density).toInt(); setTextColor(0xFFEF9A9A.toInt())
+            strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt()); strokeWidth = (1 * density).toInt()
+            setBackgroundColor(0x00000000); insetTop = 0; insetBottom = 0
+        }
+        val cancelBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            text = "Cancel"; layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = (3 * density).toInt() }
+            cornerRadius = (12 * density).toInt(); setTextColor(0xFFDDDDDD.toInt())
+            setBackgroundColor(0x00000000); strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt()); strokeWidth = (1 * density).toInt()
+            insetTop = 0; insetBottom = 0
+        }
+        btnRow.addView(deleteBtn); btnRow.addView(cancelBtn)
+        dialogView.addView(title); dialogView.addView(message); dialogView.addView(divider); dialogView.addView(btnRow)
+        val dialog = android.app.AlertDialog.Builder(this, R.style.Theme_Equalizer314_Dialog).setView(dialogView).create()
+        cancelBtn.setOnClickListener { dialog.dismiss() }
+        deleteBtn.setOnClickListener { onConfirm(); dialog.dismiss() }
+        dialog.show()
     }
 
     override fun finish() {
@@ -194,10 +295,13 @@ class TargetSelectActivity : AppCompatActivity() {
     // ---- RecyclerView Adapter ----
 
     private class TargetAdapter(
-        private val onItemClick: (TargetEntry) -> Unit
+        private val onItemClick: (TargetEntry) -> Unit,
+        private val onDeleteClick: (TargetEntry) -> Unit,
+        private val frLoader: (TargetEntry) -> FreqResponse?
     ) : RecyclerView.Adapter<TargetAdapter.ViewHolder>() {
 
         private var items = listOf<TargetEntry>()
+        private val frCache = HashMap<String, FreqResponse?>()
 
         fun submitList(list: List<TargetEntry>) {
             items = list
@@ -207,24 +311,149 @@ class TargetSelectActivity : AppCompatActivity() {
         override fun getItemCount() = items.size
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-            val view = LayoutInflater.from(parent.context)
-                .inflate(android.R.layout.simple_list_item_2, parent, false)
-            return ViewHolder(view)
+            val ctx = parent.context
+            val density = ctx.resources.displayMetrics.density
+            val hPad = (16 * density).toInt()
+            val vPad = (10 * density).toInt()
+
+            val rippleAttr = android.util.TypedValue()
+            ctx.theme.resolveAttribute(android.R.attr.selectableItemBackground, rippleAttr, true)
+            val row = android.widget.LinearLayout(ctx).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                layoutParams = RecyclerView.LayoutParams(
+                    RecyclerView.LayoutParams.MATCH_PARENT,
+                    RecyclerView.LayoutParams.WRAP_CONTENT)
+                setPadding(hPad, vPad, hPad, vPad)
+                setBackgroundResource(rippleAttr.resourceId)
+                isClickable = true
+                isFocusable = true
+            }
+            val textCol = android.widget.LinearLayout(ctx).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                layoutParams = android.widget.LinearLayout.LayoutParams(0,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            val text1 = TextView(ctx).apply { setTextColor(0xFFE2E2E2.toInt()); textSize = 14f; isSingleLine = true }
+            val text2 = TextView(ctx).apply { setTextColor(0xFF888888.toInt()); textSize = 12f; isSingleLine = true }
+            textCol.addView(text1)
+            textCol.addView(text2)
+            row.addView(textCol)
+
+            val thumbW = (48 * density).toInt()
+            val thumbH = (24 * density).toInt()
+            val rightCol = android.widget.LinearLayout(ctx).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                gravity = android.view.Gravity.CENTER_HORIZONTAL
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                    marginStart = (8 * density).toInt()
+                }
+            }
+            val thumbView = MiniFrView(ctx).apply {
+                layoutParams = android.widget.LinearLayout.LayoutParams(thumbW, thumbH)
+            }
+            val deleteBtn = android.widget.TextView(ctx).apply {
+                text = "×"
+                setTextColor(0xFFEF9A9A.toInt())
+                textSize = 18f
+                gravity = android.view.Gravity.CENTER
+                val btnSize = (30 * density).toInt()
+                layoutParams = android.widget.LinearLayout.LayoutParams(btnSize, btnSize).apply {
+                    marginStart = (4 * density).toInt()
+                    marginEnd = (4 * density).toInt()
+                }
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(0x00000000)
+                    setStroke((1 * density).toInt(), 0xFF444444.toInt())
+                    cornerRadius = 10 * density
+                }
+                isClickable = true
+                isFocusable = true
+                contentDescription = "Remove"
+            }
+            row.addView(deleteBtn)
+
+            rightCol.addView(thumbView)
+            row.addView(rightCol)
+
+            return ViewHolder(row, text1, text2, thumbView, deleteBtn)
         }
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val entry = items[position]
             holder.text1.text = entry.name
             holder.text2.text = entry.type
-            holder.text1.setTextColor(0xFFE2E2E2.toInt())
-            holder.text2.setTextColor(0xFF888888.toInt())
-            holder.text2.textSize = 12f
             holder.itemView.setOnClickListener { onItemClick(entry) }
+
+            val isImported = entry.file == "__custom__"
+            holder.deleteBtn.visibility = if (isImported) View.VISIBLE else View.GONE
+            holder.deleteBtn.setOnClickListener { onDeleteClick(entry) }
+
+            val cacheKey = entry.file.ifEmpty { entry.name }
+            val fr = frCache.getOrPut(cacheKey) { frLoader(entry) }
+            holder.thumbView.setData(fr)
         }
 
-        class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-            val text1: TextView = view.findViewById(android.R.id.text1)
-            val text2: TextView = view.findViewById(android.R.id.text2)
+        class ViewHolder(
+            view: View,
+            val text1: TextView,
+            val text2: TextView,
+            val thumbView: MiniFrView,
+            val deleteBtn: android.widget.TextView
+        ) : RecyclerView.ViewHolder(view)
+    }
+
+    private class MiniFrView(context: android.content.Context) : View(context) {
+        private var smoothFreqs: FloatArray? = null
+        private var smoothLevels: FloatArray? = null
+        private val density = context.resources.displayMetrics.density
+        private val curvePaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFFAAAAAA.toInt()
+            strokeWidth = 0.5f * density
+            style = android.graphics.Paint.Style.STROKE
+        }
+        private val gridPaint = android.graphics.Paint().apply {
+            color = 0xFF6A6A6A.toInt(); strokeWidth = 1f
+        }
+
+        fun setData(data: FreqResponse?) {
+            if (data != null && data.frequencies.size > 10) {
+                val targetFreqs = FreqResponseParser.logSpace(50)
+                smoothFreqs = targetFreqs
+                smoothLevels = FreqResponseParser.interpolateAt(data, targetFreqs)
+            } else {
+                smoothFreqs = null; smoothLevels = null
+            }
+            invalidate()
+        }
+
+        override fun onDraw(canvas: android.graphics.Canvas) {
+            super.onDraw(canvas)
+            val w = width.toFloat(); val h = height.toFloat()
+            if (w <= 0 || h <= 0) return
+            canvas.drawLine(0f, 0f, 0f, h, gridPaint)
+            val freqs = smoothFreqs ?: return
+            val levels = smoothLevels ?: return
+
+            val minDb = levels.min(); val maxDb = levels.max()
+            val range = (maxDb - minDb).coerceAtLeast(1f)
+            val center = (maxDb + minDb) / 2f
+            val halfRange = range / 2f * 1.15f
+
+            val logMin = Math.log10(20.0)
+            val logMax = Math.log10(20000.0)
+            val logSpan = logMax - logMin
+
+            val path = android.graphics.Path()
+            for (i in freqs.indices) {
+                val logF = Math.log10(freqs[i].toDouble())
+                val x = ((logF - logMin) / logSpan * w).toFloat()
+                val y = (h / 2f - ((levels[i] - center) / halfRange) * (h / 2f)).coerceIn(0f, h)
+                if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            canvas.drawPath(path, curvePaint)
         }
     }
 }

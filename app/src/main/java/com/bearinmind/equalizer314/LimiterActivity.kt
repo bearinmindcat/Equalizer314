@@ -59,7 +59,7 @@ class LimiterActivity : AppCompatActivity() {
             val wasActive = eqService?.dynamicsManager?.isActive == true
             // Don't pushToService on screen entry — causes audio dropout from DP recreation
             // Settings are already applied from when DP was started
-            com.bearinmind.equalizer314.ui.BottomNavHelper.updatePowerFab(this@LimiterActivity, wasActive)
+            com.bearinmind.equalizer314.ui.BottomNavHelper.setPowerFabInstant(this@LimiterActivity, wasActive)
         }
         override fun onServiceDisconnected(name: ComponentName?) {
             eqService = null
@@ -81,7 +81,7 @@ class LimiterActivity : AppCompatActivity() {
             if (masterSwitch.isChecked) com.google.android.material.color.MaterialColors.getColor(limIcon, com.google.android.material.R.attr.colorPrimary, 0xFFBB86FC.toInt())
             else 0xFF555555.toInt()
         )
-        startMetering()
+        if (eqPrefs.getSpectrumEnabled()) startMetering()
 
         val intent = android.content.Intent(this, EqService::class.java)
         bindService(intent, serviceConnection, BIND_AUTO_CREATE)
@@ -106,7 +106,7 @@ class LimiterActivity : AppCompatActivity() {
         // Bottom nav — shared helper handles icons, status, and navigation
         com.bearinmind.equalizer314.ui.BottomNavHelper.setup(this, com.bearinmind.equalizer314.ui.NavScreen.LIMITER, eqPrefs)
         // Power FAB toggles DynamicsProcessing on/off
-        val powerFab = findViewById<com.google.android.material.floatingactionbutton.FloatingActionButton>(R.id.powerFab)
+        val powerFab = findViewById<android.widget.ImageButton>(R.id.powerFab)
         powerFab.setOnClickListener {
             val svc = eqService ?: return@setOnClickListener
             if (svc.dynamicsManager.isActive) {
@@ -119,7 +119,7 @@ class LimiterActivity : AppCompatActivity() {
             }
             val on = svc.dynamicsManager.isActive
             com.bearinmind.equalizer314.ui.BottomNavHelper.setPowerState(this, eqPrefs, on)
-            android.widget.Toast.makeText(this, if (on) "Equalizer314 is On" else "Equalizer314 is Off", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(this, if (on) "DynamicsProcessing Start" else "DynamicsProcessing Stop", android.widget.Toast.LENGTH_SHORT).show()
         }
 
         // Waveform / level meter
@@ -175,53 +175,122 @@ class LimiterActivity : AppCompatActivity() {
         }
         // Reset button: reset limiter to defaults
         limResetBtn.setOnClickListener {
-            com.google.android.material.dialog.MaterialAlertDialogBuilder(this, R.style.Theme_Equalizer314_Dialog)
-                .setTitle("Reset")
-                .setMessage("Reset all values in this screen to their defaults?")
-                .setNegativeButton("Reset") { _, _ ->
-                    isUpdating = true
-                    eqPrefs.saveLimiterThreshold(0f)
-                    eqPrefs.saveLimiterRatio(2f)
-                    eqPrefs.saveLimiterAttack(0.01f)
-                    eqPrefs.saveLimiterRelease(1f)
-                    eqPrefs.saveLimiterPostGain(0f)
-                    thresholdSlider.value = 0f; thresholdText.setText("0.0")
-                    ratioSlider.value = 2f; ratioText.setText("2.0")
-                    attackSlider.value = 0.01f; attackText.setText("0.01")
-                    releaseSlider.value = 1f; releaseText.setText("1")
-                    postGainSlider.value = 0f; postGainText.setText("0.0")
-                    waveformView.ceilingDb = 0f
-                    ceilingView.ceilingDb = 0f
-                    isUpdating = false
-                    pushToService()
-                    android.widget.Toast.makeText(this, "Limiter reset to defaults", android.widget.Toast.LENGTH_SHORT).show()
+            val dialogView = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                setPadding((24 * density).toInt(), (20 * density).toInt(), (24 * density).toInt(), (16 * density).toInt())
+            }
+            val titleTv = android.widget.TextView(this).apply {
+                text = "Reset"
+                setTextColor(0xFFE2E2E2.toInt())
+                textSize = 20f
+                setPadding(0, 0, 0, (12 * density).toInt())
+            }
+            val messageTv = android.widget.TextView(this).apply {
+                text = "Reset all values in this screen to their defaults?"
+                setTextColor(0xFFAAAAAA.toInt())
+                textSize = 14f
+                setPadding(0, 0, 0, (16 * density).toInt())
+            }
+            val divider = android.view.View(this).apply {
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT, (1 * density).toInt()).apply {
+                    bottomMargin = (12 * density).toInt()
                 }
-                .setPositiveButton("Cancel", null)
-                .show()
+                setBackgroundColor(0xFF444444.toInt())
+            }
+            val btnRow = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
+            }
+            val resetDialogBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                text = "Reset"
+                layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    marginEnd = (3 * density).toInt()
+                }
+                cornerRadius = (12 * density).toInt()
+                setTextColor(0xFFEF9A9A.toInt())
+                strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                strokeWidth = (1 * density).toInt()
+                setBackgroundColor(0x00000000)
+                insetTop = 0; insetBottom = 0
+            }
+            val cancelBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                text = "Cancel"
+                layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    marginStart = (3 * density).toInt()
+                }
+                cornerRadius = (12 * density).toInt()
+                setTextColor(0xFFDDDDDD.toInt())
+                setBackgroundColor(0x00000000)
+                strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                strokeWidth = (1 * density).toInt()
+                insetTop = 0; insetBottom = 0
+            }
+            btnRow.addView(resetDialogBtn)
+            btnRow.addView(cancelBtn)
+            dialogView.addView(titleTv)
+            dialogView.addView(messageTv)
+            dialogView.addView(divider)
+            dialogView.addView(btnRow)
+
+            val dialog = android.app.AlertDialog.Builder(this, R.style.Theme_Equalizer314_Dialog)
+                .setView(dialogView)
+                .create()
+            cancelBtn.setOnClickListener { dialog.dismiss() }
+            resetDialogBtn.setOnClickListener {
+                isUpdating = true
+                eqPrefs.saveLimiterThreshold(0f)
+                eqPrefs.saveLimiterRatio(2f)
+                eqPrefs.saveLimiterAttack(0.01f)
+                eqPrefs.saveLimiterRelease(1f)
+                eqPrefs.saveLimiterPostGain(0f)
+                thresholdSlider.value = 0f; thresholdText.setText("0.0")
+                ratioSlider.value = 2f; ratioText.setText("2.0")
+                attackSlider.value = 0.01f; attackText.setText("0.01")
+                releaseSlider.value = 1f; releaseText.setText("1")
+                postGainSlider.value = 0f; postGainText.setText("0.0")
+                waveformView.ceilingDb = 0f
+                ceilingView.ceilingDb = 0f
+                isUpdating = false
+                pushToService()
+                android.widget.Toast.makeText(this, "Limiter reset to defaults", android.widget.Toast.LENGTH_SHORT).show()
+                dialog.dismiss()
+            }
+            dialog.show()
         }
-        vizToggle.setOnClickListener {
-            if (visualizer != null) {
-                stopMetering()
-                vizToggle.alpha = 1.0f
-                vizToggle.setBackgroundColor(0x00000000)
-                vizToggle.strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
-                vizToggle.strokeWidth = (1 * density).toInt()
-                vizToggle.iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
-            } else {
-                startMetering()
-                vizToggle.alpha = 1.0f
+        fun updateVizStyle(active: Boolean) {
+            if (active) {
                 vizToggle.setBackgroundColor(0xFF555555.toInt())
                 vizToggle.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
                 vizToggle.strokeWidth = (2 * density).toInt()
                 vizToggle.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
+            } else {
+                vizToggle.setBackgroundColor(0x00000000)
+                vizToggle.strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                vizToggle.strokeWidth = (1 * density).toInt()
+                vizToggle.iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
             }
         }
-        // Start active since metering starts automatically
-        vizToggle.alpha = 1.0f
-        vizToggle.setBackgroundColor(0xFF555555.toInt())
-        vizToggle.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
-        vizToggle.strokeWidth = (2 * density).toInt()
-        vizToggle.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
+        vizToggle.setOnClickListener {
+            if (visualizer != null) {
+                stopMetering()
+                eqPrefs.saveSpectrumEnabled(false)
+                updateVizStyle(false)
+            } else {
+                startMetering()
+                eqPrefs.saveSpectrumEnabled(true)
+                updateVizStyle(true)
+            }
+        }
+        // Respect global spectrum preference
+        if (eqPrefs.getSpectrumEnabled()) {
+            updateVizStyle(true)
+        } else {
+            stopMetering()
+            updateVizStyle(false)
+        }
     }
 
     private fun loadState() {
@@ -523,10 +592,10 @@ class LimiterActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         // Sync nav bar from saved state
-        com.bearinmind.equalizer314.ui.BottomNavHelper.updatePowerFab(this, eqPrefs.getPowerState())
+        com.bearinmind.equalizer314.ui.BottomNavHelper.setPowerFabInstant(this, eqPrefs.getPowerState())
         com.bearinmind.equalizer314.ui.BottomNavHelper.updateHighlight(this, com.bearinmind.equalizer314.ui.NavScreen.LIMITER)
         com.bearinmind.equalizer314.ui.BottomNavHelper.updateStatus(this, eqPrefs)
-        if (visualizer == null) startMetering()
+        if (visualizer == null && eqPrefs.getSpectrumEnabled()) startMetering()
     }
 
     override fun onDestroy() {

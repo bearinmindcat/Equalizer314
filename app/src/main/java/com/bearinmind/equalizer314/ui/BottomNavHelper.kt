@@ -60,10 +60,9 @@ object BottomNavHelper {
 
         setHighlightInstant(activity, currentScreen)
         updateStatus(activity, eqPrefs)
-        // Set FAB from saved power state instantly — no waiting for service
+        // Set FAB from saved power state instantly — no animation on startup
         val savedPower = eqPrefs.getPowerState()
-        android.util.Log.d("BottomNavHelper", "setup: screen=$currentScreen savedPower=$savedPower")
-        updatePowerFab(activity, savedPower)
+        setPowerFabInstant(activity, savedPower)
     }
 
     private fun setHighlightInstant(activity: Activity, currentScreen: NavScreen) {
@@ -142,15 +141,92 @@ object BottomNavHelper {
         limiterStatus.setTextColor(if (limiterOn) ON_COLOR else OFF_COLOR)
     }
 
-    fun updatePowerFab(activity: Activity, isOn: Boolean) {
-        val fab = activity.findViewById<com.google.android.material.floatingactionbutton.FloatingActionButton>(R.id.powerFab) ?: return
-        if (isOn) {
-            fab.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFFFFFFF.toInt())
-            fab.imageTintList = android.content.res.ColorStateList.valueOf(0xFF000000.toInt())
-        } else {
-            fab.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF2A2A2A.toInt())
-            fab.imageTintList = android.content.res.ColorStateList.valueOf(0xFF555555.toInt())
+    private fun makePowerBg(density: Float, fillColor: Int, strokeColor: Int, isOn: Boolean): android.graphics.drawable.RippleDrawable {
+        val shape = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 12 * density
+            setColor(fillColor)
+            setStroke((1 * density).toInt(), strokeColor)
         }
+        val mask = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 12 * density
+            setColor(0xFFFFFFFF.toInt())
+        }
+        val rippleColor = if (isOn) 0xCC000000.toInt() else 0x33FFFFFF.toInt()
+        return android.graphics.drawable.RippleDrawable(
+            android.content.res.ColorStateList.valueOf(rippleColor), shape, mask)
+    }
+
+    fun setPowerFabInstant(activity: Activity, isOn: Boolean) {
+        val btn = activity.findViewById<ImageButton>(R.id.powerFab) ?: return
+        val density = activity.resources.displayMetrics.density
+        btn.background = makePowerBg(density,
+            if (isOn) 0xFFFFFFFF.toInt() else 0xFF2A2A2A.toInt(),
+            if (isOn) 0xFF666666.toInt() else 0xFF444444.toInt(), isOn)
+        btn.setColorFilter(if (isOn) 0xFF000000.toInt() else 0xFF555555.toInt())
+        btn.foreground = null
+        btn.scaleX = if (isOn) 1.2f else 1.0f
+        btn.scaleY = if (isOn) 1.2f else 1.0f
+        btn.translationY = if (isOn) -4f * density else 0f
+    }
+
+    fun updatePowerFab(activity: Activity, isOn: Boolean) {
+        val btn = activity.findViewById<ImageButton>(R.id.powerFab) ?: return
+        val density = activity.resources.displayMetrics.density
+        val fromBg = if (isOn) 0xFF2A2A2A.toInt() else 0xFFFFFFFF.toInt()
+        val toBg = if (isOn) 0xFFFFFFFF.toInt() else 0xFF2A2A2A.toInt()
+        val fromIcon = if (isOn) 0xFF555555.toInt() else 0xFF000000.toInt()
+        val toIcon = if (isOn) 0xFF000000.toInt() else 0xFF555555.toInt()
+        val fromStroke = if (isOn) 0xFF444444.toInt() else 0xFF666666.toInt()
+        val toStroke = if (isOn) 0xFF666666.toInt() else 0xFF444444.toInt()
+        val targetScale = if (isOn) 1.2f else 1.0f
+        val targetTransY = if (isOn) -4f * density else 0f
+
+        // Animate scale + translate
+        btn.animate()
+            .scaleX(targetScale).scaleY(targetScale)
+            .translationY(targetTransY)
+            .setDuration(250)
+            .setInterpolator(android.view.animation.DecelerateInterpolator(1.5f))
+            .start()
+
+        // Set up RippleDrawable once, animate inner shape
+        val ripple = makePowerBg(density, fromBg, fromStroke, isOn)
+        val innerShape = ripple.getDrawable(0) as android.graphics.drawable.GradientDrawable
+        btn.background = ripple
+        btn.foreground = null
+
+        android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 250
+            interpolator = android.view.animation.DecelerateInterpolator(1.5f)
+            addUpdateListener { anim ->
+                val f = anim.animatedValue as Float
+                val bg = blendColor(fromBg, toBg, f)
+                val icon = blendColor(fromIcon, toIcon, f)
+                val stroke = blendColor(fromStroke, toStroke, f)
+                innerShape.setColor(bg)
+                innerShape.setStroke((1 * density).toInt(), stroke)
+                btn.setColorFilter(icon)
+            }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    // Set final ripple with correct color for the new state
+                    btn.background = makePowerBg(density, toBg, toStroke, isOn)
+                }
+            })
+            start()
+        }
+    }
+
+    private fun blendColor(from: Int, to: Int, ratio: Float): Int {
+        val fromA = (from shr 24) and 0xFF; val fromR = (from shr 16) and 0xFF
+        val fromG = (from shr 8) and 0xFF; val fromB = from and 0xFF
+        val toA = (to shr 24) and 0xFF; val toR = (to shr 16) and 0xFF
+        val toG = (to shr 8) and 0xFF; val toB = to and 0xFF
+        val a = (fromA + (toA - fromA) * ratio).toInt()
+        val r = (fromR + (toR - fromR) * ratio).toInt()
+        val g = (fromG + (toG - fromG) * ratio).toInt()
+        val b = (fromB + (toB - fromB) * ratio).toInt()
+        return (a shl 24) or (r shl 16) or (g shl 8) or b
     }
 
     /** Call this whenever power state changes — saves to prefs and updates FAB */

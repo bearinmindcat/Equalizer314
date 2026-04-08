@@ -79,7 +79,7 @@
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="8dp"
+                    android:layout_marginBottom="4dp"
                     app:cardBackgroundColor="?attr/colorSurfaceContainer"
                     app:cardCornerRadius="16dp"
                     app:cardElevation="0dp"
@@ -159,6 +159,68 @@
                             app:strokeColor="#FF444444"
                             app:strokeWidth="1dp"
                             android:contentDescription="Reset to defaults" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/undoButton"
+                            style="?attr/materialButtonOutlinedStyle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="top|end"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            android:padding="3dp"
+                            android:visibility="gone"
+                            app:icon="@drawable/ic_undo"
+                            app:iconGravity="textStart"
+                            app:iconPadding="0dp"
+                            app:iconTint="@null"
+                            app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
+                            app:strokeColor="#FF444444"
+                            app:strokeWidth="1dp"
+                            android:contentDescription="Undo" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/redoButton"
+                            style="?attr/materialButtonOutlinedStyle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="top|end"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            android:padding="3dp"
+                            android:visibility="gone"
+                            app:icon="@drawable/ic_redo"
+                            app:iconGravity="textStart"
+                            app:iconPadding="0dp"
+                            app:iconTint="@null"
+                            app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
+                            app:strokeColor="#FF444444"
+                            app:strokeWidth="1dp"
+                            android:contentDescription="Redo" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/editButton"
+                            style="?attr/materialButtonOutlinedStyle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="top|end"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            android:padding="3dp"
+                            app:icon="@drawable/ic_edit"
+                            app:iconGravity="textStart"
+                            app:iconPadding="0dp"
+                            app:iconTint="@null"
+                            app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
+                            app:strokeColor="#FF444444"
+                            app:strokeWidth="1dp"
+                            android:contentDescription="Edit" />
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/visualizerToggle"

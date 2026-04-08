@@ -23,6 +23,8 @@ class TargetCurveActivity : AppCompatActivity() {
     private lateinit var computeButton: MaterialButton
     private lateinit var exportButton: MaterialButton
     private lateinit var resultText: TextView
+    private lateinit var resultCard: android.view.View
+    private lateinit var resultGraphContainer: android.widget.FrameLayout
     private lateinit var bandCountSlider: Slider
     private lateinit var bandCountText: TextView
     private var lastComputedProfile: AutoEqProfile? = null
@@ -56,6 +58,8 @@ class TargetCurveActivity : AppCompatActivity() {
         computeButton = findViewById(R.id.computeButton)
         exportButton = findViewById(R.id.exportButton)
         resultText = findViewById(R.id.resultText)
+        resultCard = findViewById(R.id.resultCard)
+        resultGraphContainer = findViewById(R.id.resultGraphContainer)
         bandCountSlider = findViewById(R.id.bandCountSlider)
         bandCountText = findViewById(R.id.bandCountText)
 
@@ -205,11 +209,15 @@ class TargetCurveActivity : AppCompatActivity() {
 
                 lastComputedProfile = profile
 
-                // Display in APO format
-                resultText.visibility = android.view.View.VISIBLE
+                // Show result card with mini EQ graph
+                resultCard.visibility = android.view.View.VISIBLE
                 resultText.text = profileToApoText(profile)
 
-                exportButton.visibility = android.view.View.VISIBLE
+                // Mini EQ graph for generated result
+                resultGraphContainer.removeAllViews()
+                val resultEqView = MiniEqResultView(this@TargetCurveActivity, profile)
+                resultGraphContainer.addView(resultEqView)
+
                 dotHandler.removeCallbacks(dotRunnable)
                 computeButton.text = "Generate EQ"
                 computeButton.isEnabled = true
@@ -254,5 +262,59 @@ class TargetCurveActivity : AppCompatActivity() {
     override fun finish() {
         super.finish()
         overridePendingTransition(0, 0)
+    }
+
+    /** Mini EQ result view — plots generated parametric EQ response */
+    private class MiniEqResultView(
+        context: android.content.Context,
+        private val profile: AutoEqProfile
+    ) : android.view.View(context) {
+
+        private val density = context.resources.displayMetrics.density
+        private val curvePaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFFAAAAAA.toInt()
+            strokeWidth = 0.5f * density
+            style = android.graphics.Paint.Style.STROKE
+        }
+        private val gridPaint = android.graphics.Paint().apply {
+            color = 0xFF6A6A6A.toInt(); strokeWidth = 1f
+        }
+
+        init {
+            layoutParams = android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT)
+        }
+
+        override fun onDraw(canvas: android.graphics.Canvas) {
+            super.onDraw(canvas)
+            val w = width.toFloat(); val h = height.toFloat()
+            if (w <= 0 || h <= 0) return
+
+            canvas.drawLine(0f, h / 2f, w, h / 2f, gridPaint)
+            canvas.drawLine(0f, 0f, 0f, h, gridPaint)
+
+            val eq = ParametricEqualizer()
+            eq.clearBands()
+            for (f in profile.filters) {
+                val ft = when (f.filterType) {
+                    "LSC" -> BiquadFilter.FilterType.LOW_SHELF
+                    "HSC" -> BiquadFilter.FilterType.HIGH_SHELF
+                    else -> BiquadFilter.FilterType.BELL
+                }
+                eq.addBand(f.frequency, f.gain, ft, f.q.toDouble())
+            }
+            val path = android.graphics.Path()
+            val maxDb = 15f; val steps = 80
+            for (s in 0..steps) {
+                val logF = 1.301f + (s.toFloat() / steps) * (4.342f - 1.301f)
+                val freq = Math.pow(10.0, logF.toDouble()).toFloat()
+                val db = eq.getFrequencyResponse(freq)
+                val x = w * s / steps
+                val y = (h / 2f - (db / maxDb) * (h / 2f)).coerceIn(0f, h)
+                if (s == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            canvas.drawPath(path, curvePaint)
+        }
     }
 }
