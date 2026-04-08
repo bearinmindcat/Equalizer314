@@ -22,9 +22,10 @@ class TargetCurveActivity : AppCompatActivity() {
     private lateinit var targetSelectStatus: TextView
     private lateinit var computeButton: MaterialButton
     private lateinit var exportButton: MaterialButton
-    private lateinit var resultText: TextView
+    private lateinit var resultText: android.widget.EditText
     private lateinit var resultCard: android.view.View
     private lateinit var resultGraphContainer: android.widget.FrameLayout
+    private lateinit var resultTimestamp: TextView
     private lateinit var bandCountSlider: Slider
     private lateinit var bandCountText: TextView
     private var lastComputedProfile: AutoEqProfile? = null
@@ -60,12 +61,109 @@ class TargetCurveActivity : AppCompatActivity() {
         resultText = findViewById(R.id.resultText)
         resultCard = findViewById(R.id.resultCard)
         resultGraphContainer = findViewById(R.id.resultGraphContainer)
+        resultTimestamp = findViewById(R.id.resultTimestamp)
         bandCountSlider = findViewById(R.id.bandCountSlider)
         bandCountText = findViewById(R.id.bandCountText)
 
         findViewById<ImageButton>(R.id.targetBackButton).setOnClickListener { finish() }
 
         exportButton.setOnClickListener { exportApo() }
+
+        // Edit toggle for generated EQ text
+        val editBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.resultEditButton)
+        val resetBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.resultResetButton)
+        val undoBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.resultUndoButton)
+        val redoBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.resultRedoButton)
+        var isEditing = false
+        val editHistory = mutableListOf<String>()
+        var editHistoryIndex = -1
+        fun saveEditState() {
+            val current = resultText.text.toString()
+            if (editHistoryIndex >= 0 && editHistoryIndex < editHistory.size && editHistory[editHistoryIndex] == current) return
+            while (editHistory.size > editHistoryIndex + 1) editHistory.removeAt(editHistory.size - 1)
+            editHistory.add(current)
+            editHistoryIndex = editHistory.size - 1
+        }
+
+        editBtn.setOnClickListener {
+            isEditing = !isEditing
+            val density = resources.displayMetrics.density
+            if (isEditing) {
+                resultText.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                resultText.isFocusable = true
+                resultText.isFocusableInTouchMode = true
+                resultText.isCursorVisible = true
+                resultText.background = null
+                resultText.requestFocus()
+                editBtn.setBackgroundColor(0xFF555555.toInt())
+                editBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+                editBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
+                // Save initial state for undo
+                editHistory.clear(); editHistoryIndex = -1
+                saveEditState()
+                // Pop out reset, undo, redo
+                resetBtn.visibility = android.view.View.VISIBLE
+                undoBtn.visibility = android.view.View.VISIBLE
+                redoBtn.visibility = android.view.View.VISIBLE
+                resetBtn.alpha = 0f; resetBtn.scaleX = 0.3f; resetBtn.scaleY = 0.3f
+                undoBtn.alpha = 0f; undoBtn.scaleX = 0.3f; undoBtn.scaleY = 0.3f
+                redoBtn.alpha = 0f; redoBtn.scaleX = 0.3f; redoBtn.scaleY = 0.3f
+                resetBtn.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(250)
+                    .setInterpolator(android.view.animation.OvershootInterpolator(1.0f)).start()
+                undoBtn.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(250).setStartDelay(40)
+                    .setInterpolator(android.view.animation.OvershootInterpolator(1.0f)).start()
+                redoBtn.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(250).setStartDelay(80)
+                    .setInterpolator(android.view.animation.OvershootInterpolator(1.0f)).start()
+            } else {
+                resultText.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                resultText.isFocusable = false
+                resultText.isFocusableInTouchMode = false
+                resultText.isCursorVisible = false
+                resultText.isEnabled = false
+                resultText.background = null
+                resultText.clearFocus()
+                resultText.isEnabled = true
+                editBtn.setBackgroundColor(0x00000000)
+                editBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                editBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+                // Persist edits
+                val edited = resultText.text.toString().trim()
+                if (edited.isNotEmpty()) {
+                    val ts = eqPrefs.getGeneratedEqTimestamp() ?: ""
+                    eqPrefs.saveGeneratedEq(edited, ts)
+                }
+                // Collapse reset, undo, redo
+                resetBtn.animate().alpha(0f).scaleX(0.3f).scaleY(0.3f).setDuration(200)
+                    .setInterpolator(android.view.animation.AccelerateInterpolator())
+                    .withEndAction { resetBtn.visibility = android.view.View.GONE }.start()
+                undoBtn.animate().alpha(0f).scaleX(0.3f).scaleY(0.3f).setDuration(200).setStartDelay(40)
+                    .setInterpolator(android.view.animation.AccelerateInterpolator())
+                    .withEndAction { undoBtn.visibility = android.view.View.GONE }.start()
+                redoBtn.animate().alpha(0f).scaleX(0.3f).scaleY(0.3f).setDuration(200).setStartDelay(80)
+                    .setInterpolator(android.view.animation.AccelerateInterpolator())
+                    .withEndAction { redoBtn.visibility = android.view.View.GONE }.start()
+            }
+        }
+        undoBtn.setOnClickListener {
+            saveEditState()
+            if (editHistoryIndex > 0) {
+                editHistoryIndex--
+                resultText.setText(editHistory[editHistoryIndex])
+            }
+        }
+        redoBtn.setOnClickListener {
+            if (editHistoryIndex < editHistory.size - 1) {
+                editHistoryIndex++
+                resultText.setText(editHistory[editHistoryIndex])
+            }
+        }
+        resetBtn.setOnClickListener {
+            if (editHistory.isNotEmpty()) {
+                saveEditState()
+                resultText.setText(editHistory[0])
+                editHistoryIndex = editHistory.size - 1
+            }
+        }
 
         // Measurement card — opens MeasurementSelectActivity
         findViewById<android.view.View>(R.id.measurementSelectCard).setOnClickListener {
@@ -99,6 +197,7 @@ class TargetCurveActivity : AppCompatActivity() {
         updateMeasurementCard()
         updateTargetCard()
         updateComputeEnabled()
+        restoreGeneratedResult()
     }
 
     private fun updateMeasurementCard() {
@@ -131,6 +230,20 @@ class TargetCurveActivity : AppCompatActivity() {
             targetSelectStatus.text = "No target selected"
             targetSelectStatus.setTextColor(0xFF888888.toInt())
         }
+    }
+
+    private fun restoreGeneratedResult() {
+        val apoText = eqPrefs.getGeneratedEqApo() ?: return
+        val timestamp = eqPrefs.getGeneratedEqTimestamp() ?: ""
+        val profile = AutoEqParser.parse(apoText) ?: return
+        lastComputedProfile = profile
+        resultCard.visibility = android.view.View.VISIBLE
+        exportButton.visibility = android.view.View.VISIBLE
+        resultText.setText(apoText)
+        resultTimestamp.text = timestamp
+        resultGraphContainer.removeAllViews()
+        val view = MiniEqResultView(this, profile)
+        resultGraphContainer.addView(view)
     }
 
     private fun updateComputeEnabled() {
@@ -208,10 +321,17 @@ class TargetCurveActivity : AppCompatActivity() {
                 eqPrefs.saveAutoEqSource("")
 
                 lastComputedProfile = profile
+                val apoText = profileToApoText(profile)
+                val timestamp = java.text.SimpleDateFormat("MMM d, yyyy h:mm a", java.util.Locale.getDefault()).format(java.util.Date())
+
+                // Persist
+                eqPrefs.saveGeneratedEq(apoText, timestamp)
 
                 // Show result card with mini EQ graph
                 resultCard.visibility = android.view.View.VISIBLE
-                resultText.text = profileToApoText(profile)
+                exportButton.visibility = android.view.View.VISIBLE
+                resultText.setText(apoText)
+                resultTimestamp.text = timestamp
 
                 // Mini EQ graph for generated result
                 resultGraphContainer.removeAllViews()
@@ -244,8 +364,8 @@ class TargetCurveActivity : AppCompatActivity() {
     }
 
     private fun exportApo() {
-        val profile = lastComputedProfile ?: return
-        val apoText = profileToApoText(profile)
+        val apoText = resultText.text.toString().trim()
+        if (apoText.isEmpty()) return
         val measName = eqPrefs.getSelectedMeasurement() ?: "custom"
         val fileName = "${measName}_EQ.txt"
 

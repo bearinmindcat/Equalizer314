@@ -247,6 +247,14 @@ class EqPreferencesManager(context: Context) {
     fun saveAutoEqSource(source: String) { prefs.edit().putString("autoEqSource", source).apply() }
     fun getAutoEqSource(): String? = prefs.getString("autoEqSource", null)
 
+    // Generated Custom EQ persistence
+    fun saveGeneratedEq(apoText: String, timestamp: String) {
+        prefs.edit().putString("generatedEqApo", apoText).putString("generatedEqTimestamp", timestamp).apply()
+    }
+    fun getGeneratedEqApo(): String? = prefs.getString("generatedEqApo", null)
+    fun getGeneratedEqTimestamp(): String? = prefs.getString("generatedEqTimestamp", null)
+    fun clearGeneratedEq() { prefs.edit().remove("generatedEqApo").remove("generatedEqTimestamp").apply() }
+
     // MBC
     fun saveMbcEnabled(enabled: Boolean) { prefs.edit().putBoolean("mbcEnabled", enabled).apply() }
     fun getMbcEnabled(): Boolean = prefs.getBoolean("mbcEnabled", false)

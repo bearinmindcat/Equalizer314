@@ -221,39 +221,155 @@
                     android:orientation="vertical"
                     android:padding="16dp">
 
-                    <TextView
+                    <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Generated EQ"
-                        android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
-                        android:textColor="?attr/colorOnSurface" />
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:layout_marginBottom="8dp">
 
-                    <!-- Mini EQ graph for the generated result -->
-                    <FrameLayout
-                        android:id="@+id/resultGraphContainer"
-                        android:layout_width="match_parent"
-                        android:layout_height="80dp"
-                        android:layout_marginTop="8dp"
-                        android:layout_marginBottom="8dp" />
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
 
-                    <!-- Result info -->
-                    <TextView
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Generated EQ"
+                                android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
+                                android:textColor="?attr/colorOnSurface" />
+
+                            <TextView
+                                android:id="@+id/resultTimestamp"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
+                                android:textColor="?attr/colorOnSurfaceVariant" />
+                        </LinearLayout>
+
+                        <FrameLayout
+                            android:id="@+id/resultGraphContainer"
+                            android:layout_width="48dp"
+                            android:layout_height="24dp"
+                            android:layout_marginStart="8dp" />
+                    </LinearLayout>
+
+                    <!-- Editable result info (disabled until edit toggled) -->
+                    <EditText
                         android:id="@+id/resultText"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:textAppearance="@style/TextAppearance.Material3.BodySmall"
-                        android:textColor="?attr/colorOnSurfaceVariant" />
+                        android:textColor="?attr/colorOnSurfaceVariant"
+                        android:background="@null"
+                        android:inputType="textMultiLine|textNoSuggestions"
+                        android:focusable="false"
+                        android:focusableInTouchMode="false"
+                        android:cursorVisible="false"
+                        android:gravity="start|top"
+                        android:fontFamily="monospace"
+                        android:textSize="11sp" />
 
-                    <!-- Export button -->
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/exportButton"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
+                    <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:text="Export as APO" />
+                        android:orientation="horizontal"
+                        android:gravity="end|center_vertical"
+                        android:layout_marginTop="4dp">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/resultResetButton"
+                            style="?attr/materialButtonOutlinedStyle"
+                            android:layout_width="28dp"
+                            android:layout_height="28dp"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            android:padding="3dp"
+                            android:layout_marginEnd="4dp"
+                            android:visibility="gone"
+                            app:icon="@drawable/ic_reset"
+                            app:iconGravity="textStart"
+                            app:iconPadding="0dp"
+                            app:iconTint="@null"
+                            app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
+                            app:strokeColor="#FF444444"
+                            app:strokeWidth="1dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/resultUndoButton"
+                            style="?attr/materialButtonOutlinedStyle"
+                            android:layout_width="28dp"
+                            android:layout_height="28dp"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            android:padding="3dp"
+                            android:layout_marginEnd="4dp"
+                            android:visibility="gone"
+                            app:icon="@drawable/ic_undo"
+                            app:iconGravity="textStart"
+                            app:iconPadding="0dp"
+                            app:iconTint="@null"
+                            app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
+                            app:strokeColor="#FF444444"
+                            app:strokeWidth="1dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/resultRedoButton"
+                            style="?attr/materialButtonOutlinedStyle"
+                            android:layout_width="28dp"
+                            android:layout_height="28dp"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            android:padding="3dp"
+                            android:layout_marginEnd="4dp"
+                            android:visibility="gone"
+                            app:icon="@drawable/ic_redo"
+                            app:iconGravity="textStart"
+                            app:iconPadding="0dp"
+                            app:iconTint="@null"
+                            app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
+                            app:strokeColor="#FF444444"
+                            app:strokeWidth="1dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/resultEditButton"
+                            style="?attr/materialButtonOutlinedStyle"
+                            android:layout_width="28dp"
+                            android:layout_height="28dp"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            android:padding="3dp"
+                            app:icon="@drawable/ic_edit"
+                            app:iconGravity="textStart"
+                            app:iconPadding="0dp"
+                            app:iconTint="#FF888888"
+                            app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
+                            app:strokeColor="#FF444444"
+                            app:strokeWidth="1dp" />
+                    </LinearLayout>
+
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
+
+            <!-- Export button (same style as Generate EQ button) -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/exportButton"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Export as APO"
+                android:visibility="gone" />
 
         </LinearLayout>
     </ScrollView>
