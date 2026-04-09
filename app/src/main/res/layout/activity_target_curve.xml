@@ -272,91 +272,25 @@
                         android:fontFamily="monospace"
                         android:textSize="11sp" />
 
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="end|center_vertical"
-                        android:layout_marginTop="4dp">
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/resultResetButton"
-                            style="?attr/materialButtonOutlinedStyle"
-                            android:layout_width="28dp"
-                            android:layout_height="28dp"
-                            android:insetTop="0dp"
-                            android:insetBottom="0dp"
-                            android:minWidth="0dp"
-                            android:minHeight="0dp"
-                            android:padding="3dp"
-                            android:layout_marginEnd="4dp"
-                            android:visibility="gone"
-                            app:icon="@drawable/ic_reset"
-                            app:iconGravity="textStart"
-                            app:iconPadding="0dp"
-                            app:iconTint="@null"
-                            app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
-                            app:strokeColor="#FF444444"
-                            app:strokeWidth="1dp" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/resultUndoButton"
-                            style="?attr/materialButtonOutlinedStyle"
-                            android:layout_width="28dp"
-                            android:layout_height="28dp"
-                            android:insetTop="0dp"
-                            android:insetBottom="0dp"
-                            android:minWidth="0dp"
-                            android:minHeight="0dp"
-                            android:padding="3dp"
-                            android:layout_marginEnd="4dp"
-                            android:visibility="gone"
-                            app:icon="@drawable/ic_undo"
-                            app:iconGravity="textStart"
-                            app:iconPadding="0dp"
-                            app:iconTint="@null"
-                            app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
-                            app:strokeColor="#FF444444"
-                            app:strokeWidth="1dp" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/resultRedoButton"
-                            style="?attr/materialButtonOutlinedStyle"
-                            android:layout_width="28dp"
-                            android:layout_height="28dp"
-                            android:insetTop="0dp"
-                            android:insetBottom="0dp"
-                            android:minWidth="0dp"
-                            android:minHeight="0dp"
-                            android:padding="3dp"
-                            android:layout_marginEnd="4dp"
-                            android:visibility="gone"
-                            app:icon="@drawable/ic_redo"
-                            app:iconGravity="textStart"
-                            app:iconPadding="0dp"
-                            app:iconTint="@null"
-                            app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
-                            app:strokeColor="#FF444444"
-                            app:strokeWidth="1dp" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/resultEditButton"
-                            style="?attr/materialButtonOutlinedStyle"
-                            android:layout_width="28dp"
-                            android:layout_height="28dp"
-                            android:insetTop="0dp"
-                            android:insetBottom="0dp"
-                            android:minWidth="0dp"
-                            android:minHeight="0dp"
-                            android:padding="3dp"
-                            app:icon="@drawable/ic_edit"
-                            app:iconGravity="textStart"
-                            app:iconPadding="0dp"
-                            app:iconTint="#FF888888"
-                            app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
-                            app:strokeColor="#FF444444"
-                            app:strokeWidth="1dp" />
-                    </LinearLayout>
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/resultEditButton"
+                        style="?attr/materialButtonOutlinedStyle"
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:layout_gravity="end"
+                        android:layout_marginTop="4dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:minWidth="0dp"
+                        android:minHeight="0dp"
+                        android:padding="3dp"
+                        app:icon="@drawable/ic_edit"
+                        app:iconGravity="textStart"
+                        app:iconPadding="0dp"
+                        app:iconTint="#FF888888"
+                        app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
+                        app:strokeColor="#FF444444"
+                        app:strokeWidth="1dp" />
 
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>

@@ -44,6 +44,23 @@ class MainActivity : AppCompatActivity() {
     private lateinit var stateManager: EqStateManager
     private lateinit var eqPrefs: EqPreferencesManager
 
+    private var pendingExportText: String? = null
+    private val presetExportLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val uri = result.data?.data ?: return@registerForActivityResult
+            val text = pendingExportText ?: return@registerForActivityResult
+            try {
+                contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(text) }
+                android.widget.Toast.makeText(this, "Exported successfully", android.widget.Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                android.widget.Toast.makeText(this, "Export failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            pendingExportText = null
+        }
+    }
+
     // UI controllers
     private lateinit var graphicController: GraphicEqController
     private lateinit var tableController: TableEqController
@@ -835,10 +852,52 @@ class MainActivity : AppCompatActivity() {
                     }
                     dlg.show()
                 }
+                // Export button
+                val exportBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                    layoutParams = android.widget.LinearLayout.LayoutParams(
+                        (36 * density).toInt(), (36 * density).toInt()).apply {
+                        marginStart = (8 * density).toInt()
+                    }
+                    cornerRadius = (12 * density).toInt()
+                    setPadding(0, 0, 0, 0)
+                    insetTop = 0; insetBottom = 0
+                    minWidth = 0; minimumWidth = 0; minHeight = 0; minimumHeight = 0
+                    setBackgroundColor(0x00000000)
+                    icon = resources.getDrawable(R.drawable.ic_export, theme)
+                    iconGravity = com.google.android.material.button.MaterialButton.ICON_GRAVITY_TEXT_START
+                    iconPadding = 0
+                    iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+                    iconSize = (18 * density).toInt()
+                    strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                    strokeWidth = (1 * density).toInt()
+                }
+                exportBtn.setOnClickListener {
+                    val presetJson = prefs.getString("preset_$name", null) ?: return@setOnClickListener
+                    val obj = org.json.JSONObject(presetJson)
+                    val sb = StringBuilder()
+                    val preamp = obj.optDouble("preamp", 0.0)
+                    sb.append("Preamp: ${String.format("%.1f", preamp)} dB\n")
+                    val bands = obj.getJSONArray("bands")
+                    for (i in 0 until bands.length()) {
+                        val b = bands.getJSONObject(i)
+                        val ft = b.getString("filterType")
+                        val apoType = when (ft) { "LOW_SHELF" -> "LSC"; "HIGH_SHELF" -> "HSC"; else -> "PK" }
+                        sb.append("Filter ${i + 1}: ON $apoType Fc ${b.getDouble("frequency").toInt()} Hz Gain ${String.format("%.1f", b.getDouble("gain"))} dB Q ${String.format("%.2f", b.getDouble("q"))}\n")
+                    }
+                    pendingExportText = sb.toString()
+                    val intent = android.content.Intent(android.content.Intent.ACTION_CREATE_DOCUMENT).apply {
+                        addCategory(android.content.Intent.CATEGORY_OPENABLE)
+                        type = "text/plain"
+                        putExtra(android.content.Intent.EXTRA_TITLE, "${name}.txt")
+                    }
+                    presetExportLauncher.launch(intent)
+                }
+
                 rightCol.addView(thumbnail)
                 rightCol.addView(filtersText)
                 presetRow.addView(nameText)
                 presetRow.addView(rightCol)
+                presetRow.addView(exportBtn)
                 presetRow.addView(deleteBtn)
                 // Tap to load preset
                 presetRow.setOnClickListener {
@@ -1292,16 +1351,17 @@ class MainActivity : AppCompatActivity() {
     private fun setupSettingsListeners() {
         findViewById<View>(R.id.experimentalCard).setOnClickListener {
             startActivity(Intent(this, ExperimentalActivity::class.java))
+            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
         }
         // AutoEQ card (settings page)
         findViewById<View>(R.id.autoEqCard).setOnClickListener {
             autoEqLauncher.launch(Intent(this, AutoEqActivity::class.java))
-            overridePendingTransition(0, 0)
+            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
         }
         // Target card (settings page) — opens Target Curve screen
         findViewById<View>(R.id.targetCard).setOnClickListener {
             targetCurveLauncher.launch(Intent(this, TargetCurveActivity::class.java))
-            overridePendingTransition(0, 0)
+            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
         }
 
         // Preamp slider

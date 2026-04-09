@@ -289,7 +289,7 @@ class TargetSelectActivity : AppCompatActivity() {
 
     override fun finish() {
         super.finish()
-        overridePendingTransition(0, 0)
+        overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
     }
 
     // ---- RecyclerView Adapter ----

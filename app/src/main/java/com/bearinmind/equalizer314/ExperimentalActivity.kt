@@ -32,7 +32,6 @@ class ExperimentalActivity : AppCompatActivity() {
         findViewById<android.widget.ImageButton>(R.id.backButton).setOnClickListener { finish() }
 
         setupDpBandCount()
-        setupPreamp()
         setupGainCompensation()
     }
 
@@ -68,26 +67,8 @@ class ExperimentalActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupPreamp() {
-        val slider = findViewById<Slider>(R.id.expPreampSlider)
-        val text = findViewById<EditText>(R.id.expPreampText)
-
-        val savedGain = eqPrefs.getPreampGain()
-        slider.value = savedGain.coerceIn(-12f, 12f)
-        text.setText(String.format("%.1f", savedGain))
-
-        slider.addOnChangeListener { _, value, fromUser ->
-            if (!fromUser) return@addOnChangeListener
-            text.setText(String.format("%.1f", value))
-            eqPrefs.savePreampGain(value)
-        }
-
-        text.setOnEditorActionListener { _, _, _ ->
-            val gain = text.text.toString().toFloatOrNull()?.coerceIn(-12f, 12f) ?: 0f
-            slider.value = gain
-            text.setText(String.format("%.1f", gain))
-            eqPrefs.savePreampGain(gain)
-            false
-        }
+    override fun finish() {
+        super.finish()
+        overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
     }
 }

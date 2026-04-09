@@ -39,6 +39,21 @@ class TargetCurveActivity : AppCompatActivity() {
         }
     }
 
+    private val exportLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val uri = result.data?.data ?: return@registerForActivityResult
+            try {
+                val apoText = resultText.text.toString().trim()
+                contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(apoText) }
+                Toast.makeText(this, "Exported successfully", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(this, "Export failed: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     private val targetSelectLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -69,112 +84,20 @@ class TargetCurveActivity : AppCompatActivity() {
 
         exportButton.setOnClickListener { exportApo() }
 
-        // Edit toggle for generated EQ text
+        // Edit button opens editor dialog
         val editBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.resultEditButton)
-        val resetBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.resultResetButton)
-        val undoBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.resultUndoButton)
-        val redoBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.resultRedoButton)
-        var isEditing = false
-        val editHistory = mutableListOf<String>()
-        var editHistoryIndex = -1
-        fun saveEditState() {
-            val current = resultText.text.toString()
-            if (editHistoryIndex >= 0 && editHistoryIndex < editHistory.size && editHistory[editHistoryIndex] == current) return
-            while (editHistory.size > editHistoryIndex + 1) editHistory.removeAt(editHistory.size - 1)
-            editHistory.add(current)
-            editHistoryIndex = editHistory.size - 1
-        }
-
-        editBtn.setOnClickListener {
-            isEditing = !isEditing
-            val density = resources.displayMetrics.density
-            if (isEditing) {
-                resultText.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
-                resultText.isFocusable = true
-                resultText.isFocusableInTouchMode = true
-                resultText.isCursorVisible = true
-                resultText.background = null
-                resultText.requestFocus()
-                editBtn.setBackgroundColor(0xFF555555.toInt())
-                editBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
-                editBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
-                // Save initial state for undo
-                editHistory.clear(); editHistoryIndex = -1
-                saveEditState()
-                // Pop out reset, undo, redo
-                resetBtn.visibility = android.view.View.VISIBLE
-                undoBtn.visibility = android.view.View.VISIBLE
-                redoBtn.visibility = android.view.View.VISIBLE
-                resetBtn.alpha = 0f; resetBtn.scaleX = 0.3f; resetBtn.scaleY = 0.3f
-                undoBtn.alpha = 0f; undoBtn.scaleX = 0.3f; undoBtn.scaleY = 0.3f
-                redoBtn.alpha = 0f; redoBtn.scaleX = 0.3f; redoBtn.scaleY = 0.3f
-                resetBtn.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(250)
-                    .setInterpolator(android.view.animation.OvershootInterpolator(1.0f)).start()
-                undoBtn.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(250).setStartDelay(40)
-                    .setInterpolator(android.view.animation.OvershootInterpolator(1.0f)).start()
-                redoBtn.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(250).setStartDelay(80)
-                    .setInterpolator(android.view.animation.OvershootInterpolator(1.0f)).start()
-            } else {
-                resultText.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
-                resultText.isFocusable = false
-                resultText.isFocusableInTouchMode = false
-                resultText.isCursorVisible = false
-                resultText.isEnabled = false
-                resultText.background = null
-                resultText.clearFocus()
-                resultText.isEnabled = true
-                editBtn.setBackgroundColor(0x00000000)
-                editBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
-                editBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
-                // Persist edits
-                val edited = resultText.text.toString().trim()
-                if (edited.isNotEmpty()) {
-                    val ts = eqPrefs.getGeneratedEqTimestamp() ?: ""
-                    eqPrefs.saveGeneratedEq(edited, ts)
-                }
-                // Collapse reset, undo, redo
-                resetBtn.animate().alpha(0f).scaleX(0.3f).scaleY(0.3f).setDuration(200)
-                    .setInterpolator(android.view.animation.AccelerateInterpolator())
-                    .withEndAction { resetBtn.visibility = android.view.View.GONE }.start()
-                undoBtn.animate().alpha(0f).scaleX(0.3f).scaleY(0.3f).setDuration(200).setStartDelay(40)
-                    .setInterpolator(android.view.animation.AccelerateInterpolator())
-                    .withEndAction { undoBtn.visibility = android.view.View.GONE }.start()
-                redoBtn.animate().alpha(0f).scaleX(0.3f).scaleY(0.3f).setDuration(200).setStartDelay(80)
-                    .setInterpolator(android.view.animation.AccelerateInterpolator())
-                    .withEndAction { redoBtn.visibility = android.view.View.GONE }.start()
-            }
-        }
-        undoBtn.setOnClickListener {
-            saveEditState()
-            if (editHistoryIndex > 0) {
-                editHistoryIndex--
-                resultText.setText(editHistory[editHistoryIndex])
-            }
-        }
-        redoBtn.setOnClickListener {
-            if (editHistoryIndex < editHistory.size - 1) {
-                editHistoryIndex++
-                resultText.setText(editHistory[editHistoryIndex])
-            }
-        }
-        resetBtn.setOnClickListener {
-            if (editHistory.isNotEmpty()) {
-                saveEditState()
-                resultText.setText(editHistory[0])
-                editHistoryIndex = editHistory.size - 1
-            }
-        }
+        editBtn.setOnClickListener { showEditDialog() }
 
         // Measurement card — opens MeasurementSelectActivity
         findViewById<android.view.View>(R.id.measurementSelectCard).setOnClickListener {
             measurementSelectLauncher.launch(Intent(this, MeasurementSelectActivity::class.java))
-            overridePendingTransition(0, 0)
+            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
         }
 
         // Target card — opens TargetSelectActivity
         findViewById<android.view.View>(R.id.targetSelectCard).setOnClickListener {
             targetSelectLauncher.launch(Intent(this, TargetSelectActivity::class.java))
-            overridePendingTransition(0, 0)
+            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
         }
 
         // Filter count
@@ -354,6 +277,135 @@ class TargetCurveActivity : AppCompatActivity() {
         }.start()
     }
 
+    private fun showEditDialog() {
+        val density = resources.displayMetrics.density
+        val originalText = resultText.text.toString()
+        val editHistory = mutableListOf(originalText)
+        var historyIndex = 0
+
+        val dialogView = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding((24 * density).toInt(), (20 * density).toInt(), (24 * density).toInt(), (16 * density).toInt())
+        }
+
+        // Top row: title on left, undo/redo on right
+        val titleRow = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
+            setPadding(0, 0, 0, (12 * density).toInt())
+        }
+        val title = android.widget.TextView(this).apply {
+            text = "Edit Generated EQ"
+            setTextColor(0xFFE2E2E2.toInt()); textSize = 20f
+            layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val undoDlgBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            val sz = (28 * density).toInt()
+            layoutParams = android.widget.LinearLayout.LayoutParams(sz, sz).apply { marginStart = (4 * density).toInt() }
+            icon = resources.getDrawable(R.drawable.ic_undo, theme); iconGravity = com.google.android.material.button.MaterialButton.ICON_GRAVITY_TEXT_START
+            iconPadding = 0; iconTint = null; setPadding(0, 0, 0, 0); insetTop = 0; insetBottom = 0; minWidth = 0; minimumWidth = 0; minHeight = 0; minimumHeight = 0
+            cornerRadius = (8 * density).toInt(); strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt()); strokeWidth = (1 * density).toInt()
+            setBackgroundColor(0x00000000)
+        }
+        val redoDlgBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            val sz = (28 * density).toInt()
+            layoutParams = android.widget.LinearLayout.LayoutParams(sz, sz).apply { marginStart = (4 * density).toInt() }
+            icon = resources.getDrawable(R.drawable.ic_redo, theme); iconGravity = com.google.android.material.button.MaterialButton.ICON_GRAVITY_TEXT_START
+            iconPadding = 0; iconTint = null; setPadding(0, 0, 0, 0); insetTop = 0; insetBottom = 0; minWidth = 0; minimumWidth = 0; minHeight = 0; minimumHeight = 0
+            cornerRadius = (8 * density).toInt(); strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt()); strokeWidth = (1 * density).toInt()
+            setBackgroundColor(0x00000000)
+        }
+        titleRow.addView(title); titleRow.addView(undoDlgBtn); titleRow.addView(redoDlgBtn)
+
+        val editBox = android.widget.EditText(this).apply {
+            setText(originalText)
+            setTextColor(0xFFDDDDDD.toInt())
+            textSize = 11f
+            typeface = android.graphics.Typeface.MONOSPACE
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            gravity = android.view.Gravity.START or android.view.Gravity.TOP
+            minLines = 8
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF1A1A1A.toInt())
+                setStroke((1 * density).toInt(), 0xFF555555.toInt())
+                cornerRadius = 12 * density
+            }
+            val pad = (12 * density).toInt()
+            setPadding(pad, pad, pad, pad)
+        }
+
+        val divider = android.view.View(this).apply {
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, (1 * density).toInt()).apply {
+                topMargin = (12 * density).toInt(); bottomMargin = (12 * density).toInt()
+            }
+            setBackgroundColor(0xFF444444.toInt())
+        }
+
+        fun saveState() {
+            val current = editBox.text.toString()
+            if (historyIndex < editHistory.size && editHistory[historyIndex] == current) return
+            while (editHistory.size > historyIndex + 1) editHistory.removeAt(editHistory.size - 1)
+            editHistory.add(current)
+            historyIndex = editHistory.size - 1
+        }
+
+        // Bottom row: Reset + Save full width
+        val btnRow = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+        val resetDlgBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            text = "Reset"
+            layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginEnd = (3 * density).toInt()
+            }
+            cornerRadius = (12 * density).toInt(); setTextColor(0xFFEF9A9A.toInt())
+            setBackgroundColor(0x00000000); strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt()); strokeWidth = (1 * density).toInt()
+            insetTop = 0; insetBottom = 0
+        }
+        val saveBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            text = "Save"
+            layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = (3 * density).toInt()
+            }
+            cornerRadius = (12 * density).toInt(); setTextColor(0xFFDDDDDD.toInt())
+            setBackgroundColor(0x00000000); strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt()); strokeWidth = (1 * density).toInt()
+            insetTop = 0; insetBottom = 0
+        }
+        btnRow.addView(resetDlgBtn); btnRow.addView(saveBtn)
+
+        dialogView.addView(titleRow); dialogView.addView(editBox); dialogView.addView(divider); dialogView.addView(btnRow)
+
+        val dialog = android.app.AlertDialog.Builder(this, R.style.Theme_Equalizer314_Dialog)
+            .setView(dialogView).create()
+
+        undoDlgBtn.setOnClickListener {
+            saveState()
+            if (historyIndex > 0) { historyIndex--; editBox.setText(editHistory[historyIndex]) }
+        }
+        redoDlgBtn.setOnClickListener {
+            if (historyIndex < editHistory.size - 1) { historyIndex++; editBox.setText(editHistory[historyIndex]) }
+        }
+        resetDlgBtn.setOnClickListener {
+            saveState()
+            editBox.setText(editHistory[0])
+        }
+        saveBtn.setOnClickListener {
+            val edited = editBox.text.toString().trim()
+            if (edited.isNotEmpty()) {
+                resultText.setText(edited)
+                val ts = eqPrefs.getGeneratedEqTimestamp() ?: ""
+                eqPrefs.saveGeneratedEq(edited, ts)
+            }
+            dialog.dismiss()
+        }
+        dialog.show()
+    }
+
     private fun profileToApoText(profile: AutoEqProfile): String {
         val sb = StringBuilder()
         sb.append("Preamp: ${String.format("%.1f", profile.preampDb)} dB\n")
@@ -369,19 +421,17 @@ class TargetCurveActivity : AppCompatActivity() {
         val measName = eqPrefs.getSelectedMeasurement() ?: "custom"
         val fileName = "${measName}_EQ.txt"
 
-        try {
-            val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
-            val file = java.io.File(downloadsDir, fileName)
-            file.writeText(apoText)
-            Toast.makeText(this, "Exported to Downloads/$fileName", Toast.LENGTH_LONG).show()
-        } catch (e: Exception) {
-            Toast.makeText(this, "Export failed: ${e.message}", Toast.LENGTH_SHORT).show()
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TITLE, fileName)
         }
+        exportLauncher.launch(intent)
     }
 
     override fun finish() {
         super.finish()
-        overridePendingTransition(0, 0)
+        overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
     }
 
     /** Mini EQ result view — plots generated parametric EQ response */
