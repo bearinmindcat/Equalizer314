@@ -1348,6 +1348,26 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun setupSpectrumControl() {
+        findViewById<android.view.View>(R.id.spectrumControlCard).setOnClickListener {
+            startActivity(android.content.Intent(this, SpectrumControlActivity::class.java))
+            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+        }
+    }
+
+    private fun applySpectrumSettings() {
+        val ppoValues = intArrayOf(1, 2, 3, 6, 12, 24, 48, 96)
+        val renderer = visualizerHelper.renderer
+        val eqPrefs = stateManager.eqPrefs
+        if (eqPrefs.getPpoEnabled()) {
+            renderer.ppoSmoothing = ppoValues[eqPrefs.getPpoIndex().coerceIn(0, 7)]
+        } else {
+            renderer.ppoSmoothing = 0
+        }
+        renderer.setSpectrumColor(eqPrefs.getSpectrumColor())
+        renderer.releaseAlpha = eqPrefs.getSpectrumRelease()
+    }
+
     private fun setupSettingsListeners() {
         findViewById<View>(R.id.experimentalCard).setOnClickListener {
             startActivity(Intent(this, ExperimentalActivity::class.java))
@@ -1363,6 +1383,9 @@ class MainActivity : AppCompatActivity() {
             targetCurveLauncher.launch(Intent(this, TargetCurveActivity::class.java))
             overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
         }
+
+        // Spectrum Control
+        setupSpectrumControl()
 
         // Preamp slider
         preampSlider.addOnChangeListener { _, value, fromUser ->
@@ -2118,6 +2141,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Apply spectrum settings (may have changed in SpectrumControlActivity)
+        applySpectrumSettings()
         // Set FAB from saved power state — instant, no animation
         val savedPower = eqPrefs.getPowerState()
         com.bearinmind.equalizer314.ui.BottomNavHelper.setPowerFabInstant(this, savedPower)

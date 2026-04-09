@@ -255,6 +255,22 @@ class EqPreferencesManager(context: Context) {
     fun getGeneratedEqTimestamp(): String? = prefs.getString("generatedEqTimestamp", null)
     fun clearGeneratedEq() { prefs.edit().remove("generatedEqApo").remove("generatedEqTimestamp").apply() }
 
+    // Spectrum Control
+    fun saveFftSizeEnabled(enabled: Boolean) { prefs.edit().putBoolean("fftSizeEnabled", enabled).apply() }
+    fun getFftSizeEnabled(): Boolean = prefs.getBoolean("fftSizeEnabled", false)
+    fun saveFftSizeIndex(index: Int) { prefs.edit().putInt("fftSizeIndex", index).apply() }
+    fun getFftSizeIndex(): Int = prefs.getInt("fftSizeIndex", 2) // default 4096
+    fun savePpoEnabled(enabled: Boolean) { prefs.edit().putBoolean("ppoEnabled", enabled).apply() }
+    fun getPpoEnabled(): Boolean = prefs.getBoolean("ppoEnabled", false)
+    fun savePpoIndex(index: Int) { prefs.edit().putInt("ppoIndex", index).apply() }
+    fun getPpoIndex(): Int = prefs.getInt("ppoIndex", 2) // default 1/6
+    fun saveSpectrumRelease(value: Float) { prefs.edit().putFloat("spectrumRelease", value).apply() }
+    fun getSpectrumRelease(): Float = prefs.getFloat("spectrumRelease", 0.22f)
+    fun saveSpectrumColor(color: Int) { prefs.edit().putInt("spectrumColor", color).apply() }
+    fun getSpectrumColor(): Int = prefs.getInt("spectrumColor", 0xFFB4B4B4.toInt()) // default gray
+    fun saveSpectrumFps(fps: Int) { prefs.edit().putInt("spectrumFps", fps).apply() }
+    fun getSpectrumFps(): Int = prefs.getInt("spectrumFps", 60)
+
     // MBC
     fun saveMbcEnabled(enabled: Boolean) { prefs.edit().putBoolean("mbcEnabled", enabled).apply() }
     fun getMbcEnabled(): Boolean = prefs.getBoolean("mbcEnabled", false)

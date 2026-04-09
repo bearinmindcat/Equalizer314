@@ -139,6 +139,7 @@ class VisualizerHelper {
         }
         visualizer = null
         isRunning = false
-        renderer.release()
+        // Don't call renderer.release() — it kills opacity and smoothedLinear.
+        // The renderer will reset naturally when new waveform data arrives.
     }
 }

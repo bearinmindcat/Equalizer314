@@ -18,12 +18,39 @@ import kotlin.math.*
 class SpectrumAnalyzerRenderer(
     private val sampleRate: Int = 48000
 ) {
-    private val fftProcessor = WaveformFftProcessor(fftSize = 4096, sampleRate = sampleRate)
+    private var fftProcessor = WaveformFftProcessor(fftSize = 4096, sampleRate = sampleRate)
+
+    /** Change FFT size at runtime. Resets smoothing state. */
+    fun setFftSize(size: Int) {
+        if (size != fftProcessor.fftSize) {
+            fftProcessor = WaveformFftProcessor(fftSize = size, sampleRate = sampleRate)
+            smoothedLinear = null
+        }
+    }
+
+    /** PPO (Points Per Octave) smoothing. 0 = disabled. Typical: 1, 3, 6, 12, 24, 48 */
+    @Volatile
+    var ppoSmoothing: Int = 0
+
+    /** Spectrum color (ARGB). Set to change the fill/stroke tint. */
+    fun setSpectrumColor(color: Int) {
+        val r = (color shr 16) and 0xFF
+        val g = (color shr 8) and 0xFF
+        val b = color and 0xFF
+        inputStrokePaint.color = Color.argb(70, r, g, b)
+        outputStrokePaint.color = Color.argb(100, r, g, b)
+        spectrumR = r; spectrumG = g; spectrumB = b
+    }
+    private var spectrumR = 180; private var spectrumG = 180; private var spectrumB = 180
 
     // Temporally smoothed LINEAR magnitudes per bin (not dB)
     // Smoothing in linear domain properly reduces noise floor by √N frames
     @Volatile
     private var smoothedLinear: FloatArray? = null
+
+    // Pre-computed PPO-smoothed dB values (computed on Visualizer thread, read on UI thread)
+    @Volatile
+    private var ppoSmoothedDb: FloatArray? = null
 
     /** Expose smoothed linear magnitudes for compressor gain computation */
     fun getSmoothedLinear(): FloatArray? = smoothedLinear
@@ -35,7 +62,8 @@ class SpectrumAnalyzerRenderer(
 
     // Asymmetric ballistics — applied to linear magnitudes
     private val attackAlpha = 0.6f    // fast rise (~2-3 frames to reach 90%)
-    private val releaseAlpha = 0.22f  // ~6 frames to decay
+    @Volatile
+    var releaseAlpha = 0.22f  // ~6 frames to decay. Lower = slower falloff.
 
     // Opacity for fade-out when music stops (1.0 = fully visible)
     @Volatile
@@ -89,6 +117,35 @@ class SpectrumAnalyzerRenderer(
             result[i] = alpha * currentLinear[i] + (1f - alpha) * prev[i]
         }
         smoothedLinear = result
+
+        // Pre-compute PPO smoothing on this thread (not UI thread)
+        val ppo = ppoSmoothing
+        if (ppo > 0) {
+            val rawDb = FloatArray(n) { i ->
+                if (result[i] > 1e-10f) (20f * log10(result[i])).coerceAtLeast(-96f)
+                else -96f
+            }
+            val binHz = fftProcessor.binWidthHz
+            val halfOctaves = 0.5f / ppo
+            // Precompute power + prefix sum for O(1) range queries
+            val power = FloatArray(n) { i -> 10f.pow(rawDb[i] / 10f) }
+            val prefix = FloatArray(n + 1)
+            for (i in 0 until n) prefix[i + 1] = prefix[i] + power[i]
+            val smoothed = FloatArray(n)
+            for (k in 0 until n) {
+                val centerFreq = k * binHz
+                if (centerFreq < 1f) { smoothed[k] = rawDb[k]; continue }
+                val loBin = ((centerFreq * 2f.pow(-halfOctaves)) / binHz).toInt().coerceIn(0, n - 1)
+                val hiBin = ((centerFreq * 2f.pow(halfOctaves)) / binHz).toInt().coerceIn(0, n - 1)
+                val count = hiBin - loBin + 1
+                if (count <= 1) { smoothed[k] = rawDb[k]; continue }
+                val avg = (prefix[hiBin + 1] - prefix[loBin]) / count
+                smoothed[k] = if (avg > 1e-20f) (10f * log10(avg)).coerceAtLeast(-96f) else -96f
+            }
+            ppoSmoothedDb = smoothed
+        } else {
+            ppoSmoothedDb = null
+        }
     }
 
     /** Feed zeros into the EMA so it decays naturally toward silence */
@@ -101,6 +158,7 @@ class SpectrumAnalyzerRenderer(
             result[i] = 0.92f * prev[i]
         }
         smoothedLinear = result
+        ppoSmoothedDb = null  // force draw() to recompute from decayed linear values
     }
 
     /** Restore opacity to full (called when playback resumes) */
@@ -137,10 +195,16 @@ class SpectrumAnalyzerRenderer(
 
         val binWidthHz = fftProcessor.binWidthHz
 
-        // Convert smoothed linear back to dB for display
-        val db = FloatArray(n) { i ->
-            if (linear[i] > 1e-10f) (20f * log10(linear[i])).coerceAtLeast(-96f)
-            else -96f
+        // Use pre-computed PPO-smoothed dB if available, otherwise compute raw dB
+        val precomputed = ppoSmoothedDb
+        val db: FloatArray
+        if (precomputed != null && precomputed.size == n) {
+            db = precomputed
+        } else {
+            db = FloatArray(n) { i ->
+                if (linear[i] > 1e-10f) (20f * log10(linear[i])).coerceAtLeast(-96f)
+                else -96f
+            }
         }
 
         // Compute MBC band gains from the ACTUAL spectrum levels this frame
@@ -264,7 +328,7 @@ class SpectrumAnalyzerRenderer(
             // Draw input fill at 5 alpha (covers cut leftover areas)
             fillPaint.shader = LinearGradient(
                 0f, top, 0f, bottom,
-                intArrayOf(Color.argb(5, 160, 160, 160), Color.argb(2, 100, 100, 100)),
+                intArrayOf(Color.argb(5, spectrumR, spectrumG, spectrumB), Color.argb(2, spectrumR / 2, spectrumG / 2, spectrumB / 2)),
                 null, Shader.TileMode.CLAMP
             )
             canvas.drawPath(inputFillPath, fillPaint)
@@ -306,7 +370,7 @@ class SpectrumAnalyzerRenderer(
 
             fillPaint.shader = LinearGradient(
                 0f, top, 0f, bottom,
-                intArrayOf(Color.argb(80, 180, 180, 180), Color.argb(15, 100, 100, 100)),
+                intArrayOf(Color.argb(80, spectrumR, spectrumG, spectrumB), Color.argb(15, spectrumR / 2, spectrumG / 2, spectrumB / 2)),
                 null, Shader.TileMode.CLAMP
             )
             canvas.drawPath(commonFillPath, fillPaint)
@@ -318,7 +382,7 @@ class SpectrumAnalyzerRenderer(
             // Single spectrum mode — normal brightness
             fillPaint.shader = LinearGradient(
                 0f, top, 0f, bottom,
-                intArrayOf(Color.argb(80, 180, 180, 180), Color.argb(15, 100, 100, 100)),
+                intArrayOf(Color.argb(80, spectrumR, spectrumG, spectrumB), Color.argb(15, spectrumR / 2, spectrumG / 2, spectrumB / 2)),
                 null, Shader.TileMode.CLAMP
             )
             canvas.drawPath(inputFillPath, fillPaint)
