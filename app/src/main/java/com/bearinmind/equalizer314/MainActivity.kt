@@ -1446,6 +1446,8 @@ class MainActivity : AppCompatActivity() {
                 val contentLayout0 = (pageEq as ScrollView).getChildAt(0) as LinearLayout
                 val preampCard0 = contentLayout0.getChildAt(contentLayout0.childCount - 1)
                 (preampCard0.layoutParams as? LinearLayout.LayoutParams)?.topMargin = (8 * resources.displayMetrics.density).toInt()
+                // Clear any visual translation on the actual preamp card from table mode
+                ((preampSlider.parent as View).parent as View).translationY = 0f
                 parametricControlsCard.visibility = View.VISIBLE
                 graphicScrollView.visibility = View.GONE
                 filterTypeGroup.visibility = View.VISIBLE
@@ -1474,6 +1476,8 @@ class MainActivity : AppCompatActivity() {
                 val contentLayoutG = (pageEq as ScrollView).getChildAt(0) as LinearLayout
                 val preampCardG = contentLayoutG.getChildAt(contentLayoutG.childCount - 1)
                 (preampCardG.layoutParams as? LinearLayout.LayoutParams)?.topMargin = (8 * resources.displayMetrics.density).toInt()
+                // Clear any visual translation on the actual preamp card from table mode
+                ((preampSlider.parent as View).parent as View).translationY = 0f
                 parametricControlsCard.measure(
                     View.MeasureSpec.makeMeasureSpec(parametricControlsCard.width.takeIf { it > 0 }
                         ?: resources.displayMetrics.widthPixels, View.MeasureSpec.EXACTLY),
@@ -1524,6 +1528,18 @@ class MainActivity : AppCompatActivity() {
                     v.parent.requestDisallowInterceptTouchEvent(true)
                     false
                 }
+
+                // Lock the table card at zero translation (defensive against any
+                // leftover translationY from previous frames or animations).
+                tableEqCard.translationY = 0f
+
+                // Move ONLY the preamp card visually up by 8dp so it sits at the
+                // same Y as in parametric/graphic mode. translationY does not affect
+                // layout — the table card's measured/laid-out position is unchanged.
+                // Navigate via the slider's parent chain (slider → inner LinearLayout
+                // → preamp MaterialCardView) to be 100% sure we hit the right view.
+                val preampCardT = (preampSlider.parent as View).parent as View
+                preampCardT.translationY = -(8 * density)
 
                 tableController.buildTable()
             }
