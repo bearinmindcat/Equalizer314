@@ -1497,45 +1497,27 @@ class MainActivity : AppCompatActivity() {
                 findViewById<View>(R.id.triangleIndicatorContainer).visibility = View.GONE
                 tableEqCard.visibility = View.VISIBLE
 
-                // Calculate available height: page height minus graph, mode selector, and padding
-                val pageScrollView = pageEq as ScrollView
-                pageScrollView.scrollTo(0, 0)
-                pageScrollView.post {
-                    val pageH = pageScrollView.height
-                    val contentLayout = pageScrollView.getChildAt(0) as LinearLayout
-                    val padding = contentLayout.paddingTop + contentLayout.paddingBottom
+                // Match table height: from top of band toggles row 1 to bottom of band toggles row 2
+                // = bandToggleGroup + triangle + parametricControlsCard + bandToggleGroup2
+                val widthSpec = View.MeasureSpec.makeMeasureSpec(
+                    parametricControlsCard.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels,
+                    View.MeasureSpec.EXACTLY)
+                val heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
 
-                    // Measure visible elements above table card
-                    val modeSelector = findViewById<View>(R.id.modeSelectorGroup)
-                    val graphCard = (eqGraphView.parent as? View)?.parent as? View ?: eqGraphView.parent as View // the MaterialCardView wrapping the graph
-                    val modeSelectorH = modeSelector.height + (modeSelector.layoutParams as? LinearLayout.LayoutParams)?.let { it.topMargin + it.bottomMargin } .let { it ?: 0 }
-                    val graphCardH = graphCard.height + (graphCard.layoutParams as? LinearLayout.LayoutParams)?.let { it.topMargin + it.bottomMargin } .let { it ?: 0 }
-                    val tableMargin = (tableEqCard.layoutParams as? LinearLayout.LayoutParams)?.let { it.topMargin + it.bottomMargin } ?: 0
+                bandToggleGroup.measure(widthSpec, heightSpec)
+                bandToggleGroup2.measure(widthSpec, heightSpec)
+                parametricControlsCard.measure(widthSpec, heightSpec)
+                val triangleContainer = findViewById<View>(R.id.triangleIndicatorContainer)
+                triangleContainer.measure(widthSpec, heightSpec)
 
-                    // Match preamp card position to parametric/graphic mode:
-                    // In parametric mode, the preamp card Y = pageH - preampCardHeight - gapToFab
-                    // The graph height (246dp) was tuned so preamp sits with 8dp gap to FAB
-                    // So table bottom should be at the same Y as where the band toggles end
-                    // = pageH - graphCardH - modeSelectorH - padding = space for controls + preamp
-                    // The parametric controls + band toggles + preamp fill this space exactly
-                    // For table mode, table + preamp must fill the same space
-                    val controlsSpace = pageH - padding - modeSelectorH - graphCardH
-                    // Measure preamp card
-                    val preampCard = contentLayout.getChildAt(contentLayout.childCount - 1)
-                    preampCard.measure(
-                        View.MeasureSpec.makeMeasureSpec(pageScrollView.width, View.MeasureSpec.EXACTLY),
-                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
-                    val preampH = preampCard.measuredHeight +
-                        (preampCard.layoutParams as? LinearLayout.LayoutParams)?.let { it.topMargin + it.bottomMargin } .let { it ?: 0 }
-
-                    val density = resources.displayMetrics.density
-                    val adjustment = (8 * density).toInt()
-                    val tableHeight = controlsSpace - preampH - tableMargin - adjustment
-                    tableEqCard.layoutParams = tableEqCard.layoutParams.apply { height = tableHeight }
-
-                    // Tighten preamp top margin in table mode
-                    (preampCard.layoutParams as? LinearLayout.LayoutParams)?.topMargin = (7 * density).toInt()
-                }
+                val density = resources.displayMetrics.density
+                var targetHeight = bandToggleGroup.measuredHeight +
+                    triangleContainer.measuredHeight +
+                    parametricControlsCard.measuredHeight +
+                    bandToggleGroup2.measuredHeight
+                // Add bottom margin from parametric card (8dp)
+                targetHeight += (8 * density).toInt()
+                tableEqCard.layoutParams = tableEqCard.layoutParams.apply { height = targetHeight }
 
                 // Let table card's inner ScrollView handle touches, block outer scroll
                 tableEqCard.setOnTouchListener { v, event ->
