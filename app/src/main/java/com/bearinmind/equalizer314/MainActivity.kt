@@ -1442,12 +1442,14 @@ class MainActivity : AppCompatActivity() {
         when (mode) {
             EqUiMode.PARAMETRIC -> {
                 tableEqCard.setOnTouchListener(null)
-                // Restore preamp margin
+                // Restore preamp margin (this also accidentally sets the controls
+                // FrameLayout's topMargin to 8dp — that's what positions the table
+                // card; do NOT remove this line)
                 val contentLayout0 = (pageEq as ScrollView).getChildAt(0) as LinearLayout
                 val preampCard0 = contentLayout0.getChildAt(contentLayout0.childCount - 1)
                 (preampCard0.layoutParams as? LinearLayout.LayoutParams)?.topMargin = (8 * resources.displayMetrics.density).toInt()
                 // Clear any visual translation on the actual preamp card from table mode
-                ((preampSlider.parent as View).parent as View).translationY = 0f
+                findViewById<View>(R.id.preampCardBar).translationY = 0f
                 parametricControlsCard.visibility = View.VISIBLE
                 graphicScrollView.visibility = View.GONE
                 filterTypeGroup.visibility = View.VISIBLE
@@ -1472,12 +1474,14 @@ class MainActivity : AppCompatActivity() {
             }
             EqUiMode.GRAPHIC -> {
                 tableEqCard.setOnTouchListener(null)
-                // Restore preamp margin
+                // Restore preamp margin (this also accidentally sets the controls
+                // FrameLayout's topMargin to 8dp — that's what positions the table
+                // card; do NOT remove this line)
                 val contentLayoutG = (pageEq as ScrollView).getChildAt(0) as LinearLayout
                 val preampCardG = contentLayoutG.getChildAt(contentLayoutG.childCount - 1)
                 (preampCardG.layoutParams as? LinearLayout.LayoutParams)?.topMargin = (8 * resources.displayMetrics.density).toInt()
                 // Clear any visual translation on the actual preamp card from table mode
-                ((preampSlider.parent as View).parent as View).translationY = 0f
+                findViewById<View>(R.id.preampCardBar).translationY = 0f
                 parametricControlsCard.measure(
                     View.MeasureSpec.makeMeasureSpec(parametricControlsCard.width.takeIf { it > 0 }
                         ?: resources.displayMetrics.widthPixels, View.MeasureSpec.EXACTLY),
@@ -1501,27 +1505,55 @@ class MainActivity : AppCompatActivity() {
                 findViewById<View>(R.id.triangleIndicatorContainer).visibility = View.GONE
                 tableEqCard.visibility = View.VISIBLE
 
-                // Match table height: from top of band toggles row 1 to bottom of band toggles row 2
-                // = bandToggleGroup + triangle + parametricControlsCard + bandToggleGroup2
-                val widthSpec = View.MeasureSpec.makeMeasureSpec(
-                    parametricControlsCard.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels,
-                    View.MeasureSpec.EXACTLY)
-                val heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-
-                bandToggleGroup.measure(widthSpec, heightSpec)
-                bandToggleGroup2.measure(widthSpec, heightSpec)
-                parametricControlsCard.measure(widthSpec, heightSpec)
-                val triangleContainer = findViewById<View>(R.id.triangleIndicatorContainer)
-                triangleContainer.measure(widthSpec, heightSpec)
-
                 val density = resources.displayMetrics.density
-                var targetHeight = bandToggleGroup.measuredHeight +
-                    triangleContainer.measuredHeight +
-                    parametricControlsCard.measuredHeight +
-                    bandToggleGroup2.measuredHeight
-                // Add bottom margin from parametric card (8dp)
-                targetHeight += (8 * density).toInt()
-                tableEqCard.layoutParams = tableEqCard.layoutParams.apply { height = targetHeight }
+
+                // Compute and apply the table card height + preamp translationY.
+                // Wrapped in a closure so we can run it both synchronously (best effort
+                // on cold start) and after the first layout pass (which corrects any
+                // cold-start measurement errors when the views haven't been laid out
+                // yet and parametricControlsCard.width is still 0).
+                val applyTableSizing = {
+                    // Use the actual outer LinearLayout's content width when available,
+                    // falling back to (screen width - 32dp parent padding) on cold start.
+                    val outerLayout = (pageEq as ScrollView).getChildAt(0) as LinearLayout
+                    val effectiveWidth = if (outerLayout.width > 0) {
+                        outerLayout.width - outerLayout.paddingLeft - outerLayout.paddingRight
+                    } else {
+                        resources.displayMetrics.widthPixels - (32 * density).toInt()
+                    }
+                    val widthSpec = View.MeasureSpec.makeMeasureSpec(effectiveWidth, View.MeasureSpec.EXACTLY)
+                    val heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+
+                    bandToggleGroup.measure(widthSpec, heightSpec)
+                    parametricControlsCard.measure(widthSpec, heightSpec)
+
+                    // Use bandToggleGroup.measuredHeight TWICE (for both row 1 and row 2)
+                    // so the table card stays a constant size regardless of band count.
+                    // Hardcode triangleContainer to 8dp because measure() returns 10dp
+                    // (the inner triangleIndicator child's height) instead of the 8dp
+                    // layout_height the parent uses in PARAM mode.
+                    var targetHeight = bandToggleGroup.measuredHeight +
+                        (8 * density).toInt() +
+                        parametricControlsCard.measuredHeight +
+                        bandToggleGroup.measuredHeight
+                    // Add bottom margin from parametric card (8dp)
+                    targetHeight += (8 * density).toInt()
+
+                    val currentLp = tableEqCard.layoutParams
+                    if (currentLp.height != targetHeight) {
+                        tableEqCard.layoutParams = currentLp.apply { height = targetHeight }
+                    }
+                }
+
+                // Synchronous best-effort
+                applyTableSizing()
+
+                // Re-run after the first layout pass — fixes cold-start case where the
+                // synchronous measurements use stale (zero) widths and the buttons in
+                // bandToggleGroup haven't been measured yet.
+                pageEq.post {
+                    if (stateManager.currentEqUiMode == EqUiMode.TABLE) applyTableSizing()
+                }
 
                 // Let table card's inner ScrollView handle touches, block outer scroll
                 tableEqCard.setOnTouchListener { v, event ->
@@ -1533,13 +1565,10 @@ class MainActivity : AppCompatActivity() {
                 // leftover translationY from previous frames or animations).
                 tableEqCard.translationY = 0f
 
-                // Move ONLY the preamp card visually up by 8dp so it sits at the
-                // same Y as in parametric/graphic mode. translationY does not affect
-                // layout — the table card's measured/laid-out position is unchanged.
-                // Navigate via the slider's parent chain (slider → inner LinearLayout
-                // → preamp MaterialCardView) to be 100% sure we hit the right view.
-                val preampCardT = (preampSlider.parent as View).parent as View
-                preampCardT.translationY = -(8 * density)
+                // Move ONLY the actual preamp card visually up by 7dp so it sits at
+                // the same Y as in parametric/graphic mode. translationY does not
+                // affect layout — the table card stays put.
+                findViewById<View>(R.id.preampCardBar).translationY = -(7 * density)
 
                 tableController.buildTable()
             }
