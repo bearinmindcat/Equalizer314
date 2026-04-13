@@ -35,19 +35,54 @@ class SpectrumControlActivity : AppCompatActivity() {
 
         findViewById<ImageButton>(R.id.spectrumBackButton).setOnClickListener { finish() }
 
-        // Spectrum preview using EqGraphView — load current EQ curve
+        // Spectrum preview using EqGraphView
         renderer = SpectrumAnalyzerRenderer()
         graphView = findViewById(R.id.spectrumGraphView)
         graphView?.spectrumRenderer = renderer
         graphView?.showBandPoints = false
+
+        // Load the parametric EQ so the graph initializes (draws grid lines, Hz/dB
+        // labels, background, etc.). Without this the graph shows "Parametric EQ not
+        // initialized" because bandPoints is empty and onDraw returns early.
         val eq = ParametricEqualizer()
         eqPrefs.restoreState(eq)
         graphView?.setParametricEqualizer(eq)
+
+        // Hide the EQ curves — we only want the grid/background on this screen.
+        // showEqCurve = false hides the solid grey EQ frequency response line.
+        // showSaturationCurve = false hides the dashed orange tanh saturation line.
+        // To bring them back, set either/both to true.
+        graphView?.showEqCurve = false
+        graphView?.showSaturationCurve = false
+
         applyCurrentSettings()
 
-        // Spectrum toggle
+        // Spectrum toggle — programmatically sized/positioned to match the main EQ
+        // screen's visualizerToggle button (sits between the 10kHz grid line and the
+        // right edge of the graph).
         val specToggle = findViewById<com.google.android.material.button.MaterialButton>(R.id.spectrumToggle)
         val density = resources.displayMetrics.density
+        val gapPx = (2 * density).toInt()
+        graphView?.post {
+            val viewWidth = graphView?.width ?: return@post
+            val vPadPx = 80
+            val gridLine10k = (viewWidth * 3.0 / 3.301).toInt()
+            val btnTop = gapPx
+            val btnBottom = vPadPx - gapPx
+            val btnHeight = btnBottom - btnTop
+            val specWidth = (viewWidth - gapPx) - (gridLine10k + gapPx)
+
+            val specLeft = gridLine10k + gapPx
+            val specLp = specToggle.layoutParams as android.widget.FrameLayout.LayoutParams
+            specLp.width = specWidth
+            specLp.height = btnHeight
+            specLp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+            specLp.leftMargin = specLeft
+            specLp.topMargin = btnTop
+            specToggle.layoutParams = specLp
+            specToggle.minimumWidth = 0; specToggle.minimumHeight = 0
+            specToggle.setPadding(0, 0, 0, 0)
+        }
         fun updateSpecToggleStyle(active: Boolean) {
             if (active) {
                 specToggle.setBackgroundColor(0xFF555555.toInt())

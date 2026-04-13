@@ -41,6 +41,8 @@ class EqGraphView @JvmOverloads constructor(
             invalidate()
         }
 
+    // Show solid EQ frequency response curve (the main grey line)
+    var showEqCurve = true
     // Show dashed tanh saturation curve
     var showSaturationCurve = true
 
@@ -439,7 +441,7 @@ class EqGraphView @JvmOverloads constructor(
         }
 
         calculatePointPositions(vPad, graphWidth, graphHeight)
-        drawCurve(canvas, vPad, graphWidth, graphHeight)
+        if (showEqCurve) drawCurve(canvas, vPad, graphWidth, graphHeight)
 
         if (showBandPoints) {
             drawPoints(canvas)
