@@ -25,6 +25,7 @@ import com.bearinmind.equalizer314.state.EqStateManager
 import com.bearinmind.equalizer314.ui.BandToggleManager
 import com.bearinmind.equalizer314.ui.EqGraphView
 import com.bearinmind.equalizer314.ui.GraphicEqController
+import com.bearinmind.equalizer314.ui.SimpleEqController
 import com.bearinmind.equalizer314.ui.TableEqController
 
 import androidx.activity.result.contract.ActivityResultContracts
@@ -64,6 +65,7 @@ class MainActivity : AppCompatActivity() {
     // UI controllers
     private lateinit var graphicController: GraphicEqController
     private lateinit var tableController: TableEqController
+    private lateinit var simpleEqController: SimpleEqController
     private lateinit var bandToggleManager: BandToggleManager
     private val visualizerHelper = com.bearinmind.equalizer314.audio.VisualizerHelper()
 
@@ -178,6 +180,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var graphicScrollView: HorizontalScrollView
     private lateinit var graphicSlidersContainer: LinearLayout
     private lateinit var colorSwatchRow: LinearLayout
+    private lateinit var simpleEqContainer: LinearLayout
+    private lateinit var eqControlsContainer: LinearLayout
+    private lateinit var graphCardView: View
+    private lateinit var modeSelectorGroup: LinearLayout
 
     // Hz slider uses logarithmic mapping: slider 0–1000 → 10–20000 Hz
     private val hzLogMin = kotlin.math.log10(10f)
@@ -238,7 +244,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         val savedMode = try { EqUiMode.valueOf(eqPrefs.getEqUiMode()) } catch (_: Exception) { EqUiMode.PARAMETRIC }
-        switchEqUiMode(savedMode)
+        val effectiveMode = if (eqPrefs.getSimpleEqEnabled()) EqUiMode.SIMPLE else savedMode
+        switchEqUiMode(effectiveMode)
         // Ensure rows are properly ordered after views are laid out
         pageEq.post { reorderToggleRows(animate = false) }
     }
@@ -288,6 +295,10 @@ class MainActivity : AppCompatActivity() {
         graphicScrollView = findViewById(R.id.graphicScrollView)
         graphicSlidersContainer = findViewById(R.id.graphicSlidersContainer)
         colorSwatchRow = findViewById(R.id.colorSwatchRow)
+        simpleEqContainer = findViewById(R.id.simpleEqContainer)
+        eqControlsContainer = findViewById(R.id.eqControlsContainer)
+        modeSelectorGroup = findViewById(R.id.modeSelectorGroup)
+        graphCardView = (eqGraphView.parent as View).parent as View // FrameLayout → MaterialCardView
 
         val presets = arrayOf("Flat", "Bass Boost", "Treble Boost", "Vocal Enhance")
         val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, presets)
@@ -349,6 +360,10 @@ class MainActivity : AppCompatActivity() {
 
         tableController = TableEqController(
             this, tableEqRowContainer, eqGraphView, stateManager, onEqChanged
+        )
+
+        simpleEqController = SimpleEqController(
+            this, simpleEqContainer, stateManager, eqPrefs, onEqChanged
         )
 
         bandToggleManager = BandToggleManager(
@@ -513,7 +528,7 @@ class MainActivity : AppCompatActivity() {
             saveBtn.setPadding(0, 0, 0, 0)
         }
         // Save preset button — toggle between controls and preset picker
-        val eqControlsContainer = findViewById<android.view.View>(R.id.eqControlsContainer)
+        val eqControlsContainerLocal = eqControlsContainer as android.view.View
         val presetPickerScroll = findViewById<android.widget.ScrollView>(R.id.presetPickerScroll)
         val presetPickerContainer = findViewById<android.widget.LinearLayout>(R.id.presetPickerContainer)
         var presetPickerOpen = false
@@ -926,9 +941,9 @@ class MainActivity : AppCompatActivity() {
                     }
                     // Close picker with animation
                     presetPickerOpen = false
-                    eqControlsContainer.visibility = android.view.View.VISIBLE
-                    eqControlsContainer.alpha = 0f
-                    eqControlsContainer.animate().alpha(1f).setDuration(200).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+                    eqControlsContainerLocal.visibility = android.view.View.VISIBLE
+                    eqControlsContainerLocal.alpha = 0f
+                    eqControlsContainerLocal.animate().alpha(1f).setDuration(200).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
                     presetPickerScroll.animate().alpha(0f).setDuration(200).setInterpolator(android.view.animation.DecelerateInterpolator()).withEndAction {
                         presetPickerScroll.visibility = android.view.View.GONE
                         presetPickerScroll.alpha = 1f
@@ -949,17 +964,17 @@ class MainActivity : AppCompatActivity() {
                 presetPickerScroll.visibility = android.view.View.VISIBLE
                 presetPickerScroll.alpha = 0f
                 presetPickerScroll.animate().alpha(1f).setDuration(200).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
-                eqControlsContainer.animate().alpha(0f).setDuration(200).setInterpolator(android.view.animation.DecelerateInterpolator()).withEndAction {
-                    eqControlsContainer.visibility = android.view.View.GONE
-                    eqControlsContainer.alpha = 1f
+                eqControlsContainerLocal.animate().alpha(0f).setDuration(200).setInterpolator(android.view.animation.DecelerateInterpolator()).withEndAction {
+                    eqControlsContainerLocal.visibility = android.view.View.GONE
+                    eqControlsContainerLocal.alpha = 1f
                 }.start()
                 saveBtn.setBackgroundColor(0xFF555555.toInt())
                 saveBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
                 saveBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
             } else {
-                eqControlsContainer.visibility = android.view.View.VISIBLE
-                eqControlsContainer.alpha = 0f
-                eqControlsContainer.animate().alpha(1f).setDuration(200).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+                eqControlsContainerLocal.visibility = android.view.View.VISIBLE
+                eqControlsContainerLocal.alpha = 0f
+                eqControlsContainerLocal.animate().alpha(1f).setDuration(200).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
                 presetPickerScroll.animate().alpha(0f).setDuration(200).setInterpolator(android.view.animation.DecelerateInterpolator()).withEndAction {
                     presetPickerScroll.visibility = android.view.View.GONE
                     presetPickerScroll.alpha = 1f
@@ -1434,10 +1449,22 @@ class MainActivity : AppCompatActivity() {
         if (stateManager.currentEqUiMode == EqUiMode.TABLE && mode != EqUiMode.TABLE) {
             tableController.cleanup()
         }
+        // Save simple EQ gains when leaving SIMPLE mode
+        if (stateManager.currentEqUiMode == EqUiMode.SIMPLE && mode != EqUiMode.SIMPLE) {
+            simpleEqController.saveGains()
+        }
         stateManager.currentEqUiMode = mode
         eqGraphView.eqUiMode = mode
-        eqPrefs.saveEqUiMode(mode.name)
+        if (mode != EqUiMode.SIMPLE) eqPrefs.saveEqUiMode(mode.name)
         updateModeSelectorButtons()
+
+        // In non-SIMPLE modes, ensure standard views are visible and simple container hidden
+        if (mode != EqUiMode.SIMPLE) {
+            modeSelectorGroup.visibility = View.VISIBLE
+            graphCardView.visibility = View.VISIBLE
+            eqControlsContainer.visibility = View.VISIBLE
+            simpleEqContainer.visibility = View.GONE
+        }
 
         when (mode) {
             EqUiMode.PARAMETRIC -> {
@@ -1572,12 +1599,31 @@ class MainActivity : AppCompatActivity() {
 
                 tableController.buildTable()
             }
+            EqUiMode.SIMPLE -> {
+                // Hide standard EQ UI
+                modeSelectorGroup.visibility = View.GONE
+                graphCardView.visibility = View.GONE
+                eqControlsContainer.visibility = View.GONE
+
+                // Ensure the controls overlay FrameLayout has the same topMargin
+                // as it does in PARAMETRIC/GRAPHIC mode (the "Restore preamp margin"
+                // code sets it to 8dp there, but doesn't run in SIMPLE mode).
+                val overlay = simpleEqContainer.parent as? View
+                (overlay?.layoutParams as? LinearLayout.LayoutParams)?.topMargin =
+                    (8 * resources.displayMetrics.density).toInt()
+                overlay?.requestLayout()
+
+                // Show simple 10-band EQ
+                simpleEqContainer.visibility = View.VISIBLE
+                simpleEqController.configureParametricEq()
+                simpleEqController.buildSliders()
+            }
         }
         eqGraphView.invalidate()
     }
 
     private fun reorderToggleRows(animate: Boolean = true) {
-        if (stateManager.currentEqUiMode == EqUiMode.TABLE) return
+        if (stateManager.currentEqUiMode == EqUiMode.TABLE || stateManager.currentEqUiMode == EqUiMode.SIMPLE) return
         val parent = findViewById<LinearLayout>(R.id.eqControlsContainer)
         val triContainer = findViewById<View>(R.id.triangleIndicatorContainer)
 
@@ -2192,6 +2238,15 @@ class MainActivity : AppCompatActivity() {
         com.bearinmind.equalizer314.ui.BottomNavHelper.updateStatus(this, eqPrefs)
         updateAutoEqStatus()
         updateTargetStatus()
+
+        // Check if Simple EQ was toggled in experimental settings
+        val simpleEqEnabled = eqPrefs.getSimpleEqEnabled()
+        if (simpleEqEnabled && stateManager.currentEqUiMode != EqUiMode.SIMPLE) {
+            switchEqUiMode(EqUiMode.SIMPLE)
+        } else if (!simpleEqEnabled && stateManager.currentEqUiMode == EqUiMode.SIMPLE) {
+            val fallback = try { EqUiMode.valueOf(eqPrefs.getEqUiMode()) } catch (_: Exception) { EqUiMode.PARAMETRIC }
+            switchEqUiMode(fallback)
+        }
     }
 
     override fun onPause() {
@@ -2199,6 +2254,10 @@ class MainActivity : AppCompatActivity() {
         // Release visualizer so other activities can use session 0
         visualizerHelper.stop()
         eqGraphView.spectrumRenderer = null
+        // Save simple EQ gains if in simple mode
+        if (stateManager.currentEqUiMode == EqUiMode.SIMPLE) {
+            simpleEqController.saveGains()
+        }
         stateManager.saveState()
         eqPrefs.savePresetName(presetDropdown.text.toString())
     }

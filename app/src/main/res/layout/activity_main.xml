@@ -655,6 +655,14 @@
 
                 </LinearLayout> <!-- end eqControlsContainer -->
 
+                <!-- Simple EQ container (visible only in SIMPLE mode, populated programmatically) -->
+                <LinearLayout
+                    android:id="@+id/simpleEqContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone" />
+
                 <!-- Preset picker (shown when save icon is tapped) -->
                 <ScrollView
                     android:id="@+id/presetPickerScroll"

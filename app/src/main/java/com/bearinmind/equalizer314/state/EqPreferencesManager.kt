@@ -312,4 +312,21 @@ class EqPreferencesManager(context: Context) {
     // MBC Crossovers
     fun saveMbcCrossover(i: Int, freq: Float) { prefs.edit().putFloat("mbc_crossover_$i", freq).apply() }
     fun getMbcCrossover(i: Int, default: Float): Float = prefs.getFloat("mbc_crossover_$i", default)
+
+    // Simple EQ
+    fun saveSimpleEqEnabled(enabled: Boolean) { prefs.edit().putBoolean("simpleEqEnabled", enabled).apply() }
+    fun getSimpleEqEnabled(): Boolean = prefs.getBoolean("simpleEqEnabled", false)
+    fun saveSimpleEqGains(gains: FloatArray) {
+        val arr = JSONArray()
+        for (g in gains) arr.put(g.toDouble())
+        prefs.edit().putString("simpleEqGains", arr.toString()).apply()
+    }
+    fun getSimpleEqGains(): FloatArray? {
+        val str = prefs.getString("simpleEqGains", null) ?: return null
+        val arr = JSONArray(str)
+        return FloatArray(arr.length()) { arr.getDouble(it).toFloat() }
+    }
+    // Save/restore the advanced EQ state separately so switching to/from Simple doesn't destroy it
+    fun saveAdvancedEqBackup(bandsJson: String) { prefs.edit().putString("advancedEqBackup", bandsJson).apply() }
+    fun getAdvancedEqBackup(): String? = prefs.getString("advancedEqBackup", null)
 }
