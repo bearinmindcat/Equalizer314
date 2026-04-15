@@ -232,6 +232,13 @@ class MainActivity : AppCompatActivity() {
         if (savedInstanceState == null) {
             eqPrefs.savePowerState(false)
             stateManager.pendingStartEq = false
+            // Also re-lock the Experimental settings on every fresh launch
+            eqPrefs.saveExperimentalUnlocked(false)
+            // Force Experimental DSP options to safe defaults (currently disabled
+            // in the UI; see ExperimentalActivity). Overwrite anything a user may
+            // have saved in a previous build.
+            eqPrefs.saveDpBandCount(128)
+            eqPrefs.saveAutoGainEnabled(false)
         }
 
         initViews()
@@ -1407,7 +1414,25 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        findViewById<View>(R.id.experimentalCard).setOnClickListener {
+        // Experimental lock button — toggles locked/unlocked state
+        val experimentalLockButton = findViewById<ImageButton>(R.id.experimentalLockButton)
+        val experimentalCard = findViewById<View>(R.id.experimentalCard)
+        fun applyExperimentalLockState() {
+            val unlocked = eqPrefs.getExperimentalUnlocked()
+            experimentalLockButton.setImageResource(
+                if (unlocked) R.drawable.ic_lock_open else R.drawable.ic_lock
+            )
+            experimentalCard.isClickable = unlocked
+            experimentalCard.alpha = if (unlocked) 1f else 0.6f
+        }
+        applyExperimentalLockState()
+        experimentalLockButton.setOnClickListener {
+            val newState = !eqPrefs.getExperimentalUnlocked()
+            eqPrefs.saveExperimentalUnlocked(newState)
+            applyExperimentalLockState()
+        }
+        experimentalCard.setOnClickListener {
+            if (!eqPrefs.getExperimentalUnlocked()) return@setOnClickListener
             startActivity(Intent(this, ExperimentalActivity::class.java))
             overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
         }
@@ -1496,21 +1521,33 @@ class MainActivity : AppCompatActivity() {
                 stateManager.pushEqUpdate()
             }
         }
-        // Save the advanced EQ state before entering SIMPLE mode
+        // Save the advanced EQ state before entering SIMPLE mode.
+        // Skip if the current EQ is already a simple-EQ configuration (e.g. on app
+        // startup when Simple EQ was enabled in the previous session) — otherwise
+        // we'd overwrite the real advanced backup with simple-EQ band data.
         if (mode == EqUiMode.SIMPLE && stateManager.currentEqUiMode != EqUiMode.SIMPLE) {
             val eq = stateManager.parametricEq
-            val bandsJson = org.json.JSONArray()
-            for (i in 0 until eq.getBandCount()) {
-                val band = eq.getBand(i) ?: continue
-                bandsJson.put(org.json.JSONObject().apply {
-                    put("frequency", band.frequency.toDouble())
-                    put("gain", band.gain.toDouble())
-                    put("filterType", band.filterType.name)
-                    put("q", band.q)
-                    put("enabled", band.enabled)
-                })
+            val isAlreadySimpleConfig = eq.getBandCount() == com.bearinmind.equalizer314.ui.SimpleEqController.FREQUENCIES.size &&
+                (0 until eq.getBandCount()).all { i ->
+                    val band = eq.getBand(i)
+                    band != null &&
+                    band.filterType == com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.BELL &&
+                    kotlin.math.abs(band.frequency - com.bearinmind.equalizer314.ui.SimpleEqController.FREQUENCIES[i]) < 0.5f
+                }
+            if (!isAlreadySimpleConfig) {
+                val bandsJson = org.json.JSONArray()
+                for (i in 0 until eq.getBandCount()) {
+                    val band = eq.getBand(i) ?: continue
+                    bandsJson.put(org.json.JSONObject().apply {
+                        put("frequency", band.frequency.toDouble())
+                        put("gain", band.gain.toDouble())
+                        put("filterType", band.filterType.name)
+                        put("q", band.q)
+                        put("enabled", band.enabled)
+                    })
+                }
+                eqPrefs.saveAdvancedEqBackup(bandsJson.toString())
             }
-            eqPrefs.saveAdvancedEqBackup(bandsJson.toString())
         }
         stateManager.currentEqUiMode = mode
         eqGraphView.eqUiMode = mode

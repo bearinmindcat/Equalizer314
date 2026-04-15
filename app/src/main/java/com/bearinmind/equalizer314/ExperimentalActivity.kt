@@ -35,36 +35,38 @@ class ExperimentalActivity : AppCompatActivity() {
         setupGainCompensation()
     }
 
+    // NOTE: DP Band Count and Gain Compensation are intentionally disabled for
+    // the current release. The controls remain visible so users can see the
+    // planned capability, but they are non-interactive and their persisted
+    // values are forced to the safe defaults (128 bands, gain comp off) on
+    // every entry to this screen. Re-enable by removing the `isEnabled = false`
+    // lines below and restoring the listeners.
     private fun setupDpBandCount() {
         val slider = findViewById<Slider>(R.id.expDpBandCountSlider)
         val text = findViewById<EditText>(R.id.expDpBandCountText)
 
-        val savedCount = eqPrefs.getDpBandCount()
-        slider.value = savedCount.toFloat().coerceIn(32f, 128f)
-        text.setText(savedCount.toString())
+        // Force default value at runtime (ignore anything previously saved).
+        eqPrefs.saveDpBandCount(128)
+        slider.value = 128f
+        text.setText("128")
 
-        slider.addOnChangeListener { _, value, fromUser ->
-            if (!fromUser) return@addOnChangeListener
-            val count = value.toInt()
-            text.setText(count.toString())
-            eqPrefs.saveDpBandCount(count)
-        }
-
-        text.setOnEditorActionListener { _, _, _ ->
-            val count = text.text.toString().toIntOrNull()?.coerceIn(32, 128) ?: 128
-            slider.value = count.toFloat()
-            text.setText(count.toString())
-            eqPrefs.saveDpBandCount(count)
-            false
-        }
+        // Disabled for release — no-op listeners, controls grayed out.
+        slider.isEnabled = false
+        text.isEnabled = false
+        slider.alpha = 0.4f
+        text.alpha = 0.4f
     }
 
     private fun setupGainCompensation() {
         val switch = findViewById<MaterialSwitch>(R.id.expGainCompSwitch)
-        switch.isChecked = eqPrefs.getAutoGainEnabled()
-        switch.setOnCheckedChangeListener { _, isChecked ->
-            eqPrefs.saveAutoGainEnabled(isChecked)
-        }
+
+        // Force off at runtime (ignore anything previously saved).
+        eqPrefs.saveAutoGainEnabled(false)
+        switch.isChecked = false
+
+        // Disabled for release — no listener, switch grayed out.
+        switch.isEnabled = false
+        switch.alpha = 0.4f
     }
 
     override fun finish() {

@@ -330,6 +330,10 @@ class EqPreferencesManager(context: Context) {
     fun saveAdvancedEqBackup(bandsJson: String) { prefs.edit().putString("advancedEqBackup", bandsJson).apply() }
     fun getAdvancedEqBackup(): String? = prefs.getString("advancedEqBackup", null)
 
+    // Experimental lock — when locked, Experimental card is not clickable
+    fun saveExperimentalUnlocked(unlocked: Boolean) { prefs.edit().putBoolean("experimentalUnlocked", unlocked).apply() }
+    fun getExperimentalUnlocked(): Boolean = prefs.getBoolean("experimentalUnlocked", false)
+
     // Simple EQ Presets
     fun getSimpleEqPresetNames(): List<String> {
         return (prefs.getStringSet("simple_preset_names", emptySet()) ?: emptySet()).sorted()
