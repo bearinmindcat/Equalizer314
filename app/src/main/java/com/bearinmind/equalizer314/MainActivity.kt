@@ -1506,6 +1506,11 @@ class MainActivity : AppCompatActivity() {
             if (preampCard.parent !== eqControlsContainer) {
                 (preampCard.parent as? android.view.ViewGroup)?.removeView(preampCard)
                 eqControlsContainer.addView(preampCard)
+                // Restore original XML margins (topMargin=8dp, bottomMargin=0dp)
+                (preampCard.layoutParams as? LinearLayout.LayoutParams)?.apply {
+                    topMargin = (8 * resources.displayMetrics.density).toInt()
+                    bottomMargin = 0
+                }
             }
 
             // Re-sync band toggles and graph after returning from SIMPLE mode
@@ -1725,6 +1730,12 @@ class MainActivity : AppCompatActivity() {
                 // before undo/redo/reset controls card (3→4)
                 simpleEqContainer.addView(preampCard, 3)
                 preampCard.translationY = 0f
+                // Set consistent 8dp bottom margin (remove the XML topMargin=8dp to
+                // avoid double-spacing since bars card already has bottomMargin=8dp)
+                (preampCard.layoutParams as? LinearLayout.LayoutParams)?.apply {
+                    topMargin = 0
+                    bottomMargin = (8 * resources.displayMetrics.density).toInt()
+                }
             }
         }
         eqGraphView.invalidate()

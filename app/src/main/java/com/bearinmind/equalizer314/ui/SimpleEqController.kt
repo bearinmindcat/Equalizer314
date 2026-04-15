@@ -112,7 +112,7 @@ class SimpleEqController(
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
                 topMargin = (12 * density).toInt()
-                bottomMargin = (4 * density).toInt()
+                bottomMargin = (8 * density).toInt()
             }
             radius = 16 * density
             cardElevation = 0f
@@ -150,7 +150,6 @@ class SimpleEqController(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                topMargin = (8 * density).toInt()
                 bottomMargin = (8 * density).toInt()
             }
             radius = 16 * density
@@ -265,7 +264,9 @@ class SimpleEqController(
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            )
+            ).apply {
+                bottomMargin = (8 * density).toInt()
+            }
             radius = 16 * density
             cardElevation = 0f
             setCardBackgroundColor(0xFF1E1E1E.toInt())
