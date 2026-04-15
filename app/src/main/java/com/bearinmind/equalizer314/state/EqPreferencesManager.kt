@@ -329,4 +329,30 @@ class EqPreferencesManager(context: Context) {
     // Save/restore the advanced EQ state separately so switching to/from Simple doesn't destroy it
     fun saveAdvancedEqBackup(bandsJson: String) { prefs.edit().putString("advancedEqBackup", bandsJson).apply() }
     fun getAdvancedEqBackup(): String? = prefs.getString("advancedEqBackup", null)
+
+    // Simple EQ Presets
+    fun getSimpleEqPresetNames(): List<String> {
+        return (prefs.getStringSet("simple_preset_names", emptySet()) ?: emptySet()).sorted()
+    }
+    fun saveSimpleEqPreset(name: String, gains: FloatArray) {
+        val arr = JSONArray()
+        for (g in gains) arr.put(g.toDouble())
+        val names = (prefs.getStringSet("simple_preset_names", emptySet()) ?: emptySet()).toMutableSet() + name
+        prefs.edit()
+            .putString("simple_preset_$name", arr.toString())
+            .putStringSet("simple_preset_names", names)
+            .apply()
+    }
+    fun getSimpleEqPresetGains(name: String): FloatArray? {
+        val str = prefs.getString("simple_preset_$name", null) ?: return null
+        val arr = JSONArray(str)
+        return FloatArray(arr.length()) { arr.getDouble(it).toFloat() }
+    }
+    fun deleteSimpleEqPreset(name: String) {
+        val names = (prefs.getStringSet("simple_preset_names", emptySet()) ?: emptySet()).toMutableSet() - name
+        prefs.edit()
+            .remove("simple_preset_$name")
+            .putStringSet("simple_preset_names", names)
+            .apply()
+    }
 }

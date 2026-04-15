@@ -33,15 +33,6 @@ class ExperimentalActivity : AppCompatActivity() {
 
         setupDpBandCount()
         setupGainCompensation()
-        setupSimpleEq()
-    }
-
-    private fun setupSimpleEq() {
-        val switch = findViewById<MaterialSwitch>(R.id.expSimpleEqSwitch)
-        switch.isChecked = eqPrefs.getSimpleEqEnabled()
-        switch.setOnCheckedChangeListener { _, isChecked ->
-            eqPrefs.saveSimpleEqEnabled(isChecked)
-        }
     }
 
     private fun setupDpBandCount() {

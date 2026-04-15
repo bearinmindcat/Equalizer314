@@ -2,6 +2,7 @@ package com.bearinmind.equalizer314.ui
 
 import android.app.Activity
 import android.view.Gravity
+import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.bearinmind.equalizer314.R
@@ -24,12 +25,17 @@ class SimpleEqController(
 
     private var barsView: SimpleEqBarsView? = null
     private var miniGraph: EqGraphView? = null
+    private var barsCard: View? = null
+    private var presetPickerScroll: android.widget.ScrollView? = null
+    private var presetPickerContainer: LinearLayout? = null
+    private var presetPickerOpen = false
+    private var saveBtn: android.widget.ImageButton? = null
 
     // Undo/redo history
     private val history = mutableListOf<FloatArray>()
     private var historyIndex = -1
-    private var undoBtn: android.view.View? = null
-    private var redoBtn: android.view.View? = null
+    private var undoBtn: View? = null
+    private var redoBtn: View? = null
 
     private fun saveSnapshot() {
         val eq = state.parametricEq
@@ -58,6 +64,11 @@ class SimpleEqController(
         redoBtn?.alpha = if (historyIndex < history.size - 1) 1f else 0.3f
     }
 
+    private fun getCurrentGains(): FloatArray {
+        val eq = state.parametricEq
+        return FloatArray(FREQUENCIES.size) { i -> eq.getBand(i)?.gain ?: 0f }
+    }
+
     fun configureParametricEq() {
         val eq = state.parametricEq
         val savedGains = eqPrefs.getSimpleEqGains() ?: FloatArray(10) { 0f }
@@ -77,6 +88,7 @@ class SimpleEqController(
 
     fun buildSliders() {
         container.removeAllViews()
+        presetPickerOpen = false
 
         val density = activity.resources.displayMetrics.density
         val eq = state.parametricEq
@@ -111,7 +123,6 @@ class SimpleEqController(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                topMargin = (12 * density).toInt()
                 bottomMargin = (8 * density).toInt()
             }
             radius = 16 * density
@@ -143,13 +154,77 @@ class SimpleEqController(
         graphCard.addView(graph)
         container.addView(graphCard)
 
-        // Undo / Redo / Reset card (topMargin matches the gap between header and
-        // graph card on MBC / Limiter screens for visual consistency)
+        // Card wrapping the bars
+        val bCard = com.google.android.material.card.MaterialCardView(activity).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = (8 * density).toInt()
+            }
+            radius = 16 * density
+            cardElevation = 0f
+            setCardBackgroundColor(0xFF1E1E1E.toInt())
+            strokeWidth = 0
+        }
+
+        // Custom bars view
+        val bars = SimpleEqBarsView(activity).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                (256 * density).toInt()  // total height for bars + labels
+            )
+            // Load gains from EQ
+            val gains = FloatArray(SimpleEqBarsView.BAND_COUNT) { i ->
+                eq.getBand(i)?.gain?.coerceIn(-12f, 12f) ?: 0f
+            }
+            setAllGains(gains)
+
+            onGainChanged = { bandIndex, gain ->
+                val roundedGain = Math.round(gain * 10f) / 10f // snap to 0.1 dB
+                eq.updateBand(bandIndex, FREQUENCIES[bandIndex], roundedGain, BiquadFilter.FilterType.BELL, Q)
+                miniGraph?.invalidate() // live preview of curve changes
+                onEqChanged()
+            }
+            onDragEnd = { saveSnapshot() }
+        }
+        barsView = bars
+        bCard.addView(bars)
+        barsCard = bCard
+        container.addView(bCard)
+
+        // Preset picker (initially GONE, toggled by save button)
+        // Styled to match the advanced EQ preset picker: plain ScrollView,
+        // colorSurface background, no card wrapper.
+        val pickerScroll = android.widget.ScrollView(activity).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            visibility = View.GONE
+            isVerticalScrollBarEnabled = false
+            setBackgroundColor(com.google.android.material.color.MaterialColors.getColor(
+                activity, com.google.android.material.R.attr.colorSurface, 0xFF121212.toInt()))
+        }
+        val pickerInner = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        pickerScroll.addView(pickerInner)
+        presetPickerScroll = pickerScroll
+        presetPickerContainer = pickerInner
+        container.addView(pickerScroll)
+
+        // Preamp card is reparented from eqControlsContainer by switchEqUiMode —
+        // it gets inserted here (index 4, after barsCard=2, presetPicker=3) so it
+        // matches the existing preamp card used in parametric/graphic/table modes.
+
+        // Undo / Redo / Reset / Save card
         val controlsCard = com.google.android.material.card.MaterialCardView(activity).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
+                topMargin = (12 * density).toInt()
                 bottomMargin = (8 * density).toInt()
             }
             radius = 16 * density
@@ -165,12 +240,10 @@ class SimpleEqController(
             setPadding((8 * density).toInt(), (8 * density).toInt(), (8 * density).toInt(), (8 * density).toInt())
         }
 
-        // Nothing-style layout: RESET (red, left) | spacer | Undo (icon) | Redo (icon)
+        // Nothing-style layout: RESET (red, left) | spacer | Save (icon) | Undo (icon) | Redo (icon)
 
-        val btnStyle = com.google.android.material.R.attr.materialButtonOutlinedStyle
-
-        // Reset button — red text, left side, taller like Nothing's RESET
-        val reset = MaterialButton(activity, null, btnStyle).apply {
+        // Reset button — red text, left side
+        val reset = MaterialButton(activity, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
             text = "RESET"
             textSize = 12f
             setTextColor(0xFFEF9A9A.toInt())
@@ -192,13 +265,33 @@ class SimpleEqController(
             }
         }
 
-        // Spacer to push undo/redo to the right
-        val spacer = android.view.View(activity).apply {
+        // Spacer to push buttons to the right
+        val spacer = View(activity).apply {
             layoutParams = LinearLayout.LayoutParams(0, 0, 1f)
         }
 
-        // Undo — icon only, rounded rectangle outline (matches band toggle style)
         val iconBtnSize = (48 * density).toInt()
+
+        // Save / Presets button — icon only, rounded rectangle outline
+        val save = android.widget.ImageButton(activity).apply {
+            setImageResource(R.drawable.ic_save)
+            setColorFilter(0xFFBBBBBB.toInt())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 12 * density
+                setColor(0x00000000)
+                setStroke((1 * density).toInt(), 0xFF444444.toInt())
+            }
+            layoutParams = LinearLayout.LayoutParams(iconBtnSize, iconBtnSize).apply {
+                marginEnd = (8 * density).toInt()
+            }
+            scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
+            val iconPad = (12 * density).toInt()
+            setPadding(iconPad, iconPad, iconPad, iconPad)
+            setOnClickListener { togglePresetPicker() }
+        }
+        saveBtn = save
+
+        // Undo — icon only, rounded rectangle outline
         val undo = android.widget.ImageButton(activity).apply {
             setImageResource(R.drawable.ic_undo)
             setColorFilter(0xFFBBBBBB.toInt())
@@ -252,6 +345,7 @@ class SimpleEqController(
 
         controlsRow.addView(reset)
         controlsRow.addView(spacer)
+        controlsRow.addView(save)
         controlsRow.addView(undo)
         controlsRow.addView(redo)
         controlsCard.addView(controlsRow)
@@ -259,50 +353,410 @@ class SimpleEqController(
         // Save initial snapshot for undo history
         saveSnapshot()
 
-        // Card wrapping the bars
-        val barsCard = com.google.android.material.card.MaterialCardView(activity).apply {
+        // Controls card goes above the mini graph (index 1, after header)
+        container.addView(controlsCard, 1)
+    }
+
+    private fun togglePresetPicker() {
+        val density = activity.resources.displayMetrics.density
+        val decel = android.view.animation.DecelerateInterpolator()
+        val preampCard = activity.findViewById<View>(R.id.preampCardBar)
+        presetPickerOpen = !presetPickerOpen
+        if (presetPickerOpen) {
+            populatePresetPicker()
+            // Hide bars + preamp instantly, fade picker in
+            barsCard?.visibility = View.GONE
+            preampCard?.visibility = View.GONE
+            presetPickerScroll?.visibility = View.VISIBLE
+            presetPickerScroll?.alpha = 0f
+            presetPickerScroll?.animate()?.alpha(1f)?.setDuration(200)?.setInterpolator(decel)?.start()
+            saveBtn?.apply {
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = 12 * density
+                    setColor(0xFF555555.toInt())
+                    setStroke((1 * density).toInt(), 0xFF888888.toInt())
+                }
+                setColorFilter(0xFFDDDDDD.toInt())
+            }
+        } else {
+            closePresetPicker()
+        }
+    }
+
+    private fun closePresetPicker() {
+        val density = activity.resources.displayMetrics.density
+        val decel = android.view.animation.DecelerateInterpolator()
+        val preampCard = activity.findViewById<View>(R.id.preampCardBar)
+        presetPickerOpen = false
+        // Hide picker instantly, fade bars + preamp in
+        presetPickerScroll?.visibility = View.GONE
+        barsCard?.visibility = View.VISIBLE
+        barsCard?.alpha = 0f
+        barsCard?.animate()?.alpha(1f)?.setDuration(200)?.setInterpolator(decel)?.start()
+        preampCard?.apply {
+            visibility = View.VISIBLE
+            alpha = 0f
+            animate().alpha(1f).setDuration(200).setInterpolator(decel).start()
+        }
+        saveBtn?.apply {
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 12 * density
+                setColor(0x00000000)
+                setStroke((1 * density).toInt(), 0xFF444444.toInt())
+            }
+            setColorFilter(0xFFBBBBBB.toInt())
+        }
+    }
+
+    private fun populatePresetPicker() {
+        val pickerContainer = presetPickerContainer ?: return
+        pickerContainer.removeAllViews()
+        val density = activity.resources.displayMetrics.density
+        val presetNames = eqPrefs.getSimpleEqPresetNames()
+
+        // "+" button at top — save current EQ as new preset
+        val saveCurrentBtn = MaterialButton(activity, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            text = "+"
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                bottomMargin = (8 * density).toInt()
+                setMargins(0, 0, 0, (4 * density).toInt())
             }
-            radius = 16 * density
-            cardElevation = 0f
-            setCardBackgroundColor(0xFF1E1E1E.toInt())
-            strokeWidth = 0
+            cornerRadius = (12 * density).toInt()
+            textSize = 11f
+            val vertPad = (6 * density).toInt()
+            setPadding(0, vertPad, 0, vertPad)
+            insetTop = 0; insetBottom = 0
+            minWidth = 0; minimumWidth = 0
+            gravity = Gravity.CENTER
+            setBackgroundColor(0x00000000)
+            setTextColor(0xFF888888.toInt())
+            strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+            strokeWidth = (1 * density).toInt()
+            setOnClickListener { showSaveDialog() }
+        }
+        pickerContainer.addView(saveCurrentBtn)
+
+        // List saved presets
+        for (name in presetNames) {
+            val gains = eqPrefs.getSimpleEqPresetGains(name) ?: continue
+            pickerContainer.addView(createPresetRow(name, gains))
+        }
+    }
+
+    private fun showSaveDialog() {
+        val density = activity.resources.displayMetrics.density
+        val presetNames = eqPrefs.getSimpleEqPresetNames()
+
+        // Find next Custom # number
+        var nextNum = 1
+        for (n in presetNames) {
+            val match = Regex("Custom #(\\d+)").find(n)
+            if (match != null) nextNum = maxOf(nextNum, match.groupValues[1].toInt() + 1)
         }
 
-        // Custom bars view
-        val bars = SimpleEqBarsView(activity).apply {
+        val dialogView = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((24 * density).toInt(), (20 * density).toInt(), (24 * density).toInt(), (16 * density).toInt())
+        }
+        val title = TextView(activity).apply {
+            text = "Save Simple EQ Preset"
+            setTextColor(0xFFE2E2E2.toInt())
+            textSize = 20f
+            setPadding(0, 0, 0, (12 * density).toInt())
+        }
+        val inputBox = android.widget.FrameLayout(activity).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                (320 * density).toInt()  // total height for bars + labels
-            )
-            // Load gains from EQ
-            val gains = FloatArray(SimpleEqBarsView.BAND_COUNT) { i ->
-                eq.getBand(i)?.gain?.coerceIn(-12f, 12f) ?: 0f
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = (16 * density).toInt()
             }
-            setAllGains(gains)
-
-            onGainChanged = { bandIndex, gain ->
-                val roundedGain = Math.round(gain * 10f) / 10f // snap to 0.1 dB
-                eq.updateBand(bandIndex, FREQUENCIES[bandIndex], roundedGain, BiquadFilter.FilterType.BELL, Q)
-                miniGraph?.invalidate() // live preview of curve changes
-                onEqChanged()
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0x00000000)
+                setStroke((1 * density).toInt(), 0xFF555555.toInt())
+                cornerRadius = 12 * density
             }
-            onDragEnd = { saveSnapshot() }
         }
-        barsView = bars
-        barsCard.addView(bars)
-        container.addView(barsCard)
+        val defaultName = "Custom #$nextNum"
+        val input = android.widget.EditText(activity).apply {
+            hint = defaultName
+            setTextColor(0xFFFFFFFF.toInt())
+            setHintTextColor(0xFF888888.toInt())
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+            background = null
+            val pad = (14 * density).toInt()
+            setPadding(pad, pad, pad, pad)
+            isSingleLine = true
+        }
+        inputBox.addView(input)
+        val divider = View(activity).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, (1 * density).toInt()
+            ).apply {
+                bottomMargin = (12 * density).toInt()
+            }
+            setBackgroundColor(0xFF444444.toInt())
+        }
+        val btnRow = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+        val cancelBtn = MaterialButton(activity, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            text = "Cancel"
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginEnd = (3 * density).toInt()
+            }
+            cornerRadius = (12 * density).toInt()
+            setTextColor(0xFFEF9A9A.toInt())
+            strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+            strokeWidth = (1 * density).toInt()
+            setBackgroundColor(0x00000000)
+            insetTop = 0; insetBottom = 0
+        }
+        val okBtn = MaterialButton(activity, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            text = "OK"
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = (3 * density).toInt()
+            }
+            cornerRadius = (12 * density).toInt()
+            setTextColor(0xFFDDDDDD.toInt())
+            setBackgroundColor(0x00000000)
+            strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+            strokeWidth = (1 * density).toInt()
+            insetTop = 0; insetBottom = 0
+        }
+        btnRow.addView(cancelBtn)
+        btnRow.addView(okBtn)
+        dialogView.addView(title)
+        dialogView.addView(inputBox)
+        dialogView.addView(divider)
+        dialogView.addView(btnRow)
 
-        // Preamp card is reparented from eqControlsContainer by switchEqUiMode —
-        // it gets inserted here (index 2, after bars card) so it matches the
-        // existing preamp card used in parametric/graphic/table modes.
+        val dialog = android.app.AlertDialog.Builder(activity, R.style.Theme_Equalizer314_Dialog)
+            .setView(dialogView)
+            .create()
+        cancelBtn.setOnClickListener { dialog.dismiss() }
+        okBtn.setOnClickListener {
+            val name = input.text.toString().trim().ifEmpty { defaultName }
+            eqPrefs.saveSimpleEqPreset(name, getCurrentGains())
+            populatePresetPicker()
+            android.widget.Toast.makeText(activity, "Saved \"$name\"", android.widget.Toast.LENGTH_SHORT).show()
+            dialog.dismiss()
+        }
+        dialog.show()
+    }
 
-        // Undo / Redo / Reset card goes AFTER the preamp
-        container.addView(controlsCard)
+    private fun createPresetRow(name: String, gains: FloatArray): View {
+        val density = activity.resources.displayMetrics.density
+
+        val row = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, 0, 0, (4 * density).toInt())
+            }
+            gravity = Gravity.CENTER_VERTICAL
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0x00000000)
+                setStroke((1 * density).toInt(), 0xFF444444.toInt())
+                cornerRadius = 12 * density
+            }
+            val hPad = (12 * density).toInt()
+            val vPad = (10 * density).toInt()
+            setPadding(hPad, vPad, hPad, vPad)
+        }
+
+        // Preset name
+        val nameText = TextView(activity).apply {
+            text = name
+            setTextColor(0xFFE2E2E2.toInt())
+            textSize = 14f
+            isSingleLine = true
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        // Mini 10-bar thumbnail
+        val thumbW = (48 * density).toInt()
+        val thumbH = (24 * density).toInt()
+        val thumbnail = object : View(activity) {
+            override fun onDraw(canvas: android.graphics.Canvas) {
+                super.onDraw(canvas)
+                val w = width.toFloat(); val h = height.toFloat()
+                if (w <= 0 || h <= 0) return
+                val barW = w / (gains.size * 2f)
+                val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                    color = 0xFFAAAAAA.toInt()
+                }
+                val bgPaint = android.graphics.Paint().apply { color = 0xFF6A6A6A.toInt(); strokeWidth = 1f }
+                canvas.drawLine(0f, h / 2f, w, h / 2f, bgPaint)
+                for (i in gains.indices) {
+                    val cx = w * (i + 0.5f) / gains.size
+                    val left = cx - barW / 2f
+                    val right = cx + barW / 2f
+                    val mid = h / 2f
+                    val barH = (gains[i] / 12f) * (h / 2f)
+                    if (barH > 0) {
+                        canvas.drawRect(left, mid - barH, right, mid, paint)
+                    } else if (barH < 0) {
+                        canvas.drawRect(left, mid, right, mid - barH, paint)
+                    }
+                }
+            }
+        }.apply {
+            layoutParams = LinearLayout.LayoutParams(thumbW, thumbH).apply {
+                marginEnd = (8 * density).toInt()
+            }
+        }
+
+        // Export button — APO format
+        val exportBtn = MaterialButton(activity, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                (36 * density).toInt(), (36 * density).toInt()
+            ).apply {
+                marginStart = (8 * density).toInt()
+            }
+            cornerRadius = (12 * density).toInt()
+            setPadding(0, 0, 0, 0)
+            insetTop = 0; insetBottom = 0
+            minWidth = 0; minimumWidth = 0; minHeight = 0; minimumHeight = 0
+            setBackgroundColor(0x00000000)
+            icon = activity.resources.getDrawable(R.drawable.ic_export, activity.theme)
+            iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
+            iconPadding = 0
+            iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+            iconSize = (18 * density).toInt()
+            strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+            strokeWidth = (1 * density).toInt()
+            setOnClickListener {
+                val sb = StringBuilder()
+                sb.append("Preamp: 0.0 dB\n")
+                for (i in gains.indices) {
+                    val freq = FREQUENCIES[i]
+                    val freqInt = freq.toInt()
+                    sb.append("Filter ${i + 1}: ON PK Fc $freqInt Hz Gain ${String.format("%.1f", gains[i])} dB Q ${String.format("%.2f", Q)}\n")
+                }
+                (activity as? com.bearinmind.equalizer314.MainActivity)?.launchPresetExport(sb.toString(), "$name.txt")
+            }
+        }
+
+        // Delete button
+        val deleteBtn = MaterialButton(activity, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            text = "×"
+            layoutParams = LinearLayout.LayoutParams(
+                (36 * density).toInt(), (36 * density).toInt()
+            ).apply {
+                marginStart = (8 * density).toInt()
+            }
+            cornerRadius = (12 * density).toInt()
+            textSize = 16f
+            setPadding(0, 0, 0, 0)
+            insetTop = 0; insetBottom = 0
+            minWidth = 0; minimumWidth = 0; minHeight = 0; minimumHeight = 0
+            gravity = Gravity.CENTER
+            setBackgroundColor(0x00000000)
+            setTextColor(0xFFEF9A9A.toInt())
+            strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+            strokeWidth = (1 * density).toInt()
+            setOnClickListener { showDeleteDialog(name) }
+        }
+
+        row.addView(nameText)
+        row.addView(thumbnail)
+        row.addView(exportBtn)
+        row.addView(deleteBtn)
+
+        // Tap row to load preset
+        row.setOnClickListener {
+            val presetGains = eqPrefs.getSimpleEqPresetGains(name) ?: return@setOnClickListener
+            restoreSnapshot(presetGains)
+            saveSnapshot()
+            closePresetPicker()
+            android.widget.Toast.makeText(activity, "Loaded \"$name\"", android.widget.Toast.LENGTH_SHORT).show()
+        }
+
+        return row
+    }
+
+    private fun showDeleteDialog(name: String) {
+        val density = activity.resources.displayMetrics.density
+        val dlgView = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((24 * density).toInt(), (20 * density).toInt(), (24 * density).toInt(), (16 * density).toInt())
+        }
+        val dlgTitle = TextView(activity).apply {
+            text = "Delete"
+            setTextColor(0xFFE2E2E2.toInt())
+            textSize = 20f
+            setPadding(0, 0, 0, (12 * density).toInt())
+        }
+        val dlgMsg = TextView(activity).apply {
+            text = "Delete preset \"$name\"?"
+            setTextColor(0xFFAAAAAA.toInt())
+            textSize = 14f
+            setPadding(0, 0, 0, (16 * density).toInt())
+        }
+        val dlgDiv = View(activity).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, (1 * density).toInt()
+            ).apply {
+                bottomMargin = (12 * density).toInt()
+            }
+            setBackgroundColor(0xFF444444.toInt())
+        }
+        val dlgBtnRow = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+        val dlgDeleteBtn = MaterialButton(activity, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            text = "Delete"
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginEnd = (3 * density).toInt()
+            }
+            cornerRadius = (12 * density).toInt()
+            setTextColor(0xFFEF9A9A.toInt())
+            strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+            strokeWidth = (1 * density).toInt()
+            setBackgroundColor(0x00000000)
+            insetTop = 0; insetBottom = 0
+        }
+        val dlgCancelBtn = MaterialButton(activity, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            text = "Cancel"
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = (3 * density).toInt()
+            }
+            cornerRadius = (12 * density).toInt()
+            setTextColor(0xFFDDDDDD.toInt())
+            setBackgroundColor(0x00000000)
+            strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+            strokeWidth = (1 * density).toInt()
+            insetTop = 0; insetBottom = 0
+        }
+        dlgBtnRow.addView(dlgDeleteBtn)
+        dlgBtnRow.addView(dlgCancelBtn)
+        dlgView.addView(dlgTitle)
+        dlgView.addView(dlgMsg)
+        dlgView.addView(dlgDiv)
+        dlgView.addView(dlgBtnRow)
+        val dlg = android.app.AlertDialog.Builder(activity, R.style.Theme_Equalizer314_Dialog)
+            .setView(dlgView).create()
+        dlgCancelBtn.setOnClickListener { dlg.dismiss() }
+        dlgDeleteBtn.setOnClickListener {
+            eqPrefs.deleteSimpleEqPreset(name)
+            populatePresetPicker()
+            dlg.dismiss()
+        }
+        dlg.show()
     }
 
     fun syncFromEq() {

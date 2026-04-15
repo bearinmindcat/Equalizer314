@@ -62,6 +62,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    internal fun launchPresetExport(text: String, fileName: String) {
+        pendingExportText = text
+        val intent = android.content.Intent(android.content.Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(android.content.Intent.CATEGORY_OPENABLE)
+            type = "text/plain"
+            putExtra(android.content.Intent.EXTRA_TITLE, fileName)
+        }
+        presetExportLauncher.launch(intent)
+    }
+
     // UI controllers
     private lateinit var graphicController: GraphicEqController
     private lateinit var tableController: TableEqController
@@ -1384,6 +1394,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupSettingsListeners() {
+        // Simple EQ toggle (settings page)
+        val simpleEqSwitch = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.simpleEqSwitch)
+        simpleEqSwitch.isChecked = eqPrefs.getSimpleEqEnabled()
+        simpleEqSwitch.setOnCheckedChangeListener { _, isChecked ->
+            eqPrefs.saveSimpleEqEnabled(isChecked)
+            if (isChecked && stateManager.currentEqUiMode != EqUiMode.SIMPLE) {
+                switchEqUiMode(EqUiMode.SIMPLE)
+            } else if (!isChecked && stateManager.currentEqUiMode == EqUiMode.SIMPLE) {
+                val fallback = try { EqUiMode.valueOf(eqPrefs.getEqUiMode()) } catch (_: Exception) { EqUiMode.PARAMETRIC }
+                switchEqUiMode(fallback)
+            }
+        }
+
         findViewById<View>(R.id.experimentalCard).setOnClickListener {
             startActivity(Intent(this, ExperimentalActivity::class.java))
             overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
@@ -1501,6 +1524,13 @@ class MainActivity : AppCompatActivity() {
             graphCardView.visibility = View.VISIBLE
             eqControlsContainer.visibility = View.VISIBLE
             simpleEqContainer.visibility = View.GONE
+
+            // Ensure advanced preset picker is closed when returning from SIMPLE
+            findViewById<View>(R.id.presetPickerScroll).apply {
+                animate().cancel()
+                visibility = View.GONE
+                alpha = 1f
+            }
 
             val preampCard = findViewById<View>(R.id.preampCardBar)
             if (preampCard.parent !== eqControlsContainer) {
@@ -1697,6 +1727,13 @@ class MainActivity : AppCompatActivity() {
                 graphCardView.visibility = View.GONE
                 eqControlsContainer.visibility = View.GONE
 
+                // Close advanced preset picker if it was left open
+                findViewById<View>(R.id.presetPickerScroll).apply {
+                    animate().cancel()
+                    visibility = View.GONE
+                    alpha = 1f
+                }
+
                 // Ensure the controls overlay FrameLayout has the same topMargin
                 // as it does in PARAMETRIC/GRAPHIC mode (the "Restore preamp margin"
                 // code sets it to 8dp there, but doesn't run in SIMPLE mode).
@@ -1721,14 +1758,11 @@ class MainActivity : AppCompatActivity() {
                 simpleEqController.buildSliders()
 
                 // Reparent the existing preamp card from eqControlsContainer into
-                // simpleEqContainer (between the bars card and the undo/redo/reset
-                // card). This reuses the exact same preamp card used in
-                // parametric/graphic/table modes.
+                // simpleEqContainer (between the bars/preset area and controls card).
                 val preampCard = findViewById<View>(R.id.preampCardBar)
                 (preampCard.parent as? android.view.ViewGroup)?.removeView(preampCard)
-                // Insert at index 3: after header (0), mini graph (1), bars card (2),
-                // before undo/redo/reset controls card (3→4)
-                simpleEqContainer.addView(preampCard, 3)
+                // Insert at index 5: header(0), controls(1), graph(2), bars(3), presetPicker(4), preamp(5)
+                simpleEqContainer.addView(preampCard, 5)
                 preampCard.translationY = 0f
                 // Set consistent 8dp bottom margin (remove the XML topMargin=8dp to
                 // avoid double-spacing since bars card already has bottomMargin=8dp)
