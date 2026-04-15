@@ -41,26 +41,45 @@ class SimpleEqBarsView @JvmOverloads constructor(
         style = Paint.Style.STROKE
         strokeWidth = 1f * density
     }
-    private val dbLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFFAAAAAA.toInt()
-        textSize = 10f * density
-        textAlign = Paint.Align.CENTER
-    }
-    private val freqLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF888888.toInt()
+    private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF999999.toInt()
         textSize = 9f * density
         textAlign = Paint.Align.CENTER
     }
 
     private val barCornerRadius = 6f * density
-    private val barGap = 4f * density
-    private val labelTopHeight = 18f * density   // space for dB label above bars
-    private val labelBottomHeight = 18f * density // space for freq label below bars
+    // Bar sizing as % of available width — scales with screen size.
+    // barWidthPct + barGapPct should sum to ~10% (one slot = 10% of width for 10 bands).
+    private val barWidthPct = 0.07f  // each bar = 7% of view width
+    private val barGapPct = 0.02f    // gap between bars = 2% of view width
+    private val labelTopHeight = 28f * density   // space for dB label above bars
+    private val labelBottomHeight = 28f * density // space for freq label below bars
     private val barRect = RectF()
 
     private var activeBand = -1
     private var lastTapTime = 0L
     private var lastTapBand = -1
+    private var doubleTapReset = false // skip ACTION_MOVE after double-tap reset
+
+    // Pop-out animation: the active bar scales wider when being dragged
+    private val popScales = FloatArray(BAND_COUNT) { 1f }
+    private var popAnimator: android.animation.ValueAnimator? = null
+    private val POP_SCALE = 1.1f // active bar is 10% bigger
+
+    private fun animatePop(bandIndex: Int, popIn: Boolean) {
+        popAnimator?.cancel()
+        val from = popScales[bandIndex]
+        val to = if (popIn) POP_SCALE else 1f
+        popAnimator = android.animation.ValueAnimator.ofFloat(from, to).apply {
+            duration = 150
+            interpolator = android.view.animation.DecelerateInterpolator()
+            addUpdateListener {
+                popScales[bandIndex] = it.animatedValue as Float
+                invalidate()
+            }
+            start()
+        }
+    }
 
     fun setGain(index: Int, gain: Float) {
         if (index in 0 until BAND_COUNT) {
@@ -78,17 +97,19 @@ class SimpleEqBarsView @JvmOverloads constructor(
         invalidate()
     }
 
-    private fun getBandWidth(): Float {
-        return (width.toFloat() - barGap * (BAND_COUNT + 1)) / BAND_COUNT
+    private fun getBarWidth(): Float = width * barWidthPct
+    private fun getBarGap(): Float = width * barGapPct
+
+    private fun getTotalGroupWidth(): Float {
+        return BAND_COUNT * getBarWidth() + (BAND_COUNT - 1) * getBarGap()
     }
 
-    private fun getBandLeft(index: Int): Float {
-        val bw = getBandWidth()
-        return barGap + index * (bw + barGap)
+    private fun getGroupStartX(): Float {
+        return (width.toFloat() - getTotalGroupWidth()) / 2f
     }
 
     private fun getBandCenter(index: Int): Float {
-        return getBandLeft(index) + getBandWidth() / 2f
+        return getGroupStartX() + index * (getBarWidth() + getBarGap()) + getBarWidth() / 2f
     }
 
     private fun getBarTop(): Float = labelTopHeight
@@ -107,10 +128,10 @@ class SimpleEqBarsView @JvmOverloads constructor(
     }
 
     private fun bandAtX(x: Float): Int {
-        val bw = getBandWidth()
+        val slotW = getBarWidth() + getBarGap()
         for (i in 0 until BAND_COUNT) {
-            val left = getBandLeft(i)
-            if (x >= left - barGap / 2 && x <= left + bw + barGap / 2) return i
+            val cx = getBandCenter(i)
+            if (x >= cx - slotW / 2f && x <= cx + slotW / 2f) return i
         }
         return -1
     }
@@ -118,39 +139,46 @@ class SimpleEqBarsView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        val bw = getBandWidth()
         val centerY = getCenterY()
 
         for (i in 0 until BAND_COUNT) {
-            val left = getBandLeft(i)
-            val right = left + bw
+            val scale = popScales[i]
+            val cx = getBandCenter(i)
+            val halfW = getBarWidth() / 2f * scale
+            val left = cx - halfW
+            val right = cx + halfW
+
+            // Vertical pop: bar grows taller equally on top and bottom when active
+            val extraV = (getBarHeight() * (scale - 1f) * 0.5f)
+            val barTop = getBarTop() - extraV
+            val barBottom = getBarBottom() + extraV
 
             // Bar background (full height slot)
-            barRect.set(left, getBarTop(), right, getBarBottom())
+            barRect.set(left, barTop, right, barBottom)
             canvas.drawRoundRect(barRect, barCornerRadius, barCornerRadius, barBgPaint)
 
-            // Active bar (from center to gain level)
+            // Active bar — always fills from bottom up to the gain level.
             val gain = gains[i]
-            if (gain != 0f) {
-                val gainY = gainToY(gain)
-                if (gain > 0f) {
-                    barRect.set(left, gainY, right, centerY)
-                } else {
-                    barRect.set(left, centerY, right, gainY)
-                }
+            val scaledBarH = barBottom - barTop
+            val fraction = (gain - MIN_DB) / (MAX_DB - MIN_DB)
+            val gainY = barBottom - fraction * scaledBarH
+            if (gainY < barBottom) {
+                barRect.set(left, gainY, right, barBottom)
                 canvas.drawRoundRect(barRect, barCornerRadius, barCornerRadius, barPaint)
             }
 
-            // dB label above bar
+            // dB label above bar — moves up with the pop animation
             val dbText = String.format("%.1f", gain)
-            canvas.drawText(dbText, left + bw / 2f, labelTopHeight - 4f * density, dbLabelPaint)
+            canvas.drawText(dbText, cx, barTop - 4f * density, labelPaint)
 
-            // Frequency label below bar
-            canvas.drawText(LABELS[i], left + bw / 2f, height.toFloat() - 2f * density, freqLabelPaint)
+            // Frequency label below bar — moves down with the pop animation
+            val freqText = if (FREQUENCIES[i] >= 1000f) {
+                "${(FREQUENCIES[i] / 1000f).toInt()} kHz"
+            } else {
+                "${FREQUENCIES[i].toInt()} Hz"
+            }
+            canvas.drawText(freqText, cx, barBottom + labelPaint.textSize + 2f * density, labelPaint)
         }
-
-        // Center line (0 dB)
-        canvas.drawLine(0f, centerY, width.toFloat(), centerY, centerLinePaint)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -159,6 +187,8 @@ class SimpleEqBarsView @JvmOverloads constructor(
                 val band = bandAtX(event.x)
                 if (band >= 0) {
                     activeBand = band
+                    doubleTapReset = false
+                    animatePop(band, true) // pop out the active bar
                     // Double-tap detection
                     val now = System.currentTimeMillis()
                     if (now - lastTapTime < 300 && band == lastTapBand) {
@@ -166,6 +196,7 @@ class SimpleEqBarsView @JvmOverloads constructor(
                         onGainChanged?.invoke(band, 0f)
                         invalidate()
                         lastTapTime = 0
+                        doubleTapReset = true // ignore ACTION_MOVE until finger lifts
                     } else {
                         val gain = yToGain(event.y)
                         gains[band] = gain
@@ -179,7 +210,7 @@ class SimpleEqBarsView @JvmOverloads constructor(
                 }
             }
             MotionEvent.ACTION_MOVE -> {
-                if (activeBand >= 0) {
+                if (activeBand >= 0 && !doubleTapReset) {
                     val gain = yToGain(event.y)
                     gains[activeBand] = gain
                     onGainChanged?.invoke(activeBand, gain)
@@ -188,7 +219,10 @@ class SimpleEqBarsView @JvmOverloads constructor(
                 }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                if (activeBand >= 0) onDragEnd?.invoke()
+                if (activeBand >= 0) {
+                    animatePop(activeBand, false) // shrink back to normal
+                    onDragEnd?.invoke()
+                }
                 activeBand = -1
                 parent.requestDisallowInterceptTouchEvent(false)
             }

@@ -45,6 +45,14 @@ class EqGraphView @JvmOverloads constructor(
     var showEqCurve = true
     // Show dashed tanh saturation curve
     var showSaturationCurve = true
+    // Vertical padding (top/bottom) for labels — default 80f for 246dp graph.
+    // Set lower for mini/scaled-down graphs (e.g. 40f for 123dp).
+    var verticalPadding = 80f
+    // Fill the area between the EQ curve and the 0dB line with a translucent color
+    var showCurveFill = false
+    // When true, band points are non-interactive (no dragging, no labels inside dots)
+    // and drawn smaller — purely visual indicators.
+    var readOnlyPoints = false
 
     private var spectrumAnalyzer: SpectrumAnalyzer? = null
     private var spectrumData: FloatArray? = null
@@ -272,8 +280,8 @@ class EqGraphView @JvmOverloads constructor(
     private val graphMinFreq = 10f
     private val graphMaxFreq = 20000f
 
-    private val minGain = -20f
-    private val maxGain = 20f
+    var minGain = -20f
+    var maxGain = 20f
 
     var onBandChangedListener: ((bandIndex: Int, frequency: Float, gain: Float) -> Unit)? = null
     var onBandSelectedListener: ((bandIndex: Int?) -> Unit)? = null
@@ -406,7 +414,7 @@ class EqGraphView @JvmOverloads constructor(
             return
         }
 
-        val vPad = 80f
+        val vPad = verticalPadding
         val graphWidth = width.toFloat()
         val graphHeight = height - 2 * vPad
 
@@ -738,6 +746,20 @@ class EqGraphView @JvmOverloads constructor(
                 path.lineTo(x, y)
                 saturatedPath.lineTo(x, satY)
             }
+        }
+
+        // Fill between curve and 0dB line
+        if (showCurveFill && pathStarted) {
+            val zeroY = vPad + graphHeight * (1f - (0f - minGain) / (maxGain - minGain))
+            val fillPath = Path(path)
+            fillPath.lineTo(graphWidth, zeroY)
+            fillPath.lineTo(0f, zeroY)
+            fillPath.close()
+            val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = 0x30AAAAAA.toInt()  // translucent grey fill
+                style = Paint.Style.FILL
+            }
+            canvas.drawPath(fillPath, fillPaint)
         }
 
         // In MBC mode, draw EQ curve as dotted + dimmer
@@ -1134,6 +1156,19 @@ class EqGraphView @JvmOverloads constructor(
     }
 
     private fun drawPoints(canvas: Canvas) {
+        // Read-only mode: small dots only, no labels, no interaction
+        if (readOnlyPoints) {
+            val smallRadius = 6f
+            val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = 0xFFCCCCCC.toInt()
+                style = Paint.Style.FILL
+            }
+            for (point in bandPoints) {
+                canvas.drawCircle(point.x, point.y, smallRadius, dotPaint)
+            }
+            return
+        }
+
         for (i in bandPoints.indices) {
             val point = bandPoints[i]
             val isActive = i == activeBandIndex
@@ -1423,6 +1458,7 @@ class EqGraphView @JvmOverloads constructor(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (readOnlyPoints) return false  // non-interactive visual only
         // MBC crossover touch handling
         val crossovers = mbcCrossovers
         if (crossovers != null && mbcBandGains != null) {

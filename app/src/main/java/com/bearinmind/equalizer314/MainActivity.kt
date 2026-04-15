@@ -1449,21 +1449,108 @@ class MainActivity : AppCompatActivity() {
         if (stateManager.currentEqUiMode == EqUiMode.TABLE && mode != EqUiMode.TABLE) {
             tableController.cleanup()
         }
-        // Save simple EQ gains when leaving SIMPLE mode
+        // Save simple EQ gains and restore the advanced EQ when leaving SIMPLE mode
         if (stateManager.currentEqUiMode == EqUiMode.SIMPLE && mode != EqUiMode.SIMPLE) {
             simpleEqController.saveGains()
+            // Restore the advanced EQ state that was saved when entering SIMPLE mode
+            val backup = eqPrefs.getAdvancedEqBackup()
+            if (backup != null) {
+                val eq = stateManager.parametricEq
+                val bandsJson = org.json.JSONArray(backup)
+                eq.clearBands()
+                for (i in 0 until bandsJson.length()) {
+                    val obj = bandsJson.getJSONObject(i)
+                    val ft = try {
+                        com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.valueOf(obj.getString("filterType"))
+                    } catch (_: Exception) { com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.BELL }
+                    eq.addBand(obj.getDouble("frequency").toFloat(), obj.getDouble("gain").toFloat(), ft, obj.getDouble("q"))
+                    if (obj.has("enabled")) eq.setBandEnabled(i, obj.getBoolean("enabled"))
+                }
+                // Restore band slots
+                stateManager.initBandSlots()
+                eqGraphView.setParametricEqualizer(eq)
+                eqGraphView.updateBandLevels()
+                stateManager.pushEqUpdate()
+            }
+        }
+        // Save the advanced EQ state before entering SIMPLE mode
+        if (mode == EqUiMode.SIMPLE && stateManager.currentEqUiMode != EqUiMode.SIMPLE) {
+            val eq = stateManager.parametricEq
+            val bandsJson = org.json.JSONArray()
+            for (i in 0 until eq.getBandCount()) {
+                val band = eq.getBand(i) ?: continue
+                bandsJson.put(org.json.JSONObject().apply {
+                    put("frequency", band.frequency.toDouble())
+                    put("gain", band.gain.toDouble())
+                    put("filterType", band.filterType.name)
+                    put("q", band.q)
+                    put("enabled", band.enabled)
+                })
+            }
+            eqPrefs.saveAdvancedEqBackup(bandsJson.toString())
         }
         stateManager.currentEqUiMode = mode
         eqGraphView.eqUiMode = mode
         if (mode != EqUiMode.SIMPLE) eqPrefs.saveEqUiMode(mode.name)
         updateModeSelectorButtons()
 
-        // In non-SIMPLE modes, ensure standard views are visible and simple container hidden
+        // In non-SIMPLE modes, ensure standard views are visible and simple container hidden.
+        // Also reparent the preamp card back into eqControlsContainer if it was moved.
         if (mode != EqUiMode.SIMPLE) {
             modeSelectorGroup.visibility = View.VISIBLE
             graphCardView.visibility = View.VISIBLE
             eqControlsContainer.visibility = View.VISIBLE
             simpleEqContainer.visibility = View.GONE
+
+            val preampCard = findViewById<View>(R.id.preampCardBar)
+            if (preampCard.parent !== eqControlsContainer) {
+                (preampCard.parent as? android.view.ViewGroup)?.removeView(preampCard)
+                eqControlsContainer.addView(preampCard)
+            }
+
+            // Re-sync band toggles and graph after returning from SIMPLE mode
+            // (SIMPLE mode replaces the EQ with 10 fixed bands, so we need to
+            // refresh everything after restoring the advanced EQ state)
+            bandToggleManager.setupToggles()
+            eqGraphView.updateBandLevels()
+
+            // Re-position the graph overlay buttons (visibility, save, reset, edit,
+            // spectrum). They were positioned via eqGraphView.post{} at startup, but
+            // when the graph card was GONE in SIMPLE mode, the view's width was 0.
+            // Now that it's VISIBLE again, we need to re-layout after the view has
+            // its real width.
+            eqGraphView.post {
+                val viewWidth = eqGraphView.width
+                if (viewWidth <= 0) return@post
+                val vizDensity = resources.displayMetrics.density
+                val gapPx = (2 * vizDensity).toInt()
+                val vPadPx = 80
+                val gridLine10k = (viewWidth * 3.0 / 3.301).toInt()
+                val btnTop = gapPx
+                val btnHeight = vPadPx - 2 * gapPx
+                val specWidth = (viewWidth - gapPx) - (gridLine10k + gapPx)
+                val specLeft = gridLine10k + gapPx
+
+                fun reposition(btn: View, leftMargin: Int) {
+                    val lp = btn.layoutParams as? android.widget.FrameLayout.LayoutParams ?: return
+                    lp.width = specWidth; lp.height = btnHeight
+                    lp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+                    lp.leftMargin = leftMargin; lp.topMargin = btnTop
+                    btn.layoutParams = lp
+                }
+
+                val vizToggle = findViewById<View>(R.id.visualizerToggle)
+                val editBtn = findViewById<View>(R.id.editButton)
+                val resetBtn = findViewById<View>(R.id.resetButton)
+                val bandPtsBtn = findViewById<View>(R.id.bandPointsToggle)
+                val saveBtn = findViewById<View>(R.id.savePresetButton)
+
+                reposition(vizToggle, specLeft)
+                reposition(editBtn, (specLeft - gapPx - specWidth).coerceAtLeast(gapPx))
+                reposition(resetBtn, (specLeft - 2 * (gapPx + specWidth)).coerceAtLeast(gapPx))
+                reposition(bandPtsBtn, gapPx)
+                reposition(saveBtn, gapPx + specWidth + gapPx)
+            }
         }
 
         when (mode) {
@@ -1613,10 +1700,31 @@ class MainActivity : AppCompatActivity() {
                     (8 * resources.displayMetrics.density).toInt()
                 overlay?.requestLayout()
 
+                // In SIMPLE mode the mode selector + graph card are GONE, so the
+                // content starts right at the top of pageEq. MBC/Limiter activities
+                // handle this with fitsSystemWindows on their root, but here we need
+                // to manually offset. Set the outer LinearLayout's paddingTop to 0
+                // (the rootLayout already handles the status bar inset) — this is
+                // already 0dp from XML, no change needed.
+
+                // Scroll to top so header starts at correct position
+                (pageEq as android.widget.ScrollView).scrollTo(0, 0)
+
                 // Show simple 10-band EQ
                 simpleEqContainer.visibility = View.VISIBLE
                 simpleEqController.configureParametricEq()
                 simpleEqController.buildSliders()
+
+                // Reparent the existing preamp card from eqControlsContainer into
+                // simpleEqContainer (between the bars card and the undo/redo/reset
+                // card). This reuses the exact same preamp card used in
+                // parametric/graphic/table modes.
+                val preampCard = findViewById<View>(R.id.preampCardBar)
+                (preampCard.parent as? android.view.ViewGroup)?.removeView(preampCard)
+                // Insert at index 3: after header (0), mini graph (1), bars card (2),
+                // before undo/redo/reset controls card (3→4)
+                simpleEqContainer.addView(preampCard, 3)
+                preampCard.translationY = 0f
             }
         }
         eqGraphView.invalidate()
