@@ -1,0 +1,31 @@
+Equalizer314 is an open-source, system-wide parametric equalizer for Android. It is built on the platform's DynamicsProcessing API — the same audio framework Wavelet and Poweramp EQ use — but aims to expose more of what that API can actually do, and pairs it with real audio-visual feedback so the compressor and limiter stages are not just knobs you guess at.
+
+No root. No audio capture permission for the EQ itself. No media-projection prompts. No analytics, no network calls, no telemetry.
+
+Features
+
+- Four EQ modes: Parametric (drag points on the response curve), Graphic (vertical sliders), Table (numeric editor), and Simple (10-band 31 Hz to 16 kHz graphic EQ).
+- Up to 16 parametric bands, individually toggleable.
+- Five filter types: Bell, Low Shelf, High Shelf, Low Pass, High Pass.
+- Full parametric range: 20 Hz to 20 kHz, +/-20 dB, Q from 0.1 to 10.
+- RBJ Audio EQ Cookbook biquads, with optional Vicanek impulse-invariant Bell filters.
+- Built-in presets (Flat, Bass Boost, Treble Boost, Vocal Enhance) plus unlimited custom presets with mini-graph thumbnails.
+- APO import and APO export for interoperability with the desktop Equalizer APO ecosystem.
+- AutoEQ target-curve fitter: load a measurement and a target, and get back an EQ profile sized to a configurable band count.
+- Multiband compressor with 1 to 6 bands, draggable crossovers, soft-knee transfer function (Giannoulis/Massberg/Reiss 2012), per-band gain-reduction trace, noise gate, and expander.
+- Limiter with threshold, ratio, attack, release, and post-gain, plus a live input-vs-output waveform meter and LUFS metering (ITU-R BS.1770).
+- Real-time FFT spectrum analyzer (4096-pt Hann-windowed) driven by Android's Visualizer API, with log-frequency mapping, configurable points-per-octave smoothing, asymmetric ballistics, and user-selectable color and frame rate.
+- Material 3 dark theme, foreground service with "Turn Off" action from the notification.
+
+Requirements
+
+- Android 7.0 or newer (API 24 minimum).
+- Android 9.0 or newer (API 28) required for the EQ engine itself — DynamicsProcessing was added in Pie.
+- A device whose audio HAL exposes DynamicsProcessing on session 0 (most modern Android phones do; some manufacturers strip it).
+
+Known limitations
+
+- Only one app can own audio session 0 at a time. If another equalizer or audio-effect app is installed (Wavelet, Poweramp EQ, Precise Volume, RootlessJamesDSP), they will fight over session 0 and cause audio glitches. This is an Android framework limitation, not specific to Equalizer314. The app includes an auto-reclaim mechanism, but cannot fully prevent brief dropouts.
+- Apps that bypass the system audio pipeline — low-latency games using AAudio or OpenSL ES, MMAP/offload paths, and in-call audio — are not affected by any session-0 EQ.
+
+Equalizer314 is free and open-source software, licensed under the GNU General Public License v3.0 or later.

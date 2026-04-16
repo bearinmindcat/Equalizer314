@@ -37,6 +37,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Note: on AGP 8.3+, also set `vcsInfo { include = false }` here for
+            // F-Droid reproducibility. Current AGP 8.2.0 doesn't embed VCS info
+            // by default, so no disabling is needed yet.
         }
     }
 
@@ -81,3 +84,13 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
 }
+
+// F-Droid reproducible builds: disable baseline profile generation. The
+// output of baseline.prof is non-deterministic across machines and would
+// cause F-Droid's build reproducibility check to fail.
+tasks.whenTaskAdded {
+    if (name.contains("ArtProfile")) {
+        enabled = false
+    }
+}
+

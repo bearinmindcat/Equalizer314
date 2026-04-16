@@ -1,0 +1,24 @@
+Categories:
+  - Multimedia
+License: GPL-3.0-only
+AuthorName: bearinmind
+SourceCode: https://github.com/bearinmindcat/Equalizer314
+IssueTracker: https://github.com/bearinmindcat/Equalizer314/issues
+
+AutoName: Equalizer314
+
+RepoType: git
+Repo: https://github.com/bearinmindcat/Equalizer314.git
+
+Builds:
+  - versionName: 0.0.1-beta
+    versionCode: 1
+    commit: 056bebb398bab3c3ac432638d38e9e6638c956bb
+    subdir: app
+    gradle:
+      - yes
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 0.0.1-beta
+CurrentVersionCode: 1

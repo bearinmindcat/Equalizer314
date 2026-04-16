@@ -1,0 +1,10 @@
+Initial beta release.
+
+- Four EQ modes: Parametric, Graphic, Table, Simple.
+- Up to 16 bands, five filter types (Bell, Low/High Shelf, Low/High Pass).
+- Multiband compressor (1 to 6 bands) with soft-knee and per-band GR traces.
+- Limiter with input/output waveform meter and LUFS metering.
+- Real-time FFT spectrum analyzer driven by the Visualizer API.
+- AutoEQ target-curve fitter.
+- APO import/export for preset interchange with desktop Equalizer APO.
+- Custom preset library with mini-graph thumbnails.
