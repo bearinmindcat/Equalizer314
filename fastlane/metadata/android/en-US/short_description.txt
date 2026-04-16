@@ -1,1 +1,1 @@
-System-wide parametric EQ with multiband compression, limiter, and AutoEQ.
+System-wide EQ with multiband compression, limiter, and audio-visual feedback.
