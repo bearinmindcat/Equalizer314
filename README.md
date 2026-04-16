@@ -82,21 +82,18 @@ These same issues occur with Wavelet, RootlessJamesDSP, Poweramp EQ; and most ot
 ## Screenshots
 
 <p align="center">
-  <img width="32%" alt="Screenshot 1" src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.jpg" />
-  <img width="32%" alt="Screenshot 2" src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.jpg" />
-  <img width="32%" alt="Screenshot 3" src="fastlane/metadata/android/en-US/images/phoneScreenshots/3.jpg" />
+  <img width="19%" alt="Screenshot 1" src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.jpg" />
+  <img width="19%" alt="Screenshot 2" src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.jpg" />
+  <img width="19%" alt="Screenshot 3" src="fastlane/metadata/android/en-US/images/phoneScreenshots/3.jpg" />
+  <img width="19%" alt="Screenshot 4" src="fastlane/metadata/android/en-US/images/phoneScreenshots/4.jpg" />
+  <img width="19%" alt="Screenshot 5" src="fastlane/metadata/android/en-US/images/phoneScreenshots/5.jpg" />
 </p>
 
 <p align="center">
-  <img width="32%" alt="Screenshot 4" src="fastlane/metadata/android/en-US/images/phoneScreenshots/4.jpg" />
-  <img width="32%" alt="Screenshot 5" src="fastlane/metadata/android/en-US/images/phoneScreenshots/5.jpg" />
-  <img width="32%" alt="Screenshot 6" src="fastlane/metadata/android/en-US/images/phoneScreenshots/6.jpg" />
-</p>
-
-<p align="center">
-  <img width="32%" alt="Screenshot 7" src="fastlane/metadata/android/en-US/images/phoneScreenshots/7.jpg" />
-  <img width="32%" alt="Screenshot 8" src="fastlane/metadata/android/en-US/images/phoneScreenshots/8.jpg" />
-  <img width="32%" alt="Screenshot 9" src="fastlane/metadata/android/en-US/images/phoneScreenshots/9.jpg" />
+  <img width="24%" alt="Screenshot 6" src="fastlane/metadata/android/en-US/images/phoneScreenshots/6.jpg" />
+  <img width="24%" alt="Screenshot 7" src="fastlane/metadata/android/en-US/images/phoneScreenshots/7.jpg" />
+  <img width="24%" alt="Screenshot 8" src="fastlane/metadata/android/en-US/images/phoneScreenshots/8.jpg" />
+  <img width="24%" alt="Screenshot 9" src="fastlane/metadata/android/en-US/images/phoneScreenshots/9.jpg" />
 </p>
 
 ## Acknowledgment/Resources
