@@ -64,6 +64,8 @@ To reference, lots of apps run AutoEQ (https://github.com/jaakkopasanen/AutoEq/w
 On top of this I would also like to mention maintaining homogenity between preset sharing among popular equalization "applications"; this why I want with APO as the main export method than having an independent export method such as what Poweramp EQ & Wavelet use (Also as shown below in the "Generated EQ" portion). This would allow you to transfer the exported APO file to your desktop equalization software (EqualizerAPO) without having running into conversion issues. I was thinking about creating a conversion software in the app or on this github so incase people want to trasnfer over from Wavelet & Poweramp EQ, they can with ease. It might be something I will implement later if a lot of people request.
 
 <img width="538" height="886" alt="Screenshot (1539)" src="https://github.com/user-attachments/assets/721ffdb1-195a-4b50-b53e-28221787793d" />
+<img width="528" height="1178" alt="Screenshot (1540)" src="https://github.com/user-attachments/assets/3309a9e5-8e65-481e-b629-3e752dd9786c" />
+
 
 ## Acknowledgements
 
