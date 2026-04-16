@@ -79,6 +79,26 @@ As for conflicts, as long as another app is using session 0, the eq from this ap
 
 These same issues occur with Wavelet, RootlessJamesDSP, Poweramp EQ; and most other EQ apps as they all target session 0.
 
+## Screenshots
+
+<p align="center">
+  <img width="32%" alt="Screenshot 1" src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.jpg" />
+  <img width="32%" alt="Screenshot 2" src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.jpg" />
+  <img width="32%" alt="Screenshot 3" src="fastlane/metadata/android/en-US/images/phoneScreenshots/3.jpg" />
+</p>
+
+<p align="center">
+  <img width="32%" alt="Screenshot 4" src="fastlane/metadata/android/en-US/images/phoneScreenshots/4.jpg" />
+  <img width="32%" alt="Screenshot 5" src="fastlane/metadata/android/en-US/images/phoneScreenshots/5.jpg" />
+  <img width="32%" alt="Screenshot 6" src="fastlane/metadata/android/en-US/images/phoneScreenshots/6.jpg" />
+</p>
+
+<p align="center">
+  <img width="32%" alt="Screenshot 7" src="fastlane/metadata/android/en-US/images/phoneScreenshots/7.jpg" />
+  <img width="32%" alt="Screenshot 8" src="fastlane/metadata/android/en-US/images/phoneScreenshots/8.jpg" />
+  <img width="32%" alt="Screenshot 9" src="fastlane/metadata/android/en-US/images/phoneScreenshots/9.jpg" />
+</p>
+
 ## Acknowledgment/Resources
 
 All of these acknowledgements are mentioned in code comments, but I wanted too also include them here as well, because I think these are all good resources to read up on.
