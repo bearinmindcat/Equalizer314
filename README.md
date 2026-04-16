@@ -30,7 +30,7 @@ Using Visualizer API with these DynamicsProcessing features; you're really able 
 A lot of other funtions that don't use the Visualizer API I also wanted to still give correct visual feedback (same style implementation that many DAWs use) such other various functions like the compressor & attack/release visuals. You can independently change these values with the slider and by moving you finger along the line/graph itself. This occurs in other places in the app as well, but these are two good examples of this.
 
 <p align="center">
-  <img width="48%" alt="Screenshot (1538)" src="https://github.com/user-attachments/assets/c8923af2-b592-4476-aea9-f07be44b9ba2" />
+  <img width="48%" alt="Screenshot (1543)" src="https://github.com/user-attachments/assets/24f5f82b-b432-4f74-acea-79d92a509c57" />
   <img width="48%" alt="Screenshot (1537)" src="https://github.com/user-attachments/assets/261c4359-4f0d-44af-a199-068f570ff3ea" />
 </p>
 
