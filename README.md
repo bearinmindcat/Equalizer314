@@ -13,7 +13,7 @@
 
 ## About
 
-To start off there is really no "free" and/or "open source" alternatives to Wavelet and p\Poweramp EQ out there, and I felt like after using both of those apps ammong other various EQ apps that there were huge shortcomings in terms of the features & accessibilities they offered. When I started developing this app I wanted to have both a powerful parametric eq function with minimal permissions; this is why I choose to use both the DynamicsProcessing & Visualizer APIs as the framework for ths app as you only need minimal permissions for both of them to work in tandem. There are shortcomings from both these APIs, but I'll discuss more of that later.
+To start off there is really no "free" and/or "open source" alternatives to Wavelet and Poweramp EQ out there, and I felt like after using both of those apps ammong other various EQ apps that there were huge shortcomings in terms of the features & accessibilities they offered. When I started developing this app I wanted to have both a powerful parametric eq function with minimal permissions; this is why I choose to use both the DynamicsProcessing & Visualizer APIs as the framework for ths app as you only need minimal permissions for both of them to work in tandem. There are shortcomings from both these APIs, but I'll discuss more of that later.
 
 To start off this app is built off of DynamicsProcessing API you can read more about the documentation and features it offers here (https://developer.android.com/reference/android/media/audiofx/DynamicsProcessing); this is the same API that Poweramp EQ & Wavelet both use but I felt in some aspects they wern't really being able really squeeze out the max potential that this API can offer.
 
