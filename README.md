@@ -10,6 +10,7 @@
 
 <a href="https://accrescent.app/app/com.bearinmind.launcher314"><img alt="Get it on Accrescent" src="https://accrescent.app/badges/get-it-on.png" height="60"></a> <a href="https://play.google.com/store/apps/details?id=com.bearinmind.launcher314"><img alt="Get it on Google Play" src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" height="60"></a> <a href="https://apt.izzysoft.de/packages/com.bearinmind.launcher314"><img src="https://gitlab.com/IzzyOnDroid/repo/-/raw/master/assets/IzzyOnDroid.png" alt="Get it on IzzyOnDroid" height="60"></a>
 
+
 ## About
 
 To start off there is really no "free" and/or "open source" alternatives to Wavelet and p\Poweramp EQ out there, and I felt like after using both of those apps ammong other various EQ apps that there were huge shortcomings in terms of the features & accessibilities they offered. When I started developing this app I wanted to have both a powerful parametric eq function with minimal permissions; this is why I choose to use both the DynamicsProcessing & Visualizer APIs as the framework for ths app as you only need minimal permissions for both of them to work in tandem. There are shortcomings from both these APIs, but I'll discuss more of that later.
@@ -34,6 +35,7 @@ A lot of other funtions that don't use the Visualizer API I also wanted to still
   <img width="48%" alt="Screenshot (1537)" src="https://github.com/user-attachments/assets/261c4359-4f0d-44af-a199-068f570ff3ea" />
 </p>
 
+
 ## Why DynamicsProcessing & Visualizer APIs?
 
 There exists other apps and methods for device eq & visualization; but I wanted to talk about why I choose DynamicsProcessing & Visualizer as the framework for this app vs the other available and why I choose not to use those. To touch on this point again I choose to use the DynamicsProcessing API, the same API that both popular apps such as Poweramp EQ and Wavelet use as I decided DynamicsProcessing had enough tangibility in coparison to what I had to sacrifice using other more powerful methods.
@@ -57,6 +59,7 @@ AudioFlinger (JamesDSP & ViPER4Android)
 - This is the "best" method if you really want control over your audio without latency issues. There is no "down-side" to using this method other than you need a rooted device which steers a lot of people away. This along with RootlessJamesDSP are best used if you want to apply custom audio effects directly without relying on android's built-in effects.
 - only con? root.
 
+
 ## Presets & EQ Generation & AutoEQ
 
 To reference, lots of apps run AutoEQ (https://github.com/jaakkopasanen/AutoEq/wiki/Choosing-an-Equalizer-App); including Wavelet & Poweramp EQ. What both those apps don't offer are either "free access to auto eq" (comon wavelet....) & using the built in AutoEQ algorithm from the AutoEQ Github which you can take a look at here (https://github.com/jaakkopasanen/AutoEq/wiki/How-Does-AutoEq-Work%3F). This algorithm is done on the "Generate Custom EQ" section of the app; you need a "measurement" & "target" which both can be taken from squig.link along various resources online.
@@ -68,53 +71,13 @@ On top of this I would also like to mention maintaining homogenity between prese
   <img width="48%" alt="Screenshot (1541)" src="https://github.com/user-attachments/assets/896cdd5f-a483-4eeb-8bb8-c378c6788bf4" />
 </p>
 
-## Acknowledgements
-
-  - AutoEq — Jaakko Pasanen — https://github.com/jaakkopasanen/AutoEq
-  Cited in autoeq/EqFitter.kt — your target-curve fitting algorithm is based on theirs.
-  - audio-analyzer-for-android — bewantbe — https://github.com/bewantbe/audio-analyzer-for-android
-  Cited in dsp/FFT.kt and dsp/SpectrumAnalyzer.kt — Apache 2.0. Your Cooley-Tukey FFT and windowing came from here.
-  - pyloudnorm — Christian Steinmetz — https://github.com/csteinmetz1/pyloudnorm
-  Cited in audio/LufsProcessor.kt as the Python reference implementation of EBU R128.
-  - libebur128 — jiixyj — https://github.com/jiixyj/libebur128
-  Cited in audio/LufsProcessor.kt as the C reference implementation of EBU R128.
-
-  Algorithmic / academic references (not GitHub — listed here for completeness)
-
-  - Audio EQ Cookbook — Robert Bristow-Johnson — https://www.w3.org/TR/audio-eq-cookbook/
-  The RBJ biquad formulas in dsp/BiquadFilter.kt and autoeq/EqFitter.kt.
-  - Matched Second Order Digital Filters — Martin Vicanek — https://www.vicanek.de/articles/BiquadFits.pdf
-  The useVicanekMethod path for Bell filters.
-  - Giannoulis / Massberg / Reiss 2012 — Digital Dynamic Range Compressor Design (JAES) —
-  https://www.eecs.qmul.ac.uk/~josh/documents/2012/GiannoulisMassbergReiss-dynamicrangecompression-JAES2012.pdf
-  Soft-knee transfer function in CompressorCurveView, MbcGainComputer, and EqGraphView.
-  - Linkwitz-Riley crossovers — https://en.wikipedia.org/wiki/Linkwitz%E2%80%93Riley_filter
-  The 4th-order crossover math in EqGraphView.kt for MBC.
-  - ITU-R BS.1770 — https://www.itu.int/rec/R-REC-BS.1770
-  The LUFS loudness standard that LufsProcessor.kt follows.
-  - JUCE Compressor — https://github.com/juce-framework/JUCE (class reference: juce::dsp::Compressor)
-  Cited in MbcGainComputer.kt as a reference implementation of the EMA envelope follower pattern — not code copied, just the standard approach cross-checked against JUCE.
-
 ## Known Issues
 
-### Conflicts with other audio effect apps
+On this app I specifically use session 0 for all applications unlike what Wavelet and Poweramp EQ do by attaching itself to an audio session. In the future I can give the option to attach to individual audio sessions like the ladder apps, but for now as of the v0.0.1-beta release there is no ability to do so.
 
-Equalizer314 uses Android's DynamicsProcessing API on audio session 0 for system-wide audio processing. Only one app can control session 0 at a time. If another equalizer or audio effect app is installed (such as Precise Volume, Wavelet, Sound Assistant, or any other EQ app), they will fight over session 0 and cause audio glitches or the EQ to turn off unexpectedly.
+As for conflicts, as long as another app is using session 0, the eq from this app will not work, only one app can control session 0 at a time. In the code I added an auto-reclaim feature that will attempt to take over session 0 if another app takes it over, but sometimes this will not always work, and you'll experience brief audio glithes of dropouts while this is happening.
 
-**If you experience the EQ turning off on its own, uninstall or disable other audio effect apps and reboot your device.**
-
-Equalizer314 includes an auto-reclaim feature that will attempt to reclaim session 0 if another app takes it over, but this cannot fully prevent brief audio dropouts when two apps are competing.
-
-This is a limitation of the Android audio framework, not specific to Equalizer314. Other apps with the same limitation:
-
-- **Wavelet** — uses DynamicsProcessing on session 0. Their FAQ states: *"Wavelet will often not function as expected if other equalizer/hearing aid applications are installed. Freezing or uninstalling the offending application + rebooting your device will resolve issues caused by this."*
-- **RootlessJamesDSP** — uses internal audio capture instead of DynamicsProcessing, but still conflicts. Their README states: *"Cannot coexist with (some) other audio effect apps (e.g., Wavelet and other apps that make use of the DynamicsProcessing Android API)."* Because RootlessJamesDSP captures audio after DynamicsProcessing has already modified it, then outputs processed audio back through session 0, the result is double processing.
-- **Poweramp EQ** — uses DynamicsProcessing on session 0 for system-wide mode.
-- **Precise Volume** — uses DynamicsProcessing on session 0 for volume processing. Recreates its instance on every volume change, which disconnects other apps.
-
-### Apps that bypass the system audio pipeline
-
-Apps using AAudio / OpenSL ES low-latency paths, MMAP / offload modes, or telephony audio will not be affected by Equalizer314 (or by any session-0 EQ). This includes most low-latency music games and the in-call audio path.
+These same issues occur with Wavelet, RootlessJamesDSP, Poweramp EQ; and most other EQ apps as they all target session 0.
 
 ## Contributing
 
