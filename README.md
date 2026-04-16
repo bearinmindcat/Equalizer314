@@ -55,69 +55,27 @@ AudioFlinger (JamesDSP & ViPER4Android)
 - This is the "best" method if you really want control over your audio without latency issues. There is no "down-side" to using this method other than you need a rooted device which steers a lot of people away. This along with RootlessJamesDSP are best used if you want to apply custom audio effects directly without relying on android's built-in effects.
 - only con? root.
 
+---
+
+## Presets & EQ Generation & AutoEQ
+
+To reference, lots of apps run AutoEQ (https://github.com/jaakkopasanen/AutoEq/wiki/Choosing-an-Equalizer-App); including Wavelet & Poweramp EQ. What both those apps don't offer are either "free access to auto eq" (comon wavelet....) & using the built in AutoEQ algorithm from the AutoEQ Github which you can take a look at here (https://github.com/jaakkopasanen/AutoEq/wiki/How-Does-AutoEq-Work%3F). This algorithm is done on the "Generate Custom EQ" section of the app; you need a "measurement" & "target" which both can be taken from squig.link along various resources online.
+
+On top of this I would also like to mention maintaining homogenity between preset sharing among popular equalization "applications"; this why I want with APO as the main export method than having an independent export method such as what Poweramp EQ & Wavelet use (Also as shown below in the "Generated EQ" portion). This would allow you to transfer the exported APO file to your desktop equalization software (EqualizerAPO) without having running into conversion issues. I was thinking about creating a conversion software in the app or on this github so incase people want to trasnfer over from Wavelet & Poweramp EQ, they can with ease. It might be something I will implement later if a lot of people request.
+
+<img width="538" height="886" alt="Screenshot (1539)" src="https://github.com/user-attachments/assets/721ffdb1-195a-4b50-b53e-28221787793d" />
 
 
-  Your SpectrumAnalyzer + FFT classes currently have no real audio source feeding them. A
-  Visualizer attached to session 0 is the obvious candidate, but it has two catches for you
-  specifically:
 
-  1. RECORD_AUDIO permission — you'd be asking a permission prompt for what's essentially a
-  visual gimmick. Hurts install conversion.
-  2. It would stack on the same session as your DynamicsProcessing — likely fine (Visualizer
-  is a "read-only" tap), but you'd have to test carefully for dropouts or conflicts.
 
-  Alternative paths a lot of EQ apps take:
-  - MediaProjection + AudioPlaybackCapture (API 29+) — captures real 16-bit PCM, higher
-  quality than Visualizer, but requires the projection permission prompt.
-  - Feed the FFT from the parametric EQ response itself (what your app effectively does now
-  for the graph) — no permission, but you're visualizing the curve, not the audio.
 
-  TL;DR: Visualizer is the cheap, low-quality way. AudioPlaybackCapture is the expensive,
-  high-quality way. The current "just draw the EQ curve" is the zero-permission way
 
-## Features
 
-### Equalizer
-- **4 UI modes** — Parametric (drag points on a graph), Graphic (vertical sliders), Table (numeric input), Simple (10-band fixed graphic EQ).
-- **Up to 16 parametric bands**, individually toggleable.
-- **5 filter types** — Bell, Low Shelf, High Shelf, Low Pass, High Pass.
-- **Range** — 20 Hz to 20 kHz, ±20 dB, Q from 0.1 to 10.
-- **DSP accuracy** — RBJ Audio EQ Cookbook biquads with optional Vicanek impulse-invariance for Bell filters.
-- **Live frequency-response curve** with optional translucent fill, optional saturation overlay, and configurable DP band count overlay (32–128).
 
-### Presets
-- **Built-in** — Flat, Bass Boost, Treble Boost, Vocal Enhance.
-- **Custom presets** — save/load arbitrary band configurations with mini-graph thumbnails.
-- **APO export** — write any preset as Equalizer APO `.txt` (PK / LSC / HSC filter syntax) to share or use on desktop.
-- **APO import** — pull EAPO-format `.txt` files into the app as named presets.
-- **Per-mode presets** — Simple EQ keeps its own preset library separate from the parametric/graphic/table presets.
 
-### AutoEQ
-- **Target-curve fitter** — load a measurement (`.txt`/`.csv`) and a target curve, run a grid-search optimizer, and get back an EQ profile sized to a configurable band count (5–20).
-- **APO export** of the generated profile.
 
-### Multiband Compression
-- **1–6 bands** with draggable crossovers.
-- Per-band threshold, ratio, knee, attack, release, pre-gain, post-gain, noise gate, expander, range.
-- Live per-band gain-reduction trace + halo animations.
-- Soft-knee transfer function (Giannoulis et al., JAES 2012).
 
-### Limiter
-- Threshold, ratio, attack, release, post-gain.
-- Real-time waveform meter (input vs. output) and a transfer-function ceiling graph.
-- On by default to prevent clipping from large EQ gains.
 
-### Spectrum Analyzer
-- Real-time 4096-pt Hann-windowed FFT.
-- Log-frequency mapping, configurable PPO (points-per-octave) smoothing.
-- Asymmetric ballistics — fast attack, tunable release.
-- Color, FPS, and smoothing all user-configurable.
-
-### Other
-- **Material 3** dark theme.
-- **Foreground service** keeps EQ alive across app switches with a notification + "Turn Off" action.
-- **System-wide** — affects all apps that route audio through the standard Android pipeline.
-- **No analytics, no network calls, no telemetry.**
 
 ## Requirements
 
@@ -155,20 +113,9 @@ Open in Android Studio: `File > Open` → select project root.
 - **Min SDK** 24, **Target/Compile SDK** 35
 - **Kotlin** 1.9.20, **AGP** 8.2.0
 
-## Tech stack
 
-- **Kotlin** + Android Views (no Compose).
-- **Android `DynamicsProcessing`** API (`android.media.audiofx.DynamicsProcessing`) for Pre-EQ on session 0.
-- **AndroidX Media3** (1.2.0) — present in dependencies for future audio routing features; current EQ path does not use ExoPlayer.
-- **Material Components for Android** 1.11.0.
-- **Custom DSP** — biquad filter implementations and FFT are first-party (no JNI / no native libs).
 
-## Usage notes
 
-- **Power button** is the explicit gate for the EQ — it must be on for any audio shaping to happen. The state is intentionally reset to off on every fresh app launch.
-- **Pre-amp** sits before the EQ stage; bring it down if heavy positive boosts cause clipping.
-- **Simple EQ mode** is a stripped-down 10-band graphic EQ (31 Hz – 16 kHz, fixed Q ≈ 1.41) for users who don't want the full parametric workflow. Toggling it on/off preserves your advanced EQ — they're stored separately.
-- **Experimental settings** (Gain Compensation, DP Band Count) are visible but disabled in the current release. They'll be re-enabled once the gain-compensation behavior is more fully tested.
 
 ## Known Issues
 
