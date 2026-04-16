@@ -22,13 +22,17 @@ Using the Visualizer API I wanted to give users a way they can reliably cross re
 
 Using Visualizer API with these DynamicsProcessing features; you're really able to get an intimiate audio-visual feedback loop that gives you complete control over your audio framework. Shown below are some screenshots of the Multiband Compression & Limiter and how the Visualizer API functions with the input curves, gr trace curves, & the limiter waveform metering. 
 
-<img width="522" height="383" alt="Screenshot (1534)" src="https://github.com/user-attachments/assets/2449b96f-8306-4319-9eb0-ddead8ea84e5" />
-<img width="518" height="378" alt="Screenshot (1535)" src="https://github.com/user-attachments/assets/720725c4-6205-456c-ad83-c2667757927d" />
+<p align="center">
+  <img width="48%" alt="Screenshot (1534)" src="https://github.com/user-attachments/assets/2449b96f-8306-4319-9eb0-ddead8ea84e5" />
+  <img width="48%" alt="Screenshot (1535)" src="https://github.com/user-attachments/assets/720725c4-6205-456c-ad83-c2667757927d" />
+</p>
 
 A lot of other funtions that don't use the Visualizer API I also wanted to still give correct visual feedback (same style implementation that many DAWs use) such other various functions like the compressor & attack/release visuals. You can independently change these values with the slider and by moving you finger along the line/graph itself. This occurs in other places in the app as well, but these are two good examples of this.
 
-<img width="525" height="389" alt="Screenshot (1538)" src="https://github.com/user-attachments/assets/c8923af2-b592-4476-aea9-f07be44b9ba2" />
-<img width="526" height="588" alt="Screenshot (1537)" src="https://github.com/user-attachments/assets/261c4359-4f0d-44af-a199-068f570ff3ea" />
+<p align="center">
+  <img width="48%" alt="Screenshot (1538)" src="https://github.com/user-attachments/assets/c8923af2-b592-4476-aea9-f07be44b9ba2" />
+  <img width="48%" alt="Screenshot (1537)" src="https://github.com/user-attachments/assets/261c4359-4f0d-44af-a199-068f570ff3ea" />
+</p>
 
 ## Why DynamicsProcessing & Visualizer APIs?
 
