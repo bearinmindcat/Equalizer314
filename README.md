@@ -79,14 +79,6 @@ As for conflicts, as long as another app is using session 0, the eq from this ap
 
 These same issues occur with Wavelet, RootlessJamesDSP, Poweramp EQ; and most other EQ apps as they all target session 0.
 
-## Contributing
-
-Issues and PRs welcome. Some ground rules:
-
-- File a bug report with: device model, Android version, the EQ mode you're in, and (if relevant) a list of other audio apps installed.
-- Feature requests are fine — open an issue first so we can talk through fit before you write the code.
-- For PRs, keep the diff focused on one concern; don't bundle unrelated cleanup with feature work.
-
 ## Acknowledgment/Resources
 
 All of these acknowledgements are mentioned in code comments, but I wanted too also include them here as well, because I think these are all good resources to read up on.
