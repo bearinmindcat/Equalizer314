@@ -30,8 +30,6 @@ A lot of other funtions that don't use the Visualizer API I also wanted to still
 <img width="525" height="389" alt="Screenshot (1538)" src="https://github.com/user-attachments/assets/c8923af2-b592-4476-aea9-f07be44b9ba2" />
 <img width="526" height="588" alt="Screenshot (1537)" src="https://github.com/user-attachments/assets/261c4359-4f0d-44af-a199-068f570ff3ea" />
 
----
-
 ## Why DynamicsProcessing & Visualizer APIs?
 
 There exists other apps and methods for device eq & visualization; but I wanted to talk about why I choose DynamicsProcessing & Visualizer as the framework for this app vs the other available and why I choose not to use those. To touch on this point again I choose to use the DynamicsProcessing API, the same API that both popular apps such as Poweramp EQ and Wavelet use as I decided DynamicsProcessing had enough tangibility in coparison to what I had to sacrifice using other more powerful methods.
@@ -55,8 +53,6 @@ AudioFlinger (JamesDSP & ViPER4Android)
 - This is the "best" method if you really want control over your audio without latency issues. There is no "down-side" to using this method other than you need a rooted device which steers a lot of people away. This along with RootlessJamesDSP are best used if you want to apply custom audio effects directly without relying on android's built-in effects.
 - only con? root.
 
----
-
 ## Presets & EQ Generation & AutoEQ
 
 To reference, lots of apps run AutoEQ (https://github.com/jaakkopasanen/AutoEq/wiki/Choosing-an-Equalizer-App); including Wavelet & Poweramp EQ. What both those apps don't offer are either "free access to auto eq" (comon wavelet....) & using the built in AutoEQ algorithm from the AutoEQ Github which you can take a look at here (https://github.com/jaakkopasanen/AutoEq/wiki/How-Does-AutoEq-Work%3F). This algorithm is done on the "Generate Custom EQ" section of the app; you need a "measurement" & "target" which both can be taken from squig.link along various resources online.
@@ -65,57 +61,32 @@ On top of this I would also like to mention maintaining homogenity between prese
 
 <img width="538" height="886" alt="Screenshot (1539)" src="https://github.com/user-attachments/assets/721ffdb1-195a-4b50-b53e-28221787793d" />
 
+## Acknowledgements
 
+  - AutoEq — Jaakko Pasanen — https://github.com/jaakkopasanen/AutoEq
+  Cited in autoeq/EqFitter.kt — your target-curve fitting algorithm is based on theirs.
+  - audio-analyzer-for-android — bewantbe — https://github.com/bewantbe/audio-analyzer-for-android
+  Cited in dsp/FFT.kt and dsp/SpectrumAnalyzer.kt — Apache 2.0. Your Cooley-Tukey FFT and windowing came from here.
+  - pyloudnorm — Christian Steinmetz — https://github.com/csteinmetz1/pyloudnorm
+  Cited in audio/LufsProcessor.kt as the Python reference implementation of EBU R128.
+  - libebur128 — jiixyj — https://github.com/jiixyj/libebur128
+  Cited in audio/LufsProcessor.kt as the C reference implementation of EBU R128.
 
+  Algorithmic / academic references (not GitHub — listed here for completeness)
 
-
-
-
-
-
-
-
-
-
-## Requirements
-
-- **Android 7.0 (API 24)** minimum.
-- **Android 9.0 (API 28)** required for the EQ engine itself — `DynamicsProcessing` was added in Pie.
-- A device whose audio HAL exposes `DynamicsProcessing` on session 0 (most modern Android phones do; some manufacturers strip it).
-
-## Installation
-
-- **GitHub Releases** — grab the latest signed APK from the [releases page](https://github.com/bearinmindcat/Equalizer314/releases/latest).
-- **Obtainium** — use the badge above to add the repo for automatic updates.
-- **F-Droid** — _coming soon._
-- **Google Play** — _coming soon._
-
-## Building from source
-
-```bash
-git clone https://github.com/bearinmindcat/Equalizer314.git
-cd Equalizer314
-./gradlew assembleDebug
-```
-
-Or, for a signed release build (you'll need your own keystore):
-
-```bash
-./gradlew assembleRelease bundleRelease \
-  -PRELEASE_STORE_FILE=path/to/your.jks \
-  -PRELEASE_STORE_PASSWORD=*** \
-  -PRELEASE_KEY_ALIAS=*** \
-  -PRELEASE_KEY_PASSWORD=***
-```
-
-Open in Android Studio: `File > Open` → select project root.
-
-- **Min SDK** 24, **Target/Compile SDK** 35
-- **Kotlin** 1.9.20, **AGP** 8.2.0
-
-
-
-
+  - Audio EQ Cookbook — Robert Bristow-Johnson — https://www.w3.org/TR/audio-eq-cookbook/
+  The RBJ biquad formulas in dsp/BiquadFilter.kt and autoeq/EqFitter.kt.
+  - Matched Second Order Digital Filters — Martin Vicanek — https://www.vicanek.de/articles/BiquadFits.pdf
+  The useVicanekMethod path for Bell filters.
+  - Giannoulis / Massberg / Reiss 2012 — Digital Dynamic Range Compressor Design (JAES) —
+  https://www.eecs.qmul.ac.uk/~josh/documents/2012/GiannoulisMassbergReiss-dynamicrangecompression-JAES2012.pdf
+  Soft-knee transfer function in CompressorCurveView, MbcGainComputer, and EqGraphView.
+  - Linkwitz-Riley crossovers — https://en.wikipedia.org/wiki/Linkwitz%E2%80%93Riley_filter
+  The 4th-order crossover math in EqGraphView.kt for MBC.
+  - ITU-R BS.1770 — https://www.itu.int/rec/R-REC-BS.1770
+  The LUFS loudness standard that LufsProcessor.kt follows.
+  - JUCE Compressor — https://github.com/juce-framework/JUCE (class reference: juce::dsp::Compressor)
+  Cited in MbcGainComputer.kt as a reference implementation of the EMA envelope follower pattern — not code copied, just the standard approach cross-checked against JUCE.
 
 ## Known Issues
 
@@ -146,12 +117,17 @@ Issues and PRs welcome. Some ground rules:
 - Feature requests are fine — open an issue first so we can talk through fit before you write the code.
 - For PRs, keep the diff focused on one concern; don't bundle unrelated cleanup with feature work.
 
-## Acknowledgments
+## Acknowledgment/Resources
 
-- **Robert Bristow-Johnson** for the [Audio EQ Cookbook](https://www.w3.org/TR/audio-eq-cookbook/) — the foundation of the biquad math.
-- **Martin Vicanek** for [Matched Second Order Digital Filters](https://www.vicanek.de/articles/BiquadFits.pdf) — used for the impulse-invariant Bell filter option.
-- **Jaakko Pasanen** and the [AutoEq](https://github.com/jaakkopasanen/AutoEq) project for prior art on target-curve fitting.
-- **Equalizer APO** for the de-facto file format used for desktop preset interchange.
+All of these acknowledgements are mentioned in code comments, but I wanted too also include them here as well, because I think these are all good resources to read up on.
+
+- [Audio EQ Cookbook](https://www.w3.org/TR/audio-eq-cookbook/) - biquad math for the parametric eq.
+- [Matched Second Order Digital Filters](https://www.vicanek.de/articles/BiquadFits.pdf) — bell filter math for parametric eq.
+- [AutoEq](https://github.com/jaakkopasanen/AutoEq) - used for target curve/measurement fitting + autoeq presets.
+- [*Digital Dynamic Range Compressor
+  Design*](https://www.eecs.qmul.ac.uk/~josh/documents/2012/GiannoulisMassbergReiss-dynamicrangecompression-JAES2012.pdf) - used for hard/soft knee transfer function for the multiband compression
+- [ITU-R BS.1770](https://www.itu.int/rec/R-REC-BS.1770) - used LUFS measurements
+- [Linkwitz–Riley crossover](https://en.wikipedia.org/wiki/Linkwitz%E2%80%93Riley_filter) - used for crossover math in multiband compression section
 
 ## License
 
