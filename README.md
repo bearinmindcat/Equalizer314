@@ -1,51 +1,79 @@
 <h1><img width="100" src="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" alt="Equalizer314" align="absmiddle"> Equalizer314</h1>
 
-A system-wide parametric equalizer for Android, built on the platform's `DynamicsProcessing` API. No root, no audio capture, no media-projection prompts — just biquad math fed straight into the OS audio pipeline.
-
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Latest release](https://img.shields.io/github/v/release/bearinmindcat/Equalizer314)](https://github.com/bearinmindcat/Equalizer314/releases/latest)
-[![Min API](https://img.shields.io/badge/min%20SDK-24-brightgreen.svg)](https://developer.android.com/about/versions/nougat)
-[![Audio API](https://img.shields.io/badge/audio-DynamicsProcessing%20%28API%2028%2B%29-orange)](https://developer.android.com/reference/android/media/audiofx/DynamicsProcessing)
-
 <a href="https://github.com/bearinmindcat/Equalizer314/releases/latest"><img src="https://raw.githubusercontent.com/NeoApplications/Neo-Backup/034b226cea5c1b30eb4f6a6f313e4dadcbb0ece4/badge_github.png" alt="Get it on GitHub" height="70"></a>
 <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/{%22id%22:%22com.bearinmind.equalizer314%22,%22url%22:%22https://github.com/bearinmindcat/Equalizer314%22,%22author%22:%22bearinmindcat%22,%22name%22:%22Equalizer314%22}"><img src="https://raw.githubusercontent.com/ImranR98/Obtainium/b1c8ac6f2ab08497189721a788a5763e28ff64cd/assets/graphics/badge_obtainium.png" alt="Get it on Obtainium" height="70"></a>
+<a href="https://f-droid.org/packages/com.bearinmind.launcher314/"><img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" alt="Get it on F-Droid" height="80"></a>
+
+⚠️ PSA; shit will go wrong while using this app, there will be features missing that you wish I added; but this app is in **BETA** and in the very early stages of testing and development, so I'll try to make note of your issues, run through them myself and fix them as quick as possible. My goal is to get this app to a clean smooth state, but in order to do that, people like you can help test and present issues & features that come up. I will do my best to fix everything in a timely manner while incorperating **YOUR** feature wishlist in a way that I think will work for everyone :)
+
+⚠️ Another PSA; these stores below are in the pipeline. As my apps get approved on each of them I'll move them up to the section right underneath the title section of the readme. As of now these links take you nowhere. With that being said, you may wait for the app to be uploaded to a trusted store, and I'll continue developing and making changes for those of you who download it the "raw" way. Thanks again.
+
+<a href="https://accrescent.app/app/com.bearinmind.launcher314"><img alt="Get it on Accrescent" src="https://accrescent.app/badges/get-it-on.png" height="60"></a> <a href="https://play.google.com/store/apps/details?id=com.bearinmind.launcher314"><img alt="Get it on Google Play" src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" height="60"></a> <a href="https://apt.izzysoft.de/packages/com.bearinmind.launcher314"><img src="https://gitlab.com/IzzyOnDroid/repo/-/raw/master/assets/IzzyOnDroid.png" alt="Get it on IzzyOnDroid" height="60"></a>
+
+## About
+
+To start off there is really no "free" and/or "open source" alternatives to Wavelet and p\Poweramp EQ out there, and I felt like after using both of those apps ammong other various EQ apps that there were huge shortcomings in terms of the features & accessibilities they offered. When I started developing this app I wanted to have both a powerful parametric eq function with minimal permissions; this is why I choose to use both the DynamicsProcessing & Visualizer APIs as the framework for ths app as you only need minimal permissions for both of them to work in tandem. There are shortcomings from both these APIs, but I'll discuss more of that later.
+
+To start off this app is built off of DynamicsProcessing API you can read more about the documentation and features it offers here (https://developer.android.com/reference/android/media/audiofx/DynamicsProcessing); this is the same API that Poweramp EQ & Wavelet both use but I felt in some aspects they wern't really being able really squeeze out the max potential that this API can offer.
+
+As someone who comes from the audio production & IEM world I have a lot of experience understaning what both sides of those worlds want and wanted to be able to take advantage of both to create something that met my creative endeavors.
+
+Using the Visualizer API I wanted to give users a way they can reliably cross reference visual data with audio data; this is both useful for the main EQ portion as you can visually reference audio changes you make, but this comes more into play with the Limiting & Multiband Compression sides of the app. While these features are for use in the DynamicsProcessing API; and many apps like Poweramp EQ & Wavelet (who premium locks these features); they just add knobs/sliders in and expect the user to understand exactly how these features work and without real audio-visual feedback, users aren't really able to take advantage of these features in their full potential. This is the reason why many DAWs and VST Plugins use audio-visual feedback with these functions specifically.
+
+Using Visualizer API with these DynamicsProcessing features; you're really able to get an intimiate audio-visual feedback loop that gives you complete control over your audio framework. Shown below are some screenshots of the Multiband Compression & Limiter and how the Visualizer API functions with the input curves, gr trace curves, & the limiter waveform metering. 
+
+<img width="522" height="383" alt="Screenshot (1534)" src="https://github.com/user-attachments/assets/2449b96f-8306-4319-9eb0-ddead8ea84e5" />
+<img width="518" height="378" alt="Screenshot (1535)" src="https://github.com/user-attachments/assets/720725c4-6205-456c-ad83-c2667757927d" />
+
+A lot of other funtions that don't use the Visualizer API I also wanted to still give correct visual feedback (same style implementation that many DAWs use) such other various functions like the compressor & attack/release visuals. You can independently change these values with the slider and by moving you finger along the line/graph itself. This occurs in other places in the app as well, but these are two good examples of this.
+
+<img width="525" height="389" alt="Screenshot (1538)" src="https://github.com/user-attachments/assets/c8923af2-b592-4476-aea9-f07be44b9ba2" />
+<img width="526" height="588" alt="Screenshot (1537)" src="https://github.com/user-attachments/assets/261c4359-4f0d-44af-a199-068f570ff3ea" />
 
 ---
 
-## Screenshots
+## Why DynamicsProcessing & Visualizer APIs?
 
-> _Add screenshots here. Suggested: parametric graph, Simple EQ, MBC, Limiter, Spectrum Control, Settings._
+There exists other apps and methods for device eq & visualization; but I wanted to talk about why I choose DynamicsProcessing & Visualizer as the framework for this app vs the other available and why I choose not to use those. To touch on this point again I choose to use the DynamicsProcessing API, the same API that both popular apps such as Poweramp EQ and Wavelet use as I decided DynamicsProcessing had enough tangibility in coparison to what I had to sacrifice using other more powerful methods.
 
-| Parametric | Simple EQ | MBC |
-|:--:|:--:|:--:|
-| ![Parametric](docs/screenshots/parametric.png) | ![Simple EQ](docs/screenshots/simple.png) | ![MBC](docs/screenshots/mbc.png) |
+Other methods of EQ available (ranked from);
 
-| Limiter | Spectrum | Presets |
-|:--:|:--:|:--:|
-| ![Limiter](docs/screenshots/limiter.png) | ![Spectrum](docs/screenshots/spectrum.png) | ![Presets](docs/screenshots/presets.png) |
+Androids built-in Equalizer class (android.media.audiofx.Equalizer)
+- Fixed amount of EQ bands, this is what many "lazy" eq apps use and other apps who want to use EQ but don't want to focus on building an EQ engine (audiobook apps, music players, media players, video players, etc)
+- Attaches to an audio session
 
----
+AudioEffect API subclasses (https://developer.android.com/reference/android/media/audiofx/AudioEffect)
+- Much better than androids built-in equalizer class but still lacks in comparison to DynamicsProcessing
+- A lot of apps build with DynamicsProcessing & AudioEffects as there are some subclasses available within the API that can offer "different" features that DynamicsProcessing cannot and they can attach to the same audio session pipeline
+- Attaches to an audio session
 
-## What it is
+AudioPlaybackCapture (RootlessJamesDSP)
+- Has much more access to the audio framework than what any of the avaialble APIs above can do, but in order to do so you need to grant ADB perms using something like Shizuku, going this way would also provide a much more accurate Visualizer/Spectrum; but going this route would force you to use the RECORD_AUDIO permission while also increasing latency with audio, and I wanted to keep the permissions in my app as low as possible and there was already a well developed app using this method so I wanted to stay clear of doing something that was already done
+- Another limitation is that some apps such as spotify block internal audio capture
 
-Equalizer314 is a 100% local, no-ads, no-trackers Android app that shapes the global audio output of the device. It does this by computing parametric biquad filter responses on the CPU, sampling that composite curve at N log-spaced frequencies, and pushing those `(cutoffFrequency, gain)` pairs to `DynamicsProcessing` on the Pre-EQ stage of audio session 0.
+AudioFlinger (JamesDSP & ViPER4Android)
+- This is the "best" method if you really want control over your audio without latency issues. There is no "down-side" to using this method other than you need a rooted device which steers a lot of people away. This along with RootlessJamesDSP are best used if you want to apply custom audio effects directly without relying on android's built-in effects.
+- only con? root.
 
-The result is a system-wide EQ that affects every app on the device (with the limitations described in [Known Issues](#known-issues)) without needing root, accessibility, or audio-capture permissions.
 
-## Architecture
 
-```
-┌────────────────────────────┐   ┌────────────────────────────┐   ┌────────────────────────────┐
-│  ParametricEqualizer       │   │  ParametricToDpConverter   │   │  DynamicsProcessing        │
-│  (1–16 BiquadFilter bands) │ → │  (samples response at N    │ → │  (Pre-EQ stage on          │
-│  RBJ + Vicanek formulas    │   │   log-spaced frequencies)  │   │   session 0, system-wide)  │
-└────────────────────────────┘   └────────────────────────────┘   └────────────────────────────┘
-```
+  Your SpectrumAnalyzer + FFT classes currently have no real audio source feeding them. A
+  Visualizer attached to session 0 is the obvious candidate, but it has two catches for you
+  specifically:
 
-- **DSP** lives in `app/src/main/java/com/bearinmind/equalizer314/dsp/` — `BiquadFilter`, `ParametricEqualizer`, `ParametricToDpConverter`, `FFT`, `SpectrumAnalyzer`.
-- **Audio pipeline** lives in `app/src/main/java/com/bearinmind/equalizer314/audio/` — `DynamicsProcessingManager`, `EqService` (foreground service that owns the `DynamicsProcessing` instance).
-- **State** lives in `app/src/main/java/com/bearinmind/equalizer314/state/` — `EqStateManager`, `EqPreferencesManager`.
-- **UI** lives in `app/src/main/java/com/bearinmind/equalizer314/ui/` — custom `EqGraphView`, `SimpleEqBarsView`, controllers per UI mode.
+  1. RECORD_AUDIO permission — you'd be asking a permission prompt for what's essentially a
+  visual gimmick. Hurts install conversion.
+  2. It would stack on the same session as your DynamicsProcessing — likely fine (Visualizer
+  is a "read-only" tap), but you'd have to test carefully for dropouts or conflicts.
+
+  Alternative paths a lot of EQ apps take:
+  - MediaProjection + AudioPlaybackCapture (API 29+) — captures real 16-bit PCM, higher
+  quality than Visualizer, but requires the projection permission prompt.
+  - Feed the FFT from the parametric EQ response itself (what your app effectively does now
+  for the graph) — no permission, but you're visualizing the curve, not the audio.
+
+  TL;DR: Visualizer is the cheap, low-quality way. AudioPlaybackCapture is the expensive,
+  high-quality way. The current "just draw the EQ curve" is the zero-permission way
 
 ## Features
 
