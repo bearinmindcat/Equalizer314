@@ -1,0 +1,3 @@
+No user-visible changes.
+
+- Build hygiene: added .gitattributes enforcing LF line endings for text files so APK builds are byte-identical across Windows and Linux, enabling reproducible builds for F-Droid.

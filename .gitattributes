@@ -1,0 +1,31 @@
+# Enforce LF line endings for text files so that builds are reproducible
+# across Windows / Linux / macOS. This matters especially for the thousands
+# of AutoEQ profile .txt files under app/src/main/assets/autoeq/, which
+# would otherwise end up with different line endings inside the APK
+# depending on the developer's platform.
+
+*               text=auto eol=lf
+
+# Explicit rules for file types shipped inside the APK
+*.txt           text eol=lf
+*.csv           text eol=lf
+*.json          text eol=lf
+*.xml           text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+*.kt            text eol=lf
+*.java          text eol=lf
+*.gradle        text eol=lf
+*.gradle.kts    text eol=lf
+*.pro           text eol=lf
+*.properties    text eol=lf
+*.md            text eol=lf
+
+# Binary files — never touch line endings
+*.png           binary
+*.jpg           binary
+*.jpeg          binary
+*.webp          binary
+*.apk           binary
+*.jks           binary
+*.keystore      binary
