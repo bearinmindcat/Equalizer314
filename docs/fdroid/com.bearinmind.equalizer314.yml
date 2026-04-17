@@ -18,7 +18,14 @@ Builds:
     gradle:
       - yes
 
+  - versionName: 0.0.2-beta
+    versionCode: 2
+    commit: dd27a9f59e600b7e881619a6d69cd34693c2021e
+    subdir: app
+    gradle:
+      - yes
+
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: 0.0.1-beta
-CurrentVersionCode: 1
+CurrentVersion: 0.0.2-beta
+CurrentVersionCode: 2
