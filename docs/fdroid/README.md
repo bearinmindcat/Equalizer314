@@ -16,25 +16,25 @@ The fdroiddata recipe. To submit:
 
 ## Fields explained
 
-- **`commit:`** is the full SHA `056bebb398bab3c3ac432638d38e9e6638c956bb`, which is what the `Equalizer314-v0.0.1-beta` tag points to. Reviewers reject tag names here.
+- **`commit:`** is the full SHA `dd27a9f59e600b7e881619a6d69cd34693c2021e`, which is what the `Equalizer314-v0.0.2-beta` tag points to. Reviewers reject tag names here.
 - **`subdir: app`** — the gradle module lives in `app/`, not the repo root.
 - **`UpdateCheckMode: Tags`** — F-Droid scans the GitHub tags for new releases.
 - **`AutoUpdateMode: Version`** — when a new tag appears, F-Droid auto-generates a new `Builds:` entry.
 
 ## Next versions
 
-When cutting `0.0.2-beta`:
+When cutting `0.0.3-beta`, append another `Builds:` entry:
 
 ```yaml
 Builds:
-  - versionName: 0.0.1-beta
-    versionCode: 1
-    commit: 056bebb398bab3c3ac432638d38e9e6638c956bb
+  - versionName: 0.0.2-beta
+    versionCode: 2
+    commit: dd27a9f59e600b7e881619a6d69cd34693c2021e
     subdir: app
     gradle:
       - yes
-  - versionName: 0.0.2-beta
-    versionCode: 2
+  - versionName: 0.0.3-beta
+    versionCode: 3
     commit: <NEW_SHA>
     subdir: app
     gradle:

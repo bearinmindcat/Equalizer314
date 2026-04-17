@@ -11,13 +11,6 @@ RepoType: git
 Repo: https://github.com/bearinmindcat/Equalizer314.git
 
 Builds:
-  - versionName: 0.0.1-beta
-    versionCode: 1
-    commit: 056bebb398bab3c3ac432638d38e9e6638c956bb
-    subdir: app
-    gradle:
-      - yes
-
   - versionName: 0.0.2-beta
     versionCode: 2
     commit: dd27a9f59e600b7e881619a6d69cd34693c2021e
