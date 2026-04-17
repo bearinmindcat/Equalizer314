@@ -1519,6 +1519,12 @@ class MainActivity : AppCompatActivity() {
                 eqGraphView.setParametricEqualizer(eq)
                 eqGraphView.updateBandLevels()
                 stateManager.pushEqUpdate()
+                // Refresh the DP-band overlay — drawDpBands() reads cached
+                // dpCenterFrequencies/dpGains arrays that were populated with
+                // the Simple EQ response. Without this call the overlay keeps
+                // rendering the Simple curve as a ghost outline until the user
+                // touches the graph and triggers a separate refresh path.
+                stateManager.updateDpBandVisualization(eqGraphView)
             }
         }
         // Save the advanced EQ state before entering SIMPLE mode.
@@ -1603,23 +1609,32 @@ class MainActivity : AppCompatActivity() {
                 val specWidth = (viewWidth - gapPx) - (gridLine10k + gapPx)
                 val specLeft = gridLine10k + gapPx
 
-                fun reposition(btn: View, leftMargin: Int) {
+                fun reposition(btn: View, leftMargin: Int, topMargin: Int = btnTop) {
                     val lp = btn.layoutParams as? android.widget.FrameLayout.LayoutParams ?: return
                     lp.width = specWidth; lp.height = btnHeight
                     lp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
-                    lp.leftMargin = leftMargin; lp.topMargin = btnTop
+                    lp.leftMargin = leftMargin; lp.topMargin = topMargin
                     btn.layoutParams = lp
                 }
 
                 val vizToggle = findViewById<View>(R.id.visualizerToggle)
                 val editBtn = findViewById<View>(R.id.editButton)
                 val resetBtn = findViewById<View>(R.id.resetButton)
+                val undoBtn = findViewById<View>(R.id.undoButton)
+                val redoBtn = findViewById<View>(R.id.redoButton)
                 val bandPtsBtn = findViewById<View>(R.id.bandPointsToggle)
                 val saveBtn = findViewById<View>(R.id.savePresetButton)
 
+                val editLeftPx = (specLeft - gapPx - specWidth).coerceAtLeast(gapPx)
+                val resetLeftPx = (specLeft - 2 * (gapPx + specWidth)).coerceAtLeast(gapPx)
+                val row2Top = btnTop + btnHeight + gapPx
+
                 reposition(vizToggle, specLeft)
-                reposition(editBtn, (specLeft - gapPx - specWidth).coerceAtLeast(gapPx))
-                reposition(resetBtn, (specLeft - 2 * (gapPx + specWidth)).coerceAtLeast(gapPx))
+                reposition(editBtn, editLeftPx)
+                reposition(resetBtn, resetLeftPx)
+                // Undo sits directly below reset; redo sits directly below edit
+                reposition(undoBtn, resetLeftPx, row2Top)
+                reposition(redoBtn, editLeftPx, row2Top)
                 reposition(bandPtsBtn, gapPx)
                 reposition(saveBtn, gapPx + specWidth + gapPx)
             }
