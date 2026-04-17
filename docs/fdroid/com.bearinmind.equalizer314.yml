@@ -13,9 +13,9 @@ Binaries:
   https://github.com/bearinmindcat/Equalizer314/releases/download/Equalizer314-v%v/Equalizer314-v%v.apk
 
 Builds:
-  - versionName: 0.0.3-beta
-    versionCode: 3
-    commit: 43caa38b1fb6307c05a5d983a3aafb58387d77cf
+  - versionName: 0.0.4-beta
+    versionCode: 4
+    commit: dfd1510a8f2115c156c76b2e0d7df6ba93da745e
     subdir: app
     gradle:
       - yes
@@ -24,5 +24,5 @@ AllowedAPKSigningKeys: 7a8368d18ad64294f9aadf4b736adcd15cb0cb88c6b9dc2e0bd5f1e46
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: 0.0.3-beta
-CurrentVersionCode: 3
+CurrentVersion: 0.0.4-beta
+CurrentVersionCode: 4

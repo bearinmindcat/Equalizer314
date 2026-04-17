@@ -32,7 +32,8 @@ The fdroiddata CI runs a fixed set of jobs on every pushed commit. Their outcome
 | 4 | `ba713e8c` | ❌ same two | Moved `AllowedAPKSigningKeys` to its conventional location (after `Builds:`, matching the placement seen in every accepted GitHub-releases recipe). Didn't fix either underlying failure. |
 | 5 | `7e234447` | ❌ rewritemeta (build still running) | Wrapped `Binaries:` URL onto the next indented line. rewritemeta **still** failed because it also wanted a **trailing space** after `Binaries:` (YAML folded-scalar syntax quirk). |
 | 6 | `e565c67a` | ❌ reproducibility only | Added the trailing space. `fdroid rewritemeta` finally passed. `fdroid build` still failed because the CRLF/LF mismatch is a real source-level issue that no YAML tweak can patch around. |
-| 7 | `0ee151a0` | pending | Switched recipe to point at **v0.0.3-beta** (commit `43caa38b…`) — a new release cut with `.gitattributes` enforcing LF for all text file types. Both F-Droid's Linux build and any future Windows build should now embed identical LF content. |
+| 7 | `0ee151a0` | ❌ `check apk` only (build + reproducibility ✅) | Switched recipe to point at **v0.0.3-beta** (commit `43caa38b…`) — `.gitattributes` fix worked, `fdroid build` reproducibility passed for the first time. But `check apk` flagged the APK contains an extra "Dependency metadata" signing block that AGP 8.1+ embeds by default. |
+| 8 | `d5acf01e` | pending | Switched recipe to point at **v0.0.4-beta** (commit `dfd1510a…`). Added `dependenciesInfo { includeInApk = false; includeInBundle = false }` to `app/build.gradle.kts` to strip the offending signing block. |
 
 ## Why reproducibility is byte-level picky
 
@@ -53,3 +54,4 @@ The CRLF vs LF issue looks harmless — it's semantically identical text — but
 - **Set `core.autocrlf=false` globally** on your Windows dev environment for any cross-platform project. `.gitattributes` is the authoritative fix, but `autocrlf=true` is a footgun for assets.
 - **Reproducibility requires the published APK to exist before the recipe is submitted.** If you push reproducibility fields in the recipe but the GitHub release doesn't have the exact `Equalizer314-v%v.apk` artifact at the `Binaries:` URL, F-Droid's `curl` fetch fails and the build is rejected.
 - **The signing cert SHA-256 is tied to the *key*, not the release.** It stays constant across versions as long as you use the same keystore + alias. Only commit hash and version numbers change between releases.
+- **AGP 8.1+ embeds a "Dependency metadata" signing block** by default. F-Droid's `check apk` job rejects it. Always set `android.dependenciesInfo { includeInApk = false; includeInBundle = false }` for F-Droid builds.
