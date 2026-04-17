@@ -1,0 +1,4 @@
+Fixed content persistence when switching Simple EQ mode on / off.
+
+- Main EQ graph no longer shows a ghost outline of the previous Simple EQ response after toggling Simple EQ off.
+- Undo / Redo buttons now appear in their correct positions around the Edit button after returning from Simple EQ.
