@@ -9,16 +9,20 @@ AutoName: Equalizer314
 
 RepoType: git
 Repo: https://github.com/bearinmindcat/Equalizer314.git
+Binaries:
+  https://github.com/bearinmindcat/Equalizer314/releases/download/Equalizer314-v%v/Equalizer314-v%v.apk
 
 Builds:
-  - versionName: 0.0.2-beta
-    versionCode: 2
-    commit: dd27a9f59e600b7e881619a6d69cd34693c2021e
+  - versionName: 0.0.3-beta
+    versionCode: 3
+    commit: 43caa38b1fb6307c05a5d983a3aafb58387d77cf
     subdir: app
     gradle:
       - yes
 
+AllowedAPKSigningKeys: 7a8368d18ad64294f9aadf4b736adcd15cb0cb88c6b9dc2e0bd5f1e461b83e52
+
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: 0.0.2-beta
-CurrentVersionCode: 2
+CurrentVersion: 0.0.3-beta
+CurrentVersionCode: 3
