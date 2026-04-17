@@ -11,8 +11,8 @@ android {
         applicationId = "com.bearinmind.equalizer314"
         minSdk = 24
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.0.3-beta"
+        versionCode = 4
+        versionName = "0.0.4-beta"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -54,6 +54,13 @@ android {
 
     buildFeatures {
         buildConfig = true
+    }
+
+    // F-Droid rejects APKs containing the "Dependency metadata" extra signing
+    // block that AGP 8.1+ embeds by default. Disable both APK and AAB variants.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
     }
 }
 

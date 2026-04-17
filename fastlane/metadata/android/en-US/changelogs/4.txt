@@ -1,0 +1,3 @@
+No user-visible changes.
+
+- Build hygiene: disabled the AGP "Dependency metadata" signing block that F-Droid's scanner flags. Required for F-Droid reproducible build acceptance.
