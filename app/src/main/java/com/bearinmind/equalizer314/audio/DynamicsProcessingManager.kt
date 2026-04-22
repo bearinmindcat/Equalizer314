@@ -21,6 +21,9 @@ class DynamicsProcessingManager {
     private var dynamicsProcessing: DynamicsProcessing? = null
     private var currentBandCount = 0
     private var lastEq: com.bearinmind.equalizer314.dsp.ParametricEqualizer? = null
+    // Optional right-channel EQ for per-channel mode. When null, lastEq is
+    // applied to both channels (original shared behavior).
+    private var lastRightEq: com.bearinmind.equalizer314.dsp.ParametricEqualizer? = null
     private var lastReclaimTime = 0L
     private val reclaimCooldownMs = 2000L  // Don't reclaim more than once every 2 seconds
     var isActive = false
@@ -46,12 +49,11 @@ class DynamicsProcessingManager {
     var limiterThresholdDb: Float = 0f
     var limiterPostGainDb: Float = 0f
 
-    // Channel Side Options — balance, per-channel preamp, L/R swap.
+    // Channel Side Options — balance + per-channel preamp.
     // All applied as flat dB offsets baked into the PreEq band gains per channel.
     var channelBalancePercent: Int = 0     // -100..100, 0 = center
     var leftChannelGainDb: Float = 0f      // -12..12
     var rightChannelGainDb: Float = 0f     // -12..12
-    var channelSwapEnabled: Boolean = false
 
     fun start(eq: ParametricEqualizer) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
@@ -131,56 +133,79 @@ class DynamicsProcessingManager {
     }
 
     fun updateFromEqualizer(eq: ParametricEqualizer) {
+        updateFromEqualizers(eq, eq)
+    }
+
+    /** Apply potentially-different EQs to the two channels. Pass the same
+     *  instance for both in shared/BOTH mode. */
+    fun updateFromEqualizers(leftEq: ParametricEqualizer, rightEq: ParametricEqualizer) {
         val dp = dynamicsProcessing ?: return
 
         // If band count changed, must recreate the DP instance
         if (ParametricToDpConverter.numBands != currentBandCount) {
             Log.d(TAG, "Band count changed ($currentBandCount -> ${ParametricToDpConverter.numBands}), recreating DP")
-            start(eq)
+            lastRightEq = if (leftEq !== rightEq) rightEq else null
+            start(leftEq)
             return
         }
 
         try {
-            applyParametricResponse(dp, eq)
+            lastEq = leftEq
+            lastRightEq = if (leftEq !== rightEq) rightEq else null
+            applyParametricResponse(dp, leftEq, rightEq)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to update DynamicsProcessing", e)
         }
     }
 
     private fun applyParametricResponse(dp: DynamicsProcessing, eq: ParametricEqualizer) {
-        val cutoffs = ParametricToDpConverter.cutoffFrequencies
-        val gains = ParametricToDpConverter.convert(eq)
+        applyParametricResponse(dp, eq, eq)
+    }
 
-        // Apply global preamp offset
+    private fun applyParametricResponse(
+        dp: DynamicsProcessing,
+        leftEq: ParametricEqualizer,
+        rightEq: ParametricEqualizer,
+    ) {
+        val cutoffs = ParametricToDpConverter.cutoffFrequencies
+        val leftGains = ParametricToDpConverter.convert(leftEq)
+        // Skip the second sample pass when both channels share the same eq.
+        val rightGains = if (leftEq === rightEq) leftGains
+            else ParametricToDpConverter.convert(rightEq)
+
+        // Apply global preamp offset to both channels.
         if (preampGainDb != 0f) {
-            for (i in gains.indices) gains[i] += preampGainDb
+            for (i in leftGains.indices) leftGains[i] += preampGainDb
+            if (rightGains !== leftGains) {
+                for (i in rightGains.indices) rightGains[i] += preampGainDb
+            }
         }
 
-        // Auto-gain: subtract peak boost to prevent clipping
+        // Auto-gain: subtract peak boost across both channels to prevent clipping.
         if (autoGainEnabled) {
-            val peakGain = gains.max()
-            lastAutoGainOffset = if (peakGain > 0f) -peakGain else 0f
+            var peak = Float.NEGATIVE_INFINITY
+            for (g in leftGains) if (g > peak) peak = g
+            if (rightGains !== leftGains) for (g in rightGains) if (g > peak) peak = g
+            lastAutoGainOffset = if (peak > 0f) -peak else 0f
             if (lastAutoGainOffset != 0f) {
-                for (i in gains.indices) gains[i] += lastAutoGainOffset
+                for (i in leftGains.indices) leftGains[i] += lastAutoGainOffset
+                if (rightGains !== leftGains) {
+                    for (i in rightGains.indices) rightGains[i] += lastAutoGainOffset
+                }
             }
         } else {
             lastAutoGainOffset = 0f
         }
 
-        // Per-channel offsets: balance + preamp (L/R), optional swap.
+        // Per-channel offsets: balance + preamp (L/R).
         val (leftOffsetDb, rightOffsetDb) = computeChannelOffsets()
-
-        // When swap is on, left's gains go onto channel 1 and right's onto channel 0.
-        val (ch0OffsetDb, ch1OffsetDb) =
-            if (channelSwapEnabled) Pair(rightOffsetDb, leftOffsetDb)
-            else Pair(leftOffsetDb, rightOffsetDb)
 
         for (i in 0 until ParametricToDpConverter.numBands) {
             dp.setPreEqBandByChannelIndex(
-                0, i, DynamicsProcessing.EqBand(true, cutoffs[i], gains[i] + ch0OffsetDb)
+                0, i, DynamicsProcessing.EqBand(true, cutoffs[i], leftGains[i] + leftOffsetDb)
             )
             dp.setPreEqBandByChannelIndex(
-                1, i, DynamicsProcessing.EqBand(true, cutoffs[i], gains[i] + ch1OffsetDb)
+                1, i, DynamicsProcessing.EqBand(true, cutoffs[i], rightGains[i] + rightOffsetDb)
             )
         }
     }
@@ -210,12 +235,12 @@ class DynamicsProcessingManager {
         return Pair(left, right)
     }
 
-    /** Re-apply the current EQ with fresh channel settings (balance, preamp, swap). */
+    /** Re-apply the current EQ with fresh channel settings (balance, preamp). */
     fun updateChannelSettings() {
         val dp = dynamicsProcessing ?: return
         val eq = lastEq ?: return
         try {
-            applyParametricResponse(dp, eq)
+            applyParametricResponse(dp, eq, lastRightEq ?: eq)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to update channel settings", e)
         }

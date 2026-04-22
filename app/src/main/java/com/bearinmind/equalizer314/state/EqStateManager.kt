@@ -28,8 +28,22 @@ class EqStateManager(
         )
     }
 
-    var parametricEq: ParametricEqualizer = ParametricEqualizer()
+    enum class ActiveChannel { BOTH, LEFT, RIGHT }
+
+    // The three EQ instances backing per-channel editing. When Channel Side EQ
+    // is off, only bothEq is used (applied to both channels). When Channel
+    // Side EQ is on, leftEq goes to ch0 and rightEq goes to ch1, with
+    // activeChannel deciding which one is the current editing target.
+    private val bothEq: ParametricEqualizer = ParametricEqualizer()
+    private val leftEq: ParametricEqualizer = ParametricEqualizer()
+    private val rightEq: ParametricEqualizer = ParametricEqualizer()
+
+    var parametricEq: ParametricEqualizer = bothEq
         private set
+
+    var activeChannel: ActiveChannel = ActiveChannel.BOTH
+        private set
+
     val bandSlots = mutableListOf<Int>()
     val bandColors = mutableMapOf<Int, Int>() // slot index → color int
     var selectedBandIndex: Int? = null
@@ -53,7 +67,6 @@ class EqStateManager(
     var channelBalancePercent: Int = 0
     var leftChannelGainDb: Float = 0f
     var rightChannelGainDb: Float = 0f
-    var channelSwapEnabled: Boolean = false
 
     // Service binding
     var eqService: EqService? = null
@@ -93,8 +106,19 @@ class EqStateManager(
     }
 
     fun initEq(graphView: EqGraphView) {
-        parametricEq.isEnabled = true
-        eqPrefs.restoreState(parametricEq)
+        bothEq.isEnabled = true
+        eqPrefs.restoreState(bothEq)
+        // If the user left Channel Side EQ on, seed leftEq / rightEq from the
+        // saved shared state and activate LEFT as the editing target.
+        if (eqPrefs.getChannelSideEqEnabled()) {
+            copyEqState(bothEq, leftEq)
+            copyEqState(bothEq, rightEq)
+            activeChannel = ActiveChannel.LEFT
+            parametricEq = leftEq
+        } else {
+            activeChannel = ActiveChannel.BOTH
+            parametricEq = bothEq
+        }
         graphView.setParametricEqualizer(parametricEq)
         graphView.setBandSlotLabels(bandSlots)
         initBandSlots()
@@ -110,7 +134,6 @@ class EqStateManager(
         channelBalancePercent = eqPrefs.getChannelBalancePercent()
         leftChannelGainDb = eqPrefs.getLeftChannelGainDb()
         rightChannelGainDb = eqPrefs.getRightChannelGainDb()
-        channelSwapEnabled = eqPrefs.getChannelSwapEnabled()
 
         // Restore limiter
         limiterEnabled = eqPrefs.getLimiterEnabled()
@@ -143,19 +166,66 @@ class EqStateManager(
         dm.channelBalancePercent = channelBalancePercent
         dm.leftChannelGainDb = leftChannelGainDb
         dm.rightChannelGainDb = rightChannelGainDb
-        dm.channelSwapEnabled = channelSwapEnabled
-        eqService?.updateEq(parametricEq)
+        val (lEq, rEq) = getChannelEqs()
+        eqService?.updateEqPerChannel(lEq, rEq)
     }
 
-    /** Apply only channel-side-options changes (balance / preamp / swap) without
-     *  recomputing the EQ curve. Cheap enough to call on every slider step. */
+    /** Copy one EQ's band state into another. Used when forking the shared
+     *  "both" EQ into the per-channel L/R editors. */
+    private fun copyEqState(from: ParametricEqualizer, to: ParametricEqualizer) {
+        to.clearBands()
+        val count = from.getBandCount()
+        for (i in 0 until count) {
+            val b = from.getBand(i) ?: continue
+            to.addBand(b.frequency, b.gain, b.filterType, b.q)
+            to.setBandEnabled(i, b.enabled)
+        }
+        to.isEnabled = from.isEnabled
+    }
+
+    /** Called when the Channel Side EQ switch flips. On enable we fork the
+     *  current shared EQ into leftEq / rightEq (so they start identical to
+     *  what the user had) and activate L as the default editing target.
+     *  On disable we flip back to the shared "both" EQ. */
+    fun setChannelSideEqEnabled(enabled: Boolean) {
+        if (enabled) {
+            // Fork current active state into both L and R so they start the
+            // same as what the user sees when they flip the switch.
+            val source = parametricEq
+            if (source !== leftEq) copyEqState(source, leftEq)
+            if (source !== rightEq) copyEqState(source, rightEq)
+            activeChannel = ActiveChannel.LEFT
+            parametricEq = leftEq
+        } else {
+            activeChannel = ActiveChannel.BOTH
+            parametricEq = bothEq
+        }
+    }
+
+    /** Switch the active editing channel while Channel Side EQ is on.
+     *  No-op when CSE is off or the channel is already active. */
+    fun setActiveChannel(channel: ActiveChannel) {
+        if (!eqPrefs.getChannelSideEqEnabled()) return
+        if (channel == ActiveChannel.BOTH) return   // BOTH is only reachable via CSE off
+        if (channel == activeChannel) return
+        activeChannel = channel
+        parametricEq = if (channel == ActiveChannel.LEFT) leftEq else rightEq
+    }
+
+    /** Returns the ParametricEqualizer to apply to ch0 (left) and ch1 (right)
+     *  respectively. In BOTH mode both channels share the same EQ. */
+    fun getChannelEqs(): Pair<ParametricEqualizer, ParametricEqualizer> =
+        if (eqPrefs.getChannelSideEqEnabled()) Pair(leftEq, rightEq)
+        else Pair(bothEq, bothEq)
+
+    /** Apply only channel-side-options changes (balance / per-channel preamp)
+     *  without recomputing the EQ curve. Cheap enough to call on every slider step. */
     fun pushChannelSettingsUpdate() {
         if (!isProcessing) return
         val dm = eqService?.dynamicsManager ?: return
         dm.channelBalancePercent = channelBalancePercent
         dm.leftChannelGainDb = leftChannelGainDb
         dm.rightChannelGainDb = rightChannelGainDb
-        dm.channelSwapEnabled = channelSwapEnabled
         dm.updateChannelSettings()
     }
 
@@ -225,7 +295,6 @@ class EqStateManager(
         dm.channelBalancePercent = channelBalancePercent
         dm.leftChannelGainDb = leftChannelGainDb
         dm.rightChannelGainDb = rightChannelGainDb
-        dm.channelSwapEnabled = channelSwapEnabled
         dm.limiterEnabled = limiterEnabled
         dm.limiterAttackMs = limiterAttackMs
         dm.limiterReleaseMs = limiterReleaseMs
@@ -237,6 +306,13 @@ class EqStateManager(
         if (!started) {
             animatePower(false)
             Toast.makeText(context, "Failed to start DynamicsProcessing", Toast.LENGTH_SHORT).show()
+            return
+        }
+        // If Channel Side EQ is on, fan out the distinct L/R responses now
+        // that DP is live.
+        if (eqPrefs.getChannelSideEqEnabled()) {
+            val (lEq, rEq) = getChannelEqs()
+            if (lEq !== rEq) service.updateEqPerChannel(lEq, rEq)
         }
     }
 

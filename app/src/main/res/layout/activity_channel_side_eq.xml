@@ -288,11 +288,11 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-<!-- Swap L/R card removed: Android's DynamicsProcessing API cannot route
-                 audio between channels, so a true channel swap isn't possible
-                 without a MediaProjection / AudioPlaybackCapture pipeline. The
-                 backend fields (channelSwapEnabled pref, DynamicsProcessingManager
-                 field) are kept in place for when/if that pipeline is added. -->
+<!-- Channel swap intentionally not offered: DynamicsProcessing has no
+                 channel-routing primitive, and modern AudioFlinger filters
+                 AudioManager.setParameters before it reaches the HAL (verified
+                 on Samsung Android 16). A real swap would need a
+                 MediaProjection + AudioPlaybackCapture pipeline. -->
 
             <!-- Per-channel EQ toggle card -->
             <com.google.android.material.card.MaterialCardView
@@ -315,7 +315,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Per-channel EQ"
+                        android:text="Channel Side EQ"
                         android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                         android:textColor="?attr/colorOnSurface" />
 

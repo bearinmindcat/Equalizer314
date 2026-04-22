@@ -95,6 +95,10 @@ class EqService : Service() {
         dynamicsManager.updateFromEqualizer(eq)
     }
 
+    fun updateEqPerChannel(leftEq: ParametricEqualizer, rightEq: ParametricEqualizer) {
+        dynamicsManager.updateFromEqualizers(leftEq, rightEq)
+    }
+
     fun setEqEnabled(enabled: Boolean) {
         dynamicsManager.setEnabled(enabled)
     }

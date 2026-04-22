@@ -456,7 +456,6 @@ class MainActivity : AppCompatActivity() {
         val settingsGearBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.settingsGearButton)
         val channelLBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.channelLButton)
         val channelRBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.channelRButton)
-        val channelFlipBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.channelFlipButton)
         val vizDensity = resources.displayMetrics.density
         val gapPx = (2 * vizDensity).toInt()
         eqGraphView.post {
@@ -595,9 +594,7 @@ class MainActivity : AppCompatActivity() {
             channelRBtn.minimumWidth = 0; channelRBtn.minimumHeight = 0
             channelRBtn.setPadding(0, 0, 0, 0)
 
-            // Flip (⇄) is permanently hidden — true L/R swap is not available
-            // on the DP-only audio path.
-            channelFlipBtn.visibility = View.GONE
+            refreshChannelPopoutDim()
         }
 
         // Settings gear starts hidden; the split icon pops it in alongside
@@ -609,13 +606,18 @@ class MainActivity : AppCompatActivity() {
             channelPopoutOpen = !channelPopoutOpen
             if (channelPopoutOpen) {
                 val offsetY = -(altRouteBtn.height.toFloat() + gapPx)
+                // L and R are dimmed when Channel Side EQ is off, bright when on.
+                val lrAlpha = if (eqPrefs.getChannelSideEqEnabled()) 1.0f else 0.4f
+                // Paint pressed/outlined styles first so the buttons fade in
+                // already reflecting the active channel.
+                paintChannelButtonStyles()
                 listOf(channelLBtn, channelRBtn, settingsGearBtn).forEach { v ->
                     v.visibility = View.VISIBLE
                     v.alpha = 0f; v.scaleX = 0.3f; v.scaleY = 0.3f; v.translationY = offsetY
                 }
-                channelLBtn.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f)
+                channelLBtn.animate().alpha(lrAlpha).scaleX(1f).scaleY(1f).translationY(0f)
                     .setDuration(250).setInterpolator(android.view.animation.OvershootInterpolator(1.0f)).start()
-                channelRBtn.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f)
+                channelRBtn.animate().alpha(lrAlpha).scaleX(1f).scaleY(1f).translationY(0f)
                     .setDuration(250).setStartDelay(40).setInterpolator(android.view.animation.OvershootInterpolator(1.0f)).start()
                 settingsGearBtn.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f)
                     .setDuration(250).setStartDelay(80).setInterpolator(android.view.animation.OvershootInterpolator(1.0f)).start()
@@ -639,14 +641,21 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // L and R open the Channel Side Options editor (future per-channel EQ
-        // lives there; for now it hosts balance and per-channel preamp).
-        val openChannelSide: (View) -> Unit = {
-            startActivity(Intent(this, ChannelSideEqActivity::class.java))
-            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+        // L / R buttons switch which channel the main graph is editing.
+        // Only effective while Channel Side EQ is enabled; dimmed and no-op
+        // otherwise. Tapping the currently-active channel is a no-op too.
+        channelLBtn.setOnClickListener {
+            if (!eqPrefs.getChannelSideEqEnabled()) return@setOnClickListener
+            if (stateManager.activeChannel == EqStateManager.ActiveChannel.LEFT) return@setOnClickListener
+            stateManager.setActiveChannel(EqStateManager.ActiveChannel.LEFT)
+            rebindActiveEq()
         }
-        channelLBtn.setOnClickListener(openChannelSide)
-        channelRBtn.setOnClickListener(openChannelSide)
+        channelRBtn.setOnClickListener {
+            if (!eqPrefs.getChannelSideEqEnabled()) return@setOnClickListener
+            if (stateManager.activeChannel == EqStateManager.ActiveChannel.RIGHT) return@setOnClickListener
+            stateManager.setActiveChannel(EqStateManager.ActiveChannel.RIGHT)
+            rebindActiveEq()
+        }
 
         // Settings gear: navigate to the Settings page.
         settingsGearBtn.setOnClickListener {
@@ -2544,10 +2553,86 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Paint the L / R button bg/stroke/text colours according to the current
+     *  active channel. Does NOT touch alpha — callers that drive the popup
+     *  animation set alpha independently. */
+    private fun paintChannelButtonStyles() {
+        val enabled = eqPrefs.getChannelSideEqEnabled()
+        val lBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.channelLButton) ?: return
+        val rBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.channelRButton) ?: return
+        val density = resources.displayMetrics.density
+        fun paint(btn: com.google.android.material.button.MaterialButton, pressed: Boolean) {
+            if (pressed) {
+                btn.setBackgroundColor(0xFF555555.toInt())
+                btn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+                btn.strokeWidth = (2 * density).toInt()
+                btn.setTextColor(0xFFE3E3E3.toInt())
+            } else {
+                btn.setBackgroundColor(0x00000000)
+                btn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                btn.strokeWidth = (1 * density).toInt()
+                btn.setTextColor(0xFFBBBBBB.toInt())
+            }
+        }
+        if (!enabled) {
+            paint(lBtn, false); paint(rBtn, false)
+            return
+        }
+        val active = stateManager.activeChannel
+        paint(lBtn, active == EqStateManager.ActiveChannel.LEFT)
+        paint(rBtn, active == EqStateManager.ActiveChannel.RIGHT)
+    }
+
+    /** Visual state for the L / R popout buttons.
+     *  - CSE off: both buttons dim (alpha 0.4), outlined style.
+     *  - CSE on: both buttons at full alpha; active uses filled "pressed"
+     *    style (like the active Spectrum / Band-points buttons), the other
+     *    uses the outlined style. */
+    private fun refreshChannelPopoutDim() {
+        paintChannelButtonStyles()
+        val enabled = eqPrefs.getChannelSideEqEnabled()
+        val lBtn = findViewById<View>(R.id.channelLButton) ?: return
+        val rBtn = findViewById<View>(R.id.channelRButton) ?: return
+        val a = if (enabled) 1.0f else 0.4f
+        lBtn.alpha = a; rBtn.alpha = a
+    }
+
+    /** Rebind the graph + band toggles + input widgets after the active EQ
+     *  reference changes (Channel Side EQ on/off, or L/R mode switch). */
+    private fun rebindActiveEq() {
+        val eq = stateManager.parametricEq
+        eqGraphView.setParametricEqualizer(eq)
+        eqGraphView.updateBandLevels()
+        stateManager.pushEqUpdate()
+        stateManager.updateDpBandVisualization(eqGraphView)
+
+        val count = eq.getBandCount()
+        if (count > 0) {
+            val idx = (stateManager.selectedBandIndex ?: 0).coerceIn(0, count - 1)
+            stateManager.selectedBandIndex = idx
+            eqGraphView.setActiveBand(idx)
+            updateFilterTypeButtons(idx)
+            updateBandInputs(idx)
+        }
+        bandToggleManager.setupToggles()
+        refreshChannelPopoutDim()
+    }
+
     override fun onResume() {
         super.onResume()
         // Apply spectrum settings (may have changed in SpectrumControlActivity)
         applySpectrumSettings()
+        // Sync Channel Side EQ state — the switch lives in ChannelSideEqActivity,
+        // so when we return here the pref may have flipped and we need to swap
+        // the active ParametricEqualizer accordingly.
+        val cseOnNow = eqPrefs.getChannelSideEqEnabled()
+        val cseOnInState = stateManager.activeChannel != EqStateManager.ActiveChannel.BOTH
+        if (cseOnNow != cseOnInState) {
+            stateManager.setChannelSideEqEnabled(cseOnNow)
+            rebindActiveEq()
+        } else {
+            refreshChannelPopoutDim()
+        }
         // Set FAB from saved power state — instant, no animation
         val savedPower = eqPrefs.getPowerState()
         com.bearinmind.equalizer314.ui.BottomNavHelper.setPowerFabInstant(this, savedPower)

@@ -343,10 +343,6 @@ class EqPreferencesManager(context: Context) {
     fun saveChannelBalancePercent(pct: Int) { prefs.edit().putInt("channelBalancePercent", pct).apply() }
     fun getChannelBalancePercent(): Int = prefs.getInt("channelBalancePercent", 0)
 
-    // Swap L/R channels — stored only; no runtime DSP hookup yet.
-    fun saveChannelSwapEnabled(enabled: Boolean) { prefs.edit().putBoolean("channelSwapEnabled", enabled).apply() }
-    fun getChannelSwapEnabled(): Boolean = prefs.getBoolean("channelSwapEnabled", false)
-
     // Per-channel preamp gain in dB. Range ±12 dB. Stored only; no runtime hookup yet.
     fun saveLeftChannelGainDb(db: Float) { prefs.edit().putFloat("leftChannelGainDb", db).apply() }
     fun getLeftChannelGainDb(): Float = prefs.getFloat("leftChannelGainDb", 0f)

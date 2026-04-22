@@ -229,28 +229,6 @@
                             android:contentDescription="Right channel" />
 
                         <com.google.android.material.button.MaterialButton
-                            android:id="@+id/channelFlipButton"
-                            style="?attr/materialButtonOutlinedStyle"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_gravity="top|start"
-                            android:insetTop="0dp"
-                            android:insetBottom="0dp"
-                            android:insetLeft="0dp"
-                            android:insetRight="0dp"
-                            android:minWidth="0dp"
-                            android:minHeight="0dp"
-                            android:padding="3dp"
-                            android:text="⇄"
-                            android:textColor="#FFBBBBBB"
-                            android:textSize="14sp"
-                            android:visibility="gone"
-                            app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
-                            app:strokeColor="#FF444444"
-                            app:strokeWidth="1dp"
-                            android:contentDescription="Flip L/R" />
-
-                        <com.google.android.material.button.MaterialButton
                             android:id="@+id/resetButton"
                             style="?attr/materialButtonOutlinedStyle"
                             android:layout_width="wrap_content"
