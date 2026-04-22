@@ -46,6 +46,13 @@ class DynamicsProcessingManager {
     var limiterThresholdDb: Float = 0f
     var limiterPostGainDb: Float = 0f
 
+    // Channel Side Options — balance, per-channel preamp, L/R swap.
+    // All applied as flat dB offsets baked into the PreEq band gains per channel.
+    var channelBalancePercent: Int = 0     // -100..100, 0 = center
+    var leftChannelGainDb: Float = 0f      // -12..12
+    var rightChannelGainDb: Float = 0f     // -12..12
+    var channelSwapEnabled: Boolean = false
+
     fun start(eq: ParametricEqualizer) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
             Log.e(TAG, "DynamicsProcessing requires API 28+")
@@ -144,7 +151,7 @@ class DynamicsProcessingManager {
         val cutoffs = ParametricToDpConverter.cutoffFrequencies
         val gains = ParametricToDpConverter.convert(eq)
 
-        // Apply preamp offset
+        // Apply global preamp offset
         if (preampGainDb != 0f) {
             for (i in gains.indices) gains[i] += preampGainDb
         }
@@ -160,10 +167,57 @@ class DynamicsProcessingManager {
             lastAutoGainOffset = 0f
         }
 
+        // Per-channel offsets: balance + preamp (L/R), optional swap.
+        val (leftOffsetDb, rightOffsetDb) = computeChannelOffsets()
+
+        // When swap is on, left's gains go onto channel 1 and right's onto channel 0.
+        val (ch0OffsetDb, ch1OffsetDb) =
+            if (channelSwapEnabled) Pair(rightOffsetDb, leftOffsetDb)
+            else Pair(leftOffsetDb, rightOffsetDb)
+
         for (i in 0 until ParametricToDpConverter.numBands) {
-            val eqBand = DynamicsProcessing.EqBand(true, cutoffs[i], gains[i])
-            dp.setPreEqBandByChannelIndex(0, i, eqBand)  // left
-            dp.setPreEqBandByChannelIndex(1, i, eqBand)  // right
+            dp.setPreEqBandByChannelIndex(
+                0, i, DynamicsProcessing.EqBand(true, cutoffs[i], gains[i] + ch0OffsetDb)
+            )
+            dp.setPreEqBandByChannelIndex(
+                1, i, DynamicsProcessing.EqBand(true, cutoffs[i], gains[i] + ch1OffsetDb)
+            )
+        }
+    }
+
+    /**
+     * Compute the flat dB offset to apply to each channel's pre-EQ bands,
+     * combining per-channel preamp gain with balance attenuation.
+     *
+     * Balance semantics: the side being panned TOWARD stays at 0 dB relative
+     * to preamp; the opposite side is attenuated. Pan wins over preamp, so a
+     * fully-left pan mutes the right channel regardless of right preamp.
+     */
+    private fun computeChannelOffsets(): Pair<Float, Float> {
+        val pct = channelBalancePercent.coerceIn(-100, 100)
+        val leftBalanceDb = if (pct > 0) {
+            val ratio = ((100 - pct) / 100f).coerceAtLeast(1e-4f)
+            20f * kotlin.math.log10(ratio)
+        } else 0f
+        val rightBalanceDb = if (pct < 0) {
+            val ratio = ((100 + pct) / 100f).coerceAtLeast(1e-4f)
+            20f * kotlin.math.log10(ratio)
+        } else 0f
+        // Cap floor at -60 dB (≈ silent) to avoid feeding an extreme number to
+        // DynamicsProcessing; cap ceiling at +24 dB.
+        val left = (leftChannelGainDb + leftBalanceDb).coerceIn(-60f, 24f)
+        val right = (rightChannelGainDb + rightBalanceDb).coerceIn(-60f, 24f)
+        return Pair(left, right)
+    }
+
+    /** Re-apply the current EQ with fresh channel settings (balance, preamp, swap). */
+    fun updateChannelSettings() {
+        val dp = dynamicsProcessing ?: return
+        val eq = lastEq ?: return
+        try {
+            applyParametricResponse(dp, eq)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to update channel settings", e)
         }
     }
 

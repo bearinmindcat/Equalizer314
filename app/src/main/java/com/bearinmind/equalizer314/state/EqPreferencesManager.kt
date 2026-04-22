@@ -334,6 +334,25 @@ class EqPreferencesManager(context: Context) {
     fun saveExperimentalUnlocked(unlocked: Boolean) { prefs.edit().putBoolean("experimentalUnlocked", unlocked).apply() }
     fun getExperimentalUnlocked(): Boolean = prefs.getBoolean("experimentalUnlocked", false)
 
+    // Channel Side EQ — per-channel (L/R) EQ mode. Stored only; no runtime effect yet.
+    fun saveChannelSideEqEnabled(enabled: Boolean) { prefs.edit().putBoolean("channelSideEqEnabled", enabled).apply() }
+    fun getChannelSideEqEnabled(): Boolean = prefs.getBoolean("channelSideEqEnabled", false)
+
+    // Channel balance — integer percent from -100 (fully left) to +100 (fully right), 0 = neutral.
+    // Stored only; no runtime DSP hookup yet.
+    fun saveChannelBalancePercent(pct: Int) { prefs.edit().putInt("channelBalancePercent", pct).apply() }
+    fun getChannelBalancePercent(): Int = prefs.getInt("channelBalancePercent", 0)
+
+    // Swap L/R channels — stored only; no runtime DSP hookup yet.
+    fun saveChannelSwapEnabled(enabled: Boolean) { prefs.edit().putBoolean("channelSwapEnabled", enabled).apply() }
+    fun getChannelSwapEnabled(): Boolean = prefs.getBoolean("channelSwapEnabled", false)
+
+    // Per-channel preamp gain in dB. Range ±12 dB. Stored only; no runtime hookup yet.
+    fun saveLeftChannelGainDb(db: Float) { prefs.edit().putFloat("leftChannelGainDb", db).apply() }
+    fun getLeftChannelGainDb(): Float = prefs.getFloat("leftChannelGainDb", 0f)
+    fun saveRightChannelGainDb(db: Float) { prefs.edit().putFloat("rightChannelGainDb", db).apply() }
+    fun getRightChannelGainDb(): Float = prefs.getFloat("rightChannelGainDb", 0f)
+
     // Simple EQ Presets
     fun getSimpleEqPresetNames(): List<String> {
         return (prefs.getStringSet("simple_preset_names", emptySet()) ?: emptySet()).sorted()

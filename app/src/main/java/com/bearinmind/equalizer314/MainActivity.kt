@@ -452,6 +452,11 @@ class MainActivity : AppCompatActivity() {
         val redoBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.redoButton)
         val bandPtsBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.bandPointsToggle)
         val saveBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.savePresetButton)
+        val altRouteBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.altRouteButton)
+        val settingsGearBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.settingsGearButton)
+        val channelLBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.channelLButton)
+        val channelRBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.channelRButton)
+        val channelFlipBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.channelFlipButton)
         val vizDensity = resources.displayMetrics.density
         val gapPx = (2 * vizDensity).toInt()
         eqGraphView.post {
@@ -534,15 +539,120 @@ class MainActivity : AppCompatActivity() {
             bandPtsBtn.setPadding(0, 0, 0, 0)
 
             // Save preset button: right next to eye button
+            val saveLeft = gapPx + specWidth + gapPx
             val saveLp = saveBtn.layoutParams as android.widget.FrameLayout.LayoutParams
             saveLp.width = specWidth
             saveLp.height = btnHeight
             saveLp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
-            saveLp.leftMargin = gapPx + specWidth + gapPx
+            saveLp.leftMargin = saveLeft
             saveLp.topMargin = btnTop
             saveBtn.layoutParams = saveLp
             saveBtn.minimumWidth = 0; saveBtn.minimumHeight = 0
             saveBtn.setPadding(0, 0, 0, 0)
+
+            // Alt-route button: right after save preset button
+            val altRouteLeft = saveLeft + specWidth + gapPx
+            val altRouteLp = altRouteBtn.layoutParams as android.widget.FrameLayout.LayoutParams
+            altRouteLp.width = specWidth
+            altRouteLp.height = btnHeight
+            altRouteLp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+            altRouteLp.leftMargin = altRouteLeft
+            altRouteLp.topMargin = btnTop
+            altRouteBtn.layoutParams = altRouteLp
+            altRouteBtn.minimumWidth = 0; altRouteBtn.minimumHeight = 0
+            altRouteBtn.setPadding(0, 0, 0, 0)
+
+            // Settings gear button: directly to the right of the alt-route button
+            val settingsLeft = altRouteLeft + specWidth + gapPx
+            val settingsLp = settingsGearBtn.layoutParams as android.widget.FrameLayout.LayoutParams
+            settingsLp.width = specWidth
+            settingsLp.height = btnHeight
+            settingsLp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+            settingsLp.leftMargin = settingsLeft
+            settingsLp.topMargin = btnTop
+            settingsGearBtn.layoutParams = settingsLp
+            settingsGearBtn.minimumWidth = 0; settingsGearBtn.minimumHeight = 0
+            settingsGearBtn.setPadding(0, 0, 0, 0)
+
+            // L / R popout sit on row 2 directly below alt-route and settings.
+            val row2Top = btnTop + btnHeight + gapPx
+            val lLeft = altRouteLeft
+            val rLeft = settingsLeft
+
+            val lLp = channelLBtn.layoutParams as android.widget.FrameLayout.LayoutParams
+            lLp.width = specWidth; lLp.height = btnHeight
+            lLp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+            lLp.leftMargin = lLeft; lLp.topMargin = row2Top
+            channelLBtn.layoutParams = lLp
+            channelLBtn.minimumWidth = 0; channelLBtn.minimumHeight = 0
+            channelLBtn.setPadding(0, 0, 0, 0)
+
+            val rLp = channelRBtn.layoutParams as android.widget.FrameLayout.LayoutParams
+            rLp.width = specWidth; rLp.height = btnHeight
+            rLp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+            rLp.leftMargin = rLeft; rLp.topMargin = row2Top
+            channelRBtn.layoutParams = rLp
+            channelRBtn.minimumWidth = 0; channelRBtn.minimumHeight = 0
+            channelRBtn.setPadding(0, 0, 0, 0)
+
+            // Flip (⇄) is permanently hidden — true L/R swap is not available
+            // on the DP-only audio path.
+            channelFlipBtn.visibility = View.GONE
+        }
+
+        // Settings gear starts hidden; the split icon pops it in alongside
+        // L / R with the same overshoot animation used by undo / redo / reset.
+        settingsGearBtn.visibility = View.GONE
+
+        var channelPopoutOpen = false
+        altRouteBtn.setOnClickListener {
+            channelPopoutOpen = !channelPopoutOpen
+            if (channelPopoutOpen) {
+                val offsetY = -(altRouteBtn.height.toFloat() + gapPx)
+                listOf(channelLBtn, channelRBtn, settingsGearBtn).forEach { v ->
+                    v.visibility = View.VISIBLE
+                    v.alpha = 0f; v.scaleX = 0.3f; v.scaleY = 0.3f; v.translationY = offsetY
+                }
+                channelLBtn.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f)
+                    .setDuration(250).setInterpolator(android.view.animation.OvershootInterpolator(1.0f)).start()
+                channelRBtn.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f)
+                    .setDuration(250).setStartDelay(40).setInterpolator(android.view.animation.OvershootInterpolator(1.0f)).start()
+                settingsGearBtn.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f)
+                    .setDuration(250).setStartDelay(80).setInterpolator(android.view.animation.OvershootInterpolator(1.0f)).start()
+                altRouteBtn.setBackgroundColor(0xFF555555.toInt())
+                altRouteBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+                altRouteBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
+            } else {
+                val offsetY = -(altRouteBtn.height.toFloat() + gapPx)
+                settingsGearBtn.animate().alpha(0f).scaleX(0.3f).scaleY(0.3f).translationY(offsetY)
+                    .setDuration(200).setInterpolator(android.view.animation.AccelerateInterpolator())
+                    .withEndAction { settingsGearBtn.visibility = View.GONE; settingsGearBtn.translationY = 0f }.start()
+                channelRBtn.animate().alpha(0f).scaleX(0.3f).scaleY(0.3f).translationY(offsetY)
+                    .setDuration(200).setStartDelay(40).setInterpolator(android.view.animation.AccelerateInterpolator())
+                    .withEndAction { channelRBtn.visibility = View.GONE; channelRBtn.translationY = 0f }.start()
+                channelLBtn.animate().alpha(0f).scaleX(0.3f).scaleY(0.3f).translationY(offsetY)
+                    .setDuration(200).setStartDelay(80).setInterpolator(android.view.animation.AccelerateInterpolator())
+                    .withEndAction { channelLBtn.visibility = View.GONE; channelLBtn.translationY = 0f }.start()
+                altRouteBtn.setBackgroundColor(0x00000000)
+                altRouteBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                altRouteBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+            }
+        }
+
+        // L and R open the Channel Side Options editor (future per-channel EQ
+        // lives there; for now it hosts balance and per-channel preamp).
+        val openChannelSide: (View) -> Unit = {
+            startActivity(Intent(this, ChannelSideEqActivity::class.java))
+            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+        }
+        channelLBtn.setOnClickListener(openChannelSide)
+        channelRBtn.setOnClickListener(openChannelSide)
+
+        // Settings gear: navigate to the Settings page.
+        settingsGearBtn.setOnClickListener {
+            pageEq.visibility = View.GONE
+            pageSettings.visibility = View.VISIBLE
+            updateBottomBarHighlight(isEqPage = false)
         }
         // Save preset button — toggle between controls and preset picker
         val eqControlsContainerLocal = eqControlsContainer as android.view.View
@@ -1414,6 +1524,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // Channel Side EQ card (settings page) — opens the per-channel editor
+        findViewById<View>(R.id.channelSideEqCard).setOnClickListener {
+            startActivity(Intent(this, ChannelSideEqActivity::class.java))
+            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+        }
+
         // Experimental lock button — toggles locked/unlocked state
         val experimentalLockButton = findViewById<ImageButton>(R.id.experimentalLockButton)
         val experimentalCard = findViewById<View>(R.id.experimentalCard)
@@ -1636,7 +1752,18 @@ class MainActivity : AppCompatActivity() {
                 reposition(undoBtn, resetLeftPx, row2Top)
                 reposition(redoBtn, editLeftPx, row2Top)
                 reposition(bandPtsBtn, gapPx)
-                reposition(saveBtn, gapPx + specWidth + gapPx)
+                val saveLeftPx = gapPx + specWidth + gapPx
+                reposition(saveBtn, saveLeftPx)
+
+                // Alt-route button: after save on row 1
+                val altRouteLeftPx = saveLeftPx + specWidth + gapPx
+                reposition(findViewById(R.id.altRouteButton), altRouteLeftPx)
+                // Settings gear: right of alt-route on row 1 (popout member)
+                val settingsLeftPx = altRouteLeftPx + specWidth + gapPx
+                reposition(findViewById(R.id.settingsGearButton), settingsLeftPx)
+                // L / R popout on row 2 — L below alt-route, R below settings
+                reposition(findViewById(R.id.channelLButton), altRouteLeftPx, row2Top)
+                reposition(findViewById(R.id.channelRButton), settingsLeftPx, row2Top)
             }
         }
 

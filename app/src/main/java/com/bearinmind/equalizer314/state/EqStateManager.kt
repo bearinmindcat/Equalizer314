@@ -49,6 +49,12 @@ class EqStateManager(
     var limiterThresholdDb: Float = -0.5f
     var limiterPostGainDb: Float = 0f
 
+    // Channel Side Options
+    var channelBalancePercent: Int = 0
+    var leftChannelGainDb: Float = 0f
+    var rightChannelGainDb: Float = 0f
+    var channelSwapEnabled: Boolean = false
+
     // Service binding
     var eqService: EqService? = null
     var serviceBound = false
@@ -100,6 +106,12 @@ class EqStateManager(
         preampGainDb = eqPrefs.getPreampGain()
         autoGainEnabled = eqPrefs.getAutoGainEnabled()
 
+        // Restore channel side options
+        channelBalancePercent = eqPrefs.getChannelBalancePercent()
+        leftChannelGainDb = eqPrefs.getLeftChannelGainDb()
+        rightChannelGainDb = eqPrefs.getRightChannelGainDb()
+        channelSwapEnabled = eqPrefs.getChannelSwapEnabled()
+
         // Restore limiter
         limiterEnabled = eqPrefs.getLimiterEnabled()
         limiterAttackMs = eqPrefs.getLimiterAttack()
@@ -128,7 +140,23 @@ class EqStateManager(
         val dm = eqService?.dynamicsManager ?: return
         dm.preampGainDb = preampGainDb
         dm.autoGainEnabled = autoGainEnabled
+        dm.channelBalancePercent = channelBalancePercent
+        dm.leftChannelGainDb = leftChannelGainDb
+        dm.rightChannelGainDb = rightChannelGainDb
+        dm.channelSwapEnabled = channelSwapEnabled
         eqService?.updateEq(parametricEq)
+    }
+
+    /** Apply only channel-side-options changes (balance / preamp / swap) without
+     *  recomputing the EQ curve. Cheap enough to call on every slider step. */
+    fun pushChannelSettingsUpdate() {
+        if (!isProcessing) return
+        val dm = eqService?.dynamicsManager ?: return
+        dm.channelBalancePercent = channelBalancePercent
+        dm.leftChannelGainDb = leftChannelGainDb
+        dm.rightChannelGainDb = rightChannelGainDb
+        dm.channelSwapEnabled = channelSwapEnabled
+        dm.updateChannelSettings()
     }
 
     fun pushLimiterUpdate() {
@@ -194,6 +222,10 @@ class EqStateManager(
         val dm = service.dynamicsManager
         dm.preampGainDb = preampGainDb
         dm.autoGainEnabled = autoGainEnabled
+        dm.channelBalancePercent = channelBalancePercent
+        dm.leftChannelGainDb = leftChannelGainDb
+        dm.rightChannelGainDb = rightChannelGainDb
+        dm.channelSwapEnabled = channelSwapEnabled
         dm.limiterEnabled = limiterEnabled
         dm.limiterAttackMs = limiterAttackMs
         dm.limiterReleaseMs = limiterReleaseMs
