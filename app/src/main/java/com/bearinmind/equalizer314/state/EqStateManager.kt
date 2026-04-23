@@ -330,10 +330,14 @@ class EqStateManager(
     fun getFilterIconRes(filterType: BiquadFilter.FilterType): Int {
         return when (filterType) {
             BiquadFilter.FilterType.BELL -> R.drawable.ic_filter_bell
-            BiquadFilter.FilterType.LOW_SHELF -> R.drawable.ic_filter_low_shelf
-            BiquadFilter.FilterType.HIGH_SHELF -> R.drawable.ic_filter_high_shelf
-            BiquadFilter.FilterType.LOW_PASS -> R.drawable.ic_filter_low_pass
-            BiquadFilter.FilterType.HIGH_PASS -> R.drawable.ic_filter_high_pass
+            BiquadFilter.FilterType.LOW_SHELF,
+            BiquadFilter.FilterType.LOW_SHELF_1 -> R.drawable.ic_filter_low_shelf
+            BiquadFilter.FilterType.HIGH_SHELF,
+            BiquadFilter.FilterType.HIGH_SHELF_1 -> R.drawable.ic_filter_high_shelf
+            BiquadFilter.FilterType.LOW_PASS,
+            BiquadFilter.FilterType.LOW_PASS_1 -> R.drawable.ic_filter_low_pass
+            BiquadFilter.FilterType.HIGH_PASS,
+            BiquadFilter.FilterType.HIGH_PASS_1 -> R.drawable.ic_filter_high_pass
         }
     }
 

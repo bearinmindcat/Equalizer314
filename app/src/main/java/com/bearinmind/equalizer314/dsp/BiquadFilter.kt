@@ -14,11 +14,15 @@ class BiquadFilter(
     var q: Double = 0.707  // Q factor (0.1 to 10.0, default Butterworth)
 ) {
     enum class FilterType {
-        BELL,           // Boost/cut at specific frequency
-        LOW_SHELF,      // Boost/cut low frequencies
-        HIGH_SHELF,     // Boost/cut high frequencies
-        LOW_PASS,       // Cut high frequencies
-        HIGH_PASS       // Cut low frequencies
+        BELL,           // APO "PK" — peaking bell at Fc with Q
+        LOW_SHELF,      // APO "LSC" / "LS 12 dB" — 2nd-order low shelf, 12 dB/oct
+        HIGH_SHELF,     // APO "HSC" / "HS 12 dB" — 2nd-order high shelf, 12 dB/oct
+        LOW_PASS,       // APO "LPQ" — 2nd-order low pass, 12 dB/oct, with Q
+        HIGH_PASS,      // APO "HPQ" — 2nd-order high pass, 12 dB/oct, with Q
+        LOW_SHELF_1,    // APO "LS" / "LS 6 dB" — 1st-order low shelf, 6 dB/oct
+        HIGH_SHELF_1,   // APO "HS" / "HS 6 dB" — 1st-order high shelf, 6 dB/oct
+        LOW_PASS_1,     // APO "LP" — 1st-order low pass, 6 dB/oct (no Q)
+        HIGH_PASS_1,    // APO "HP" — 1st-order high pass, 6 dB/oct (no Q)
     }
 
     // Biquad coefficients
@@ -130,6 +134,76 @@ class BiquadFilter(
                 a0 = 1.0 + alpha
                 a1 = -2.0 * cosOmega
                 a2 = 1.0 - alpha
+            }
+
+            // 1st-order filters — bilinear-transform biquad form (Zölzer DAFX).
+            // 1st-order in biquad form has b2 = a2 = 0; only b0 / b1 / a1 are
+            // set. `processStereoInPlace` and `getFrequencyResponse` handle
+            // the zeroed 2nd-order terms without any extra code.
+            FilterType.LOW_PASS_1 -> {
+                val K = tan(PI * frequency / sampleRate).coerceAtLeast(1e-9)
+                val denom = 1.0 + K
+                b0 = K / denom
+                b1 = K / denom
+                b2 = 0.0
+                a0 = 1.0
+                a1 = (K - 1.0) / denom
+                a2 = 0.0
+            }
+
+            FilterType.HIGH_PASS_1 -> {
+                val K = tan(PI * frequency / sampleRate).coerceAtLeast(1e-9)
+                val denom = 1.0 + K
+                b0 = 1.0 / denom
+                b1 = -1.0 / denom
+                b2 = 0.0
+                a0 = 1.0
+                a1 = (K - 1.0) / denom
+                a2 = 0.0
+            }
+
+            FilterType.LOW_SHELF_1 -> {
+                val K = tan(PI * frequency / sampleRate).coerceAtLeast(1e-9)
+                val V = 10.0.pow(abs(gain) / 20.0)
+                if (gain >= 0.0) {
+                    val denom = 1.0 + K
+                    b0 = (1.0 + V * K) / denom
+                    b1 = (V * K - 1.0) / denom
+                    b2 = 0.0
+                    a0 = 1.0
+                    a1 = (K - 1.0) / denom
+                    a2 = 0.0
+                } else {
+                    val denom = 1.0 + V * K
+                    b0 = (1.0 + K) / denom
+                    b1 = (K - 1.0) / denom
+                    b2 = 0.0
+                    a0 = 1.0
+                    a1 = (V * K - 1.0) / denom
+                    a2 = 0.0
+                }
+            }
+
+            FilterType.HIGH_SHELF_1 -> {
+                val K = tan(PI * frequency / sampleRate).coerceAtLeast(1e-9)
+                val V = 10.0.pow(abs(gain) / 20.0)
+                if (gain >= 0.0) {
+                    val denom = 1.0 + K
+                    b0 = (V + K) / denom
+                    b1 = (K - V) / denom
+                    b2 = 0.0
+                    a0 = 1.0
+                    a1 = (K - 1.0) / denom
+                    a2 = 0.0
+                } else {
+                    val denom = V + K
+                    b0 = V * (1.0 + K) / denom
+                    b1 = V * (K - 1.0) / denom
+                    b2 = 0.0
+                    a0 = 1.0
+                    a1 = (K - V) / denom
+                    a2 = 0.0
+                }
             }
         }
 
