@@ -161,6 +161,29 @@
                             app:strokeWidth="1dp"
                             android:contentDescription="Toggle channel routing" />
 
+                        <!-- Tiny L/R badge overlaid on the altRouteButton's
+                             top-right corner, visible only when Channel Side
+                             EQ is on. Bordered rectangle background frames
+                             the letter. Position + elevation set
+                             programmatically. -->
+                        <TextView
+                            android:id="@+id/altRouteChannelBadge"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="top|start"
+                            android:textSize="6sp"
+                            android:textStyle="bold"
+                            android:textColor="#FFE3E3E3"
+                            android:includeFontPadding="false"
+                            android:background="@drawable/bg_channel_badge"
+                            android:paddingStart="2dp"
+                            android:paddingEnd="2dp"
+                            android:paddingTop="1dp"
+                            android:paddingBottom="1dp"
+                            android:elevation="8dp"
+                            android:visibility="gone"
+                            android:importantForAccessibility="no" />
+
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/settingsGearButton"
                             style="?attr/materialButtonOutlinedStyle"

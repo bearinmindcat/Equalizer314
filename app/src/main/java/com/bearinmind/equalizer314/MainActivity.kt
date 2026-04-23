@@ -561,6 +561,33 @@ class MainActivity : AppCompatActivity() {
             altRouteBtn.minimumWidth = 0; altRouteBtn.minimumHeight = 0
             altRouteBtn.setPadding(0, 0, 0, 0)
 
+            // Mini L/R badge overlaid on the top-right of altRouteButton.
+            // "Correct" offsets tuned by hand against the Samsung Z Flip7 UI —
+            // if the user asks to revisit L/R badge positioning, these are the
+            // baseline values:
+            //   leftMargin = altRouteLeft + specWidth - badgeWidth - 6dp
+            //   topMargin  = btnTop + 5dp
+            //   translationZ = 16dp   (+ bringToFront) so it layers above the
+            //                         MaterialButton's icon drawing layer.
+            // Increasing the leftMargin dp-offset moves the badge LEFT (away
+            // from the button's right edge); decreasing it moves the badge
+            // RIGHT. Same direction convention used in prior tweaks.
+            val badge = findViewById<android.widget.TextView>(R.id.altRouteChannelBadge)
+            badge.measure(
+                android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED),
+                android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED)
+            )
+            val badgeLp = badge.layoutParams as android.widget.FrameLayout.LayoutParams
+            badgeLp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+            badgeLp.leftMargin = altRouteLeft + specWidth - badge.measuredWidth - (6 * vizDensity).toInt()
+            badgeLp.topMargin = btnTop + (5 * vizDensity).toInt()
+            badge.layoutParams = badgeLp
+            // Force the badge above the MaterialButton's drawing layer. Both
+            // translationZ and bringToFront are needed — Material components
+            // can out-Z siblings at the same elevation.
+            badge.translationZ = 16f * vizDensity
+            badge.bringToFront()
+
             // Settings gear button: directly to the right of the alt-route button
             val settingsLeft = altRouteLeft + specWidth + gapPx
             val settingsLp = settingsGearBtn.layoutParams as android.widget.FrameLayout.LayoutParams
@@ -2574,13 +2601,32 @@ class MainActivity : AppCompatActivity() {
                 btn.setTextColor(0xFFBBBBBB.toInt())
             }
         }
+        val badge = findViewById<android.widget.TextView>(R.id.altRouteChannelBadge)
+        val altRouteBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.altRouteButton)
         if (!enabled) {
             paint(lBtn, false); paint(rBtn, false)
+            badge?.visibility = View.GONE
+            altRouteBtn?.setIconResource(R.drawable.ic_alt_route_right)
             return
         }
         val active = stateManager.activeChannel
         paint(lBtn, active == EqStateManager.ActiveChannel.LEFT)
         paint(rBtn, active == EqStateManager.ActiveChannel.RIGHT)
+        badge?.let {
+            when (active) {
+                EqStateManager.ActiveChannel.LEFT -> { it.text = "L"; it.visibility = View.VISIBLE }
+                EqStateManager.ActiveChannel.RIGHT -> { it.text = "R"; it.visibility = View.VISIBLE }
+                else -> it.visibility = View.GONE
+            }
+        }
+        // Swap the split-arrow for the single-branch variant when in L/R mode
+        // so the icon reflects the single channel being routed.
+        altRouteBtn?.setIconResource(
+            if (active == EqStateManager.ActiveChannel.BOTH)
+                R.drawable.ic_alt_route_right
+            else
+                R.drawable.ic_alt_route_right_solid
+        )
     }
 
     /** Visual state for the L / R popout buttons.
