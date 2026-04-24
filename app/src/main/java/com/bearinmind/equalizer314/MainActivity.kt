@@ -993,15 +993,53 @@ class MainActivity : AppCompatActivity() {
                         try {
                             val obj = org.json.JSONObject(presetJson)
                             val cseOn = obj.optBoolean("channelSideEqEnabled", false)
+                            val curveColor = 0xFFAAAAAA.toInt()
                             if (cseOn && obj.has("leftBands") && obj.has("rightBands")) {
-                                val halfH = h / 2f
-                                drawCurve(canvas, buildEq(obj.getJSONArray("leftBands")),
-                                    0f, 0f, w, halfH, 0xFF6ABFFF.toInt())        // L: blue
-                                drawCurve(canvas, buildEq(obj.getJSONArray("rightBands")),
-                                    0f, halfH, w, halfH, 0xFFFF9E6A.toInt())     // R: orange
+                                // Stacked: L on top, R on bottom, separated
+                                // by a divider line and a 2px gap. Both curves
+                                // use the same grey as the single-curve case;
+                                // a small "L" / "R" label sits at the left of
+                                // each row so the two graphs read as "two
+                                // labeled graphs" rather than one mashed curve.
+                                val labelCol = 9f * density
+                                val gap = 2f * density
+                                val halfH = (h - gap) / 2f
+                                // Match the "N filters" text next to each
+                                // preset row: 10 sp, medium grey (#888), not
+                                // bold.
+                                val labelPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                                    color = 0xFF888888.toInt()
+                                    textSize = 10f * resources.displayMetrics.scaledDensity
+                                    textAlign = android.graphics.Paint.Align.CENTER
+                                }
+                                val fm = labelPaint.fontMetrics
+                                val textCenterOffset = (-fm.ascent - fm.descent) / 2f
+                                // L label + L curve
+                                canvas.drawText("L", labelCol / 2f, halfH / 2f + textCenterOffset, labelPaint)
+                                drawCurve(
+                                    canvas,
+                                    buildEq(obj.getJSONArray("leftBands")),
+                                    labelCol, 0f, w - labelCol, halfH,
+                                    curveColor,
+                                )
+                                // Divider between the two graphs
+                                val dividerPaint = android.graphics.Paint().apply {
+                                    color = 0xFF444444.toInt()
+                                    strokeWidth = 1f
+                                }
+                                canvas.drawLine(0f, halfH + gap / 2f, w, halfH + gap / 2f, dividerPaint)
+                                // R label + R curve
+                                val rTop = halfH + gap
+                                canvas.drawText("R", labelCol / 2f, rTop + halfH / 2f + textCenterOffset, labelPaint)
+                                drawCurve(
+                                    canvas,
+                                    buildEq(obj.getJSONArray("rightBands")),
+                                    labelCol, rTop, w - labelCol, halfH,
+                                    curveColor,
+                                )
                             } else {
                                 drawCurve(canvas, buildEq(obj.getJSONArray("bands")),
-                                    0f, 0f, w, h, 0xFFAAAAAA.toInt())
+                                    0f, 0f, w, h, curveColor)
                             }
                         } catch (_: Exception) {}
                     }
