@@ -116,11 +116,9 @@ class MainActivity : AppCompatActivity() {
                 android.widget.Toast.makeText(this, "Could not parse APO preset", android.widget.Toast.LENGTH_LONG).show()
                 return@registerForActivityResult
             }
-            // Apply profile
-            val eq = com.bearinmind.equalizer314.dsp.ParametricEqualizer()
-            eq.clearBands()
-            for (filter in profile.filters) {
-                val filterType = when (filter.filterType) {
+            // APO token → our FilterType
+            fun mapFilterType(token: String): com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType =
+                when (token) {
                     "PK"  -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.BELL
                     "LSC" -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.LOW_SHELF
                     "HSC" -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.HIGH_SHELF
@@ -135,17 +133,67 @@ class MainActivity : AppCompatActivity() {
                     "AP"  -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.ALL_PASS
                     else  -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.BELL
                 }
-                eq.addBand(filter.frequency, filter.gain, filterType, filter.q.toDouble())
-            }
-            eq.isEnabled = true
-            val slots = (0 until eq.getBandCount()).toList()
-            eqPrefs.saveState(eq, slots)
+            fun toBandSpecs(filters: List<com.bearinmind.equalizer314.autoeq.AutoEqFilter>):
+                    List<com.bearinmind.equalizer314.state.EqStateManager.BandSpec> =
+                filters.map {
+                    com.bearinmind.equalizer314.state.EqStateManager.BandSpec(
+                        frequency = it.frequency,
+                        gain = it.gain,
+                        q = it.q.toDouble(),
+                        filterType = mapFilterType(it.filterType),
+                    )
+                }
+
             eqPrefs.savePreampGain(profile.preampDb)
             eqPrefs.savePresetName("APO Import")
             eqPrefs.saveAutoEqName("")
             eqPrefs.saveAutoEqSource("")
-            reloadEqFromPrefs()
-            android.widget.Toast.makeText(this, "Applied ${profile.filters.size} filters", android.widget.Toast.LENGTH_SHORT).show()
+
+            if (profile.perChannel) {
+                // Fork into L/R editors and flip Channel Side EQ on.
+                val leftSpecs = toBandSpecs(profile.leftFilters)
+                val rightSpecs = toBandSpecs(profile.rightFilters)
+                // bothBands falls back to the combined flat list in case the
+                // user later turns CSE off.
+                val bothSpecs = toBandSpecs(profile.filters)
+                stateManager.applyPresetEqs(
+                    cseEnabled = true,
+                    bothBands = bothSpecs,
+                    leftBands = leftSpecs,
+                    rightBands = rightSpecs,
+                )
+                // Persist L's bands as the saved state so restoreState on
+                // next cold start lands on a sensible EQ.
+                eqPrefs.saveState(stateManager.parametricEq, (0 until stateManager.parametricEq.getBandCount()).toList())
+                if (stateManager.isProcessing) {
+                    val (lEq, rEq) = stateManager.getChannelEqs()
+                    stateManager.eqService?.let { svc ->
+                        svc.dynamicsManager.stop()
+                        svc.dynamicsManager.start(stateManager.parametricEq)
+                        svc.updateEqPerChannel(lEq, rEq)
+                    }
+                }
+                reloadEqFromPrefs()
+                refreshChannelPopoutDim()
+                android.widget.Toast.makeText(
+                    this,
+                    "Applied L:${profile.leftFilters.size} R:${profile.rightFilters.size} filters",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            } else {
+                // Flat single-channel preset — CSE off, single EQ.
+                val specs = toBandSpecs(profile.filters)
+                stateManager.applyPresetEqs(
+                    cseEnabled = false,
+                    bothBands = specs,
+                    leftBands = specs,
+                    rightBands = specs,
+                )
+                eqPrefs.saveState(stateManager.parametricEq, (0 until stateManager.parametricEq.getBandCount()).toList())
+                reloadEqFromPrefs()
+                refreshChannelPopoutDim()
+                android.widget.Toast.makeText(this, "Applied ${profile.filters.size} filters", android.widget.Toast.LENGTH_SHORT).show()
+            }
         } catch (e: Exception) {
             android.widget.Toast.makeText(this, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
         }
@@ -826,21 +874,35 @@ class MainActivity : AppCompatActivity() {
                 saveDialogBtn.setOnClickListener {
                     val name = input.text.toString().trim().ifEmpty { defaultName }
                     if (name.isNotEmpty()) {
-                        val eq = stateManager.parametricEq
-                        stateManager.eqPrefs.saveState(eq)
+                        stateManager.eqPrefs.saveState(stateManager.parametricEq)
+                        fun serialize(eq: com.bearinmind.equalizer314.dsp.ParametricEqualizer): org.json.JSONArray {
+                            val arr = org.json.JSONArray()
+                            for (b in eq.getAllBands()) {
+                                arr.put(org.json.JSONObject().apply {
+                                    put("frequency", b.frequency)
+                                    put("gain", b.gain)
+                                    put("q", b.q)
+                                    put("filterType", b.filterType.name)
+                                    put("enabled", b.enabled)
+                                })
+                            }
+                            return arr
+                        }
                         val json = org.json.JSONObject()
                         json.put("preamp", stateManager.preampGainDb)
-                        val bands = org.json.JSONArray()
-                        for (b in eq.getAllBands()) {
-                            val bj = org.json.JSONObject()
-                            bj.put("frequency", b.frequency)
-                            bj.put("gain", b.gain)
-                            bj.put("q", b.q)
-                            bj.put("filterType", b.filterType.name)
-                            bj.put("enabled", b.enabled)
-                            bands.put(bj)
+                        val cseOn = eqPrefs.getChannelSideEqEnabled()
+                        json.put("channelSideEqEnabled", cseOn)
+                        if (cseOn) {
+                            val (lEq, rEq) = stateManager.getChannelEqs()
+                            json.put("leftBands", serialize(lEq))
+                            json.put("rightBands", serialize(rEq))
+                            // Back-compat: also write the currently-active EQ
+                            // under the legacy "bands" key so older builds
+                            // still see something.
+                            json.put("bands", serialize(stateManager.parametricEq))
+                        } else {
+                            json.put("bands", serialize(stateManager.parametricEq))
                         }
-                        json.put("bands", bands)
                         prefs.edit()
                             .putString("preset_$name", json.toString())
                             .putStringSet("preset_names", (presetNames.toMutableSet() + name))
@@ -880,41 +942,67 @@ class MainActivity : AppCompatActivity() {
                     setPadding(hPad, vPad, hPad, vPad)
                 }
 
-                // Mini EQ curve thumbnail
+                // Mini EQ curve thumbnail. For Channel-Side-EQ presets we
+                // stack two mini graphs (L on top, R on bottom) so the
+                // per-channel split is legible at a glance. Single-curve
+                // presets render one grey curve as before.
                 val thumbW = (48 * density).toInt()
                 val thumbH = (24 * density).toInt()
                 val thumbnail = object : android.view.View(this) {
+                    private fun buildEq(arr: org.json.JSONArray): com.bearinmind.equalizer314.dsp.ParametricEqualizer {
+                        val eq = com.bearinmind.equalizer314.dsp.ParametricEqualizer()
+                        eq.clearBands()
+                        for (i in 0 until arr.length()) {
+                            val b = arr.getJSONObject(i)
+                            val ft = try { com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.valueOf(b.getString("filterType")) }
+                                     catch (_: Exception) { com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.BELL }
+                            eq.addBand(b.getDouble("frequency").toFloat(), b.getDouble("gain").toFloat(), ft, b.getDouble("q"))
+                        }
+                        return eq
+                    }
+
+                    private fun drawCurve(
+                        canvas: android.graphics.Canvas,
+                        eq: com.bearinmind.equalizer314.dsp.ParametricEqualizer,
+                        x0: Float, y0: Float, w: Float, h: Float,
+                        color: Int,
+                    ) {
+                        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                            this.color = color; strokeWidth = 0.5f * density; style = android.graphics.Paint.Style.STROKE
+                        }
+                        val gridPaint = android.graphics.Paint().apply { this.color = 0xFF6A6A6A.toInt(); strokeWidth = 1f }
+                        canvas.drawLine(x0, y0 + h / 2f, x0 + w, y0 + h / 2f, gridPaint)
+                        canvas.drawLine(x0, y0, x0, y0 + h, gridPaint)
+                        val path = android.graphics.Path()
+                        val maxDb = 15f; val steps = 50
+                        for (s in 0..steps) {
+                            val logF = 1.301f + (s.toFloat() / steps) * (4.342f - 1.301f)
+                            val freq = 10f.pow(logF)
+                            val db = eq.getFrequencyResponse(freq)
+                            val x = x0 + w * s / steps
+                            val y = (y0 + h / 2f - (db / maxDb) * (h / 2f)).coerceIn(y0, y0 + h)
+                            if (s == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                        }
+                        canvas.drawPath(path, paint)
+                    }
+
                     override fun onDraw(canvas: android.graphics.Canvas) {
                         super.onDraw(canvas)
                         val w = width.toFloat(); val h = height.toFloat()
                         if (w <= 0 || h <= 0 || presetJson == null) return
                         try {
                             val obj = org.json.JSONObject(presetJson)
-                            val bands = obj.getJSONArray("bands")
-                            val eq = com.bearinmind.equalizer314.dsp.ParametricEqualizer()
-                            eq.clearBands()
-                            for (i in 0 until bands.length()) {
-                                val b = bands.getJSONObject(i)
-                                val ft = try { com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.valueOf(b.getString("filterType")) }
-                                         catch (_: Exception) { com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.BELL }
-                                eq.addBand(b.getDouble("frequency").toFloat(), b.getDouble("gain").toFloat(), ft, b.getDouble("q"))
+                            val cseOn = obj.optBoolean("channelSideEqEnabled", false)
+                            if (cseOn && obj.has("leftBands") && obj.has("rightBands")) {
+                                val halfH = h / 2f
+                                drawCurve(canvas, buildEq(obj.getJSONArray("leftBands")),
+                                    0f, 0f, w, halfH, 0xFF6ABFFF.toInt())        // L: blue
+                                drawCurve(canvas, buildEq(obj.getJSONArray("rightBands")),
+                                    0f, halfH, w, halfH, 0xFFFF9E6A.toInt())     // R: orange
+                            } else {
+                                drawCurve(canvas, buildEq(obj.getJSONArray("bands")),
+                                    0f, 0f, w, h, 0xFFAAAAAA.toInt())
                             }
-                            val path = android.graphics.Path()
-                            val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                                color = 0xFFAAAAAA.toInt(); strokeWidth = 0.5f * density; style = android.graphics.Paint.Style.STROKE
-                            }
-                            val gridPaint = android.graphics.Paint().apply { color = 0xFF6A6A6A.toInt(); strokeWidth = 1f }
-                            canvas.drawLine(0f, h / 2f, w, h / 2f, gridPaint)
-                            canvas.drawLine(0f, 0f, 0f, h, gridPaint)
-                            val maxDb = 15f; val steps = 50
-                            for (s in 0..steps) {
-                                val logF = 1.301f + (s.toFloat() / steps) * (4.342f - 1.301f)
-                                val freq = 10f.pow(logF)
-                                val db = eq.getFrequencyResponse(freq)
-                                val x = w * s / steps; val y = (h / 2f - (db / maxDb) * (h / 2f)).coerceIn(0f, h)
-                                if (s == 0) path.moveTo(x, y) else path.lineTo(x, y)
-                            }
-                            canvas.drawPath(path, paint)
                         } catch (_: Exception) {}
                     }
                 }.apply {
@@ -1065,36 +1153,55 @@ class MainActivity : AppCompatActivity() {
                     val sb = StringBuilder()
                     val preamp = obj.optDouble("preamp", 0.0)
                     sb.append("Preamp: ${String.format("%.1f", preamp)} dB\n")
-                    val bands = obj.getJSONArray("bands")
-                    for (i in 0 until bands.length()) {
-                        val b = bands.getJSONObject(i)
-                        val ft = b.getString("filterType")
-                        // Map our FilterType to APO's token + which optional
-                        // fields the line needs. BP / NO / AP / LP / HP have
-                        // no Gain; 1st-order LS / HS / LP / HP have no Q.
-                        val apoType: String
-                        val hasGain: Boolean
-                        val hasQ: Boolean
-                        when (ft) {
-                            "BELL"         -> { apoType = "PK";  hasGain = true;  hasQ = true  }
-                            "LOW_SHELF"    -> { apoType = "LSC"; hasGain = true;  hasQ = true  }
-                            "HIGH_SHELF"   -> { apoType = "HSC"; hasGain = true;  hasQ = true  }
-                            "LOW_PASS"     -> { apoType = "LPQ"; hasGain = false; hasQ = true  }
-                            "HIGH_PASS"    -> { apoType = "HPQ"; hasGain = false; hasQ = true  }
-                            "LOW_SHELF_1"  -> { apoType = "LS";  hasGain = true;  hasQ = false }
-                            "HIGH_SHELF_1" -> { apoType = "HS";  hasGain = true;  hasQ = false }
-                            "LOW_PASS_1"   -> { apoType = "LP";  hasGain = false; hasQ = false }
-                            "HIGH_PASS_1"  -> { apoType = "HP";  hasGain = false; hasQ = false }
-                            "BAND_PASS"    -> { apoType = "BP";  hasGain = false; hasQ = true  }
-                            "NOTCH"        -> { apoType = "NO";  hasGain = false; hasQ = true  }
-                            "ALL_PASS"     -> { apoType = "AP";  hasGain = false; hasQ = true  }
-                            else           -> { apoType = "PK";  hasGain = true;  hasQ = true  }
+
+                    // Emit one APO filter line per band.
+                    fun appendFilters(bands: org.json.JSONArray, indexOffset: Int = 0) {
+                        for (i in 0 until bands.length()) {
+                            val b = bands.getJSONObject(i)
+                            val ft = b.getString("filterType")
+                            // Map our FilterType to APO's token + which optional
+                            // fields the line needs. BP / NO / AP / LP / HP have
+                            // no Gain; 1st-order LS / HS / LP / HP have no Q.
+                            val apoType: String
+                            val hasGain: Boolean
+                            val hasQ: Boolean
+                            when (ft) {
+                                "BELL"         -> { apoType = "PK";  hasGain = true;  hasQ = true  }
+                                "LOW_SHELF"    -> { apoType = "LSC"; hasGain = true;  hasQ = true  }
+                                "HIGH_SHELF"   -> { apoType = "HSC"; hasGain = true;  hasQ = true  }
+                                "LOW_PASS"     -> { apoType = "LPQ"; hasGain = false; hasQ = true  }
+                                "HIGH_PASS"    -> { apoType = "HPQ"; hasGain = false; hasQ = true  }
+                                "LOW_SHELF_1"  -> { apoType = "LS";  hasGain = true;  hasQ = false }
+                                "HIGH_SHELF_1" -> { apoType = "HS";  hasGain = true;  hasQ = false }
+                                "LOW_PASS_1"   -> { apoType = "LP";  hasGain = false; hasQ = false }
+                                "HIGH_PASS_1"  -> { apoType = "HP";  hasGain = false; hasQ = false }
+                                "BAND_PASS"    -> { apoType = "BP";  hasGain = false; hasQ = true  }
+                                "NOTCH"        -> { apoType = "NO";  hasGain = false; hasQ = true  }
+                                "ALL_PASS"     -> { apoType = "AP";  hasGain = false; hasQ = true  }
+                                else           -> { apoType = "PK";  hasGain = true;  hasQ = true  }
+                            }
+                            val fc = b.getDouble("frequency").toInt()
+                            val line = StringBuilder("Filter ${i + 1 + indexOffset}: ON $apoType Fc $fc Hz")
+                            if (hasGain) line.append(" Gain ${String.format("%.1f", b.getDouble("gain"))} dB")
+                            if (hasQ) line.append(" Q ${String.format("%.2f", b.getDouble("q"))}")
+                            sb.append(line).append('\n')
                         }
-                        val fc = b.getDouble("frequency").toInt()
-                        val line = StringBuilder("Filter ${i + 1}: ON $apoType Fc $fc Hz")
-                        if (hasGain) line.append(" Gain ${String.format("%.1f", b.getDouble("gain"))} dB")
-                        if (hasQ) line.append(" Q ${String.format("%.2f", b.getDouble("q"))}")
-                        sb.append(line).append('\n')
+                    }
+
+                    val cseOn = obj.optBoolean("channelSideEqEnabled", false)
+                    if (cseOn && obj.has("leftBands") && obj.has("rightBands")) {
+                        val leftArr = obj.getJSONArray("leftBands")
+                        val rightArr = obj.getJSONArray("rightBands")
+                        sb.append("Channel: L\n")
+                        appendFilters(leftArr)
+                        sb.append("Channel: R\n")
+                        // Continue filter numbering from where L ended so the
+                        // file has globally unique Filter N indices.
+                        appendFilters(rightArr, indexOffset = leftArr.length())
+                    } else {
+                        // Single / shared EQ preset — no Channel: directive
+                        // means APO applies all filters to every channel.
+                        appendFilters(obj.getJSONArray("bands"))
                     }
                     pendingExportText = sb.toString()
                     val intent = android.content.Intent(android.content.Intent.ACTION_CREATE_DOCUMENT).apply {
@@ -1115,18 +1222,32 @@ class MainActivity : AppCompatActivity() {
                 presetRow.setOnClickListener {
                     val json = prefs.getString("preset_$name", null) ?: return@setOnClickListener
                     val obj = org.json.JSONObject(json)
-                    val eq = stateManager.parametricEq ?: return@setOnClickListener
-                    eq.clearBands()
-                    val bandsArr = obj.getJSONArray("bands")
-                    for (i in 0 until bandsArr.length()) {
-                        val bj = bandsArr.getJSONObject(i)
-                        val ft = try { com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.valueOf(bj.getString("filterType")) }
-                                 catch (_: Exception) { com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.BELL }
-                        eq.addBand(bj.getDouble("frequency").toFloat(), bj.getDouble("gain").toFloat(), ft, bj.getDouble("q"))
-                        if (bj.has("enabled")) eq.setBandEnabled(i, bj.getBoolean("enabled"))
+
+                    fun parseBands(arr: org.json.JSONArray): List<com.bearinmind.equalizer314.state.EqStateManager.BandSpec> {
+                        val out = mutableListOf<com.bearinmind.equalizer314.state.EqStateManager.BandSpec>()
+                        for (i in 0 until arr.length()) {
+                            val bj = arr.getJSONObject(i)
+                            val ft = try { com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.valueOf(bj.getString("filterType")) }
+                                     catch (_: Exception) { com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.BELL }
+                            out += com.bearinmind.equalizer314.state.EqStateManager.BandSpec(
+                                frequency = bj.getDouble("frequency").toFloat(),
+                                gain = bj.getDouble("gain").toFloat(),
+                                q = bj.getDouble("q"),
+                                filterType = ft,
+                                enabled = if (bj.has("enabled")) bj.getBoolean("enabled") else true,
+                            )
+                        }
+                        return out
                     }
-                    eqGraphView.setParametricEqualizer(eq)
-                    stateManager.eqPrefs.saveState(eq)
+
+                    val cseOn = obj.optBoolean("channelSideEqEnabled", false)
+                    val bothBands = if (obj.has("bands")) parseBands(obj.getJSONArray("bands")) else emptyList()
+                    val leftBands = if (obj.has("leftBands")) parseBands(obj.getJSONArray("leftBands")) else bothBands
+                    val rightBands = if (obj.has("rightBands")) parseBands(obj.getJSONArray("rightBands")) else bothBands
+                    stateManager.applyPresetEqs(cseOn, bothBands, leftBands, rightBands)
+
+                    eqGraphView.setParametricEqualizer(stateManager.parametricEq)
+                    stateManager.eqPrefs.saveState(stateManager.parametricEq)
                     stateManager.initBandSlots()
                     bandToggleManager.setupToggles()
                     if (obj.has("preamp")) {
@@ -1134,8 +1255,14 @@ class MainActivity : AppCompatActivity() {
                         stateManager.eqPrefs.savePreampGain(stateManager.preampGainDb)
                     }
                     if (stateManager.isProcessing) {
-                        stateManager.eqService?.let { svc -> svc.dynamicsManager.stop(); svc.dynamicsManager.start(eq) }
+                        val (lEq, rEq) = stateManager.getChannelEqs()
+                        stateManager.eqService?.let { svc ->
+                            svc.dynamicsManager.stop()
+                            svc.dynamicsManager.start(stateManager.parametricEq)
+                            svc.updateEqPerChannel(lEq, rEq)
+                        }
                     }
+                    refreshChannelPopoutDim()
                     // Close picker with animation
                     presetPickerOpen = false
                     eqControlsContainerLocal.visibility = android.view.View.VISIBLE

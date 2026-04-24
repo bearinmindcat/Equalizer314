@@ -218,6 +218,51 @@ class EqStateManager(
         if (eqPrefs.getChannelSideEqEnabled()) Pair(leftEq, rightEq)
         else Pair(bothEq, bothEq)
 
+    /** Minimal structure for a preset's band list, shared between the
+     *  preset-save / preset-load / APO-round-trip paths. */
+    data class BandSpec(
+        val frequency: Float,
+        val gain: Float,
+        val q: Double,
+        val filterType: BiquadFilter.FilterType,
+        val enabled: Boolean = true,
+    )
+
+    /** Replace the in-memory EQ state from a parsed preset.
+     *  - `cseEnabled == false`: load [bothBands] into `bothEq`, point
+     *    `parametricEq` at it, activeChannel = BOTH.
+     *  - `cseEnabled == true`: load [leftBands] into `leftEq` and
+     *    [rightBands] into `rightEq`, activeChannel = LEFT, point
+     *    `parametricEq` at `leftEq`. The CSE pref is also persisted so a
+     *    subsequent `getChannelSideEqEnabled()` matches what was loaded. */
+    fun applyPresetEqs(
+        cseEnabled: Boolean,
+        bothBands: List<BandSpec>,
+        leftBands: List<BandSpec>,
+        rightBands: List<BandSpec>,
+    ) {
+        eqPrefs.saveChannelSideEqEnabled(cseEnabled)
+        if (cseEnabled) {
+            loadBandsInto(leftEq, leftBands)
+            loadBandsInto(rightEq, rightBands)
+            activeChannel = ActiveChannel.LEFT
+            parametricEq = leftEq
+        } else {
+            loadBandsInto(bothEq, bothBands)
+            activeChannel = ActiveChannel.BOTH
+            parametricEq = bothEq
+        }
+    }
+
+    private fun loadBandsInto(eq: ParametricEqualizer, bands: List<BandSpec>) {
+        eq.clearBands()
+        for ((i, b) in bands.withIndex()) {
+            eq.addBand(b.frequency, b.gain, b.filterType, b.q)
+            eq.setBandEnabled(i, b.enabled)
+        }
+        eq.isEnabled = true
+    }
+
     /** Apply only channel-side-options changes (balance / per-channel preamp)
      *  without recomputing the EQ curve. Cheap enough to call on every slider step. */
     fun pushChannelSettingsUpdate() {
@@ -330,18 +375,17 @@ class EqStateManager(
     fun getFilterIconRes(filterType: BiquadFilter.FilterType): Int {
         return when (filterType) {
             BiquadFilter.FilterType.BELL -> R.drawable.ic_filter_bell
-            BiquadFilter.FilterType.LOW_SHELF,
-            BiquadFilter.FilterType.LOW_SHELF_1 -> R.drawable.ic_filter_low_shelf
-            BiquadFilter.FilterType.HIGH_SHELF,
-            BiquadFilter.FilterType.HIGH_SHELF_1 -> R.drawable.ic_filter_high_shelf
-            BiquadFilter.FilterType.LOW_PASS,
-            BiquadFilter.FilterType.LOW_PASS_1 -> R.drawable.ic_filter_low_pass
-            BiquadFilter.FilterType.HIGH_PASS,
-            BiquadFilter.FilterType.HIGH_PASS_1 -> R.drawable.ic_filter_high_pass
-            // BP / NO / AP don't have dedicated icons yet — fall back to bell.
-            BiquadFilter.FilterType.BAND_PASS,
-            BiquadFilter.FilterType.NOTCH,
-            BiquadFilter.FilterType.ALL_PASS -> R.drawable.ic_filter_bell
+            BiquadFilter.FilterType.LOW_SHELF -> R.drawable.ic_filter_low_shelf
+            BiquadFilter.FilterType.LOW_SHELF_1 -> R.drawable.ic_filter_low_shelf_6
+            BiquadFilter.FilterType.HIGH_SHELF -> R.drawable.ic_filter_high_shelf
+            BiquadFilter.FilterType.HIGH_SHELF_1 -> R.drawable.ic_filter_high_shelf_6
+            BiquadFilter.FilterType.LOW_PASS -> R.drawable.ic_filter_low_pass
+            BiquadFilter.FilterType.LOW_PASS_1 -> R.drawable.ic_filter_low_pass_6
+            BiquadFilter.FilterType.HIGH_PASS -> R.drawable.ic_filter_high_pass
+            BiquadFilter.FilterType.HIGH_PASS_1 -> R.drawable.ic_filter_high_pass_6
+            BiquadFilter.FilterType.BAND_PASS -> R.drawable.ic_filter_band_pass
+            BiquadFilter.FilterType.NOTCH -> R.drawable.ic_filter_notch
+            BiquadFilter.FilterType.ALL_PASS -> R.drawable.ic_filter_bypass
         }
     }
 

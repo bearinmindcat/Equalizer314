@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 1st-order (6 dB/oct) high shelf. Half-height transition vs 12 dB variant. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="28dp"
+    android:height="28dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:strokeColor="@android:color/white"
+        android:strokeWidth="2"
+        android:fillColor="#00000000"
+        android:pathData="M 1,15 L 7,15 C 10,15 14,9 17,9 L 23,9"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"/>
+</vector>
