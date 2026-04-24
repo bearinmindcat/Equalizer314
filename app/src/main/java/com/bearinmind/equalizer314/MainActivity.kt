@@ -121,9 +121,19 @@ class MainActivity : AppCompatActivity() {
             eq.clearBands()
             for (filter in profile.filters) {
                 val filterType = when (filter.filterType) {
+                    "PK"  -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.BELL
                     "LSC" -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.LOW_SHELF
                     "HSC" -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.HIGH_SHELF
-                    else -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.BELL
+                    "LS"  -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.LOW_SHELF_1
+                    "HS"  -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.HIGH_SHELF_1
+                    "LPQ" -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.LOW_PASS
+                    "HPQ" -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.HIGH_PASS
+                    "LP"  -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.LOW_PASS_1
+                    "HP"  -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.HIGH_PASS_1
+                    "BP"  -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.BAND_PASS
+                    "NO"  -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.NOTCH
+                    "AP"  -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.ALL_PASS
+                    else  -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.BELL
                 }
                 eq.addBand(filter.frequency, filter.gain, filterType, filter.q.toDouble())
             }
@@ -1059,8 +1069,32 @@ class MainActivity : AppCompatActivity() {
                     for (i in 0 until bands.length()) {
                         val b = bands.getJSONObject(i)
                         val ft = b.getString("filterType")
-                        val apoType = when (ft) { "LOW_SHELF" -> "LSC"; "HIGH_SHELF" -> "HSC"; else -> "PK" }
-                        sb.append("Filter ${i + 1}: ON $apoType Fc ${b.getDouble("frequency").toInt()} Hz Gain ${String.format("%.1f", b.getDouble("gain"))} dB Q ${String.format("%.2f", b.getDouble("q"))}\n")
+                        // Map our FilterType to APO's token + which optional
+                        // fields the line needs. BP / NO / AP / LP / HP have
+                        // no Gain; 1st-order LS / HS / LP / HP have no Q.
+                        val apoType: String
+                        val hasGain: Boolean
+                        val hasQ: Boolean
+                        when (ft) {
+                            "BELL"         -> { apoType = "PK";  hasGain = true;  hasQ = true  }
+                            "LOW_SHELF"    -> { apoType = "LSC"; hasGain = true;  hasQ = true  }
+                            "HIGH_SHELF"   -> { apoType = "HSC"; hasGain = true;  hasQ = true  }
+                            "LOW_PASS"     -> { apoType = "LPQ"; hasGain = false; hasQ = true  }
+                            "HIGH_PASS"    -> { apoType = "HPQ"; hasGain = false; hasQ = true  }
+                            "LOW_SHELF_1"  -> { apoType = "LS";  hasGain = true;  hasQ = false }
+                            "HIGH_SHELF_1" -> { apoType = "HS";  hasGain = true;  hasQ = false }
+                            "LOW_PASS_1"   -> { apoType = "LP";  hasGain = false; hasQ = false }
+                            "HIGH_PASS_1"  -> { apoType = "HP";  hasGain = false; hasQ = false }
+                            "BAND_PASS"    -> { apoType = "BP";  hasGain = false; hasQ = true  }
+                            "NOTCH"        -> { apoType = "NO";  hasGain = false; hasQ = true  }
+                            "ALL_PASS"     -> { apoType = "AP";  hasGain = false; hasQ = true  }
+                            else           -> { apoType = "PK";  hasGain = true;  hasQ = true  }
+                        }
+                        val fc = b.getDouble("frequency").toInt()
+                        val line = StringBuilder("Filter ${i + 1}: ON $apoType Fc $fc Hz")
+                        if (hasGain) line.append(" Gain ${String.format("%.1f", b.getDouble("gain"))} dB")
+                        if (hasQ) line.append(" Q ${String.format("%.2f", b.getDouble("q"))}")
+                        sb.append(line).append('\n')
                     }
                     pendingExportText = sb.toString()
                     val intent = android.content.Intent(android.content.Intent.ACTION_CREATE_DOCUMENT).apply {
@@ -2233,11 +2267,14 @@ class MainActivity : AppCompatActivity() {
         val bandIndex = eqGraphView.getActiveBandIndex() ?: return
         val band = stateManager.parametricEq.getBand(bandIndex) ?: return
         val ftNow = band.filterType
-        val isPass = ftNow == BiquadFilter.FilterType.LOW_PASS ||
-                     ftNow == BiquadFilter.FilterType.HIGH_PASS ||
-                     ftNow == BiquadFilter.FilterType.LOW_PASS_1 ||
-                     ftNow == BiquadFilter.FilterType.HIGH_PASS_1
-        val effectiveDb = if (isPass) 0f else db
+        val gainless = ftNow == BiquadFilter.FilterType.LOW_PASS ||
+                       ftNow == BiquadFilter.FilterType.HIGH_PASS ||
+                       ftNow == BiquadFilter.FilterType.LOW_PASS_1 ||
+                       ftNow == BiquadFilter.FilterType.HIGH_PASS_1 ||
+                       ftNow == BiquadFilter.FilterType.BAND_PASS ||
+                       ftNow == BiquadFilter.FilterType.NOTCH ||
+                       ftNow == BiquadFilter.FilterType.ALL_PASS
+        val effectiveDb = if (gainless) 0f else db
         stateManager.parametricEq.updateBand(bandIndex, band.frequency, effectiveDb, band.filterType, band.q)
         eqGraphView.updateBandLevels()
         stateManager.pushEqUpdate()
@@ -2289,17 +2326,20 @@ class MainActivity : AppCompatActivity() {
             bandDbSlider.value = band.gain.coerceIn(-12f, 12f)
             qSlider.value = band.q.toFloat().coerceIn(0.1f, 12f)
 
-            // dB slider / input are disabled for every gainless filter type
-            // (low / high pass 2nd- and 1st-order all ignore Gain).
+            // dB slider / input are disabled for every gainless filter type:
+            // low / high pass at either order, plus BP / NO / AP.
             val ft = band.filterType
-            val isPass = ft == BiquadFilter.FilterType.LOW_PASS ||
-                         ft == BiquadFilter.FilterType.HIGH_PASS ||
-                         ft == BiquadFilter.FilterType.LOW_PASS_1 ||
-                         ft == BiquadFilter.FilterType.HIGH_PASS_1
-            bandDbSlider.isEnabled = !isPass
-            bandDbInput.isEnabled = !isPass
-            bandDbSlider.alpha = if (isPass) 0.3f else 1f
-            bandDbInput.alpha = if (isPass) 0.3f else 1f
+            val gainless = ft == BiquadFilter.FilterType.LOW_PASS ||
+                           ft == BiquadFilter.FilterType.HIGH_PASS ||
+                           ft == BiquadFilter.FilterType.LOW_PASS_1 ||
+                           ft == BiquadFilter.FilterType.HIGH_PASS_1 ||
+                           ft == BiquadFilter.FilterType.BAND_PASS ||
+                           ft == BiquadFilter.FilterType.NOTCH ||
+                           ft == BiquadFilter.FilterType.ALL_PASS
+            bandDbSlider.isEnabled = !gainless
+            bandDbInput.isEnabled = !gainless
+            bandDbSlider.alpha = if (gainless) 0.3f else 1f
+            bandDbInput.alpha = if (gainless) 0.3f else 1f
 
             // Q slider / input don't apply to 1st-order variants — they
             // collapse to a 6 dB/oct slope with no Q term.
@@ -2499,90 +2539,67 @@ class MainActivity : AppCompatActivity() {
     // ---- Filter Type Buttons ----
 
     private fun setupFilterTypeButtons() {
-        val filterTypes = listOf(
-            "PEAK" to BiquadFilter.FilterType.BELL,
+        filterTypeGroup.removeAllViews()
+
+        // PEAK — first tap applies BELL (the default "Peak" / PK). When the
+        // band is already in the peak family (PK / BP / NO / AP), a second
+        // tap opens a dropdown to pick between those four sub-types.
+        val peakBtn = buildFilterTypeButton(
+            label = "PEAK",
+            defaultSubtitle = "",
+            weightedWidth = true,
+        )
+        peakBtn.setOnClickListener { anchor ->
+            val bandIndex = eqGraphView.getActiveBandIndex() ?: return@setOnClickListener
+            val band = stateManager.parametricEq.getBand(bandIndex)
+            val inFamily = band != null && band.enabled && isPeakFamily(band.filterType)
+            if (inFamily) {
+                showPeakPopup(anchor, bandIndex)
+            } else {
+                applyFilterTypeToBand(bandIndex, BiquadFilter.FilterType.BELL)
+            }
+        }
+        filterTypeGroup.addView(peakBtn)
+
+        // Shelves & passes — each has a 2-tap 12 dB / 6 dB slope popup.
+        val shelfPassTypes = listOf(
             "LSHELF" to BiquadFilter.FilterType.LOW_SHELF,
             "HSHELF" to BiquadFilter.FilterType.HIGH_SHELF,
             "LPF" to BiquadFilter.FilterType.LOW_PASS,
-            "HPF" to BiquadFilter.FilterType.HIGH_PASS
+            "HPF" to BiquadFilter.FilterType.HIGH_PASS,
         )
-
-        filterTypeGroup.removeAllViews()
-        for ((label, type) in filterTypes) {
-            // Shelves / passes have a 1st-order variant; PEAK does not.
-            // Shelf / pass buttons open a 2-item popup ("12 dB/oct" / "6 dB/oct")
-            // on tap so the slope is picked inline on the button itself.
-            val hasSlopeVariant = oneOrderVariant(type) != null
-
-            val btn = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-                icon = null
-                // Initial label: primary on line 1, default "12 dB" subtitle
-                // on line 2 (blank for PEAK). updateFilterTypeButtons
-                // replaces the subtitle with the band's current slope when
-                // this button's family matches the active band.
-                text = buildFilterButtonText(label, if (hasSlopeVariant) "12 dB" else "")
-                textSize = 11f
-                cornerRadius = resources.getDimensionPixelSize(R.dimen.filter_btn_radius)
-                isSingleLine = false
-                maxLines = 2
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                    setMargins(3, 0, 3, 0)
-                }
-                val vertPad = (4 * resources.displayMetrics.density).toInt()
-                setPadding(0, vertPad, 0, vertPad)
-                insetTop = 0
-                insetBottom = 0
-
-                setOnClickListener { anchor ->
-                    val bandIndex = eqGraphView.getActiveBandIndex() ?: return@setOnClickListener
-                    if (!hasSlopeVariant) {
-                        applyFilterTypeToBand(bandIndex, type)
-                        return@setOnClickListener
-                    }
-                    // Two-tap gesture: first tap selects this filter family
-                    // (with the default 12 dB/oct slope); second tap on the
-                    // already-selected filter opens the slope dropdown.
-                    val band = stateManager.parametricEq.getBand(bandIndex)
-                    val alreadyActive = band != null &&
-                        band.enabled &&
-                        filterTypeFamily(band.filterType) == type
-                    if (alreadyActive) {
-                        showSlopePopup(anchor, bandIndex, type)
-                    } else {
-                        applyFilterTypeToBand(bandIndex, type)
-                    }
+        for ((label, type) in shelfPassTypes) {
+            val btn = buildFilterTypeButton(
+                label = label,
+                defaultSubtitle = "12 dB",
+                weightedWidth = true,
+            )
+            btn.setOnClickListener { anchor ->
+                val bandIndex = eqGraphView.getActiveBandIndex() ?: return@setOnClickListener
+                val band = stateManager.parametricEq.getBand(bandIndex)
+                val alreadyActive = band != null &&
+                    band.enabled &&
+                    filterTypeFamily(band.filterType) == type
+                if (alreadyActive) {
+                    showSlopePopup(anchor, bandIndex, type)
+                } else {
+                    applyFilterTypeToBand(bandIndex, type)
                 }
             }
             filterTypeGroup.addView(btn)
         }
 
-        // BYPASS button
-        val bypassBtn = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-            icon = null
-            text = buildFilterButtonText("BYPASS", "")
-            textSize = 11f
-            cornerRadius = resources.getDimensionPixelSize(R.dimen.filter_btn_radius)
-            isSingleLine = false
-            maxLines = 2
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                setMargins(3, 0, 3, 0)
-            }
-            val vertPad = (4 * resources.displayMetrics.density).toInt()
-            setPadding(0, vertPad, 0, vertPad)
-            insetTop = 0
-            insetBottom = 0
-
-            setOnClickListener {
-                val bandIndex = eqGraphView.getActiveBandIndex() ?: return@setOnClickListener
-                stateManager.parametricEq.setBandEnabled(bandIndex, false)
-                updateFilterTypeButtons(bandIndex)
-                bandToggleManager.updateIcons()
-                bandToggleManager.updateSelection(bandIndex)
-                eqGraphView.updateBandLevels()
-                eqGraphView.invalidate()
-                stateManager.updateDpBandVisualization(eqGraphView)
-                stateManager.pushEqUpdate()
-            }
+        // BYPASS — tied 1:1 with the APO `AP` (all-pass) token. Tapping
+        // BYPASS sets the band to ALL_PASS (flat magnitude on-device, exports
+        // as `Filter N: ON AP ...`). No dropdown, single tap applies.
+        val bypassBtn = buildFilterTypeButton(
+            label = "BYPASS",
+            defaultSubtitle = "",
+            weightedWidth = true,
+        )
+        bypassBtn.setOnClickListener {
+            val bandIndex = eqGraphView.getActiveBandIndex() ?: return@setOnClickListener
+            applyFilterTypeToBand(bandIndex, BiquadFilter.FilterType.ALL_PASS)
         }
         filterTypeGroup.addView(bypassBtn)
     }
@@ -2598,49 +2615,93 @@ class MainActivity : AppCompatActivity() {
                            currentType == BiquadFilter.FilterType.HIGH_PASS_1
         val bandEnabled = band.enabled
 
-        val labelsAndTypes = listOf(
-            "PEAK" to BiquadFilter.FilterType.BELL,
-            "LSHELF" to BiquadFilter.FilterType.LOW_SHELF,
-            "HSHELF" to BiquadFilter.FilterType.HIGH_SHELF,
-            "LPF" to BiquadFilter.FilterType.LOW_PASS,
-            "HPF" to BiquadFilter.FilterType.HIGH_PASS,
+        // Single row: order matches how buttons are added in
+        // setupFilterTypeButtons: PEAK, LSHELF, HSHELF, LPF, HPF, BYPASS.
+        data class Entry(val btn: MaterialButton, val label: String, val role: Role)
+        val roles = listOf(Role.PEAK, Role.SHELF_PASS, Role.SHELF_PASS, Role.SHELF_PASS, Role.SHELF_PASS, Role.BYPASS)
+        val labels = listOf("PEAK", "LSHELF", "HSHELF", "LPF", "HPF", "BYPASS")
+        val typesForHighlight = listOf(
+            BiquadFilter.FilterType.BELL,
+            BiquadFilter.FilterType.LOW_SHELF,
+            BiquadFilter.FilterType.HIGH_SHELF,
+            BiquadFilter.FilterType.LOW_PASS,
+            BiquadFilter.FilterType.HIGH_PASS,
+            BiquadFilter.FilterType.BELL,        // unused for BYPASS
         )
-
+        val entries = mutableListOf<Entry>()
         for (i in 0 until filterTypeGroup.childCount) {
             val btn = filterTypeGroup.getChildAt(i) as? MaterialButton ?: continue
-            val isBypass = i == labelsAndTypes.size
-            val entry = labelsAndTypes.getOrNull(i)
-            val buttonType = entry?.second
-            val sameFamily = buttonType != null && filterTypeFamily(buttonType) == currentFamily
-            val isActive = if (isBypass) !bandEnabled else (bandEnabled && sameFamily)
+            if (i >= roles.size) break
+            entries += Entry(btn, labels[i], roles[i])
+        }
 
-            if (isActive) {
-                btn.setBackgroundColor(getColor(R.color.filter_active))
-                btn.setTextColor(getColor(R.color.filter_active_text))
-            } else {
-                btn.setBackgroundColor(0x00000000)
-                btn.setTextColor(getColor(R.color.filter_inactive_text))
-                btn.strokeColor = android.content.res.ColorStateList.valueOf(getColor(R.color.filter_outline))
+        val inPeakFam = isPeakFamily(currentType)
+        val isAllPass = currentType == BiquadFilter.FilterType.ALL_PASS
+
+        for ((i, e) in entries.withIndex()) {
+            val buttonType = typesForHighlight[i]
+            val sameFamily = filterTypeFamily(buttonType) == currentFamily
+            val isActive = when (e.role) {
+                Role.PEAK -> bandEnabled && inPeakFam
+                Role.SHELF_PASS -> bandEnabled && sameFamily
+                // BYPASS is tied to AP: highlighted when band is ALL_PASS
+                // OR when band is disabled (legacy presets).
+                Role.BYPASS -> !bandEnabled || isAllPass
             }
 
-            // Keep the button's subtitle in sync. Shelves / passes show the
-            // active band's slope when this button matches, else the default
-            // "12 dB/oct" label (what a tap-to-select would apply). PEAK and
-            // BYPASS keep a blank subtitle line so heights stay aligned.
-            if (entry != null) {
-                val (label, type) = entry
-                val hasVariant = oneOrderVariant(type) != null
-                val subtitle = when {
-                    !hasVariant -> ""
+            if (isActive) {
+                e.btn.setBackgroundColor(getColor(R.color.filter_active))
+                e.btn.setTextColor(getColor(R.color.filter_active_text))
+            } else {
+                e.btn.setBackgroundColor(0x00000000)
+                e.btn.setTextColor(getColor(R.color.filter_inactive_text))
+                e.btn.strokeColor = android.content.res.ColorStateList.valueOf(getColor(R.color.filter_outline))
+            }
+
+            // Subtitle policy:
+            //   • PEAK: blank. Sub-type is shown by replacing the primary
+            //     label with "BAND PASS" / "NOTCH" instead of a subtitle.
+            //   • Shelves / passes: current slope if active, else default "12 dB".
+            //   • BYPASS: blank. Bypass↔AP mapping is implicit in APO export.
+            val primary: String = when (e.role) {
+                Role.PEAK -> peakButtonLabel(currentType, bandEnabled)
+                else -> e.label
+            }
+            val subtitle: String = when (e.role) {
+                Role.PEAK -> ""
+                Role.SHELF_PASS -> when {
                     sameFamily -> if (currentIs1st) "6 dB" else "12 dB"
                     else -> "12 dB"
                 }
-                btn.text = buildFilterButtonText(label, subtitle)
-            } else {
-                btn.text = buildFilterButtonText("BYPASS", "")
+                Role.BYPASS -> ""
             }
+            e.btn.text = buildFilterButtonText(primary, subtitle)
         }
     }
+
+    /** Primary label text for the PEAK button. When the band is on BP or NO
+     *  the label swaps to "B. PASS" / "NOTCH" so the sub-type reads like its
+     *  own filter category rather than a variant badge. "B. PASS" keeps the
+     *  label short so the text stays at full size without shrinking. */
+    private fun peakButtonLabel(current: BiquadFilter.FilterType, bandEnabled: Boolean): String = when {
+        !bandEnabled -> "PEAK"
+        current == BiquadFilter.FilterType.BAND_PASS -> "B. PASS"
+        current == BiquadFilter.FilterType.NOTCH -> "NOTCH"
+        else -> "PEAK"
+    }
+
+    private enum class Role { PEAK, SHELF_PASS, BYPASS }
+
+    /** True when the filter type belongs to the PEAK button's dropdown:
+     *  the plain bell plus the two gainless Fc+Q specials (BP / NO).
+     *  ALL_PASS lives on the BYPASS button, not here. */
+    private fun isPeakFamily(t: BiquadFilter.FilterType): Boolean = when (t) {
+        BiquadFilter.FilterType.BELL,
+        BiquadFilter.FilterType.BAND_PASS,
+        BiquadFilter.FilterType.NOTCH -> true
+        else -> false
+    }
+
 
     /** Collapse 1st- and 2nd-order variants into a single "family" key so the
      *  filter-type button highlighting treats LShelf / LShelf (6 dB) as the
@@ -2663,15 +2724,28 @@ class MainActivity : AppCompatActivity() {
         else -> null
     }
 
-    /** Build a two-line filter-button label: primary name on top, slope
-     *  subtitle below. No spans — both lines share the same text size and
-     *  inherit the button's textColor, so active / inactive colouring flows
-     *  to the subtitle exactly like the primary label. An empty subtitle
-     *  leaves a blank line so buttons with no slope (PEAK, BYPASS) match
-     *  the height of the shelf / pass buttons. */
+    /** Build the filter-button label. Two-line form when a subtitle is
+     *  supplied ("LSHELF\n12 dB"); single-line form when there's no subtitle
+     *  (PEAK, B. PASS, NOTCH, BYPASS) so the visible text sits at the true
+     *  vertical center of the button. Row / button minHeight keeps every
+     *  cell the same size despite the line-count difference. The primary
+     *  label is proportionally shrunk when it's long enough to overflow
+     *  (8+ chars → 70% of the button's textSize). */
     private fun buildFilterButtonText(primary: String, subtitle: String): CharSequence {
-        val sub = subtitle.ifEmpty { " " }
-        return "$primary\n$sub"
+        val full = if (subtitle.isEmpty()) primary else "$primary\n$subtitle"
+        val span = android.text.SpannableString(full)
+        val shrink = when {
+            primary.length >= 8 -> 0.7f
+            else -> 1f
+        }
+        if (shrink < 1f) {
+            span.setSpan(
+                android.text.style.RelativeSizeSpan(shrink),
+                0, primary.length,
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+            )
+        }
+        return span
     }
 
     /** Apply a chosen filter type to a band and refresh every dependent UI
@@ -2687,6 +2761,134 @@ class MainActivity : AppCompatActivity() {
         stateManager.updateDpBandVisualization(eqGraphView)
         stateManager.pushEqUpdate()
         stateManager.eqPrefs.saveState(stateManager.parametricEq, stateManager.bandSlots)
+    }
+
+    /** Shared factory for the filter-type buttons in both rows. `weightedWidth`
+     *  gives the button `layout_weight=1` with width=0 (for the shelves row);
+     *  passing a `fixedWidthPx` gives it that exact width (for the centered
+     *  PEAK / BYPASS row). */
+    private fun buildFilterTypeButton(
+        label: String,
+        defaultSubtitle: String,
+        weightedWidth: Boolean,
+        fixedWidthPx: Int = 0,
+    ): MaterialButton {
+        val density = resources.displayMetrics.density
+        return MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            icon = null
+            text = buildFilterButtonText(label, defaultSubtitle)
+            textSize = 11f
+            cornerRadius = resources.getDimensionPixelSize(R.dimen.filter_btn_radius)
+            isSingleLine = false
+            maxLines = 2
+            // Explicit centering on both axes so primary + subtitle stay
+            // centered regardless of label length or subtitle state.
+            gravity = android.view.Gravity.CENTER
+            textAlignment = View.TEXT_ALIGNMENT_CENTER
+            // Drop the font's ascender/descender padding so the two-line
+            // text block measures exactly 2x its line height and centers
+            // cleanly inside the button's vertical space.
+            includeFontPadding = false
+            layoutParams = if (weightedWidth) {
+                LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            } else {
+                LinearLayout.LayoutParams(fixedWidthPx, LinearLayout.LayoutParams.WRAP_CONTENT)
+            }.apply { setMargins(3, 0, 3, 0) }
+            val vertPad = (6 * density).toInt()
+            setPadding(0, vertPad, 0, vertPad)
+            insetTop = 0
+            insetBottom = 0
+            // Common minimum height so every button in the row is the
+            // same size, regardless of primary-label shrink factor.
+            minimumHeight = (42 * density).toInt()
+            minHeight = (42 * density).toInt()
+        }
+    }
+
+    /** Drop the PEAK button's PK / BP / NO / AP dropdown directly below the
+     *  button, styled to match `showSlopePopup`. Tapping any item applies
+     *  that filter type to the active band. */
+    private fun showPeakPopup(anchor: View, bandIndex: Int) {
+        val band = stateManager.parametricEq.getBand(bandIndex) ?: return
+        val current = band.filterType
+        val density = resources.displayMetrics.density
+        val cornerRadius = resources.getDimensionPixelSize(R.dimen.filter_btn_radius).toFloat()
+        val outlineColor = getColor(R.color.filter_outline)
+        val activeBg = getColor(R.color.filter_active)
+        val activeTx = getColor(R.color.filter_active_text)
+        val inactiveTx = getColor(R.color.filter_inactive_text)
+        val bgColor = com.google.android.material.color.MaterialColors.getColor(
+            this,
+            com.google.android.material.R.attr.colorSurfaceContainerHigh,
+            0xFF2A2930.toInt()
+        )
+
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(bgColor)
+                setStroke((1 * density).toInt(), outlineColor)
+                setCornerRadius(cornerRadius)
+            }
+            clipToOutline = true
+        }
+
+        val popup = android.widget.PopupWindow(
+            container,
+            anchor.width,
+            android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+            true,
+        ).apply {
+            elevation = 8f * density
+            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(0x00000000))
+        }
+
+        fun addItem(label: String, type: BiquadFilter.FilterType) {
+            val isActive = current == type
+            val item = android.widget.TextView(this).apply {
+                text = label
+                textSize = 11f
+                gravity = android.view.Gravity.CENTER
+                isSingleLine = true
+                setTextColor(if (isActive) activeTx else inactiveTx)
+                if (isActive) setBackgroundColor(activeBg)
+                val vertPad = (8 * density).toInt()
+                setPadding(0, vertPad, 0, vertPad)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                )
+                setOnClickListener {
+                    applyFilterTypeToBand(bandIndex, type)
+                    popup.dismiss()
+                }
+                isClickable = true
+                isFocusable = true
+            }
+            container.addView(item)
+        }
+
+        fun addDivider() {
+            val divider = View(this).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    (1 * density).toInt(),
+                )
+                setBackgroundColor(outlineColor)
+            }
+            container.addView(divider)
+        }
+
+        // PK (plain bell) lives at the top so the user can return from
+        // BP / NO to a classic peaking bell without round-tripping through a
+        // different filter family. AP is owned by BYPASS, not listed here.
+        addItem("PK", BiquadFilter.FilterType.BELL)
+        addDivider()
+        addItem("BP", BiquadFilter.FilterType.BAND_PASS)
+        addDivider()
+        addItem("NO", BiquadFilter.FilterType.NOTCH)
+
+        popup.showAsDropDown(anchor, 0, (2 * density).toInt())
     }
 
     /** Drop a small outlined popup directly below the tapped filter button,

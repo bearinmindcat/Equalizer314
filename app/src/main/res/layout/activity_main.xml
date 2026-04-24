@@ -437,12 +437,18 @@
                         android:orientation="vertical"
                         android:padding="16dp">
 
-                        <!-- Filter Type Buttons -->
+                        <!-- Filter Type Buttons — single horizontal row,
+                             equal-weighted across all buttons. Row-level
+                             gravity=center + baselineAligned=false keeps
+                             every button's text centered vertically even if
+                             two buttons have slightly different heights. -->
                         <LinearLayout
                             android:id="@+id/filterTypeGroup"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:orientation="horizontal"
+                            android:gravity="center"
+                            android:baselineAligned="false"
                             android:paddingBottom="8dp" />
 
                         <!-- Band Parameters: linked slider + text input for Hz, dB, Q -->

@@ -23,6 +23,9 @@ class BiquadFilter(
         HIGH_SHELF_1,   // APO "HS" / "HS 6 dB" — 1st-order high shelf, 6 dB/oct
         LOW_PASS_1,     // APO "LP" — 1st-order low pass, 6 dB/oct (no Q)
         HIGH_PASS_1,    // APO "HP" — 1st-order high pass, 6 dB/oct (no Q)
+        BAND_PASS,      // APO "BP" — 2nd-order band-pass (constant skirt, peak gain = Q)
+        NOTCH,          // APO "NO" — 2nd-order notch, deep dip at Fc
+        ALL_PASS,       // APO "AP" — 2nd-order all-pass (flat magnitude, phase only)
     }
 
     // Biquad coefficients
@@ -204,6 +207,38 @@ class BiquadFilter(
                     a1 = (K - V) / denom
                     a2 = 0.0
                 }
+            }
+
+            // 2nd-order band-pass — RBJ cookbook "constant skirt gain,
+            // peak gain = Q" form. Peaks at Fc, rolls off either side.
+            FilterType.BAND_PASS -> {
+                b0 = alpha
+                b1 = 0.0
+                b2 = -alpha
+                a0 = 1.0 + alpha
+                a1 = -2.0 * cosOmega
+                a2 = 1.0 - alpha
+            }
+
+            // 2nd-order notch — RBJ cookbook. Deep null at Fc, flat elsewhere.
+            FilterType.NOTCH -> {
+                b0 = 1.0
+                b1 = -2.0 * cosOmega
+                b2 = 1.0
+                a0 = 1.0 + alpha
+                a1 = -2.0 * cosOmega
+                a2 = 1.0 - alpha
+            }
+
+            // 2nd-order all-pass — RBJ cookbook. Unity magnitude at every
+            // frequency, only the phase changes.
+            FilterType.ALL_PASS -> {
+                b0 = 1.0 - alpha
+                b1 = -2.0 * cosOmega
+                b2 = 1.0 + alpha
+                a0 = 1.0 + alpha
+                a1 = -2.0 * cosOmega
+                a2 = 1.0 - alpha
             }
         }
 

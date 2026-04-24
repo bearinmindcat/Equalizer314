@@ -338,6 +338,10 @@ class EqStateManager(
             BiquadFilter.FilterType.LOW_PASS_1 -> R.drawable.ic_filter_low_pass
             BiquadFilter.FilterType.HIGH_PASS,
             BiquadFilter.FilterType.HIGH_PASS_1 -> R.drawable.ic_filter_high_pass
+            // BP / NO / AP don't have dedicated icons yet — fall back to bell.
+            BiquadFilter.FilterType.BAND_PASS,
+            BiquadFilter.FilterType.NOTCH,
+            BiquadFilter.FilterType.ALL_PASS -> R.drawable.ic_filter_bell
         }
     }
 
