@@ -104,18 +104,30 @@ class TableEqController(
         if (!band.enabled) row.alpha = 0.5f
         row.addView(numBox)
 
-        val filterTypeNames = listOf("PEAK", "LSHELF", "HSHELF", "LPF", "HPF", "BYPASS")
+        // Full 12-token APO vocabulary. Parallel lists: label[i] ↔ type[i].
+        // BYPASS is the last entry and maps to ALL_PASS (matches the
+        // Parametric-mode Bypass↔AP tie).
+        val filterTypeNames = listOf(
+            "PEAK",
+            "LSHELF", "LSHELF 6dB",
+            "HSHELF", "HSHELF 6dB",
+            "LPF", "LPF 6dB",
+            "HPF", "HPF 6dB",
+            "BAND PASS", "NOTCH",
+            "BYPASS",
+        )
         val filterTypeValues = listOf(
             BiquadFilter.FilterType.BELL,
-            BiquadFilter.FilterType.LOW_SHELF,
-            BiquadFilter.FilterType.HIGH_SHELF,
-            BiquadFilter.FilterType.LOW_PASS,
-            BiquadFilter.FilterType.HIGH_PASS
+            BiquadFilter.FilterType.LOW_SHELF, BiquadFilter.FilterType.LOW_SHELF_1,
+            BiquadFilter.FilterType.HIGH_SHELF, BiquadFilter.FilterType.HIGH_SHELF_1,
+            BiquadFilter.FilterType.LOW_PASS, BiquadFilter.FilterType.LOW_PASS_1,
+            BiquadFilter.FilterType.HIGH_PASS, BiquadFilter.FilterType.HIGH_PASS_1,
+            BiquadFilter.FilterType.BAND_PASS, BiquadFilter.FilterType.NOTCH,
+            BiquadFilter.FilterType.ALL_PASS,
         )
-        val currentTypeIdx = if (!band.enabled) {
-            filterTypeNames.size - 1
-        } else {
-            filterTypeValues.indexOf(band.filterType).coerceAtLeast(0)
+        val currentTypeIdx = when {
+            !band.enabled -> filterTypeNames.size - 1  // legacy disabled → BYPASS
+            else -> filterTypeValues.indexOf(band.filterType).coerceAtLeast(0)
         }
         val filterBtn = TextView(activity).apply {
             text = filterTypeNames[currentTypeIdx]
@@ -146,16 +158,17 @@ class TableEqController(
                         setPadding((16 * density).toInt(), (14 * density).toInt(), (16 * density).toInt(), (14 * density).toInt())
                         setOnClickListener {
                             val b = eq.getBand(bandIndex) ?: return@setOnClickListener
-                            if (idx == filterTypeNames.size - 1) {
-                                eq.setBandEnabled(bandIndex, false)
-                                row.alpha = 0.5f
-                                numBox.setTextColor(0xFF666666.toInt())
-                            } else {
-                                if (!b.enabled) eq.setBandEnabled(bandIndex, true)
-                                eq.updateBand(bandIndex, b.frequency, b.gain, filterTypeValues[idx], b.q)
-                                row.alpha = 1f
-                                numBox.setTextColor(0xFFCCCCCC.toInt())
-                            }
+                            // Apply the chosen type directly; BYPASS = ALL_PASS
+                            // per the Parametric-mode model. Re-enable the
+                            // band regardless so no band stays in the legacy
+                            // disabled state.
+                            if (!b.enabled) eq.setBandEnabled(bandIndex, true)
+                            eq.updateBand(bandIndex, b.frequency, b.gain, filterTypeValues[idx], b.q)
+                            row.alpha = 1f
+                            numBox.setTextColor(
+                                if (isColorLight(state.bandColors[slotIndex] ?: 0xFF333333.toInt()))
+                                    0xFF222222.toInt() else 0xFFCCCCCC.toInt()
+                            )
                             filterBtn.text = filterTypeNames[idx]
                             graphView.setParametricEqualizer(eq)
                             onEqChanged()
@@ -178,11 +191,9 @@ class TableEqController(
             val curColor = state.bandColors[slotIndex] ?: 0xFF333333.toInt()
             val light = isColorLight(curColor)
             numBox.setTextColor(if (!nowEnabled) 0xFF666666.toInt() else if (light) 0xFF222222.toInt() else 0xFFCCCCCC.toInt())
-            filterBtn.text = if (nowEnabled) {
-                val idx = filterTypeValues.indexOf(b.filterType).coerceAtLeast(0)
-                filterTypeNames[idx]
-            } else {
-                "BYPASS"
+            filterBtn.text = when {
+                !nowEnabled -> "BYPASS"
+                else -> filterTypeNames[filterTypeValues.indexOf(b.filterType).coerceAtLeast(0)]
             }
             graphView.setParametricEqualizer(eq)
             onEqChanged()
@@ -232,7 +243,13 @@ class TableEqController(
         }
         row.addView(hzInput)
 
-        val isLpHp = band.filterType == BiquadFilter.FilterType.LOW_PASS || band.filterType == BiquadFilter.FilterType.HIGH_PASS
+        val gainless = when (band.filterType) {
+            BiquadFilter.FilterType.LOW_PASS, BiquadFilter.FilterType.HIGH_PASS,
+            BiquadFilter.FilterType.LOW_PASS_1, BiquadFilter.FilterType.HIGH_PASS_1,
+            BiquadFilter.FilterType.BAND_PASS, BiquadFilter.FilterType.NOTCH,
+            BiquadFilter.FilterType.ALL_PASS -> true
+            else -> false
+        }
         val dbInput = makeInput(String.format("%.1f", band.gain), signedNumType, 1f, marginEnd) { text ->
             val db = text.toFloatOrNull()?.coerceIn(-12f, 12f) ?: band.gain
             val b = eq.getBand(bandIndex) ?: return@makeInput
@@ -240,9 +257,9 @@ class TableEqController(
             graphView.updateBandLevels()
             onEqChanged()
         }
-        dbInput.setTextColor(if (isLpHp) 0xFF666666.toInt() else 0xFFCCCCCC.toInt())
-        dbInput.isEnabled = !isLpHp
-        dbInput.alpha = if (isLpHp) 0.4f else 1f
+        dbInput.setTextColor(if (gainless) 0xFF666666.toInt() else 0xFFCCCCCC.toInt())
+        dbInput.isEnabled = !gainless
+        dbInput.alpha = if (gainless) 0.4f else 1f
         row.addView(dbInput)
 
         val qInput = makeInput(String.format("%.2f", band.q), numType, 1f, 0) { text ->

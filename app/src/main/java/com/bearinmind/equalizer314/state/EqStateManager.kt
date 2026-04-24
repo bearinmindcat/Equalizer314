@@ -108,11 +108,16 @@ class EqStateManager(
     fun initEq(graphView: EqGraphView) {
         bothEq.isEnabled = true
         eqPrefs.restoreState(bothEq)
-        // If the user left Channel Side EQ on, seed leftEq / rightEq from the
-        // saved shared state and activate LEFT as the editing target.
+        // If the user left Channel Side EQ on, try to restore `leftEq` and
+        // `rightEq` from their own prefs so a session's L/R divergence
+        // survives a process restart. When those prefs don't exist (first
+        // time CSE has been enabled, or fresh install) fall back to forking
+        // `bothEq` into both. Either way, activate LEFT as the editing target.
         if (eqPrefs.getChannelSideEqEnabled()) {
-            copyEqState(bothEq, leftEq)
-            copyEqState(bothEq, rightEq)
+            val lOk = eqPrefs.restoreLeftBands(leftEq)
+            val rOk = eqPrefs.restoreRightBands(rightEq)
+            if (!lOk) copyEqState(bothEq, leftEq)
+            if (!rOk) copyEqState(bothEq, rightEq)
             activeChannel = ActiveChannel.LEFT
             parametricEq = leftEq
         } else {
@@ -189,13 +194,22 @@ class EqStateManager(
      *  On disable we flip back to the shared "both" EQ. */
     fun setChannelSideEqEnabled(enabled: Boolean) {
         if (enabled) {
-            // Fork current active state into both L and R so they start the
-            // same as what the user sees when they flip the switch.
-            val source = parametricEq
-            if (source !== leftEq) copyEqState(source, leftEq)
-            if (source !== rightEq) copyEqState(source, rightEq)
+            // Prefer prior L/R divergence when the prefs carry it (e.g. user
+            // flipped CSE off + back on without loading a fresh preset). Fall
+            // back to forking from the current active EQ when either pref is
+            // absent, which is the first-time-enabled / fresh-install path.
+            val lOk = eqPrefs.restoreLeftBands(leftEq)
+            val rOk = eqPrefs.restoreRightBands(rightEq)
+            if (!lOk || !rOk) {
+                val source = parametricEq
+                if (!lOk && source !== leftEq) copyEqState(source, leftEq)
+                if (!rOk && source !== rightEq) copyEqState(source, rightEq)
+            }
             activeChannel = ActiveChannel.LEFT
             parametricEq = leftEq
+            // Persist the now-authoritative L/R state so it survives restart.
+            eqPrefs.saveLeftBands(leftEq)
+            eqPrefs.saveRightBands(rightEq)
         } else {
             activeChannel = ActiveChannel.BOTH
             parametricEq = bothEq
@@ -247,10 +261,17 @@ class EqStateManager(
             loadBandsInto(rightEq, rightBands)
             activeChannel = ActiveChannel.LEFT
             parametricEq = leftEq
+            // Persist the freshly-loaded L / R bands under their own prefs
+            // keys so a subsequent process restart keeps the divergence.
+            eqPrefs.saveLeftBands(leftEq)
+            eqPrefs.saveRightBands(rightEq)
         } else {
             loadBandsInto(bothEq, bothBands)
             activeChannel = ActiveChannel.BOTH
             parametricEq = bothEq
+            // Wipe any stale per-channel prefs so re-enabling CSE forks from
+            // the newly-loaded bothEq instead of resurrecting old divergence.
+            eqPrefs.clearLeftRightBands()
         }
     }
 
@@ -396,6 +417,7 @@ class EqStateManager(
 
     fun saveState() {
         eqPrefs.saveState(parametricEq, bandSlots)
+        persistLeftRightIfCse()
         eqPrefs.saveBandColors(bandColors)
         eqPrefs.savePreampGain(preampGainDb)
         eqPrefs.saveAutoGainEnabled(autoGainEnabled)
@@ -405,5 +427,16 @@ class EqStateManager(
         eqPrefs.saveLimiterRatio(limiterRatio)
         eqPrefs.saveLimiterThreshold(limiterThresholdDb)
         eqPrefs.saveLimiterPostGain(limiterPostGainDb)
+    }
+
+    /** Mirror the active-EQ save so L/R divergence survives an app restart.
+     *  Safe to call even when CSE is off — becomes a no-op. Callsites that
+     *  save the active EQ directly via `eqPrefs.saveState(parametricEq, ...)`
+     *  should also invoke this so the non-active channel's state isn't lost. */
+    fun persistLeftRightIfCse() {
+        if (eqPrefs.getChannelSideEqEnabled()) {
+            eqPrefs.saveLeftBands(leftEq)
+            eqPrefs.saveRightBands(rightEq)
+        }
     }
 }

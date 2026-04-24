@@ -140,17 +140,41 @@ class GraphicEqController(
     private fun createSliderCard(bandIndex: Int, targetHeight: Int = 0): com.google.android.material.card.MaterialCardView {
         val eq = state.parametricEq
         val band = eq.getBand(bandIndex)!!
-        val isLpHp = band.filterType == BiquadFilter.FilterType.LOW_PASS || band.filterType == BiquadFilter.FilterType.HIGH_PASS
+        // Gainless = slider will drive Q instead of Gain (same rule used in
+        // Parametric mode to disable the dB slider).
+        val isGainless = when (band.filterType) {
+            BiquadFilter.FilterType.LOW_PASS, BiquadFilter.FilterType.HIGH_PASS,
+            BiquadFilter.FilterType.LOW_PASS_1, BiquadFilter.FilterType.HIGH_PASS_1,
+            BiquadFilter.FilterType.BAND_PASS, BiquadFilter.FilterType.NOTCH,
+            BiquadFilter.FilterType.ALL_PASS -> true
+            else -> false
+        }
+        val isLpHp = isGainless   // legacy local name, kept for minimal churn below
         val density = activity.resources.displayMetrics.density
         val sliderVisualHeight = (130 * density).toInt()
         val btnMargin = 2
 
+        // Full 12-token APO vocabulary for this band. Labels are kept tight
+        // so the bottom-sheet popup reads at a glance and matches the
+        // Parametric-mode labelling. BYPASS is the last entry and maps to
+        // ALL_PASS (Bypass↔AP tie).
         val filterTypes = listOf(
-            R.drawable.ic_filter_bell to BiquadFilter.FilterType.BELL,
-            R.drawable.ic_filter_low_shelf to BiquadFilter.FilterType.LOW_SHELF,
-            R.drawable.ic_filter_high_shelf to BiquadFilter.FilterType.HIGH_SHELF,
-            R.drawable.ic_filter_low_pass to BiquadFilter.FilterType.LOW_PASS,
-            R.drawable.ic_filter_high_pass to BiquadFilter.FilterType.HIGH_PASS
+            BiquadFilter.FilterType.BELL,
+            BiquadFilter.FilterType.LOW_SHELF, BiquadFilter.FilterType.LOW_SHELF_1,
+            BiquadFilter.FilterType.HIGH_SHELF, BiquadFilter.FilterType.HIGH_SHELF_1,
+            BiquadFilter.FilterType.LOW_PASS, BiquadFilter.FilterType.LOW_PASS_1,
+            BiquadFilter.FilterType.HIGH_PASS, BiquadFilter.FilterType.HIGH_PASS_1,
+            BiquadFilter.FilterType.BAND_PASS, BiquadFilter.FilterType.NOTCH,
+            BiquadFilter.FilterType.ALL_PASS,
+        )
+        val filterTypeLabels = listOf(
+            "PEAK",
+            "LSHELF", "LSHELF 6dB",
+            "HSHELF", "HSHELF 6dB",
+            "LPF", "LPF 6dB",
+            "HPF", "HPF 6dB",
+            "BAND PASS", "NOTCH",
+            "BYPASS",
         )
 
         // Match width of toggle buttons — include "+" button when it fits in the row
@@ -311,13 +335,18 @@ class GraphicEqController(
         sliderFrame.addView(slider)
         cardContent.addView(sliderFrame)
 
-        val filterTypeLabels = listOf("PEAK", "LSHELF", "HSHELF", "LPF", "HPF")
-        val currentFilterIdx = filterTypes.indexOfFirst { it.second == band.filterType }.coerceAtLeast(0)
+        // Pick the label index matching the band's current filter type. If
+        // the band is legacy-disabled (enabled=false), show BYPASS.
+        val currentFilterIdx = if (!band.enabled) {
+            filterTypes.size - 1   // BYPASS (ALL_PASS) — the last entry
+        } else {
+            filterTypes.indexOfFirst { it == band.filterType }.coerceAtLeast(0)
+        }
         val filterLabelSize = when { bandCount <= 5 -> 8f; bandCount <= 6 -> 7f; else -> 6f }
 
         val filterBtn = MaterialButton(activity, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
             icon = null
-            text = if (band.enabled) filterTypeLabels[currentFilterIdx] else "BYPASS"
+            text = filterTypeLabels[currentFilterIdx]
             textSize = filterLabelSize
             setTextColor(0xFFAAAAAA.toInt())
             cornerRadius = (8 * density).toInt()
@@ -337,13 +366,12 @@ class GraphicEqController(
 
             setOnClickListener {
                 val filterBtn = this
-                val allLabels = filterTypeLabels + "BYPASS"
                 val bottomSheet = com.google.android.material.bottomsheet.BottomSheetDialog(activity)
                 val sheetLayout = LinearLayout(activity).apply {
                     orientation = LinearLayout.VERTICAL
                     setPadding((16 * density).toInt(), (16 * density).toInt(), (16 * density).toInt(), (24 * density).toInt())
                 }
-                allLabels.forEachIndexed { idx, name ->
+                filterTypeLabels.forEachIndexed { idx, name ->
                     val item = android.widget.TextView(activity).apply {
                         text = name
                         textSize = 16f
@@ -351,14 +379,14 @@ class GraphicEqController(
                         setPadding((16 * density).toInt(), (14 * density).toInt(), (16 * density).toInt(), (14 * density).toInt())
                         setOnClickListener {
                             val b = eq.getBand(bandIndex) ?: return@setOnClickListener
-                            if (idx >= filterTypes.size) {
-                                eq.setBandEnabled(bandIndex, false)
-                                filterBtn.text = "BYPASS"
-                            } else {
-                                if (!b.enabled) eq.setBandEnabled(bandIndex, true)
-                                eq.updateBand(bandIndex, b.frequency, b.gain, filterTypes[idx].second, b.q)
-                                filterBtn.text = filterTypeLabels[idx]
-                            }
+                            // Always apply the chosen type directly. BYPASS
+                            // is the last entry and maps to ALL_PASS — same
+                            // tie used in Parametric mode. Re-enable the
+                            // band so no filter stays in the legacy disabled
+                            // state after a selection.
+                            if (!b.enabled) eq.setBandEnabled(bandIndex, true)
+                            eq.updateBand(bandIndex, b.frequency, b.gain, filterTypes[idx], b.q)
+                            filterBtn.text = filterTypeLabels[idx]
                             graphView.updateBandLevels()
                             onBandCountChanged()
                             bottomSheet.dismiss()

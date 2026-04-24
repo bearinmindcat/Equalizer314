@@ -162,9 +162,11 @@ class MainActivity : AppCompatActivity() {
                     leftBands = leftSpecs,
                     rightBands = rightSpecs,
                 )
-                // Persist L's bands as the saved state so restoreState on
-                // next cold start lands on a sensible EQ.
+                // Persist L's bands as the main "bands" state + both L and R
+                // under their own prefs keys so the divergence survives a
+                // process restart.
                 eqPrefs.saveState(stateManager.parametricEq, (0 until stateManager.parametricEq.getBandCount()).toList())
+                stateManager.persistLeftRightIfCse()
                 if (stateManager.isProcessing) {
                     val (lEq, rEq) = stateManager.getChannelEqs()
                     stateManager.eqService?.let { svc ->
@@ -875,6 +877,7 @@ class MainActivity : AppCompatActivity() {
                     val name = input.text.toString().trim().ifEmpty { defaultName }
                     if (name.isNotEmpty()) {
                         stateManager.eqPrefs.saveState(stateManager.parametricEq)
+                        stateManager.persistLeftRightIfCse()
                         fun serialize(eq: com.bearinmind.equalizer314.dsp.ParametricEqualizer): org.json.JSONArray {
                             val arr = org.json.JSONArray()
                             for (b in eq.getAllBands()) {
@@ -1286,6 +1289,7 @@ class MainActivity : AppCompatActivity() {
 
                     eqGraphView.setParametricEqualizer(stateManager.parametricEq)
                     stateManager.eqPrefs.saveState(stateManager.parametricEq)
+                    stateManager.persistLeftRightIfCse()
                     stateManager.initBandSlots()
                     bandToggleManager.setupToggles()
                     if (obj.has("preamp")) {
@@ -1446,6 +1450,9 @@ class MainActivity : AppCompatActivity() {
                 }
                 eqGraphView.setParametricEqualizer(eq)
                 stateManager.eqPrefs.saveState(eq)
+                // Reset wipes the shared EQ — drop any stored L/R divergence
+                // so re-enabling CSE forks from the fresh defaults.
+                stateManager.eqPrefs.clearLeftRightBands()
                 stateManager.initBandSlots()
                 bandToggleManager.setupToggles()
                 if (stateManager.isProcessing) {
@@ -1538,6 +1545,7 @@ class MainActivity : AppCompatActivity() {
             }
             eqGraphView.setParametricEqualizer(eq)
             stateManager.eqPrefs.saveState(eq)
+            stateManager.persistLeftRightIfCse()
             stateManager.initBandSlots()
             bandToggleManager.setupToggles()
             if (stateManager.isProcessing) {
@@ -2926,6 +2934,7 @@ class MainActivity : AppCompatActivity() {
         stateManager.updateDpBandVisualization(eqGraphView)
         stateManager.pushEqUpdate()
         stateManager.eqPrefs.saveState(stateManager.parametricEq, stateManager.bandSlots)
+        stateManager.persistLeftRightIfCse()
     }
 
     /** Shared factory for the filter-type buttons in both rows. `weightedWidth`
