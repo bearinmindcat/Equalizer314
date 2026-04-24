@@ -1,0 +1,6 @@
+- Channel Side EQ: edit Left and Right channels independently (Balance + per-channel Preamp).
+- Full APO parity: 12 filter types (PK, LSC, HSC, LS, HS, LPQ, HPQ, LP, HP, BP, NO, AP).
+- APO import accepts every type; `Channel: L/R` directives round-trip.
+- Fixes issue #5: `LS` low shelves from EasyEffects / Owliophile now load correctly.
+- 6 dB / 12 dB slope selector on shelves and passes.
+- Graphic and Table modes support all 12 filter types.
