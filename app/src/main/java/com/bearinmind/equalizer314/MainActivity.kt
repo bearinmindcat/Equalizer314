@@ -633,15 +633,10 @@ class MainActivity : AppCompatActivity() {
             // from the button's right edge); decreasing it moves the badge
             // RIGHT. Same direction convention used in prior tweaks.
             val badge = findViewById<android.widget.TextView>(R.id.altRouteChannelBadge)
-            badge.measure(
-                android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED),
-                android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED)
-            )
-            val badgeLp = badge.layoutParams as android.widget.FrameLayout.LayoutParams
-            badgeLp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
-            badgeLp.leftMargin = altRouteLeft + specWidth - badge.measuredWidth - (6 * vizDensity).toInt()
-            badgeLp.topMargin = btnTop + (5 * vizDensity).toInt()
-            badge.layoutParams = badgeLp
+            badgeAnchorAltRouteLeft = altRouteLeft
+            badgeAnchorSpecWidth = specWidth
+            badgeAnchorBtnTop = btnTop
+            repositionChannelBadge(badge)
             // Force the badge above the MaterialButton's drawing layer. Both
             // translationZ and bringToFront are needed — Material components
             // can out-Z siblings at the same elevation.
@@ -3165,6 +3160,37 @@ class MainActivity : AppCompatActivity() {
     /** Paint the L / R button bg/stroke/text colours according to the current
      *  active channel. Does NOT touch alpha — callers that drive the popup
      *  animation set alpha independently. */
+    /** Geometry cached on first layout so `repositionChannelBadge` can
+     *  re-anchor the badge whenever its text changes (L vs R glyphs can
+     *  differ in width at very small font sizes, and the XML placeholder
+     *  may measure slightly differently from the runtime value). */
+    private var badgeAnchorAltRouteLeft: Int = 0
+    private var badgeAnchorSpecWidth: Int = 0
+    private var badgeAnchorBtnTop: Int = 0
+
+    /** Position the L/R badge in the top-right corner of the split icon,
+     *  accounting for the badge's actual measured width so the right edge
+     *  sits a consistent 6 dp inside the button regardless of glyph width.
+     *  "Correct" offsets tuned by hand against the Samsung Z Flip7 UI —
+     *  if the user asks to revisit L/R badge positioning, these are the
+     *  baseline values:
+     *    leftMargin = altRouteLeft + specWidth - badgeWidth - 6 dp
+     *    topMargin  = btnTop + 5 dp
+     *  Increasing the leftMargin dp-offset moves the badge LEFT; decreasing
+     *  it moves RIGHT. */
+    private fun repositionChannelBadge(badge: android.widget.TextView) {
+        val density = resources.displayMetrics.density
+        badge.measure(
+            android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED),
+            android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED),
+        )
+        val lp = badge.layoutParams as? android.widget.FrameLayout.LayoutParams ?: return
+        lp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+        lp.leftMargin = badgeAnchorAltRouteLeft + badgeAnchorSpecWidth - badge.measuredWidth - (6 * density).toInt()
+        lp.topMargin = badgeAnchorBtnTop + (5 * density).toInt()
+        badge.layoutParams = lp
+    }
+
     private fun paintChannelButtonStyles() {
         val enabled = eqPrefs.getChannelSideEqEnabled()
         val lBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.channelLButton) ?: return
@@ -3200,6 +3226,9 @@ class MainActivity : AppCompatActivity() {
                 EqStateManager.ActiveChannel.RIGHT -> { it.text = "R"; it.visibility = View.VISIBLE }
                 else -> it.visibility = View.GONE
             }
+            // Re-measure and re-anchor the badge so a subtle width change
+            // between "L" and "R" doesn't shove it past the button edge.
+            if (it.visibility == View.VISIBLE) repositionChannelBadge(it)
         }
         // Swap the split-arrow for the single-branch variant when in L/R mode
         // so the icon reflects the single channel being routed.
