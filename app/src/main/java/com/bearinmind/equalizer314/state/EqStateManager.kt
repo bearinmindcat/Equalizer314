@@ -175,6 +175,37 @@ class EqStateManager(
         eqService?.updateEqPerChannel(lEq, rEq)
     }
 
+    private val updateHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var updatePending = false
+    private val flushUpdate = Runnable {
+        updatePending = false
+        pushEqUpdate()
+    }
+
+    /** Coalesce rapid-fire EQ updates (e.g. graph-dot drag) into at most one
+     *  DP write per frame. Each ACTION_MOVE only schedules a flush if one
+     *  isn't already queued; the flush reads the latest in-memory EQ state.
+     *  Without this, a 60+ Hz drag stream blocks the audio thread with one
+     *  full DP-band rewrite per touch event. Call [flushEqUpdate] on the
+     *  drag-end (ACTION_UP) so the final committed state lands immediately. */
+    fun pushEqUpdateThrottled() {
+        if (!isProcessing) return
+        if (updatePending) return
+        updatePending = true
+        updateHandler.postDelayed(flushUpdate, 16L)
+    }
+
+    /** Cancel any queued throttled update and push the current state now.
+     *  Used at drag-end so the final value is committed without a frame of
+     *  latency. */
+    fun flushEqUpdate() {
+        if (updatePending) {
+            updateHandler.removeCallbacks(flushUpdate)
+            updatePending = false
+        }
+        pushEqUpdate()
+    }
+
     /** Copy one EQ's band state into another. Used when forking the shared
      *  "both" EQ into the per-channel L/R editors. */
     private fun copyEqState(from: ParametricEqualizer, to: ParametricEqualizer) {

@@ -285,6 +285,7 @@ class EqGraphView @JvmOverloads constructor(
 
     var onBandChangedListener: ((bandIndex: Int, frequency: Float, gain: Float) -> Unit)? = null
     var onBandSelectedListener: ((bandIndex: Int?) -> Unit)? = null
+    var onBandDragEndListener: (() -> Unit)? = null
     var onLongPressListener: (() -> Unit)? = null
     // Slot labels for band dots (e.g., [0, 2, 4, 6] → display as "1", "3", "5", "7")
     private var bandSlotLabels: List<Int>? = null
@@ -1540,8 +1541,10 @@ class EqGraphView @JvmOverloads constructor(
                 cancelLongPressTimer()
                 parent?.requestDisallowInterceptTouchEvent(false)
                 justResetBand = false
+                val wasDragging = isDragging
                 isDragging = false
                 invalidate()
+                if (wasDragging) onBandDragEndListener?.invoke()
             }
         }
         return super.onTouchEvent(event)

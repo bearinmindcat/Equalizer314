@@ -55,6 +55,14 @@ class DynamicsProcessingManager {
     var leftChannelGainDb: Float = 0f      // -12..12
     var rightChannelGainDb: Float = 0f     // -12..12
 
+    // Background thread for the per-band binder calls. Each EQ update issues
+    // 2 × numBands setPreEqBandByChannelIndex() transactions; running them
+    // on the UI thread blocks both rendering and (under contention) the
+    // audio path during a drag.
+    private val workerThread = android.os.HandlerThread("EqDpWorker").apply { start() }
+    private val workerHandler = android.os.Handler(workerThread.looper)
+    @Volatile private var pendingApply: Runnable? = null
+
     fun start(eq: ParametricEqualizer) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
             Log.e(TAG, "DynamicsProcessing requires API 28+")
@@ -167,47 +175,61 @@ class DynamicsProcessingManager {
         leftEq: ParametricEqualizer,
         rightEq: ParametricEqualizer,
     ) {
+        // Cheap math (response sampling, gain offsets) on the caller's thread,
+        // since it touches the live ParametricEqualizer which is owned by the
+        // UI thread. The expensive part — 2 × numBands binder transactions
+        // into AudioFlinger — is dispatched to the worker thread.
         val cutoffs = ParametricToDpConverter.cutoffFrequencies
         val leftGains = ParametricToDpConverter.convert(leftEq)
-        // Skip the second sample pass when both channels share the same eq.
-        val rightGains = if (leftEq === rightEq) leftGains
+        val rightGains = if (leftEq === rightEq) leftGains.copyOf()
             else ParametricToDpConverter.convert(rightEq)
 
-        // Apply global preamp offset to both channels.
         if (preampGainDb != 0f) {
             for (i in leftGains.indices) leftGains[i] += preampGainDb
-            if (rightGains !== leftGains) {
-                for (i in rightGains.indices) rightGains[i] += preampGainDb
-            }
+            for (i in rightGains.indices) rightGains[i] += preampGainDb
         }
 
-        // Auto-gain: subtract peak boost across both channels to prevent clipping.
         if (autoGainEnabled) {
             var peak = Float.NEGATIVE_INFINITY
             for (g in leftGains) if (g > peak) peak = g
-            if (rightGains !== leftGains) for (g in rightGains) if (g > peak) peak = g
+            for (g in rightGains) if (g > peak) peak = g
             lastAutoGainOffset = if (peak > 0f) -peak else 0f
             if (lastAutoGainOffset != 0f) {
                 for (i in leftGains.indices) leftGains[i] += lastAutoGainOffset
-                if (rightGains !== leftGains) {
-                    for (i in rightGains.indices) rightGains[i] += lastAutoGainOffset
-                }
+                for (i in rightGains.indices) rightGains[i] += lastAutoGainOffset
             }
         } else {
             lastAutoGainOffset = 0f
         }
 
-        // Per-channel offsets: balance + preamp (L/R).
         val (leftOffsetDb, rightOffsetDb) = computeChannelOffsets()
+        for (i in leftGains.indices) leftGains[i] += leftOffsetDb
+        for (i in rightGains.indices) rightGains[i] += rightOffsetDb
 
-        for (i in 0 until ParametricToDpConverter.numBands) {
-            dp.setPreEqBandByChannelIndex(
-                0, i, DynamicsProcessing.EqBand(true, cutoffs[i], leftGains[i] + leftOffsetDb)
-            )
-            dp.setPreEqBandByChannelIndex(
-                1, i, DynamicsProcessing.EqBand(true, cutoffs[i], rightGains[i] + rightOffsetDb)
-            )
+        // Coalesce: drop any in-flight job in favour of the latest gains. The
+        // Volatile read is a stale-but-correct check; the only consequence of
+        // a race is one extra binder loop, which is harmless.
+        val n = ParametricToDpConverter.numBands
+        val cutoffsSnap = cutoffs
+        val job = Runnable {
+            try {
+                for (i in 0 until n) {
+                    dp.setPreEqBandByChannelIndex(
+                        0, i, DynamicsProcessing.EqBand(true, cutoffsSnap[i], leftGains[i])
+                    )
+                    dp.setPreEqBandByChannelIndex(
+                        1, i, DynamicsProcessing.EqBand(true, cutoffsSnap[i], rightGains[i])
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "DP band write failed", e)
+            } finally {
+                pendingApply = null
+            }
         }
+        pendingApply?.let { workerHandler.removeCallbacks(it) }
+        pendingApply = job
+        workerHandler.post(job)
     }
 
     /**
@@ -324,6 +346,10 @@ class DynamicsProcessingManager {
     }
 
     fun stop() {
+        // Drain any queued band-write before tearing down the DP instance —
+        // the runnable would otherwise run against a released native handle.
+        pendingApply?.let { workerHandler.removeCallbacks(it) }
+        pendingApply = null
         try {
             dynamicsProcessing?.enabled = false
             dynamicsProcessing?.release()

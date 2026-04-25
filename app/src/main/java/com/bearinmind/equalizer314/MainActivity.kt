@@ -1627,12 +1627,17 @@ class MainActivity : AppCompatActivity() {
         }
 
         eqGraphView.onBandChangedListener = { bandIndex, _, _ ->
-            stateManager.pushEqUpdate()
+            // Throttle DP writes during drag — each ACTION_MOVE would otherwise
+            // trigger a full Pre-EQ rewrite on the audio thread. The drag-end
+            // listener flushes the final value.
+            stateManager.pushEqUpdateThrottled()
             updateBandInputs(bandIndex)
             stateManager.updateDpBandVisualization(eqGraphView)
             if (stateManager.currentEqUiMode == EqUiMode.TABLE) tableController.buildTable()
             if (stateManager.currentEqUiMode == EqUiMode.GRAPHIC) graphicController.updateSliderValues()
         }
+
+        eqGraphView.onBandDragEndListener = { stateManager.flushEqUpdate() }
 
         eqGraphView.onLongPressListener = { showPresetsBottomSheet() }
 
