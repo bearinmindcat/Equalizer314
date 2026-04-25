@@ -560,6 +560,7 @@ class MbcActivity : AppCompatActivity() {
                     requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 200)
                     return@setOnClickListener
                 }
+                applySpectrumSettings()
                 visualizerHelper.start(graphView)
                 graphView.spectrumRenderer = visualizerHelper.renderer
                 updateVizStyle(true)
@@ -571,6 +572,7 @@ class MbcActivity : AppCompatActivity() {
         if (eqPrefs.getSpectrumEnabled() &&
             checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
             == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            applySpectrumSettings()
             visualizerHelper.start(graphView)
             graphView.spectrumRenderer = visualizerHelper.renderer
             updateVizStyle(true)
@@ -1400,6 +1402,9 @@ class MbcActivity : AppCompatActivity() {
         com.bearinmind.equalizer314.ui.BottomNavHelper.setPowerFabInstant(this, eqPrefs.getPowerState())
         com.bearinmind.equalizer314.ui.BottomNavHelper.updateHighlight(this, com.bearinmind.equalizer314.ui.NavScreen.MBC)
         com.bearinmind.equalizer314.ui.BottomNavHelper.updateStatus(this, eqPrefs)
+        // Apply spectrum settings (PPO smoothing, color, release) — may have
+        // changed in SpectrumControlActivity while we were paused.
+        applySpectrumSettings()
         // Restart visualizer if it was enabled (may have been stopped in onPause)
         if (eqPrefs.getSpectrumEnabled() && !visualizerHelper.isRunning &&
             checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
@@ -1407,6 +1412,18 @@ class MbcActivity : AppCompatActivity() {
             visualizerHelper.start(graphView)
             graphView.spectrumRenderer = visualizerHelper.renderer
         }
+    }
+
+    private fun applySpectrumSettings() {
+        val ppoValues = intArrayOf(1, 2, 3, 6, 12, 24, 48, 96)
+        val renderer = visualizerHelper.renderer
+        if (eqPrefs.getPpoEnabled()) {
+            renderer.ppoSmoothing = ppoValues[eqPrefs.getPpoIndex().coerceIn(0, 7)]
+        } else {
+            renderer.ppoSmoothing = 0
+        }
+        renderer.setSpectrumColor(eqPrefs.getSpectrumColor())
+        renderer.releaseAlpha = eqPrefs.getSpectrumRelease()
     }
 
     override fun onPause() {
