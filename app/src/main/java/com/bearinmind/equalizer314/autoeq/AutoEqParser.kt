@@ -1,5 +1,7 @@
 package com.bearinmind.equalizer314.autoeq
 
+import com.bearinmind.equalizer314.dsp.BiquadFilter
+
 /**
  * Parser for Equalizer APO "config.txt" style files. Accepts every filter
  * type APO emits, including variants that omit `Gain` or `Q` and the
@@ -11,6 +13,23 @@ package com.bearinmind.equalizer314.autoeq
  * downstream code maps to BiquadFilter.FilterType values:
  *   PK  LSC  HSC  LS  HS  LPQ  HPQ  LP  HP  BP  NO  AP
  */
+fun apoTokenToFilterType(token: String): BiquadFilter.FilterType =
+    when (token) {
+        "PK"  -> BiquadFilter.FilterType.BELL
+        "LSC" -> BiquadFilter.FilterType.LOW_SHELF
+        "HSC" -> BiquadFilter.FilterType.HIGH_SHELF
+        "LS"  -> BiquadFilter.FilterType.LOW_SHELF_1
+        "HS"  -> BiquadFilter.FilterType.HIGH_SHELF_1
+        "LPQ" -> BiquadFilter.FilterType.LOW_PASS
+        "HPQ" -> BiquadFilter.FilterType.HIGH_PASS
+        "LP"  -> BiquadFilter.FilterType.LOW_PASS_1
+        "HP"  -> BiquadFilter.FilterType.HIGH_PASS_1
+        "BP"  -> BiquadFilter.FilterType.BAND_PASS
+        "NO"  -> BiquadFilter.FilterType.NOTCH
+        "AP"  -> BiquadFilter.FilterType.ALL_PASS
+        else  -> BiquadFilter.FilterType.BELL
+    }
+
 object AutoEqParser {
 
     private val preampRegex = Regex("""Preamp:\s*(-?[\d.]+)\s*dB""", RegexOption.IGNORE_CASE)

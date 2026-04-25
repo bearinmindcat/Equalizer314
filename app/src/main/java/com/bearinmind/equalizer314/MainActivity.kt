@@ -116,23 +116,6 @@ class MainActivity : AppCompatActivity() {
                 android.widget.Toast.makeText(this, "Could not parse APO preset", android.widget.Toast.LENGTH_LONG).show()
                 return@registerForActivityResult
             }
-            // APO token → our FilterType
-            fun mapFilterType(token: String): com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType =
-                when (token) {
-                    "PK"  -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.BELL
-                    "LSC" -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.LOW_SHELF
-                    "HSC" -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.HIGH_SHELF
-                    "LS"  -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.LOW_SHELF_1
-                    "HS"  -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.HIGH_SHELF_1
-                    "LPQ" -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.LOW_PASS
-                    "HPQ" -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.HIGH_PASS
-                    "LP"  -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.LOW_PASS_1
-                    "HP"  -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.HIGH_PASS_1
-                    "BP"  -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.BAND_PASS
-                    "NO"  -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.NOTCH
-                    "AP"  -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.ALL_PASS
-                    else  -> com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.BELL
-                }
             fun toBandSpecs(filters: List<com.bearinmind.equalizer314.autoeq.AutoEqFilter>):
                     List<com.bearinmind.equalizer314.state.EqStateManager.BandSpec> =
                 filters.map {
@@ -140,7 +123,7 @@ class MainActivity : AppCompatActivity() {
                         frequency = it.frequency,
                         gain = it.gain,
                         q = it.q.toDouble(),
-                        filterType = mapFilterType(it.filterType),
+                        filterType = com.bearinmind.equalizer314.autoeq.apoTokenToFilterType(it.filterType),
                     )
                 }
 

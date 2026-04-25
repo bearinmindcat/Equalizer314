@@ -156,11 +156,7 @@ class AutoEqActivity : AppCompatActivity() {
         eq.clearBands()
 
         for (filter in profile.filters) {
-            val filterType = when (filter.filterType) {
-                "LSC" -> BiquadFilter.FilterType.LOW_SHELF
-                "HSC" -> BiquadFilter.FilterType.HIGH_SHELF
-                else -> BiquadFilter.FilterType.BELL
-            }
+            val filterType = com.bearinmind.equalizer314.autoeq.apoTokenToFilterType(filter.filterType)
             eq.addBand(filter.frequency, filter.gain, filterType, filter.q.toDouble())
         }
         eq.isEnabled = true
@@ -447,11 +443,7 @@ class AutoEqActivity : AppCompatActivity() {
             val eq = ParametricEqualizer()
             eq.clearBands()
             for (f in prof.filters) {
-                val ft = when (f.filterType) {
-                    "LSC" -> BiquadFilter.FilterType.LOW_SHELF
-                    "HSC" -> BiquadFilter.FilterType.HIGH_SHELF
-                    else -> BiquadFilter.FilterType.BELL
-                }
+                val ft = com.bearinmind.equalizer314.autoeq.apoTokenToFilterType(f.filterType)
                 eq.addBand(f.frequency, f.gain, ft, f.q.toDouble())
             }
             val path = android.graphics.Path()
