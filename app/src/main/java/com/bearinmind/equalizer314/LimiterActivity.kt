@@ -574,19 +574,19 @@ class LimiterActivity : AppCompatActivity() {
     private fun pushToService() {
         val svc = eqService ?: return
         if (!svc.dynamicsManager.isActive) return
-        // Update limiter fields then recreate DP to apply them
-        // (updateLimiter fails with "invalid parameter operation" on Samsung —
-        //  limiter params can only be set during DP construction)
-        svc.dynamicsManager.limiterEnabled = eqPrefs.getLimiterEnabled()
-        svc.dynamicsManager.limiterAttackMs = eqPrefs.getLimiterAttack()
-        svc.dynamicsManager.limiterReleaseMs = eqPrefs.getLimiterRelease()
-        svc.dynamicsManager.limiterRatio = eqPrefs.getLimiterRatio()
-        svc.dynamicsManager.limiterThresholdDb = eqPrefs.getLimiterThreshold()
-        svc.dynamicsManager.limiterPostGainDb = eqPrefs.getLimiterPostGain()
-        // Recreate DP with updated limiter config
-        val tempEq = com.bearinmind.equalizer314.dsp.ParametricEqualizer()
-        eqPrefs.restoreState(tempEq)
-        svc.dynamicsManager.start(tempEq)
+        // Update limiter fields and apply via setLimiterByChannelIndex on the
+        // live DP. Earlier code recreated the entire DynamicsProcessing
+        // instance per slider tick which caused audio dropouts and ~100 ms of
+        // UI hitch per tick — the live update path is dispatched to the
+        // worker thread and coalesced.
+        val dm = svc.dynamicsManager
+        dm.limiterEnabled = eqPrefs.getLimiterEnabled()
+        dm.limiterAttackMs = eqPrefs.getLimiterAttack()
+        dm.limiterReleaseMs = eqPrefs.getLimiterRelease()
+        dm.limiterRatio = eqPrefs.getLimiterRatio()
+        dm.limiterThresholdDb = eqPrefs.getLimiterThreshold()
+        dm.limiterPostGainDb = eqPrefs.getLimiterPostGain()
+        dm.pushLimiterUpdate()
     }
 
     override fun onPause() {

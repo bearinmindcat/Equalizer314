@@ -62,6 +62,7 @@ class DynamicsProcessingManager {
     private val workerThread = android.os.HandlerThread("EqDpWorker").apply { start() }
     private val workerHandler = android.os.Handler(workerThread.looper)
     @Volatile private var pendingApply: Runnable? = null
+    @Volatile private var pendingLimiter: Runnable? = null
 
     fun start(eq: ParametricEqualizer) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
@@ -345,11 +346,40 @@ class DynamicsProcessingManager {
         dynamicsProcessing?.enabled = enabled
     }
 
+    /** Apply the current limiter fields to the live DP instance without
+     *  rebuilding it. Dispatched to the worker thread so a slider drag
+     *  doesn't stall the UI thread on a binder transaction. Coalesced with
+     *  the band-write job so back-to-back slider ticks collapse to one
+     *  write. Falls back silently when DP isn't running. */
+    fun pushLimiterUpdate() {
+        val dp = dynamicsProcessing ?: return
+        val limiter = DynamicsProcessing.Limiter(
+            limiterEnabled, limiterEnabled, 0,
+            limiterAttackMs, limiterReleaseMs, limiterRatio,
+            limiterThresholdDb, limiterPostGainDb
+        )
+        val job = Runnable {
+            try {
+                dp.setLimiterByChannelIndex(0, limiter)
+                dp.setLimiterByChannelIndex(1, limiter)
+            } catch (e: Exception) {
+                Log.e(TAG, "Limiter live-update failed", e)
+            } finally {
+                pendingLimiter = null
+            }
+        }
+        pendingLimiter?.let { workerHandler.removeCallbacks(it) }
+        pendingLimiter = job
+        workerHandler.post(job)
+    }
+
     fun stop() {
         // Drain any queued band-write before tearing down the DP instance —
         // the runnable would otherwise run against a released native handle.
         pendingApply?.let { workerHandler.removeCallbacks(it) }
         pendingApply = null
+        pendingLimiter?.let { workerHandler.removeCallbacks(it) }
+        pendingLimiter = null
         try {
             dynamicsProcessing?.enabled = false
             dynamicsProcessing?.release()
