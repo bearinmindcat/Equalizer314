@@ -112,6 +112,11 @@ class LimiterActivity : AppCompatActivity() {
             if (svc.dynamicsManager.isActive) {
                 svc.dynamicsManager.stop()
             } else {
+                // Promote the service to a started foreground service so it
+                // survives activity unbind/rebind across navigation. Without
+                // this the service is bind-only and gets destroyed the
+                // moment LimiterActivity exits, tearing DP down with it.
+                EqService.start(this)
                 val tempEq = com.bearinmind.equalizer314.dsp.ParametricEqualizer()
                 eqPrefs.restoreState(tempEq)
                 svc.dynamicsManager.start(tempEq)

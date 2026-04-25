@@ -3277,6 +3277,17 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Pick up any limiter changes made in LimiterActivity while we were
+        // paused. LimiterActivity writes prefs directly and never touches
+        // EqStateManager's mirror fields, so without this sync the next
+        // saveState() (onPause) would overwrite the user's prefs with stale
+        // in-memory values.
+        stateManager.limiterEnabled     = eqPrefs.getLimiterEnabled()
+        stateManager.limiterAttackMs    = eqPrefs.getLimiterAttack()
+        stateManager.limiterReleaseMs   = eqPrefs.getLimiterRelease()
+        stateManager.limiterRatio       = eqPrefs.getLimiterRatio()
+        stateManager.limiterThresholdDb = eqPrefs.getLimiterThreshold()
+        stateManager.limiterPostGainDb  = eqPrefs.getLimiterPostGain()
         // Apply spectrum settings (may have changed in SpectrumControlActivity)
         applySpectrumSettings()
         // Sync Channel Side EQ state — the switch lives in ChannelSideEqActivity,
