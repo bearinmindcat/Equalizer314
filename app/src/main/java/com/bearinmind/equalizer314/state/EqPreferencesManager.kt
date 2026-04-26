@@ -252,6 +252,36 @@ class EqPreferencesManager(context: Context) {
         return (0 until arr.length()).map { arr.getString(it) }
     }
 
+    // Favorite AutoEQ presets — keyed by "source\u0001name" so an imported
+    // preset whose name collides with a database entry is tracked separately.
+    private fun favKey(source: String, name: String) = "$source\u0001$name"
+    fun addFavoritePreset(name: String, source: String) {
+        val key = favKey(source, name)
+        val list = getFavoritePresetKeys().toMutableList()
+        if (key !in list) list.add(0, key)
+        prefs.edit().putString("favoritePresets", org.json.JSONArray(list).toString()).apply()
+    }
+    fun removeFavoritePreset(name: String, source: String) {
+        val key = favKey(source, name)
+        val list = getFavoritePresetKeys().toMutableList()
+        list.remove(key)
+        prefs.edit().putString("favoritePresets", org.json.JSONArray(list).toString()).apply()
+    }
+    fun isFavoritePreset(name: String, source: String): Boolean =
+        favKey(source, name) in getFavoritePresetKeys()
+    private fun getFavoritePresetKeys(): List<String> {
+        val str = prefs.getString("favoritePresets", null) ?: return emptyList()
+        val arr = org.json.JSONArray(str)
+        return (0 until arr.length()).map { arr.getString(it) }
+    }
+    /** Returns favorited presets in display order (newest first) as
+     *  (name, source) pairs. */
+    fun getFavoritePresets(): List<Pair<String, String>> =
+        getFavoritePresetKeys().mapNotNull {
+            val parts = it.split('\u0001', limit = 2)
+            if (parts.size == 2) parts[1] to parts[0] else null
+        }
+
     // Imported targets (stored as JSON array of names)
     fun addImportedTarget(name: String, rawText: String = "") {
         val list = getImportedTargets().toMutableList()

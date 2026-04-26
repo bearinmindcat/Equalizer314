@@ -295,6 +295,17 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
+            <!-- Add-to-AutoEQ-presets button (saves the generated EQ as an
+                 imported preset so it shows up in the AutoEQ list). -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/addToPresetsButton"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Add to presets"
+                android:visibility="gone" />
+
             <!-- Export button (same style as Generate EQ button) -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/exportButton"

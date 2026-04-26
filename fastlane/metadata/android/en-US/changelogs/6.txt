@@ -1,0 +1,9 @@
+- Renamed "AutoEQ" section to "AutoEQ & Presets" (title and main-screen card).
+- Star/favorite presets in AutoEQ & Presets: tap the star on any row to bubble it to the top of the list.
+- Generate Custom EQ: new "Add to presets" button saves the generated curve into AutoEQ & Presets with a custom name.
+- Fixed Channel Side EQ not turning off when importing or applying a flat (non-CSE) preset via APO import / AutoEQ / Generate.
+- Fixed UI + audio lag when dragging EQ bands or limiter sliders while DynamicsProcessing is active. DP writes now run on a background worker; the Limiter no longer recreates DP per slider tick.
+- Fixed Limiter / DynamicsProcessing turning off after navigating between Limiter and other screens.
+- Fixed APO `LS` filter being imported as a Peak when applied through the AutoEQ / Generate paths.
+- Spectrum Control settings (PPO smoothing, color, release) now apply to the MBC spectrum too.
+- ADI registration file checked into the repo for F-Droid reproducibility (it's a public verification challenge, not a secret).

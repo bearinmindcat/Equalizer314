@@ -100,11 +100,31 @@ class MainActivity : AppCompatActivity() {
     }
 
     private val autoEqLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == RESULT_OK) reloadEqFromPrefs()
+        if (result.resultCode == RESULT_OK) handlePresetReturn()
     }
 
     private val targetCurveLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == RESULT_OK) reloadEqFromPrefs()
+        if (result.resultCode == RESULT_OK) handlePresetReturn()
+    }
+
+    /** Common refresh for AutoEQ / TargetCurve preset returns. The launched
+     *  activity persists the new bands and (possibly) flips Channel Side EQ
+     *  off; we still need to rebind the graph and audio to the new active EQ
+     *  reference so the UI doesn't keep showing a stale leftEq/rightEq view. */
+    private fun handlePresetReturn() {
+        // Reset stale band selection — if CSE was on, selectedBandIndex may
+        // point past the end of the new bothEq.
+        stateManager.selectedBandIndex = 0
+        reloadEqFromPrefs()
+        rebindActiveEq()
+        if (stateManager.isProcessing) {
+            val (lEq, rEq) = stateManager.getChannelEqs()
+            stateManager.eqService?.let { svc ->
+                svc.dynamicsManager.stop()
+                svc.dynamicsManager.start(stateManager.parametricEq)
+                svc.updateEqPerChannel(lEq, rEq)
+            }
+        }
     }
 
     private val apoImportLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -167,6 +187,9 @@ class MainActivity : AppCompatActivity() {
                 ).show()
             } else {
                 // Flat single-channel preset — CSE off, single EQ.
+                // Reset stale band selection — CSE-on may have left
+                // selectedBandIndex pointing past the end of the new bothEq.
+                stateManager.selectedBandIndex = 0
                 val specs = toBandSpecs(profile.filters)
                 stateManager.applyPresetEqs(
                     cseEnabled = false,
@@ -176,7 +199,22 @@ class MainActivity : AppCompatActivity() {
                 )
                 eqPrefs.saveState(stateManager.parametricEq, (0 until stateManager.parametricEq.getBandCount()).toList())
                 reloadEqFromPrefs()
-                refreshChannelPopoutDim()
+                // Force a full active-EQ rebind so the graph / band toggles /
+                // input widgets retarget bothEq when CSE was previously on.
+                // Without this the UI keeps pointing at the old leftEq until
+                // the user manually flips the CSE switch.
+                rebindActiveEq()
+                // If DP is running, it was bound to leftEq/rightEq — push the
+                // new bothEq to both channels so audio matches the displayed
+                // EQ immediately instead of after the next interaction.
+                if (stateManager.isProcessing) {
+                    val (lEq, rEq) = stateManager.getChannelEqs()
+                    stateManager.eqService?.let { svc ->
+                        svc.dynamicsManager.stop()
+                        svc.dynamicsManager.start(stateManager.parametricEq)
+                        svc.updateEqPerChannel(lEq, rEq)
+                    }
+                }
                 android.widget.Toast.makeText(this, "Applied ${profile.filters.size} filters", android.widget.Toast.LENGTH_SHORT).show()
             }
         } catch (e: Exception) {

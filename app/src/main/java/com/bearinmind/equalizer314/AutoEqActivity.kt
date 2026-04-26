@@ -87,7 +87,9 @@ class AutoEqActivity : AppCompatActivity() {
                 } else {
                     database.loadProfile(entry)
                 }
-            }
+            },
+            isFavorite = { entry -> eqPrefs.isFavoritePreset(entry.name, entry.source) },
+            onFavoriteToggle = { entry -> toggleFavoritePreset(entry) }
         )
         recyclerView.layoutManager = LinearLayoutManager(this)
         recyclerView.adapter = adapter
@@ -115,21 +117,54 @@ class AutoEqActivity : AppCompatActivity() {
     }
 
     private fun performSearch(query: String) {
+        val q = query.trim().lowercase()
         val dbResults = database.search(query)
-        // Prepend imported presets at top
         val imported = eqPrefs.getImportedPresets()
         val importedEntries = imported
-            .filter { name ->
-                query.isBlank() || name.lowercase().contains(query.trim().lowercase())
-            }
+            .filter { name -> q.isEmpty() || name.lowercase().contains(q) }
             .map { AutoEqEntry(it, "Imported", "", "", "") }
-        val results = importedEntries + dbResults
+
+        // Pull starred entries to the top, in star-order (newest first).
+        // Resolve each favorite back to its full AutoEqEntry from the
+        // imported list or the db search by name+source.
+        val favs = eqPrefs.getFavoritePresets()
+        val favKeys = favs.map { (n, s) -> "$n|$s" }.toHashSet()
+        val favEntries = mutableListOf<AutoEqEntry>()
+        for ((favName, favSource) in favs) {
+            if (q.isNotEmpty() && !favName.lowercase().contains(q)) continue
+            val entry: AutoEqEntry? = if (favSource == "Imported") {
+                if (imported.contains(favName)) AutoEqEntry(favName, "Imported", "", "", "") else null
+            } else {
+                val candidates = database.search(favName)
+                candidates.firstOrNull { it.name == favName && it.source == favSource }
+                    ?: candidates.firstOrNull { it.name == favName }
+            }
+            if (entry != null) favEntries.add(entry)
+        }
+
+        // Drop already-favorited entries from the regular section so they
+        // don't appear twice.
+        val regularImported = importedEntries.filter { "${it.name}|${it.source}" !in favKeys }
+        val regularDb = dbResults.filter { "${it.name}|${it.source}" !in favKeys }
+
+        val results = favEntries + regularImported + regularDb
         adapter.submitList(results)
         resultCount.text = if (query.isBlank()) {
             "${database.totalCount() + imported.size} presets"
         } else {
             "${results.size} presets"
         }
+    }
+
+    private fun toggleFavoritePreset(entry: AutoEqEntry) {
+        if (eqPrefs.isFavoritePreset(entry.name, entry.source)) {
+            eqPrefs.removeFavoritePreset(entry.name, entry.source)
+        } else {
+            eqPrefs.addFavoritePreset(entry.name, entry.source)
+        }
+        // Re-sort the list so the toggled entry jumps to the top (or back
+        // to its natural position when un-favorited).
+        performSearch(searchInput.text?.toString() ?: "")
     }
 
     private fun onHeadphoneSelected(entry: AutoEqEntry) {
@@ -168,6 +203,11 @@ class AutoEqActivity : AppCompatActivity() {
         eqPrefs.saveAutoEqName(entry.name)
         eqPrefs.saveAutoEqSource(entry.source)
         eqPrefs.savePresetName("AutoEQ")
+        // AutoEQ profiles are always flat single-channel — disable Channel
+        // Side EQ if it was on so MainActivity rebinds the graph to bothEq
+        // instead of staying on a stale leftEq/rightEq view.
+        eqPrefs.saveChannelSideEqEnabled(false)
+        eqPrefs.clearLeftRightBands()
 
         setResult(RESULT_OK)
     }
@@ -294,7 +334,9 @@ class AutoEqActivity : AppCompatActivity() {
     private class HeadphoneAdapter(
         private val onItemClick: (AutoEqEntry) -> Unit,
         private val onDeleteClick: (AutoEqEntry) -> Unit,
-        private val profileLoader: (AutoEqEntry) -> AutoEqProfile?
+        private val profileLoader: (AutoEqEntry) -> AutoEqProfile?,
+        private val isFavorite: (AutoEqEntry) -> Boolean,
+        private val onFavoriteToggle: (AutoEqEntry) -> Unit
     ) : RecyclerView.Adapter<HeadphoneAdapter.ViewHolder>() {
 
         private var items = listOf<AutoEqEntry>()
@@ -378,11 +420,31 @@ class AutoEqActivity : AppCompatActivity() {
             }
             row.addView(deleteBtn)
 
+            // Star button — same 30dp box style as the × delete button.
+            val rippleBorderless = android.util.TypedValue()
+            ctx.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, rippleBorderless, true)
+            val starBtn = android.widget.ImageButton(ctx).apply {
+                val btnSize = (30 * density).toInt()
+                layoutParams = android.widget.LinearLayout.LayoutParams(btnSize, btnSize).apply {
+                    marginStart = (4 * density).toInt()
+                    marginEnd = (4 * density).toInt()
+                }
+                setBackgroundResource(rippleBorderless.resourceId)
+                scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                val pad = (6 * density).toInt()
+                setPadding(pad, pad, pad, pad)
+                contentDescription = "Favorite"
+                imageTintList = null
+                isClickable = true
+                isFocusable = true
+            }
+            row.addView(starBtn)
+
             rightCol.addView(thumbView)
             rightCol.addView(filterText)
             row.addView(rightCol)
 
-            return ViewHolder(row, text1, text2, thumbView, filterText, deleteBtn)
+            return ViewHolder(row, text1, text2, thumbView, filterText, deleteBtn, starBtn)
         }
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
@@ -398,6 +460,11 @@ class AutoEqActivity : AppCompatActivity() {
             holder.deleteBtn.visibility = if (isImported) View.VISIBLE else View.GONE
             holder.deleteBtn.setOnClickListener { onDeleteClick(entry) }
 
+            holder.starBtn.setImageResource(
+                if (isFavorite(entry)) R.drawable.ic_star_filled else R.drawable.ic_star_outline
+            )
+            holder.starBtn.setOnClickListener { onFavoriteToggle(entry) }
+
             // Load profile for thumbnail (cached)
             val cacheKey = entry.path.ifEmpty { entry.name }
             val profile = profileCache.getOrPut(cacheKey) { profileLoader(entry) }
@@ -411,7 +478,8 @@ class AutoEqActivity : AppCompatActivity() {
             val text2: TextView,
             val thumbView: MiniEqView,
             val filterText: TextView,
-            val deleteBtn: android.widget.TextView
+            val deleteBtn: android.widget.TextView,
+            val starBtn: android.widget.ImageButton
         ) : RecyclerView.ViewHolder(view)
     }
 

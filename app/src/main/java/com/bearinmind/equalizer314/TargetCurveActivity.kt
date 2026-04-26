@@ -22,6 +22,7 @@ class TargetCurveActivity : AppCompatActivity() {
     private lateinit var targetSelectStatus: TextView
     private lateinit var computeButton: MaterialButton
     private lateinit var exportButton: MaterialButton
+    private lateinit var addToPresetsButton: MaterialButton
     private lateinit var resultText: android.widget.EditText
     private lateinit var resultCard: android.view.View
     private lateinit var resultGraphContainer: android.widget.FrameLayout
@@ -73,6 +74,7 @@ class TargetCurveActivity : AppCompatActivity() {
         targetSelectStatus = findViewById(R.id.targetSelectStatus)
         computeButton = findViewById(R.id.computeButton)
         exportButton = findViewById(R.id.exportButton)
+        addToPresetsButton = findViewById(R.id.addToPresetsButton)
         resultText = findViewById(R.id.resultText)
         resultCard = findViewById(R.id.resultCard)
         resultGraphContainer = findViewById(R.id.resultGraphContainer)
@@ -83,6 +85,7 @@ class TargetCurveActivity : AppCompatActivity() {
         findViewById<ImageButton>(R.id.targetBackButton).setOnClickListener { finish() }
 
         exportButton.setOnClickListener { exportApo() }
+        addToPresetsButton.setOnClickListener { showAddToPresetsDialog() }
 
         // Edit button opens editor dialog
         val editBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.resultEditButton)
@@ -162,6 +165,7 @@ class TargetCurveActivity : AppCompatActivity() {
         lastComputedProfile = profile
         resultCard.visibility = android.view.View.VISIBLE
         exportButton.visibility = android.view.View.VISIBLE
+        addToPresetsButton.visibility = android.view.View.VISIBLE
         resultText.setText(apoText)
         resultTimestamp.text = timestamp
         resultGraphContainer.removeAllViews()
@@ -238,6 +242,11 @@ class TargetCurveActivity : AppCompatActivity() {
                 eqPrefs.savePresetName("Generate Custom EQ")
                 eqPrefs.saveAutoEqName("")
                 eqPrefs.saveAutoEqSource("")
+                // Generated curves are flat single-channel — disable Channel
+                // Side EQ if it was on so MainActivity rebinds the graph to
+                // bothEq instead of staying on a stale leftEq/rightEq view.
+                eqPrefs.saveChannelSideEqEnabled(false)
+                eqPrefs.clearLeftRightBands()
 
                 lastComputedProfile = profile
                 val apoText = profileToApoText(profile)
@@ -249,6 +258,7 @@ class TargetCurveActivity : AppCompatActivity() {
                 // Show result card with mini EQ graph
                 resultCard.visibility = android.view.View.VISIBLE
                 exportButton.visibility = android.view.View.VISIBLE
+                addToPresetsButton.visibility = android.view.View.VISIBLE
                 resultText.setText(apoText)
                 resultTimestamp.text = timestamp
 
@@ -423,6 +433,115 @@ class TargetCurveActivity : AppCompatActivity() {
             putExtra(Intent.EXTRA_TITLE, fileName)
         }
         exportLauncher.launch(intent)
+    }
+
+    /** Save the currently-shown generated APO into the imported-presets list
+     *  so it shows up in the AutoEQ screen alongside imported and database
+     *  entries. Prompts the user for a name; falls back to a measurement-
+     *  derived default. */
+    private fun showAddToPresetsDialog() {
+        val apoText = resultText.text.toString().trim()
+        if (apoText.isEmpty()) {
+            Toast.makeText(this, "Generate an EQ first", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val density = resources.displayMetrics.density
+        val measName = eqPrefs.getSelectedMeasurement()
+        val defaultName = if (!measName.isNullOrBlank()) measName
+            else "Generated " + java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
+
+        val dialogView = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding((24 * density).toInt(), (20 * density).toInt(), (24 * density).toInt(), (16 * density).toInt())
+        }
+        val titleTv = android.widget.TextView(this).apply {
+            text = "Add to AutoEQ & Presets"
+            setTextColor(0xFFE2E2E2.toInt()); textSize = 20f
+            setPadding(0, 0, 0, (12 * density).toInt())
+        }
+        val messageTv = android.widget.TextView(this).apply {
+            text = "Add this EQ to the AutoEQ & Presets list"
+            setTextColor(0xFFAAAAAA.toInt()); textSize = 14f
+            setPadding(0, 0, 0, (12 * density).toInt())
+        }
+        val nameInput = android.widget.EditText(this).apply {
+            setText(defaultName)
+            setTextColor(0xFFE2E2E2.toInt())
+            setHintTextColor(0xFF888888.toInt())
+            setSingleLine(true)
+            setSelection(text.length)
+            setPadding(
+                (12 * density).toInt(), (10 * density).toInt(),
+                (12 * density).toInt(), (10 * density).toInt()
+            )
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0x00000000)
+                setStroke((1 * density).toInt(), 0xFF444444.toInt())
+                cornerRadius = 10 * density
+            }
+        }
+        val divider = android.view.View(this).apply {
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, (1 * density).toInt()
+            ).apply {
+                topMargin = (16 * density).toInt()
+                bottomMargin = (12 * density).toInt()
+            }
+            setBackgroundColor(0xFF444444.toInt())
+        }
+        val btnRow = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+        val cancelBtn = com.google.android.material.button.MaterialButton(
+            this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle
+        ).apply {
+            text = "Cancel"
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+            ).apply { marginEnd = (3 * density).toInt() }
+            cornerRadius = (12 * density).toInt()
+            setTextColor(0xFFDDDDDD.toInt())
+            strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+            strokeWidth = (1 * density).toInt()
+            setBackgroundColor(0x00000000)
+            insetTop = 0; insetBottom = 0
+        }
+        val addBtn = com.google.android.material.button.MaterialButton(
+            this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle
+        ).apply {
+            text = "Add"
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+            ).apply { marginStart = (3 * density).toInt() }
+            cornerRadius = (12 * density).toInt()
+            setTextColor(0xFFE2E2E2.toInt())
+            strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+            strokeWidth = (1 * density).toInt()
+            setBackgroundColor(0x00000000)
+            insetTop = 0; insetBottom = 0
+        }
+        btnRow.addView(cancelBtn); btnRow.addView(addBtn)
+        dialogView.addView(titleTv)
+        dialogView.addView(messageTv)
+        dialogView.addView(nameInput)
+        dialogView.addView(divider)
+        dialogView.addView(btnRow)
+
+        val dialog = android.app.AlertDialog.Builder(this, R.style.Theme_Equalizer314_Dialog)
+            .setView(dialogView)
+            .create()
+        cancelBtn.setOnClickListener { dialog.dismiss() }
+        addBtn.setOnClickListener {
+            val name = nameInput.text.toString().trim().ifEmpty { defaultName }
+            eqPrefs.addImportedPreset(name, apoText)
+            Toast.makeText(this, "Added \"$name\" to AutoEQ presets", Toast.LENGTH_SHORT).show()
+            dialog.dismiss()
+        }
+        dialog.show()
     }
 
     override fun finish() {
