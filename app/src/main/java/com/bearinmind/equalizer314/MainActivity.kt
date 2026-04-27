@@ -1794,6 +1794,12 @@ class MainActivity : AppCompatActivity() {
             overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
         }
 
+        // Convert-to-APO card — opens the Wavelet/Poweramp converter
+        findViewById<View>(R.id.convertToApoCard).setOnClickListener {
+            startActivity(Intent(this, ConvertToApoActivity::class.java))
+            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+        }
+
         // Experimental lock button — toggles locked/unlocked state
         val experimentalLockButton = findViewById<ImageButton>(R.id.experimentalLockButton)
         val experimentalCard = findViewById<View>(R.id.experimentalCard)
