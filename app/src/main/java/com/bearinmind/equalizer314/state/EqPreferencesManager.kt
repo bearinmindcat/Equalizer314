@@ -282,6 +282,19 @@ class EqPreferencesManager(context: Context) {
             if (parts.size == 2) parts[1] to parts[0] else null
         }
 
+    // Audio Effects Pipeline — ordered list of effect IDs (enum names) that
+    // represents the intended processing order. UI persists drag-reorder
+    // here; the chain executor reads this back to know which effects run
+    // and in what order. Stored as a comma-separated list because the set
+    // is small and stable.
+    fun saveAudioEffectsOrder(order: List<String>) {
+        prefs.edit().putString("audioEffectsOrder", order.joinToString(",")).apply()
+    }
+    fun getAudioEffectsOrder(): List<String>? {
+        val s = prefs.getString("audioEffectsOrder", null) ?: return null
+        return s.split(',').filter { it.isNotBlank() }
+    }
+
     // Imported targets (stored as JSON array of names)
     fun addImportedTarget(name: String, rawText: String = "") {
         val list = getImportedTargets().toMutableList()

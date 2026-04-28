@@ -79,6 +79,10 @@
             android:name="com.bearinmind.equalizer314.ConvertToApoActivity"
             android:exported="false"
             android:theme="@style/Theme.Equalizer314" />
+        <activity
+            android:name="com.bearinmind.equalizer314.AudioEffectsPipelineActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Equalizer314" />
 
         <service
             android:name="com.bearinmind.equalizer314.audio.EqService"

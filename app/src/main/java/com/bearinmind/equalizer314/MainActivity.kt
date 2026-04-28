@@ -1800,6 +1800,13 @@ class MainActivity : AppCompatActivity() {
             overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
         }
 
+        // Audio Effects Pipeline — placeholder screen for chaining/reordering
+        // session-0 audio effects.
+        findViewById<View>(R.id.audioEffectsPipelineCard).setOnClickListener {
+            startActivity(Intent(this, AudioEffectsPipelineActivity::class.java))
+            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+        }
+
         // Experimental lock button — toggles locked/unlocked state
         val experimentalLockButton = findViewById<ImageButton>(R.id.experimentalLockButton)
         val experimentalCard = findViewById<View>(R.id.experimentalCard)
