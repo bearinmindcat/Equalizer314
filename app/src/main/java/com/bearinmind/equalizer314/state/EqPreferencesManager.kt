@@ -295,6 +295,35 @@ class EqPreferencesManager(context: Context) {
         return s.split(',').filter { it.isNotBlank() }
     }
 
+    /** Per-effect enable flag for the Audio Effects Pipeline. Defaults to
+     *  false — effects are off until the user toggles their power button. */
+    fun isAudioEffectEnabled(id: String): Boolean =
+        prefs.getBoolean("audioEffectEnabled_$id", false)
+    fun setAudioEffectEnabled(id: String, enabled: Boolean) {
+        prefs.edit().putBoolean("audioEffectEnabled_$id", enabled).apply()
+    }
+
+    // ---- Environmental Reverb -----------------------------------------
+    // User-facing units: dB for *Level fields (API uses mB; convert × 100
+    // when attaching to the AudioEffect), per-mille for diffusion/density,
+    // ratio for decayHfRatio. Defaults match Android's documented values.
+    fun saveReverbDecayTimeMs(v: Float) { prefs.edit().putFloat("reverbDecayTimeMs", v).apply() }
+    fun getReverbDecayTimeMs(): Float = prefs.getFloat("reverbDecayTimeMs", 1490f)
+    fun saveReverbDecayHfRatio(v: Float) { prefs.edit().putFloat("reverbDecayHfRatio", v).apply() }
+    fun getReverbDecayHfRatio(): Float = prefs.getFloat("reverbDecayHfRatio", 0.83f)
+    fun saveReverbReverbLevelDb(v: Float) { prefs.edit().putFloat("reverbReverbLevelDb", v).apply() }
+    fun getReverbReverbLevelDb(): Float = prefs.getFloat("reverbReverbLevelDb", -26f)
+    fun saveReverbRoomLevelDb(v: Float) { prefs.edit().putFloat("reverbRoomLevelDb", v).apply() }
+    fun getReverbRoomLevelDb(): Float = prefs.getFloat("reverbRoomLevelDb", -10f)
+    fun saveReverbReflectionsDelayMs(v: Float) { prefs.edit().putFloat("reverbReflectionsDelayMs", v).apply() }
+    fun getReverbReflectionsDelayMs(): Float = prefs.getFloat("reverbReflectionsDelayMs", 7f)
+    fun saveReverbReflectionsLevelDb(v: Float) { prefs.edit().putFloat("reverbReflectionsLevelDb", v).apply() }
+    fun getReverbReflectionsLevelDb(): Float = prefs.getFloat("reverbReflectionsLevelDb", -10f)
+    fun saveReverbDiffusionPct(v: Float) { prefs.edit().putFloat("reverbDiffusionPct", v).apply() }
+    fun getReverbDiffusionPct(): Float = prefs.getFloat("reverbDiffusionPct", 100f)
+    fun saveReverbDensityPct(v: Float) { prefs.edit().putFloat("reverbDensityPct", v).apply() }
+    fun getReverbDensityPct(): Float = prefs.getFloat("reverbDensityPct", 100f)
+
     // Imported targets (stored as JSON array of names)
     fun addImportedTarget(name: String, rawText: String = "") {
         val list = getImportedTargets().toMutableList()

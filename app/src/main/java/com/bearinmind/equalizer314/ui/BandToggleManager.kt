@@ -47,8 +47,13 @@ class BandToggleManager(
         val eq = state.parametricEq
         val bandCount = eq.getBandCount()
 
+        // Graphic-mode band toggles follow the slot label order (1, 2, 3,
+        // …) so the row stays in numeric order regardless of where the
+        // user has dragged each dot on the graph above. Other modes keep
+        // their natural index order.
         val orderedIndices = if (state.currentEqUiMode == EqUiMode.GRAPHIC) {
-            (0 until bandCount).sortedBy { eq.getBand(it)?.frequency ?: 0f }
+            val slots = state.bandSlots
+            (0 until bandCount).sortedBy { slots.getOrNull(it) ?: it }
         } else {
             (0 until bandCount).toList()
         }

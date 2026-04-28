@@ -29,10 +29,21 @@ class GraphicEqController(
     private val PAGE_SIZE = 8
     var targetCardHeight = 0
 
+    /** Order bands by their displayed slot label (1, 2, 3, …) so the
+     *  graphic-section sliders stay in numeric order regardless of where
+     *  the user has dragged dots on the graph. Falls back to natural
+     *  index when no slot mapping is present. */
+    private fun bandOrder(eq: com.bearinmind.equalizer314.dsp.ParametricEqualizer): List<Int> {
+        val slots = state.bandSlots
+        return (0 until eq.getBandCount()).sortedBy {
+            slots.getOrNull(it) ?: it
+        }
+    }
+
     /** Returns true if the page changed and sliders need rebuilding */
     fun updatePageForBand(bandIndex: Int?): Boolean {
         val eq = state.parametricEq
-        val allSorted = (0 until eq.getBandCount()).sortedBy { eq.getBand(it)?.frequency ?: 0f }
+        val allSorted = bandOrder(eq)
         val displayPos = if (bandIndex != null) {
             val idx = allSorted.indexOf(bandIndex)
             if (idx >= 0) idx else 0
@@ -49,7 +60,7 @@ class GraphicEqController(
         container.removeAllViews()
         sliderRefs.clear()
         val eq = state.parametricEq
-        allSortedIndices = (0 until eq.getBandCount()).sortedBy { eq.getBand(it)?.frequency ?: 0f }
+        allSortedIndices = bandOrder(eq)
 
         // Determine page from selected band
         val selectedBand = state.selectedBandIndex

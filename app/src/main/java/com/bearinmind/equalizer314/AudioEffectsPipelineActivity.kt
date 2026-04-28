@@ -33,15 +33,22 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
         val title: String,
         val description: String,
         val isFixed: Boolean = false,
+        /** Whether this effect supports the right-side on/off toggle.
+         *  Channel Input / Audio Output are fixed bookends with nothing to
+         *  toggle, and DynamicsProcessing is the main always-on chain
+         *  (controlled by the global Power FAB on the main screen). */
+        val canToggle: Boolean = true,
     ) {
         AUDIO_INPUT(
-            "Audio Source",
+            "Channel Input",
             "System audio at session 0 — input to the effects chain",
-            isFixed = true
+            isFixed = true,
+            canToggle = false
         ),
         DYNAMICS_PROCESSING(
             "DynamicsProcessing API",
-            "EQ, MBC, and Limiter — currently the active processing chain"
+            "EQ, MBC, and Limiter — currently the active processing chain",
+            canToggle = false
         ),
         ENVIRONMENTAL_REVERB(
             "Environmental Reverb",
@@ -62,7 +69,8 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
         AUDIO_OUTPUT(
             "Audio Output",
             "Speakers, headphones, or other connected output",
-            isFixed = true
+            isFixed = true,
+            canToggle = false
         ),
     }
 
@@ -70,6 +78,7 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
     private lateinit var recyclerView: RecyclerView
     private lateinit var adapter: PipelineAdapter
     private val items = mutableListOf<EffectId>()
+    private val enabledMap = HashMap<EffectId, Boolean>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -82,7 +91,23 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
         recyclerView.layoutManager = LinearLayoutManager(this)
         loadOrder()
 
-        adapter = PipelineAdapter(items) { vh -> touchHelper.startDrag(vh) }
+        // Hydrate enable state once; per-row binds read this map so toggles
+        // are immediate and survive rebinds during drag without a pref hit.
+        for (id in EffectId.values()) {
+            enabledMap[id] = eqPrefs.isAudioEffectEnabled(id.name)
+        }
+
+        adapter = PipelineAdapter(
+            items,
+            isEnabled = { enabledMap[it] ?: false },
+            onToggle = { effect ->
+                val newState = !(enabledMap[effect] ?: false)
+                enabledMap[effect] = newState
+                eqPrefs.setAudioEffectEnabled(effect.name, newState)
+            },
+            onHandleTouch = { vh -> touchHelper.startDrag(vh) },
+            onCardClick = { effect -> openDetailScreen(effect) }
+        )
         recyclerView.adapter = adapter
         touchHelper.attachToRecyclerView(recyclerView)
         recyclerView.addItemDecoration(ConnectorDecoration(this))
@@ -171,6 +196,16 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
         }
     })
 
+    private fun openDetailScreen(effect: EffectId) {
+        when (effect) {
+            EffectId.ENVIRONMENTAL_REVERB -> {
+                startActivity(android.content.Intent(this, EnvironmentalReverbActivity::class.java))
+                overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+            }
+            else -> { /* detail screens for the other effects land later */ }
+        }
+    }
+
     override fun finish() {
         super.finish()
         overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
@@ -180,7 +215,10 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
 
     private class PipelineAdapter(
         private val items: List<EffectId>,
+        private val isEnabled: (EffectId) -> Boolean,
+        private val onToggle: (EffectId) -> Unit,
         private val onHandleTouch: (RecyclerView.ViewHolder) -> Unit,
+        private val onCardClick: (EffectId) -> Unit,
     ) : RecyclerView.Adapter<PipelineAdapter.ViewHolder>() {
 
         override fun getItemCount() = items.size
@@ -259,7 +297,25 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
             textCol.addView(description)
             row.addView(textCol)
 
-            return ViewHolder(card, title, description, handle)
+            // Right-side power button — styled like the main Power FAB
+            // (12dp rounded square with stroke). Background drawable is set
+            // in onBindViewHolder/paintPower since fill, stroke, and icon
+            // tint all flip between on/off states.
+            val power = ImageView(ctx).apply {
+                setImageResource(R.drawable.ic_nav_power)
+                layoutParams = LinearLayout.LayoutParams(
+                    (36 * density).toInt(), (36 * density).toInt()
+                ).apply { marginStart = (8 * density).toInt() }
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                val pp = (8 * density).toInt()
+                setPadding(pp, pp, pp, pp)
+                isClickable = true
+                isFocusable = true
+                contentDescription = "Toggle effect"
+            }
+            row.addView(power)
+
+            return ViewHolder(card, title, description, handle, power)
         }
 
         @SuppressLint("ClickableViewAccessibility")
@@ -274,13 +330,67 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
                 holder.handle.setOnTouchListener(null)
             } else {
                 holder.handle.visibility = View.VISIBLE
-                holder.handle.setOnTouchListener { _, ev ->
-                    if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
-                        onHandleTouch(holder)
+                holder.handle.setOnTouchListener { v, ev ->
+                    // Drive the press state ourselves so the ripple stays
+                    // pinned at full alpha through ACTION_DOWN → drag-start
+                    // → drag-end without flickering when ItemTouchHelper
+                    // takes over the gesture.
+                    when (ev.actionMasked) {
+                        MotionEvent.ACTION_DOWN -> {
+                            v.isPressed = true
+                            onHandleTouch(holder)
+                        }
+                        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                            v.isPressed = false
+                        }
                     }
                     false
                 }
             }
+
+            if (effect.canToggle) {
+                holder.power.visibility = View.VISIBLE
+                paintPower(holder.power, isEnabled(effect))
+                holder.power.setOnClickListener {
+                    onToggle(effect)
+                    paintPower(holder.power, isEnabled(effect))
+                }
+            } else {
+                holder.power.visibility = View.GONE
+                holder.power.setOnClickListener(null)
+            }
+
+            // Tapping the card body (anywhere except the handle / power
+            // button) opens that effect's detail screen.
+            holder.itemView.setOnClickListener { onCardClick(effect) }
+            (holder.itemView as? MaterialCardView)?.apply {
+                isClickable = true
+                isFocusable = true
+            }
+        }
+
+        private fun paintPower(view: ImageView, enabled: Boolean) {
+            // Same 12dp dark rounded square on both states. When the effect
+            // is on, the icon and stroke both light up white; when off,
+            // both fall back to the muted gray. Color inversion is reserved
+            // for the main DynamicsProcessing FAB on the home screen.
+            val density = view.resources.displayMetrics.density
+            val on = enabled
+            val iconColor = if (on) 0xFFFFFFFF.toInt() else 0xFF555555.toInt()
+            val strokeColor = if (on) 0xFFFFFFFF.toInt() else 0xFF444444.toInt()
+            val shape = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 12 * density
+                setColor(0xFF2A2A2A.toInt())
+                setStroke((1 * density).toInt(), strokeColor)
+            }
+            val mask = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 12 * density
+                setColor(0xFFFFFFFF.toInt())
+            }
+            view.background = android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf(0x33FFFFFF.toInt()), shape, mask
+            )
+            view.imageTintList = android.content.res.ColorStateList.valueOf(iconColor)
         }
 
         class ViewHolder(
@@ -288,6 +398,7 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
             val title: TextView,
             val description: TextView,
             val handle: ImageView,
+            val power: ImageView,
         ) : RecyclerView.ViewHolder(view)
     }
 

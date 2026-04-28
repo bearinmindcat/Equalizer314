@@ -1466,7 +1466,7 @@ class EqGraphView @JvmOverloads constructor(
             return handleMbcTouch(event, crossovers)
         }
 
-        if (eqUiMode == EqUiMode.TABLE || !showBandPoints) {
+        if (!showBandPoints) {
             return super.onTouchEvent(event)
         }
 
@@ -1592,12 +1592,10 @@ class EqGraphView @JvmOverloads constructor(
             val graphWidth = width.toFloat()
             val graphHeight = height - 2 * vPad
 
-            // In GRAPHIC mode, keep frequency fixed — only allow gain changes
-            val newFreq = if (eqUiMode == EqUiMode.GRAPHIC) {
-                point.frequency
-            } else {
-                xToFreq(x, graphWidth)
-            }
+            // Free X+Y drag in every mode — Graphic & Table follow the
+            // dot's new frequency, their controllers re-bind to the
+            // updated band on the next onBandChanged tick.
+            val newFreq = xToFreq(x, graphWidth)
             point.frequency = newFreq
 
             val currentFilterType = parametricEq?.getBand(index)?.filterType ?: BiquadFilter.FilterType.BELL
