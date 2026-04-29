@@ -5,6 +5,8 @@ import android.widget.EditText
 import android.widget.ImageButton
 import androidx.appcompat.app.AppCompatActivity
 import com.bearinmind.equalizer314.state.EqPreferencesManager
+import com.bearinmind.equalizer314.ui.DiffusionDensityColumnsView
+import com.bearinmind.equalizer314.ui.DiffusionDensityView
 import com.bearinmind.equalizer314.ui.ReverbVisualizerView
 import com.google.android.material.slider.Slider
 
@@ -20,6 +22,8 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
 
     private lateinit var eqPrefs: EqPreferencesManager
     private lateinit var visualizer: ReverbVisualizerView
+    private lateinit var xyGraph: DiffusionDensityView
+    private lateinit var xyColumns: DiffusionDensityColumnsView
     private var isUpdating = false
 
     // Slider/text refs cached so the visualizer's drag handles can push
@@ -36,12 +40,18 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
     private lateinit var reflectDelayText: EditText
     private lateinit var reflectLevelSlider: Slider
     private lateinit var reflectLevelText: EditText
+    private lateinit var diffusionSlider: Slider
+    private lateinit var diffusionText: EditText
+    private lateinit var densitySlider: Slider
+    private lateinit var densityText: EditText
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_environmental_reverb)
         eqPrefs = EqPreferencesManager(this)
         visualizer = findViewById(R.id.reverbVisualizer)
+        xyGraph = findViewById(R.id.reverbDiffusionDensity)
+        xyColumns = findViewById(R.id.reverbDiffusionDensityColumns)
 
         findViewById<ImageButton>(R.id.reverbBackButton).setOnClickListener { finish() }
 
@@ -93,14 +103,51 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
             reflectLevelSlider, reflectLevelText,
             "%.0f", eqPrefs.getReverbReflectionsLevelDb(), eqPrefs::saveReverbReflectionsLevelDb
         ) { visualizer.reflectionsLevelDb = it }
-        wire(
-            findViewById(R.id.reverbDiffusionSlider), findViewById(R.id.reverbDiffusionText),
-            "%.0f", eqPrefs.getReverbDiffusionPct(), eqPrefs::saveReverbDiffusionPct
-        ) { visualizer.diffusionPct = it }
-        wire(
-            findViewById(R.id.reverbDensitySlider), findViewById(R.id.reverbDensityText),
-            "%.0f", eqPrefs.getReverbDensityPct(), eqPrefs::saveReverbDensityPct
-        ) { visualizer.densityPct = it }
+        diffusionSlider = findViewById(R.id.reverbDiffusionSlider)
+        diffusionText = findViewById(R.id.reverbDiffusionText)
+        densitySlider = findViewById(R.id.reverbDensitySlider)
+        densityText = findViewById(R.id.reverbDensityText)
+
+        wire(diffusionSlider, diffusionText, "%.0f", eqPrefs.getReverbDiffusionPct(),
+            eqPrefs::saveReverbDiffusionPct
+        ) {
+            visualizer.diffusionPct = it
+            xyGraph.diffusionPct = it
+            xyColumns.diffusionPct = it
+        }
+        wire(densitySlider, densityText, "%.0f", eqPrefs.getReverbDensityPct(),
+            eqPrefs::saveReverbDensityPct
+        ) {
+            visualizer.densityPct = it
+            xyGraph.densityPct = it
+            xyColumns.densityPct = it
+        }
+
+        // Seed both XY widgets with persisted values + listen for live
+        // drags from either. Each one updates prefs, the visualizer, the
+        // sliders, and the *other* XY widget so they stay in lockstep.
+        val initialDiff = eqPrefs.getReverbDiffusionPct()
+        val initialDens = eqPrefs.getReverbDensityPct()
+        xyGraph.diffusionPct = initialDiff; xyGraph.densityPct = initialDens
+        xyColumns.diffusionPct = initialDiff; xyColumns.densityPct = initialDens
+        val xyListener: (Float, Float) -> Unit = { diff, dens ->
+            eqPrefs.saveReverbDiffusionPct(diff)
+            eqPrefs.saveReverbDensityPct(dens)
+            visualizer.diffusionPct = diff
+            visualizer.densityPct = dens
+            pushSlider(diffusionSlider, diffusionText, "%.0f", diff)
+            pushSlider(densitySlider, densityText, "%.0f", dens)
+        }
+        xyGraph.onChanged = { diff, dens ->
+            xyColumns.diffusionPct = diff
+            xyColumns.densityPct = dens
+            xyListener(diff, dens)
+        }
+        xyColumns.onChanged = { diff, dens ->
+            xyGraph.diffusionPct = diff
+            xyGraph.densityPct = dens
+            xyListener(diff, dens)
+        }
 
         // Drag handles on the visualizer route back here so the slider,
         // text input, and persisted value all stay in sync.

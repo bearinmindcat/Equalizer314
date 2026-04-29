@@ -69,23 +69,66 @@
                     android:textColor="?attr/colorOnSurfaceVariant" />
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Visualization card — impulse response preview that updates
-                 live as the user scrubs the parameter sliders below. -->
+            <!-- Reverb amplitude IR — wide full-width card. -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="220dp"
                 android:layout_marginBottom="12dp"
-                app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
+                app:cardBackgroundColor="#FF1A1A1A"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
-                app:strokeWidth="0dp">
+                app:strokeWidth="1dp"
+                app:strokeColor="#FF333333">
 
                 <com.bearinmind.equalizer314.ui.ReverbVisualizerView
                     android:id="@+id/reverbVisualizer"
                     android:layout_width="match_parent"
-                    android:layout_height="120dp"
-                    android:layout_margin="12dp" />
+                    android:layout_height="match_parent" />
             </com.google.android.material.card.MaterialCardView>
+
+            <!-- Diffusion/Density X/Y graph (70%) + Diff/Dens column
+                 sliders (30%) — mirrors the Limiter screen's waveform +
+                 ceiling/GR side-by-side layout. -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="12dp">
+
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="0dp"
+                    android:layout_height="220dp"
+                    android:layout_weight="0.7"
+                    android:layout_marginEnd="6dp"
+                    app:cardBackgroundColor="#FF1A1A1A"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="0dp"
+                    app:strokeWidth="1dp"
+                    app:strokeColor="#FF333333">
+
+                    <com.bearinmind.equalizer314.ui.DiffusionDensityView
+                        android:id="@+id/reverbDiffusionDensity"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent" />
+                </com.google.android.material.card.MaterialCardView>
+
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="0dp"
+                    android:layout_height="220dp"
+                    android:layout_weight="0.3"
+                    android:layout_marginStart="6dp"
+                    app:cardBackgroundColor="#FF1A1A1A"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="0dp"
+                    app:strokeWidth="1dp"
+                    app:strokeColor="#FF333333">
+
+                    <com.bearinmind.equalizer314.ui.DiffusionDensityColumnsView
+                        android:id="@+id/reverbDiffusionDensityColumns"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent" />
+                </com.google.android.material.card.MaterialCardView>
+            </LinearLayout>
 
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
