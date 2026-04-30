@@ -38,6 +38,8 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
     private lateinit var roomText: EditText
     private lateinit var reflectDelaySlider: Slider
     private lateinit var reflectDelayText: EditText
+    private lateinit var revDelaySlider: Slider
+    private lateinit var revDelayText: EditText
     private lateinit var reflectLevelSlider: Slider
     private lateinit var reflectLevelText: EditText
     private lateinit var diffusionSlider: Slider
@@ -63,6 +65,7 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
         visualizer.roomLevelDb = eqPrefs.getReverbRoomLevelDb()
         visualizer.reflectionsDelayMs = eqPrefs.getReverbReflectionsDelayMs()
         visualizer.reflectionsLevelDb = eqPrefs.getReverbReflectionsLevelDb()
+        visualizer.reverbDelayMs = eqPrefs.getReverbDelayMs()
         visualizer.diffusionPct = eqPrefs.getReverbDiffusionPct()
         visualizer.densityPct = eqPrefs.getReverbDensityPct()
 
@@ -76,6 +79,8 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
         roomText = findViewById(R.id.reverbRoomText)
         reflectDelaySlider = findViewById(R.id.reverbReflectDelaySlider)
         reflectDelayText = findViewById(R.id.reverbReflectDelayText)
+        revDelaySlider = findViewById(R.id.reverbDelaySlider)
+        revDelayText = findViewById(R.id.reverbDelayText)
         reflectLevelSlider = findViewById(R.id.reverbReflectLevelSlider)
         reflectLevelText = findViewById(R.id.reverbReflectLevelText)
 
@@ -99,6 +104,10 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
             reflectDelaySlider, reflectDelayText,
             "%.0f", eqPrefs.getReverbReflectionsDelayMs(), eqPrefs::saveReverbReflectionsDelayMs
         ) { visualizer.reflectionsDelayMs = it }
+        wire(
+            revDelaySlider, revDelayText,
+            "%.0f", eqPrefs.getReverbDelayMs(), eqPrefs::saveReverbDelayMs
+        ) { visualizer.reverbDelayMs = it }
         wire(
             reflectLevelSlider, reflectLevelText,
             "%.0f", eqPrefs.getReverbReflectionsLevelDb(), eqPrefs::saveReverbReflectionsLevelDb
@@ -182,6 +191,10 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
             ReverbVisualizerView.Param.REFLECTIONS_LEVEL -> {
                 eqPrefs.saveReverbReflectionsLevelDb(value)
                 pushSlider(reflectLevelSlider, reflectLevelText, "%.0f", value)
+            }
+            ReverbVisualizerView.Param.REVERB_DELAY -> {
+                eqPrefs.saveReverbDelayMs(value)
+                pushSlider(revDelaySlider, revDelayText, "%.0f", value)
             }
         }
     }

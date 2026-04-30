@@ -254,6 +254,28 @@
                         </com.google.android.material.textfield.TextInputLayout>
                     </LinearLayout>
 
+                    <!-- Reverb Delay (gap between early reflections and late tail). -->
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="4dp">
+                        <TextView android:layout_width="120dp" android:layout_height="wrap_content"
+                            android:text="Reverb Delay (ms)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                            android:textColor="?attr/colorOnSurfaceVariant" />
+                        <com.google.android.material.slider.Slider android:id="@+id/reverbDelaySlider"
+                            android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                            android:valueFrom="0" android:valueTo="100" android:value="11"
+                            app:labelBehavior="gone" />
+                        <com.google.android.material.textfield.TextInputLayout android:layout_width="64dp"
+                            android:layout_height="wrap_content" android:layout_marginStart="4dp"
+                            app:boxCornerRadiusTopStart="8dp" app:boxCornerRadiusTopEnd="8dp"
+                            app:boxCornerRadiusBottomStart="8dp" app:boxCornerRadiusBottomEnd="8dp"
+                            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense">
+                            <com.google.android.material.textfield.TextInputEditText android:id="@+id/reverbDelayText"
+                                android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:inputType="numberDecimal" android:textSize="12sp"
+                                android:gravity="center" android:imeOptions="actionDone" />
+                        </com.google.android.material.textfield.TextInputLayout>
+                    </LinearLayout>
+
                     <!-- Reflections Level -->
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="4dp">
