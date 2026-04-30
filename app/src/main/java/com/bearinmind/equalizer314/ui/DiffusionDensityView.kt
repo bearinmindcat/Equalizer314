@@ -7,6 +7,8 @@ import android.graphics.Path
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
+import java.util.Random
+import kotlin.math.sqrt
 
 /**
  * X/Y editor for the EnvironmentalReverb's Diffusion (X) and Density (Y).
@@ -69,6 +71,11 @@ class DiffusionDensityView @JvmOverloads constructor(
     }
     private val dotRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFFDDDDDD.toInt(); strokeWidth = 2.5f; style = Paint.Style.STROKE
+    }
+    // Mini dots drawn INSIDE the X/Y dot to visualize what the
+    // density (count) and diffusion (jitter) values are doing.
+    private val miniDotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFAAAAAA.toInt(); style = Paint.Style.FILL
     }
     private val haloPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0x38AAAAAA.toInt(); style = Paint.Style.FILL
@@ -146,12 +153,13 @@ class DiffusionDensityView @JvmOverloads constructor(
         // 0/100 — same trick the gate / compressor curves use. Filled
         // with the graph-bg colour and ringed in light grey to match
         // those views exactly.
-        val dotR = 20f
+        val dotR = 40f
         val dotMargin = dotR + 2f
         val dotX = px.coerceIn(plotL + dotMargin, plotR - dotMargin)
         val dotY = py.coerceIn(plotT + dotMargin, plotB - dotMargin)
-        if (dragging) canvas.drawCircle(dotX, dotY, 24f * density, haloPaint)
+        if (dragging) canvas.drawCircle(dotX, dotY, dotR + 12f * density, haloPaint)
         canvas.drawCircle(dotX, dotY, dotR, dotBgPaint)
+        drawMiniDots(canvas, dotX, dotY, dotR)
         canvas.drawCircle(dotX, dotY, dotR, dotRingPaint)
 
         // Axis pill labels. Density's centre sits 40dp from the left
@@ -161,6 +169,84 @@ class DiffusionDensityView @JvmOverloads constructor(
         val pillEdgeOffset = 40f * density
         drawAxisPill(canvas, "Diffusion", (plotL + plotR) / 2f, plotB - pillEdgeOffset, rotated = false)
         drawAxisPill(canvas, "Density", plotL + pillEdgeOffset, (plotT + plotB) / 2f, rotated = true)
+    }
+
+    /** Renders the mini-dot pattern inside the X/Y dot.
+     *  - Density drives the count: 4 (min) → 30 (max), with the latest
+     *    dot fading in via alpha as the slider crosses each integer.
+     *  - Diffusion drives the jitter: at 0 % the dots sit on a perfect
+     *    rowed grid; at 100 % they are randomly scattered.
+     *  - Grid extent (gridR) scales smoothly with density so existing
+     *    dots migrate outward as new ones fade in — no snap reshuffles.
+     *  Fixed RNG seed keeps each dot's jitter stable across redraws. */
+    private fun drawMiniDots(canvas: Canvas, cx: Float, cy: Float, dotR: Float) {
+        val miniR = 1.5f * density
+        val nDotsFloat = 4f + (densityPct / 100f) * 26f  // continuous 4..30
+        val effectiveR = dotR - miniR - 3f * density
+        if (effectiveR <= 0f) return
+        val diffFrac = (diffusionPct / 100f).coerceIn(0f, 1f)
+
+        // Grid extent grows with density. Existing dots migrate outward
+        // smoothly as new dots fade in at the periphery. Floor bumped
+        // a touch (0.30 → 0.40) so even at min density + min diffusion
+        // the dots breathe a bit instead of clumping in the centre.
+        val densityFrac = ((nDotsFloat - 4f) / 26f).coerceIn(0f, 1f)
+        val gridR = effectiveR * (0.40f + 0.35f * densityFrac)
+        val gridHalfW = gridR * 0.781f   // 6 cols × 5 rows fits with
+        val gridHalfH = gridR * 0.625f   // square cells, corners on r
+        val cellStepX = gridHalfW * 2f / 5f
+        val cellStepY = gridHalfH * 2f / 4f
+
+        val rng = Random(42L)
+        val baseAlpha = miniDotPaint.alpha
+        for ((i, cell) in miniDotOrder.withIndex()) {
+            val alpha = (nDotsFloat - i).coerceIn(0f, 1f)
+            if (alpha <= 0f) break
+
+            val col = cell.first
+            val row = cell.second
+            var px = cx - gridHalfW + col * cellStepX
+            var py = cy - gridHalfH + row * cellStepY
+
+            // Diffusion scatters dots away from their grid cell.
+            val jitterScale = effectiveR * 0.7f * diffFrac
+            px += (rng.nextFloat() - 0.5f) * 2f * jitterScale
+            py += (rng.nextFloat() - 0.5f) * 2f * jitterScale
+
+            // Clamp to inside the X/Y dot's circle.
+            val dx = px - cx
+            val dy = py - cy
+            val dist = sqrt(dx * dx + dy * dy)
+            if (dist > effectiveR) {
+                px = cx + dx / dist * effectiveR
+                py = cy + dy / dist * effectiveR
+            }
+
+            miniDotPaint.alpha = (alpha * baseAlpha).toInt().coerceIn(0, 255)
+            canvas.drawCircle(px, py, miniR, miniDotPaint)
+        }
+        miniDotPaint.alpha = baseAlpha
+    }
+
+    /** Order in which the 30 grid cells "appear" as density grows.
+     *  Sorted by distance from the grid's centre so low-density layouts
+     *  cluster around the middle and new dots emerge outward. */
+    private val miniDotOrder: List<Pair<Int, Int>> = run {
+        val maxCols = 6
+        val maxRows = 5
+        val centerCol = (maxCols - 1) / 2f
+        val centerRow = (maxRows - 1) / 2f
+        val cells = mutableListOf<Triple<Int, Int, Float>>()
+        for (col in 0 until maxCols) {
+            for (row in 0 until maxRows) {
+                val dx = col - centerCol
+                val dy = row - centerRow
+                val dist = sqrt(dx * dx + dy * dy)
+                cells.add(Triple(col, row, dist))
+            }
+        }
+        cells.sortBy { it.third }
+        cells.map { Pair(it.first, it.second) }
     }
 
     private fun drawAxisPill(canvas: Canvas, text: String, cx: Float, cy: Float, rotated: Boolean) {

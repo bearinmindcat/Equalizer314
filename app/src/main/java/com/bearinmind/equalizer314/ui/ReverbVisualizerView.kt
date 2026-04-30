@@ -169,6 +169,13 @@ class ReverbVisualizerView @JvmOverloads constructor(
         color = 0xFF444444.toInt()
         strokeWidth = 1.5f * density
     }
+    // Faint shaded fill drawn over the silent regions (Pre-delay and
+    // Reverb Delay zones in the bar area) to communicate "intentionally
+    // empty" instead of looking like dead pixels.
+    private val silenceZonePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = 0x14FFFFFF.toInt()
+    }
     // Early Reflections vertical-axis range — matches the Reflect (dB)
     // slider's valueFrom/valueTo in activity_environmental_reverb.xml
     // and the EnvironmentalReverb API's setReflectionsLevel range.
@@ -326,6 +333,7 @@ class ReverbVisualizerView @JvmOverloads constructor(
         decayEnd = timeToX((reflectionsDelayMs + earlyDurationMs + decayDurationMs).coerceAtMost(xMaxMs))
 
         drawBackground(canvas)
+        drawSilenceZones(canvas)
         drawGhostEnvelope(canvas, decayDurationMs)
         drawBars(canvas, earlyDurationMs, decayDurationMs)
         drawFrame(canvas)
@@ -333,6 +341,15 @@ class ReverbVisualizerView @JvmOverloads constructor(
         drawTimeAxisLine(canvas)
         drawControlCircles(canvas)
         drawHandles(canvas)
+    }
+
+    /** Faint shaded rectangles over zones 0 (Pre-delay) and 2 (Reverb
+     *  Delay) in the bar area, to mark them as "intentionally silent"
+     *  rather than empty/dead pixels. */
+    private fun drawSilenceZones(c: Canvas) {
+        for (zone in listOf(0, 2)) {
+            c.drawRect(zoneStart(zone), plotT, zoneEnd(zone), plotB, silenceZonePaint)
+        }
     }
 
     /** Card outlines around the Early Reflections (zone 1) and Decay
@@ -465,7 +482,6 @@ class ReverbVisualizerView @JvmOverloads constructor(
 
         val preDelayX = preDelayToX(reflectionsDelayMs)
         val earlyEndAbs = earlyToX(earlyReflectionsWidthMs)
-        val decayEndAbs = decayToX(decayTimeMs)
 
         // 1. Source signal — hollow "doughnut" capsule at the very left
         //    edge. Outlined rounded-rect with empty interior; the
@@ -491,18 +507,20 @@ class ReverbVisualizerView @JvmOverloads constructor(
             c.restore()
         }
 
-        // 2. Early reflections — 10 bars between Pre-delay and Early
-        //    Refl circle positions, scaled vertically by the
-        //    Reflections Level dB. Skipped entirely when the slider
-        //    is at its minimum (= "no early reflections"), so the
-        //    cluster cleanly disappears instead of compressing.
-        if (earlyReflectionsWidthMs > earlyMinMs + 0.5f) {
+        // 2. Early reflections — bars between Pre-delay and Early Refl
+        //    circle positions, scaled vertically by Reflections Level
+        //    dB. At the slider's minimum (= "no early reflections")
+        //    only ONE anchor bar is drawn at the cluster's start, and
+        //    it's rendered as a DOTTED line to communicate "the region
+        //    exists but has no width yet."
+        run {
             val refLevel = dbToAmp01(reflectionsLevelDb)
             val earlyStartX = preDelayX
             val earlyEndX = earlyEndAbs.coerceAtLeast(earlyStartX + 1f)
-            val nRefl = 10
+            val collapsed = earlyReflectionsWidthMs <= earlyMinMs + 0.5f
+            val nRefl = if (collapsed) 1 else 10
             for (i in 0 until nRefl) {
-                val fracT = (i + 0.5f) / nRefl
+                val fracT = if (collapsed) 0f else (i + 0.5f) / nRefl
                 val x = earlyStartX + fracT * (earlyEndX - earlyStartX)
                 if (x > plotR) continue
                 val baseAmp = envelopeAtX(x)
@@ -520,11 +538,22 @@ class ReverbVisualizerView @JvmOverloads constructor(
         //    the decay fills both the Reverb Delay and Decay zones.
         //    As Reverb Delay grows, the gap re-opens and the tail
         //    retreats into zone 3. Body = first 40 %, tail = remaining 60 %.
+        // Tail visual width is proportional to decay duration ONLY,
+        // independent of Reverb Delay. Reverb Delay still positions
+        // tailStartX (so changing it slides the whole tail), but the
+        // length grows smoothly with decay regardless of where the
+        // tail starts. This kills the asymmetric "snap-open" you saw
+        // when Reverb Delay was at its minimum.
         val tailStartX = revDelayToX(reverbDelayMs)
-        val tailEndX = decayEndAbs.coerceIn(tailStartX + 1f, plotR)
+        val zone3Width = zoneEnd(3) - zoneStart(3)
+        val decayFrac = ((decayTimeMs - decayMinMs) /
+            (decayMaxMs - decayMinMs)).coerceIn(0f, 1f)
+        val tailLengthPx = decayFrac * zone3Width
+        val tailEndX = (tailStartX + tailLengthPx).coerceAtMost(plotR)
+            .coerceAtLeast(tailStartX + 1f)
+        val tailLevel = dbToAmp01(reverbLevelDb)
         val nTail = 30
         val bodyTailSplit = 0.40f
-        val tailLevel = dbToAmp01(reverbLevelDb)
         for (i in 0 until nTail) {
             val fracT = (i + 0.5f) / nTail
             val x = tailStartX + fracT * (tailEndX - tailStartX)
