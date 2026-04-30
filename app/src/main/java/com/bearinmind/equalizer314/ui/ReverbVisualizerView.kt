@@ -160,6 +160,26 @@ class ReverbVisualizerView @JvmOverloads constructor(
         color = 0xFFDDDDDD.toInt()
         strokeWidth = 2.5f
     }
+    // Outline drawn around zones that allow 2-D drag (Early Reflections
+    // and Decay). The dot inside the card can be dragged side-to-side
+    // (existing X behaviour) and up-and-down (new Y behaviour, visual-
+    // only for now).
+    private val zoneCardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        color = 0xFF444444.toInt()
+        strokeWidth = 1.5f * density
+    }
+    // Early Reflections vertical-axis range — matches the Reflect (dB)
+    // slider's valueFrom/valueTo in activity_environmental_reverb.xml
+    // and the EnvironmentalReverb API's setReflectionsLevel range.
+    private val reflectionsLevelMinDb = -90f
+    private val reflectionsLevelMaxDb = 10f
+
+    // Decay vertical-axis range — matches the Reverb (dB) slider's
+    // valueFrom/valueTo (-90..+20 dB) and the API's setReverbLevel
+    // range. Y position of the Decay dot maps to reverbLevelDb.
+    private val reverbLevelMinDb = -90f
+    private val reverbLevelMaxDb = 20f
 
     private val ghostPath = Path()
 
@@ -309,9 +329,69 @@ class ReverbVisualizerView @JvmOverloads constructor(
         drawGhostEnvelope(canvas, decayDurationMs)
         drawBars(canvas, earlyDurationMs, decayDurationMs)
         drawFrame(canvas)
+        drawZoneCards(canvas)
         drawTimeAxisLine(canvas)
         drawControlCircles(canvas)
         drawHandles(canvas)
+    }
+
+    /** Card outlines around the Early Reflections (zone 1) and Decay
+     *  (zone 3) zones — these zones support 2-D drag so a visible
+     *  container hints at the dot's freedom of movement. The card's
+     *  left and right edges align exactly with the zone's tick marks. */
+    private fun drawZoneCards(c: Canvas) {
+        val cornerR = 8f * density
+        val topPad = 2f * density
+        val bottomPad = 2f * density
+        for (zone in listOf(1, 3)) {
+            val left = zoneStart(zone)
+            val right = zoneEnd(zone)
+            val top = controlBandTop + topPad
+            val bottom = controlBandBottom - bottomPad
+            c.drawRoundRect(left, top, right, bottom, cornerR, cornerR, zoneCardPaint)
+        }
+    }
+
+    /** Bounds of a zone's drag card — used to clamp the dot's Y so it
+     *  doesn't escape the visible card. Returns (top, bottom) Y. */
+    private fun zoneCardYBounds(): Pair<Float, Float> {
+        val r = 5.5f * density
+        val topPad = 2f * density
+        val bottomPad = 2f * density
+        return Pair(
+            controlBandTop + topPad + r + 2f,
+            controlBandBottom - bottomPad - r - 2f,
+        )
+    }
+
+    /** Map the Early Reflections dot's Y position back to the
+     *  reflectionsLevelDb range. Top of card = max dB, bottom = min. */
+    private fun reflectionsLevelDbToY(): Float {
+        val (cardYTop, cardYBot) = zoneCardYBounds()
+        val frac = ((reflectionsLevelDb - reflectionsLevelMinDb) /
+            (reflectionsLevelMaxDb - reflectionsLevelMinDb)).coerceIn(0f, 1f)
+        return cardYBot - frac * (cardYBot - cardYTop)
+    }
+    private fun yToReflectionsLevelDb(y: Float): Float {
+        val (cardYTop, cardYBot) = zoneCardYBounds()
+        val ranged = y.coerceIn(cardYTop, cardYBot)
+        val frac = (cardYBot - ranged) / (cardYBot - cardYTop)
+        return reflectionsLevelMinDb + frac * (reflectionsLevelMaxDb - reflectionsLevelMinDb)
+    }
+
+    /** Map the Decay dot's Y position back to the reverbLevelDb range.
+     *  Top of card = max dB, bottom = min. */
+    private fun reverbLevelDbToY(): Float {
+        val (cardYTop, cardYBot) = zoneCardYBounds()
+        val frac = ((reverbLevelDb - reverbLevelMinDb) /
+            (reverbLevelMaxDb - reverbLevelMinDb)).coerceIn(0f, 1f)
+        return cardYBot - frac * (cardYBot - cardYTop)
+    }
+    private fun yToReverbLevelDb(y: Float): Float {
+        val (cardYTop, cardYBot) = zoneCardYBounds()
+        val ranged = y.coerceIn(cardYTop, cardYBot)
+        val frac = (cardYBot - ranged) / (cardYBot - cardYTop)
+        return reverbLevelMinDb + frac * (reverbLevelMaxDb - reverbLevelMinDb)
     }
 
     private fun drawTimeAxisLine(c: Canvas) {
@@ -412,10 +492,12 @@ class ReverbVisualizerView @JvmOverloads constructor(
         }
 
         // 2. Early reflections — 10 bars between Pre-delay and Early
-        //    Refl circle positions. Skipped entirely when the slider
+        //    Refl circle positions, scaled vertically by the
+        //    Reflections Level dB. Skipped entirely when the slider
         //    is at its minimum (= "no early reflections"), so the
         //    cluster cleanly disappears instead of compressing.
         if (earlyReflectionsWidthMs > earlyMinMs + 0.5f) {
+            val refLevel = dbToAmp01(reflectionsLevelDb)
             val earlyStartX = preDelayX
             val earlyEndX = earlyEndAbs.coerceAtLeast(earlyStartX + 1f)
             val nRefl = 10
@@ -424,7 +506,8 @@ class ReverbVisualizerView @JvmOverloads constructor(
                 val x = earlyStartX + fracT * (earlyEndX - earlyStartX)
                 if (x > plotR) continue
                 val baseAmp = envelopeAtX(x)
-                val amp = if (i % 2 == 1) baseAmp * altShrink else baseAmp
+                val shrunk = if (i % 2 == 1) baseAmp * altShrink else baseAmp
+                val amp = shrunk * refLevel
                 if (amp < 0.01f) continue
                 c.drawLine(x, plotB, x, amp01ToY(amp), earlyBarPaint)
             }
@@ -439,14 +522,16 @@ class ReverbVisualizerView @JvmOverloads constructor(
         //    retreats into zone 3. Body = first 40 %, tail = remaining 60 %.
         val tailStartX = revDelayToX(reverbDelayMs)
         val tailEndX = decayEndAbs.coerceIn(tailStartX + 1f, plotR)
-        val nTail = 60
+        val nTail = 30
         val bodyTailSplit = 0.40f
+        val tailLevel = dbToAmp01(reverbLevelDb)
         for (i in 0 until nTail) {
             val fracT = (i + 0.5f) / nTail
             val x = tailStartX + fracT * (tailEndX - tailStartX)
             if (x > plotR) continue
             val baseAmp = envelopeAtX(x)
-            val amp = if (i % 2 == 1) baseAmp * altShrink else baseAmp
+            val shrunk = if (i % 2 == 1) baseAmp * altShrink else baseAmp
+            val amp = shrunk * tailLevel
             if (amp < 0.01f) continue
             val paint = if (fracT < bodyTailSplit) bodyBarPaint else tailBarPaint
             c.drawLine(x, plotB, x, amp01ToY(amp), paint)
@@ -542,22 +627,30 @@ class ReverbVisualizerView @JvmOverloads constructor(
         val revDelayX = clampInZone(2, revDelayToX(reverbDelayMs))
         val decayX = clampInZone(3, decayToX(decayTimeMs))
 
+        // Early & Decay zones support 2-D drag — their dot Y can leave
+        // the trackline. Pre-delay & Reverb Delay stay on the line.
+        // Both dot Ys are *derived* from their dB params so each dot
+        // and the matching dB slider stay in sync automatically.
+        val earlyY = reflectionsLevelDbToY()
+        val decayY = reverbLevelDbToY()
+
         handlePos[Handle.PREDELAY_CIRCLE] = HandlePos(preDelayX, cy)
-        handlePos[Handle.EARLY_CIRCLE] = HandlePos(earlyX, cy)
+        handlePos[Handle.EARLY_CIRCLE] = HandlePos(earlyX, earlyY)
         handlePos[Handle.REVDELAY_CIRCLE] = HandlePos(revDelayX, cy)
-        handlePos[Handle.DECAY_CIRCLE] = HandlePos(decayX, cy)
+        handlePos[Handle.DECAY_CIRCLE] = HandlePos(decayX, decayY)
         handlePos.remove(Handle.SOURCE_CIRCLE)
 
-        for ((h, x) in listOf(
-            Handle.PREDELAY_CIRCLE to preDelayX,
-            Handle.EARLY_CIRCLE to earlyX,
-            Handle.REVDELAY_CIRCLE to revDelayX,
-            Handle.DECAY_CIRCLE to decayX,
+        for ((h, pos) in listOf(
+            Handle.PREDELAY_CIRCLE to (preDelayX to cy),
+            Handle.EARLY_CIRCLE to (earlyX to earlyY),
+            Handle.REVDELAY_CIRCLE to (revDelayX to cy),
+            Handle.DECAY_CIRCLE to (decayX to decayY),
         )) {
+            val (x, y) = pos
             val active = h == grabbed
-            c.drawCircle(x, cy, r, handleFillPaint)
+            c.drawCircle(x, y, r, handleFillPaint)
             val ring = if (active) handleFillActivePaint else handleStrokePaint
-            c.drawCircle(x, cy, r, ring)
+            c.drawCircle(x, y, r, ring)
         }
     }
 
@@ -668,9 +761,16 @@ class ReverbVisualizerView @JvmOverloads constructor(
                 cb?.invoke(Param.REFLECTIONS_DELAY, newDelay)
             }
             Handle.EARLY_CIRCLE -> {
-                // Constrained to the 25..50 % zone; X maps linearly
-                // onto earlyReflectionsWidthMs in [0, 1000] ms.
+                // Constrained to the 25..50 % zone. X maps linearly
+                // onto earlyReflectionsWidthMs in [0, 1000] ms; Y maps
+                // linearly onto reflectionsLevelDb in [-90, +10] dB
+                // (top of card = louder, bottom = quieter). Dragging
+                // the dot up makes the early-reflection bars taller;
+                // the Reflect (dB) slider tracks the dot in real time.
                 earlyReflectionsWidthMs = xToEarly(x)
+                val newDb = yToReflectionsLevelDb(y)
+                reflectionsLevelDb = newDb
+                cb?.invoke(Param.REFLECTIONS_LEVEL, newDb)
             }
             Handle.REVDELAY_CIRCLE -> {
                 // Constrained to the 50..75 % zone; X maps linearly
@@ -680,11 +780,18 @@ class ReverbVisualizerView @JvmOverloads constructor(
                 cb?.invoke(Param.REVERB_DELAY, newDelay)
             }
             Handle.DECAY_CIRCLE -> {
-                // Constrained to the 75..100 % zone; X maps linearly
-                // onto decayTimeMs in [100, 20 000] ms.
+                // Constrained to the 75..100 % zone. X maps linearly
+                // onto decayTimeMs in [100, 20 000] ms; Y maps onto
+                // reverbLevelDb in [-90, +20] dB (top = louder tail,
+                // bottom = quieter). Dragging the dot up makes the
+                // late-tail bars taller and the Reverb (dB) slider
+                // tracks the dot in real time.
                 val newDecay = xToDecay(x)
                 decayTimeMs = newDecay
                 cb?.invoke(Param.DECAY_TIME, newDecay)
+                val newDb = yToReverbLevelDb(y)
+                reverbLevelDb = newDb
+                cb?.invoke(Param.REVERB_LEVEL, newDb)
             }
         }
     }
