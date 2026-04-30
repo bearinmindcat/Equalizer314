@@ -229,39 +229,22 @@ class ReverbVisualizerView @JvmOverloads constructor(
     }
 
     private fun drawGhostEnvelope(c: Canvas, decayDurationMs: Float) {
-        // Linear envelope: direct sound spike → flat through pre-delay
-        // → ramps from reflection level to reverb level across the
-        // early-reflection window → linearly drops 60 dB across the
-        // decay window. No HF curvature for now.
-        val refl = reflectionsDelayMs
-        val tailStartMs = refl + earlyReflectionsWidthMs
-        val samples = 100
-
+        // The envelope is a single straight line from the top-left
+        // corner of the plot to the bottom-right. Pre-delay and
+        // early-reflections width move the BARS along the time axis,
+        // but the envelope shape stays fixed.
         ghostPath.reset()
-        var first = true
-        for (s in 0..samples) {
-            val tFrac = s.toFloat() / samples
-            val tMs = tFrac * xMaxMs
-            val amp = when {
-                tMs < refl -> dbToAmp01(roomLevelDb) * kotlin.math.exp(-(tMs * tMs) / 8f)
-                tMs < tailStartMs -> {
-                    val k = ((tMs - refl) / (tailStartMs - refl)).coerceIn(0f, 1f)
-                    val db = reflectionsLevelDb + (reverbLevelDb - reflectionsLevelDb) * k
-                    dbToAmp01(db)
-                }
-                else -> {
-                    val tailDur = decayDurationMs.coerceAtLeast(50f)
-                    val tailFrac = ((tMs - tailStartMs) / tailDur).coerceIn(0f, 1f)
-                    val envDb = reverbLevelDb - 60f * tailFrac  // linear
-                    dbToAmp01(envDb)
-                }
-            }
-            val x = timeToX(tMs)
-            val y = amp01ToY(amp)
-            if (first) { ghostPath.moveTo(x, y); first = false }
-            else ghostPath.lineTo(x, y)
-        }
+        ghostPath.moveTo(plotL, plotT)
+        ghostPath.lineTo(plotR, plotB)
         c.drawPath(ghostPath, ghostEnvelopePaint)
+    }
+
+    /** Linear amplitude (0..1) at a given x: 1.0 at the left edge,
+     *  0.0 at the right edge. All bars sample this so their heights
+     *  drop top-left to bottom-right regardless of region. */
+    private fun envelopeAtX(x: Float): Float {
+        val plotW = (plotR - plotL).coerceAtLeast(1f)
+        return (1f - (x - plotL) / plotW).coerceIn(0f, 1f)
     }
 
     private fun drawBars(c: Canvas, earlyDurationMs: Float, decayDurationMs: Float) {
@@ -270,52 +253,55 @@ class ReverbVisualizerView @JvmOverloads constructor(
         val roomLevel = dbToAmp01(roomLevelDb)
         val tailStartMs = refl + earlyDurationMs
 
-        // 1. Source signal — single tall bar at t=0. Inset by half the
-        // stroke width so the bar reads fully on-screen instead of
-        // being half-clipped against the left edge of the plot. Always
-        // drawn at full plot height so it's the visible "anchor" line
-        // for the rest of the bars.
+        // Every bar samples its height from [envelopeAtX], a single
+        // straight line from (plotL, plotT) to (plotR, plotB). That
+        // way the swarm always traces a clean diagonal from upper-left
+        // to lower-right regardless of where pre-delay or the early-
+        // reflection cluster lands on the time axis.
+
+        // 1. Source signal — single bar at t=0, inset by half the
+        //    stroke width so the line reads fully on-screen.
         run {
-            val sourceAmp = if (roomLevel > 0.01f) roomLevel else 1f
             val inset = directBarPaint.strokeWidth * 0.5f + 1f * density
             val x0 = (timeToX(0f) + inset).coerceAtLeast(plotL + inset)
-            c.drawLine(x0, plotB, x0, amp01ToY(sourceAmp), directBarPaint)
+            val amp = envelopeAtX(x0)
+            c.drawLine(x0, plotB, x0, amp01ToY(amp), directBarPaint)
         }
 
-        // 2. Early reflections — fixed count, evenly spaced, deterministic
-        //    height taper. No Density/Diffusion influence (yet).
+        // 2. Early reflections — fixed count, evenly spaced.
         val nRefl = 10
         for (i in 0 until nRefl) {
             val fracT = (i + 0.5f) / nRefl
             val t = refl + earlyDurationMs * fracT
-            val taper = 1f - fracT * 0.5f
-            val amp = refLevel * taper
             val x = timeToX(t)
+            val amp = envelopeAtX(x)
+            if (amp < 0.01f) continue
             c.drawLine(x, plotB, x, amp01ToY(amp), earlyBarPaint)
         }
 
-        // 3. Reverb body + decay tail — fixed count, evenly spaced,
-        //    linear envelope. Body = first 40 %, tail = remaining 60 %.
+        // 3. Reverb body + decay tail — fixed count, evenly spaced.
+        //    Body = first 40 % of the tail region, tail = remaining 60 %.
         val bodyTailSplit = 0.40f
         val nTail = 60
         val tailDur = decayDurationMs.coerceAtLeast(50f)
         for (i in 0 until nTail) {
             val tailFrac = (i + 0.5f) / nTail
-            val envDb = reverbLevelDb - 60f * tailFrac  // linear decay
-            val envAmp = dbToAmp01(envDb)
-            if (envAmp < 0.01f) continue
             val tMs = tailStartMs + tailDur * tailFrac
             val x = timeToX(tMs)
+            if (x > plotR) continue
+            val amp = envelopeAtX(x)
+            if (amp < 0.01f) continue
             val paint = if (tailFrac < bodyTailSplit) bodyBarPaint else tailBarPaint
-            c.drawLine(x, plotB, x, amp01ToY(envAmp), paint)
+            c.drawLine(x, plotB, x, amp01ToY(amp), paint)
         }
 
         // Cache handle anchor positions on the underlying envelope.
+        // Curve-anchor handles aren't drawn anymore but the cached
+        // positions are kept for any future re-enable.
         handlePos[Handle.ROOM] = HandlePos(timeToX(0f), amp01ToY(roomLevel))
         handlePos[Handle.REFLECTIONS] = HandlePos(timeToX(refl), amp01ToY(refLevel))
         handlePos[Handle.REVERB] = HandlePos(timeToX(tailStartMs), amp01ToY(dbToAmp01(reverbLevelDb)))
         run {
-            // Linear-tail mid-point handle.
             val midFrac = 0.5f
             val midT = tailStartMs + decayDurationMs * midFrac
             val midDb = reverbLevelDb - 60f * midFrac
