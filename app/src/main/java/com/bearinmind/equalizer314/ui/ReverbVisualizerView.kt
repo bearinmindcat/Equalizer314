@@ -269,7 +269,7 @@ class ReverbVisualizerView @JvmOverloads constructor(
         // envelope occupy the rest of the height below the band.
         val sideMargin = 6f * density
         val bottomMargin = 6f * density
-        val topBandH = 56f * density
+        val topBandH = 68f * density
         plotL = sideMargin
         plotR = w - sideMargin
         plotT = topBandH
@@ -407,10 +407,14 @@ class ReverbVisualizerView @JvmOverloads constructor(
             c.drawLine(x, plotB, x, amp01ToY(amp), earlyBarPaint)
         }
 
-        // 3. Reverb body + decay tail — 60 bars between Early Refl and
-        //    Decay circle positions. Body = first 40 %, tail = the
-        //    remaining 60 %.
-        val tailStartX = earlyEndX
+        // 3. Reverb body + decay tail — confined to zone 2. The tail
+        //    starts at the zone's left edge (the 66 % tick) and ends
+        //    at the Decay circle, so changing Early Reflections doesn't
+        //    push the decay region around. Decay Time only governs the
+        //    late tail in real reverbs (Android EnvironmentalReverb +
+        //    standard Schroeder model), so this matches that model.
+        //    Body = first 40 %, tail = remaining 60 %.
+        val tailStartX = zoneStart(2)
         val tailEndX = decayEndAbs.coerceIn(tailStartX + 1f, plotR)
         val nTail = 60
         val bodyTailSplit = 0.40f
