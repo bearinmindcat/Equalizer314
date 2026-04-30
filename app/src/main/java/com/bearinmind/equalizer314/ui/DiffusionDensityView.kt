@@ -47,6 +47,20 @@ class DiffusionDensityView @JvmOverloads constructor(
     private val gridLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFF888888.toInt(); textSize = 24f
     }
+
+    // Rounded "axis pill" labels — same paint trio as the
+    // EqGraphView's "Band N | freq | dB | type" pill so the styling
+    // reads as part of the same app.
+    private val axisPillTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFAAAAAA.toInt(); textSize = 20f
+    }
+    private val axisPillBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF1C1C1C.toInt(); style = Paint.Style.FILL
+    }
+    private val axisPillStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF444444.toInt(); style = Paint.Style.STROKE
+        strokeWidth = 2f
+    }
     // Dot styling matched to MBC's gate / compressor curves: dark
     // graph-color fill so it punches through the gridlines, with a
     // light-grey ring on top.
@@ -110,7 +124,9 @@ class DiffusionDensityView @JvmOverloads constructor(
             canvas.drawLine(gx, xLabelBottomY, gx, plotB, gridPaint)
             canvas.drawText(label, gx - labelW / 2f, xLabelBaselineY, gridLabelPaint)
 
-            // Horizontal line at Y=v% — label sits near the left edge.
+            // Horizontal line at Y=v% — label sits at the left edge,
+            // gridline broken around it. The "Density" pill (drawn
+            // later) sits further right, *after* this number.
             val gy = plotB - (v / 100f) * plotH
             val yLabelLeftX = plotL + 6f * density
             val yLabelRightX = yLabelLeftX + labelW + labelGap
@@ -137,6 +153,36 @@ class DiffusionDensityView @JvmOverloads constructor(
         if (dragging) canvas.drawCircle(dotX, dotY, 24f * density, haloPaint)
         canvas.drawCircle(dotX, dotY, dotR, dotBgPaint)
         canvas.drawCircle(dotX, dotY, dotR, dotRingPaint)
+
+        // Axis pill labels. Density's centre sits 40dp from the left
+        // edge; Diffusion's centre sits the same 40dp from the bottom
+        // edge so the visual gap between each pill and its axis-number
+        // row is identical.
+        val pillEdgeOffset = 40f * density
+        drawAxisPill(canvas, "Diffusion", (plotL + plotR) / 2f, plotB - pillEdgeOffset, rotated = false)
+        drawAxisPill(canvas, "Density", plotL + pillEdgeOffset, (plotT + plotB) / 2f, rotated = true)
+    }
+
+    private fun drawAxisPill(canvas: Canvas, text: String, cx: Float, cy: Float, rotated: Boolean) {
+        val textW = axisPillTextPaint.measureText(text)
+        val padH = 14f
+        val padV = 8f
+        val cornerR = 12f * density
+        // Pill rect centered on (cx, cy) before rotation. Ascent is
+        // negative; the text baseline sits below center by half-height.
+        val rectW = textW + padH * 2f
+        val textHeight = 20f  // matches textSize
+        val rectH = textHeight + padV * 2f
+        val rect = android.graphics.RectF(
+            cx - rectW / 2f, cy - rectH / 2f,
+            cx + rectW / 2f, cy + rectH / 2f
+        )
+        canvas.save()
+        if (rotated) canvas.rotate(-90f, cx, cy)
+        canvas.drawRoundRect(rect, cornerR, cornerR, axisPillBgPaint)
+        canvas.drawRoundRect(rect, cornerR, cornerR, axisPillStrokePaint)
+        canvas.drawText(text, cx - textW / 2f, cy + textHeight / 2f - 4f, axisPillTextPaint)
+        canvas.restore()
     }
 
     private fun clipRoundRect(c: Canvas, l: Float, t: Float, r: Float, b: Float, rx: Float) {
