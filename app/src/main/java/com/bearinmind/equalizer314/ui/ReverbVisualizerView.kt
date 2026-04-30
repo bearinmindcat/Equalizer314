@@ -286,7 +286,7 @@ class ReverbVisualizerView @JvmOverloads constructor(
         // envelope occupy the rest of the height below the band.
         val sideMargin = 6f * density
         val bottomMargin = 6f * density
-        val topBandH = 68f * density
+        val topBandH = 90f * density
         plotL = sideMargin
         plotR = w - sideMargin
         plotT = topBandH
@@ -342,8 +342,10 @@ class ReverbVisualizerView @JvmOverloads constructor(
     }
 
     private fun trackLineY(): Float {
-        // The track-line sits low in the top band so labels fit above.
-        return controlBandBottom - 12f * density
+        // The track-line sits centred vertically in the top band, so
+        // there's equal breathing room above (label area) and below
+        // (between the line and the bars).
+        return (controlBandTop + controlBandBottom) / 2f
     }
 
     private fun drawBackground(c: Canvas) {
