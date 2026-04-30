@@ -180,23 +180,51 @@ class ReverbVisualizerView @JvmOverloads constructor(
     private var controlBandTop = 0f
     private var controlBandBottom = 0f
 
-    // The bars in the graph use a fixed layout — they don't shift when
-    // pre-delay / early-reflections / decay change, so the chart stays
-    // visually stable. The bottom-row circles live on their own LINEAR
-    // ms axis (0..ctrlMaxMs) — moving them now feels like sliding along
-    // a steady ruler, not a stretchy log scale. The fixed max is large
-    // enough to give each section a usable drag range; values beyond it
-    // (e.g. very long decays) just park the circle at the right edge.
-    private val ctrlMaxMs = 3000f
+    // The chart is divided into three equal-width zones across the top
+    // control line:
+    //   [   Pre-delay   ][ Early Reflections ][      Decay        ]
+    //      0..33 %             33..66 %               66..100 %
+    // Each circle is constrained to its own zone, with a linear mapping
+    // from that param's min → max along the zone's width. Tick marks at
+    // 0/33/66/100 % indicate the min and max of each zone.
+    private val preDelayMinMs = 0f
     private val preDelayMaxMs = 300f
+    private val earlyMinMs = 50f
+    private val earlyMaxMs = 1000f
+    private val decayMinMs = 100f
+    private val decayMaxMs = 20000f
 
-    private fun ctrlMsToX(ms: Float): Float {
-        val clamped = ms.coerceIn(0f, ctrlMaxMs)
-        return plotL + (clamped / ctrlMaxMs) * (plotR - plotL)
+    private fun zoneStart(zone: Int): Float {
+        val plotW = plotR - plotL
+        return plotL + plotW * (zone / 3f)
     }
-    private fun ctrlXToMs(x: Float): Float {
-        val frac = ((x - plotL) / (plotR - plotL)).coerceIn(0f, 1f)
-        return frac * ctrlMaxMs
+    private fun zoneEnd(zone: Int): Float {
+        val plotW = plotR - plotL
+        return plotL + plotW * ((zone + 1) / 3f)
+    }
+    private fun preDelayToX(ms: Float): Float {
+        val frac = ((ms - preDelayMinMs) / (preDelayMaxMs - preDelayMinMs)).coerceIn(0f, 1f)
+        return zoneStart(0) + frac * (zoneEnd(0) - zoneStart(0))
+    }
+    private fun xToPreDelay(x: Float): Float {
+        val frac = ((x - zoneStart(0)) / (zoneEnd(0) - zoneStart(0))).coerceIn(0f, 1f)
+        return preDelayMinMs + frac * (preDelayMaxMs - preDelayMinMs)
+    }
+    private fun earlyToX(ms: Float): Float {
+        val frac = ((ms - earlyMinMs) / (earlyMaxMs - earlyMinMs)).coerceIn(0f, 1f)
+        return zoneStart(1) + frac * (zoneEnd(1) - zoneStart(1))
+    }
+    private fun xToEarly(x: Float): Float {
+        val frac = ((x - zoneStart(1)) / (zoneEnd(1) - zoneStart(1))).coerceIn(0f, 1f)
+        return earlyMinMs + frac * (earlyMaxMs - earlyMinMs)
+    }
+    private fun decayToX(ms: Float): Float {
+        val frac = ((ms - decayMinMs) / (decayMaxMs - decayMinMs)).coerceIn(0f, 1f)
+        return zoneStart(2) + frac * (zoneEnd(2) - zoneStart(2))
+    }
+    private fun xToDecay(x: Float): Float {
+        val frac = ((x - zoneStart(2)) / (zoneEnd(2) - zoneStart(2))).coerceIn(0f, 1f)
+        return decayMinMs + frac * (decayMaxMs - decayMinMs)
     }
 
     // Legacy linear-time helpers — only used to cache the (now-unused)
@@ -215,19 +243,20 @@ class ReverbVisualizerView @JvmOverloads constructor(
         val w = width.toFloat(); val h = height.toFloat()
         if (w <= 0f || h <= 0f) return
 
-        // Minimal margins — no axis labels, no region labels, no top
-        // arrow. Just a small breathing space around the plot and the
-        // bottom control band.
-        val leftLabelW = 6f * density
-        val bottomLabelH = 6f * density
-        val topArrowH = 6f * density
-        val controlBandH = 30f * density
-        plotL = leftLabelW
-        plotT = topArrowH
-        plotR = w - 6f * density
-        plotB = h - bottomLabelH - controlBandH
-        controlBandTop = plotB + bottomLabelH * 0.4f
-        controlBandBottom = h - 2f * density
+        // The three control circles sit on a single horizontal track-
+        // line near the bottom of a top control band. Above the line
+        // (still inside the band) sit the three zone labels, each
+        // centred between its zone's min/max tick marks. The bars +
+        // envelope occupy the rest of the height below the band.
+        val sideMargin = 6f * density
+        val bottomMargin = 6f * density
+        val topBandH = 42f * density
+        plotL = sideMargin
+        plotR = w - sideMargin
+        plotT = topBandH
+        plotB = h - bottomMargin
+        controlBandTop = 2f * density
+        controlBandBottom = topBandH - 2f * density
 
         // Bars use a fixed layout (don't move with parameters); circles
         // slide on a stable log-ms axis below. xMaxMs is kept around for
@@ -250,10 +279,32 @@ class ReverbVisualizerView @JvmOverloads constructor(
     }
 
     private fun drawTimeAxisLine(c: Canvas) {
-        // Thin "ms" reference line just under the bars, no labels —
-        // the three control circles below sit on this shared axis.
-        val y = plotB + (controlBandTop - plotB) * 0.55f
-        c.drawLine(plotL, y, plotR, y, regionDividerPaint)
+        // Single horizontal track-line across the top band that the
+        // three circles sit on. Sits low in the band so the zone labels
+        // have room to live ABOVE the line, centred between each zone's
+        // min/max tick marks.
+        val lineY = trackLineY()
+        c.drawLine(plotL, lineY, plotR, lineY, regionDividerPaint)
+        val tickHalf = 5f * density
+        for (i in 0..3) {
+            val x = plotL + (plotR - plotL) * (i / 3f)
+            c.drawLine(x, lineY - tickHalf, x, lineY + tickHalf, regionDividerPaint)
+        }
+
+        // Zone labels — fixed positions, NOT attached to the dragged
+        // circles. Each label is centred between its zone's min/max
+        // ticks (i.e. the zone midpoint) and sits above the line.
+        val labels = arrayOf("Pre-delay", "Early Reflections", "Decay")
+        val labelY = lineY - 6f * density - controlLabelPaint.descent()
+        for (zone in 0..2) {
+            val zoneMidX = (zoneStart(zone) + zoneEnd(zone)) / 2f
+            c.drawText(labels[zone], zoneMidX, labelY, controlLabelPaint)
+        }
+    }
+
+    private fun trackLineY(): Float {
+        // The track-line sits low in the top band so labels fit above.
+        return controlBandBottom - 12f * density
     }
 
     private fun drawBackground(c: Canvas) {
@@ -291,9 +342,14 @@ class ReverbVisualizerView @JvmOverloads constructor(
         // pattern of overlapping reflections in a real reverb tail.
         val altShrink = 0.65f
 
-        val preDelayX = ctrlMsToX(reflectionsDelayMs)
-        val earlyEndAbs = ctrlMsToX(reflectionsDelayMs + earlyReflectionsWidthMs)
-        val decayEndAbs = ctrlMsToX(reflectionsDelayMs + earlyReflectionsWidthMs + decayTimeMs)
+        // Each bar region is anchored to its respective circle's X
+        // position in the top control line. Pre-delay circle marks the
+        // start of the early-reflection cluster; Early Refl circle
+        // marks where the cluster ends and the body+tail begin; Decay
+        // circle marks where the tail ends.
+        val preDelayX = preDelayToX(reflectionsDelayMs)
+        val earlyEndAbs = earlyToX(earlyReflectionsWidthMs)
+        val decayEndAbs = decayToX(decayTimeMs)
 
         // 1. Source signal — hollow "doughnut" capsule at the very left
         //    edge. Outlined rounded-rect with empty interior; the
@@ -413,23 +469,19 @@ class ReverbVisualizerView @JvmOverloads constructor(
     }
 
     private fun drawControlCircles(c: Canvas) {
-        // Three bottom-row circles, all on the same log-ms axis. Each
-        // circle's position represents the cumulative time at which
-        // that region ENDS:
-        //   Pre-delay  → reflectionsDelayMs
-        //   Early Refl → reflectionsDelayMs + earlyReflectionsWidthMs
-        //   Decay      → ... + decayTimeMs
-        // Log scale is used so all three params fit on one shared axis
-        // even though their natural ranges span 0–300 ms / 50–1000 ms /
-        // 100–20 000 ms.
-        val cy = (controlBandTop + controlBandBottom) / 2f
+        // Three top-row circles, each constrained to its own third of
+        // the chart width with a linear param-min → param-max mapping.
+        //   Pre-delay  : 0..33 % zone, 0..300 ms
+        //   Early Refl : 33..66 % zone, 50..1000 ms
+        //   Decay      : 66..100 % zone, 100..20 000 ms
+        // Zone LABELS are drawn separately, anchored to the zone
+        // midpoints — see [drawTimeAxisLine].
+        val cy = trackLineY()
         val r = 9f * density
 
-        val preDelayX = ctrlMsToX(reflectionsDelayMs).coerceIn(plotL + r, plotR - r)
-        val earlyX = ctrlMsToX(reflectionsDelayMs + earlyReflectionsWidthMs)
-            .coerceIn(plotL + r, plotR - r)
-        val decayX = ctrlMsToX(reflectionsDelayMs + earlyReflectionsWidthMs + decayTimeMs)
-            .coerceIn(plotL + r, plotR - r)
+        val preDelayX = preDelayToX(reflectionsDelayMs)
+        val earlyX = earlyToX(earlyReflectionsWidthMs)
+        val decayX = decayToX(decayTimeMs)
 
         handlePos[Handle.PREDELAY_CIRCLE] = HandlePos(preDelayX, cy)
         handlePos[Handle.EARLY_CIRCLE] = HandlePos(earlyX, cy)
@@ -445,13 +497,6 @@ class ReverbVisualizerView @JvmOverloads constructor(
             val fill = if (active) handleFillActivePaint else handleFillPaint
             c.drawCircle(x, cy, r, fill)
             c.drawCircle(x, cy, r, handleStrokePaint)
-            val label = when (h) {
-                Handle.PREDELAY_CIRCLE -> "Pre-delay"
-                Handle.EARLY_CIRCLE -> "Early Refl"
-                Handle.DECAY_CIRCLE -> "Decay"
-                else -> ""
-            }
-            c.drawText(label, x, controlBandBottom - 1f * density, controlLabelPaint)
         }
     }
 
@@ -554,24 +599,21 @@ class ReverbVisualizerView @JvmOverloads constructor(
                 cb?.invoke(Param.ROOM_LEVEL, newDb)
             }
             Handle.PREDELAY_CIRCLE -> {
-                // All three circles share the log-ms axis. Pre-delay
-                // circle sits at reflectionsDelayMs, so the drag X
-                // maps directly onto that param.
-                val newDelay = ctrlXToMs(x).coerceIn(0f, 300f)
+                // Constrained to the 0..33 % zone; X maps linearly
+                // onto reflectionsDelayMs in [0, 300] ms.
+                val newDelay = xToPreDelay(x)
                 reflectionsDelayMs = newDelay
                 cb?.invoke(Param.REFLECTIONS_DELAY, newDelay)
             }
             Handle.EARLY_CIRCLE -> {
-                // Circle sits at (pre-delay + early width), so the
-                // new width = (circle_x → ms) minus pre-delay.
-                val newWidth = (ctrlXToMs(x) - reflectionsDelayMs).coerceIn(50f, 1000f)
-                earlyReflectionsWidthMs = newWidth
+                // Constrained to the 33..66 % zone; X maps linearly
+                // onto earlyReflectionsWidthMs in [50, 1000] ms.
+                earlyReflectionsWidthMs = xToEarly(x)
             }
             Handle.DECAY_CIRCLE -> {
-                // Circle sits at (pre-delay + early + decay), so the
-                // new decay = (circle_x → ms) minus the rest.
-                val newDecay = (ctrlXToMs(x) - reflectionsDelayMs - earlyReflectionsWidthMs)
-                    .coerceIn(100f, 20000f)
+                // Constrained to the 66..100 % zone; X maps linearly
+                // onto decayTimeMs in [100, 20 000] ms.
+                val newDecay = xToDecay(x)
                 decayTimeMs = newDecay
                 cb?.invoke(Param.DECAY_TIME, newDecay)
             }
