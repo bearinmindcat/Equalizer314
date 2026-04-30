@@ -137,18 +137,23 @@ class ReverbVisualizerView @JvmOverloads constructor(
         strokeWidth = 1.2f * density
         style = Paint.Style.STROKE
     }
+    // Slider-thumb paints — mirror the density/diffusion view's dot
+    // styling EXACTLY: bg-coloured fill so the track-line punches
+    // cleanly through the ring, a 2.5 px light-grey ring on top, amber
+    // ring when grabbed. (Stroke width is raw px to match the X/Y dot.)
     private val handleFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
-        color = 0xFFE2E2E2.toInt()
+        color = bgColor
     }
     private val handleFillActivePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
+        style = Paint.Style.STROKE
         color = 0xFFFFD54F.toInt()
+        strokeWidth = 2.5f
     }
     private val handleStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        color = 0xCC000000.toInt()
-        strokeWidth = 1f * density
+        color = 0xFFDDDDDD.toInt()
+        strokeWidth = 2.5f
     }
 
     private val ghostPath = Path()
@@ -182,11 +187,13 @@ class ReverbVisualizerView @JvmOverloads constructor(
 
     // The chart is divided into three equal-width zones across the top
     // control line:
-    //   [   Pre-delay   ][ Early Reflections ][      Decay        ]
-    //      0..33 %             33..66 %               66..100 %
-    // Each circle is constrained to its own zone, with a linear mapping
-    // from that param's min → max along the zone's width. Tick marks at
-    // 0/33/66/100 % indicate the min and max of each zone.
+    //   [Direct Sound][   Pre-delay   ][ Early Reflections ][   Decay   ]
+    //                     0..33 %           33..66 %             66..100 %
+    // The zones (and the track-line they sit on) start AFTER the
+    // Direct Sound capsule on the left, not at plotL — so the capsule
+    // doesn't overlap the pre-delay range. Each circle is constrained
+    // to its own zone with a linear param-min → max mapping; tick marks
+    // at 0/33/66/100 % mark the min/max of each zone.
     private val preDelayMinMs = 0f
     private val preDelayMaxMs = 300f
     private val earlyMinMs = 50f
@@ -194,13 +201,25 @@ class ReverbVisualizerView @JvmOverloads constructor(
     private val decayMinMs = 100f
     private val decayMaxMs = 20000f
 
+    // Direct Sound capsule layout — shared between drawBars (which
+    // draws the capsule itself) and zonesLeft() (which uses the
+    // capsule's right edge as the left bound of the track-line).
+    private val directSoundBarW = 18f * density
+    private val directSoundSideInset = 4f * density
+    private val directSoundGap = 4f * density
+
+    private fun zonesLeft(): Float =
+        plotL + directSoundSideInset + directSoundBarW + directSoundGap
+
     private fun zoneStart(zone: Int): Float {
-        val plotW = plotR - plotL
-        return plotL + plotW * (zone / 3f)
+        val left = zonesLeft()
+        val w = plotR - left
+        return left + w * (zone / 3f)
     }
     private fun zoneEnd(zone: Int): Float {
-        val plotW = plotR - plotL
-        return plotL + plotW * ((zone + 1) / 3f)
+        val left = zonesLeft()
+        val w = plotR - left
+        return left + w * ((zone + 1) / 3f)
     }
     private fun preDelayToX(ms: Float): Float {
         val frac = ((ms - preDelayMinMs) / (preDelayMaxMs - preDelayMinMs)).coerceIn(0f, 1f)
@@ -280,14 +299,17 @@ class ReverbVisualizerView @JvmOverloads constructor(
 
     private fun drawTimeAxisLine(c: Canvas) {
         // Single horizontal track-line across the top band that the
-        // three circles sit on. Sits low in the band so the zone labels
-        // have room to live ABOVE the line, centred between each zone's
-        // min/max tick marks.
+        // three circles sit on. Starts at the right edge of the Direct
+        // Sound capsule (zonesLeft()) instead of plotL, so the line
+        // doesn't extend "past" / behind the capsule. Sits low in the
+        // band so the zone labels have room to live ABOVE the line,
+        // centred between each zone's min/max tick marks.
         val lineY = trackLineY()
-        c.drawLine(plotL, lineY, plotR, lineY, regionDividerPaint)
+        val lineLeft = zonesLeft()
+        c.drawLine(lineLeft, lineY, plotR, lineY, regionDividerPaint)
         val tickHalf = 5f * density
         for (i in 0..3) {
-            val x = plotL + (plotR - plotL) * (i / 3f)
+            val x = lineLeft + (plotR - lineLeft) * (i / 3f)
             c.drawLine(x, lineY - tickHalf, x, lineY + tickHalf, regionDividerPaint)
         }
 
@@ -342,11 +364,6 @@ class ReverbVisualizerView @JvmOverloads constructor(
         // pattern of overlapping reflections in a real reverb tail.
         val altShrink = 0.65f
 
-        // Each bar region is anchored to its respective circle's X
-        // position in the top control line. Pre-delay circle marks the
-        // start of the early-reflection cluster; Early Refl circle
-        // marks where the cluster ends and the body+tail begin; Decay
-        // circle marks where the tail ends.
         val preDelayX = preDelayToX(reflectionsDelayMs)
         val earlyEndAbs = earlyToX(earlyReflectionsWidthMs)
         val decayEndAbs = decayToX(decayTimeMs)
@@ -355,8 +372,8 @@ class ReverbVisualizerView @JvmOverloads constructor(
         //    edge. Outlined rounded-rect with empty interior; the
         //    vertical label "Direct Sound" runs up the inside.
         run {
-            val barW = 18f * density
-            val sideInset = 4f * density
+            val barW = directSoundBarW
+            val sideInset = directSoundSideInset
             val left = plotL + sideInset
             val right = left + barW
             val top = amp01ToY(envelopeAtX(left + barW / 2f)) + directRingPaint.strokeWidth * 0.5f
@@ -469,19 +486,32 @@ class ReverbVisualizerView @JvmOverloads constructor(
     }
 
     private fun drawControlCircles(c: Canvas) {
-        // Three top-row circles, each constrained to its own third of
+        // Three top-row thumbs, each constrained to its own third of
         // the chart width with a linear param-min → param-max mapping.
         //   Pre-delay  : 0..33 % zone, 0..300 ms
         //   Early Refl : 33..66 % zone, 50..1000 ms
         //   Decay      : 66..100 % zone, 100..20 000 ms
-        // Zone LABELS are drawn separately, anchored to the zone
-        // midpoints — see [drawTimeAxisLine].
+        // The thumbs are hollow circles styled the same as the X/Y dot
+        // in the density/diffusion view (bg-coloured fill so the
+        // track-line punches through, light-grey ring on top), but a
+        // tiny bit smaller. Zone LABELS are drawn separately, anchored
+        // to the zone midpoints; see [drawTimeAxisLine].
+        //
+        // Each circle is clamped INSIDE its zone (margin = r + 2 px) so
+        // it never visually pokes past its tick mark — same trick the
+        // X/Y graph's dot uses. The underlying parameter still spans
+        // its full min..max range; only the circle's visible position
+        // is inset.
         val cy = trackLineY()
-        val r = 9f * density
+        val r = 5.5f * density
+        val dotMargin = r + 2f
 
-        val preDelayX = preDelayToX(reflectionsDelayMs)
-        val earlyX = earlyToX(earlyReflectionsWidthMs)
-        val decayX = decayToX(decayTimeMs)
+        fun clampInZone(zone: Int, x: Float) =
+            x.coerceIn(zoneStart(zone) + dotMargin, zoneEnd(zone) - dotMargin)
+
+        val preDelayX = clampInZone(0, preDelayToX(reflectionsDelayMs))
+        val earlyX = clampInZone(1, earlyToX(earlyReflectionsWidthMs))
+        val decayX = clampInZone(2, decayToX(decayTimeMs))
 
         handlePos[Handle.PREDELAY_CIRCLE] = HandlePos(preDelayX, cy)
         handlePos[Handle.EARLY_CIRCLE] = HandlePos(earlyX, cy)
@@ -494,9 +524,9 @@ class ReverbVisualizerView @JvmOverloads constructor(
             Handle.DECAY_CIRCLE to decayX,
         )) {
             val active = h == grabbed
-            val fill = if (active) handleFillActivePaint else handleFillPaint
-            c.drawCircle(x, cy, r, fill)
-            c.drawCircle(x, cy, r, handleStrokePaint)
+            c.drawCircle(x, cy, r, handleFillPaint)
+            val ring = if (active) handleFillActivePaint else handleStrokePaint
+            c.drawCircle(x, cy, r, ring)
         }
     }
 
