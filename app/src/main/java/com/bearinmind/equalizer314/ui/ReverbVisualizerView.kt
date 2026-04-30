@@ -269,7 +269,7 @@ class ReverbVisualizerView @JvmOverloads constructor(
         // envelope occupy the rest of the height below the band.
         val sideMargin = 6f * density
         val bottomMargin = 6f * density
-        val topBandH = 42f * density
+        val topBandH = 56f * density
         plotL = sideMargin
         plotR = w - sideMargin
         plotT = topBandH
