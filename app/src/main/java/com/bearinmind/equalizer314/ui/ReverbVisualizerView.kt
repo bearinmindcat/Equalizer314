@@ -99,11 +99,34 @@ class ReverbVisualizerView @JvmOverloads constructor(
         strokeWidth = 2.0f * density
         color = earlyBarColor
     }
+    // Dashed variant used when the cluster has collapsed (Early Refl
+    // slider at its minimum). The dashes communicate "this region
+    // exists but has no width yet."
+    private val earlyBarDashedPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.BUTT
+        strokeWidth = 2.0f * density
+        color = earlyBarColor
+        pathEffect = android.graphics.DashPathEffect(
+            floatArrayOf(3f * density, 3f * density), 0f
+        )
+    }
     private val bodyBarPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
         strokeWidth = 1.6f * density
         color = bodyBarColor
+    }
+    // Dashed variant used when the tail has collapsed (Decay slider
+    // at its minimum).
+    private val bodyBarDashedPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.BUTT
+        strokeWidth = 1.6f * density
+        color = bodyBarColor
+        pathEffect = android.graphics.DashPathEffect(
+            floatArrayOf(3f * density, 3f * density), 0f
+        )
     }
     private val tailBarPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -481,7 +504,6 @@ class ReverbVisualizerView @JvmOverloads constructor(
         val altShrink = 0.65f
 
         val preDelayX = preDelayToX(reflectionsDelayMs)
-        val earlyEndAbs = earlyToX(earlyReflectionsWidthMs)
 
         // 1. Source signal — hollow "doughnut" capsule at the very left
         //    edge. Outlined rounded-rect with empty interior; the
@@ -507,27 +529,39 @@ class ReverbVisualizerView @JvmOverloads constructor(
             c.restore()
         }
 
-        // 2. Early reflections — bars between Pre-delay and Early Refl
-        //    circle positions, scaled vertically by Reflections Level
-        //    dB. At the slider's minimum (= "no early reflections")
-        //    only ONE anchor bar is drawn at the cluster's start, and
-        //    it's rendered as a DOTTED line to communicate "the region
-        //    exists but has no width yet."
+        // 2. Early reflections — cluster anchored at Pre-delay's X
+        //    (preDelayX). Visual width is proportional to early-refl
+        //    duration, scaled to the AVAILABLE space from preDelayX
+        //    out to the end of zone 1 (the early-refl zone). So:
+        //      - earlyWidth=max + preDelay=min → cluster fills zones
+        //        0 + 1 (pre-delay zone is "consumed" since there's no
+        //        gap before reflections start)
+        //      - earlyWidth=max + preDelay=max → cluster fills zone 1
+        //        only (full pre-delay gap pushes the cluster right)
+        //      - earlyWidth=min + any preDelay → cluster collapses to
+        //        a single overlapping line at preDelayX (no snap-open)
         run {
             val refLevel = dbToAmp01(reflectionsLevelDb)
             val earlyStartX = preDelayX
-            val earlyEndX = earlyEndAbs.coerceAtLeast(earlyStartX + 1f)
+            val earlyFrac = ((earlyReflectionsWidthMs - earlyMinMs) /
+                (earlyMaxMs - earlyMinMs)).coerceIn(0f, 1f)
+            val earlyMaxLength = (zoneEnd(1) - earlyStartX).coerceAtLeast(0f)
+            val earlyClusterLength = earlyFrac * earlyMaxLength
+            val earlyEndX = (earlyStartX + earlyClusterLength)
+                .coerceAtMost(zoneEnd(1))
+                .coerceAtLeast(earlyStartX + 1f)
             val collapsed = earlyReflectionsWidthMs <= earlyMinMs + 0.5f
-            val nRefl = if (collapsed) 1 else 10
+            val paint = if (collapsed) earlyBarDashedPaint else earlyBarPaint
+            val nRefl = 10
             for (i in 0 until nRefl) {
-                val fracT = if (collapsed) 0f else (i + 0.5f) / nRefl
+                val fracT = (i + 0.5f) / nRefl
                 val x = earlyStartX + fracT * (earlyEndX - earlyStartX)
                 if (x > plotR) continue
                 val baseAmp = envelopeAtX(x)
                 val shrunk = if (i % 2 == 1) baseAmp * altShrink else baseAmp
                 val amp = shrunk * refLevel
                 if (amp < 0.01f) continue
-                c.drawLine(x, plotB, x, amp01ToY(amp), earlyBarPaint)
+                c.drawLine(x, plotB, x, amp01ToY(amp), paint)
             }
         }
 
@@ -538,22 +572,24 @@ class ReverbVisualizerView @JvmOverloads constructor(
         //    the decay fills both the Reverb Delay and Decay zones.
         //    As Reverb Delay grows, the gap re-opens and the tail
         //    retreats into zone 3. Body = first 40 %, tail = remaining 60 %.
-        // Tail visual width is proportional to decay duration ONLY,
-        // independent of Reverb Delay. Reverb Delay still positions
-        // tailStartX (so changing it slides the whole tail), but the
-        // length grows smoothly with decay regardless of where the
-        // tail starts. This kills the asymmetric "snap-open" you saw
-        // when Reverb Delay was at its minimum.
+        // Tail visual width is proportional to decay duration, scaled
+        // to the AVAILABLE space from tailStartX out to plotR. So:
+        //   - decay=max + reverbDelay=min → tail fills 50%..100%
+        //     (zone 2 + zone 3, all the way to the graph's right edge)
+        //   - decay=max + reverbDelay=max → tail fills zone 3 only
+        //   - decay=min + any reverbDelay → tail collapses to a single
+        //     line at tailStartX (no snap-open).
         val tailStartX = revDelayToX(reverbDelayMs)
-        val zone3Width = zoneEnd(3) - zoneStart(3)
         val decayFrac = ((decayTimeMs - decayMinMs) /
             (decayMaxMs - decayMinMs)).coerceIn(0f, 1f)
-        val tailLengthPx = decayFrac * zone3Width
+        val maxTailLength = (plotR - tailStartX).coerceAtLeast(0f)
+        val tailLengthPx = decayFrac * maxTailLength
         val tailEndX = (tailStartX + tailLengthPx).coerceAtMost(plotR)
             .coerceAtLeast(tailStartX + 1f)
         val tailLevel = dbToAmp01(reverbLevelDb)
         val nTail = 30
         val bodyTailSplit = 0.40f
+        val tailCollapsed = decayTimeMs <= decayMinMs + 0.5f
         for (i in 0 until nTail) {
             val fracT = (i + 0.5f) / nTail
             val x = tailStartX + fracT * (tailEndX - tailStartX)
@@ -562,7 +598,11 @@ class ReverbVisualizerView @JvmOverloads constructor(
             val shrunk = if (i % 2 == 1) baseAmp * altShrink else baseAmp
             val amp = shrunk * tailLevel
             if (amp < 0.01f) continue
-            val paint = if (fracT < bodyTailSplit) bodyBarPaint else tailBarPaint
+            val paint = when {
+                tailCollapsed -> bodyBarDashedPaint
+                fracT < bodyTailSplit -> bodyBarPaint
+                else -> tailBarPaint
+            }
             c.drawLine(x, plotB, x, amp01ToY(amp), paint)
         }
 

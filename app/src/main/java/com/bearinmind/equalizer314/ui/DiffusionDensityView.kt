@@ -8,6 +8,8 @@ import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
 import java.util.Random
+import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.sqrt
 
 /**
@@ -186,12 +188,12 @@ class DiffusionDensityView @JvmOverloads constructor(
         if (effectiveR <= 0f) return
         val diffFrac = (diffusionPct / 100f).coerceIn(0f, 1f)
 
-        // Grid extent grows with density. Existing dots migrate outward
-        // smoothly as new dots fade in at the periphery. Floor bumped
-        // a touch (0.30 → 0.40) so even at min density + min diffusion
-        // the dots breathe a bit instead of clumping in the centre.
+        // Grid extent grows with density. Floor bumped to 0.85 so
+        // even at min density (4 dots in a 2×2) the cluster fills most
+        // of the circle and the rowed pattern is clearly readable at
+        // min diffusion. Top still grows to 0.95 at max density.
         val densityFrac = ((nDotsFloat - 4f) / 26f).coerceIn(0f, 1f)
-        val gridR = effectiveR * (0.40f + 0.35f * densityFrac)
+        val gridR = effectiveR * (0.85f + 0.10f * densityFrac)
         val gridHalfW = gridR * 0.781f   // 6 cols × 5 rows fits with
         val gridHalfH = gridR * 0.625f   // square cells, corners on r
         val cellStepX = gridHalfW * 2f / 5f
@@ -229,8 +231,10 @@ class DiffusionDensityView @JvmOverloads constructor(
     }
 
     /** Order in which the 30 grid cells "appear" as density grows.
-     *  Sorted by distance from the grid's centre so low-density layouts
-     *  cluster around the middle and new dots emerge outward. */
+     *  Uses Chebyshev distance (max of dx, dy) from the grid's centre
+     *  so cells fill in clean concentric squares — 4 dots = 2×2,
+     *  6 dots = 2×3, 12 dots = 4×3, etc. Tie-break by row then col so
+     *  the cluster grows symmetrically around the centre. */
     private val miniDotOrder: List<Pair<Int, Int>> = run {
         val maxCols = 6
         val maxRows = 5
@@ -239,13 +243,13 @@ class DiffusionDensityView @JvmOverloads constructor(
         val cells = mutableListOf<Triple<Int, Int, Float>>()
         for (col in 0 until maxCols) {
             for (row in 0 until maxRows) {
-                val dx = col - centerCol
-                val dy = row - centerRow
-                val dist = sqrt(dx * dx + dy * dy)
+                val dx = abs(col - centerCol)
+                val dy = abs(row - centerRow)
+                val dist = max(dx, dy)
                 cells.add(Triple(col, row, dist))
             }
         }
-        cells.sortBy { it.third }
+        cells.sortWith(compareBy({ it.third }, { it.second }, { it.first }))
         cells.map { Pair(it.first, it.second) }
     }
 
