@@ -156,7 +156,12 @@ class DiffusionDensityView @JvmOverloads constructor(
         // with the graph-bg colour and ringed in light grey to match
         // those views exactly.
         val dotR = 40f
-        val dotMargin = dotR + 2f
+        // Small inset (3 dp) so the dot doesn't quite touch the card's
+        // edges — keeps it from being clipped at the rounded corners
+        // while staying visually close to the crosshair endpoints. The
+        // crosshair lines still draw at the un-clamped px/py and so
+        // continue to reach plotL/plotR/plotT/plotB at the extremes.
+        val dotMargin = dotR + 3f * density
         val dotX = px.coerceIn(plotL + dotMargin, plotR - dotMargin)
         val dotY = py.coerceIn(plotT + dotMargin, plotB - dotMargin)
         if (dragging) canvas.drawCircle(dotX, dotY, dotR + 12f * density, haloPaint)

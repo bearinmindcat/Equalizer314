@@ -199,6 +199,16 @@ class ReverbVisualizerView @JvmOverloads constructor(
         style = Paint.Style.FILL
         color = 0x14FFFFFF.toInt()
     }
+    // Vertical dotted line marking the centre of the chart — also the
+    // left edge of the Reverb Delay zone (where its range starts).
+    private val centerLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        color = 0xFF666666.toInt()
+        strokeWidth = 1f * density
+        pathEffect = android.graphics.DashPathEffect(
+            floatArrayOf(4f * density, 4f * density), 0f
+        )
+    }
     // Early Reflections vertical-axis range — matches the Reflect (dB)
     // slider's valueFrom/valueTo in activity_environmental_reverb.xml
     // and the EnvironmentalReverb API's setReflectionsLevel range.
@@ -369,19 +379,52 @@ class ReverbVisualizerView @JvmOverloads constructor(
         drawGhostEnvelope(canvas, decayDurationMs)
         drawBars(canvas, earlyDurationMs, decayDurationMs)
         drawFrame(canvas)
+        drawCenterLine(canvas)
         drawZoneCards(canvas)
         drawTimeAxisLine(canvas)
         drawControlCircles(canvas)
         drawHandles(canvas)
     }
 
-    /** Faint shaded rectangles over zones 0 (Pre-delay) and 2 (Reverb
-     *  Delay) in the bar area, to mark them as "intentionally silent"
-     *  rather than empty/dead pixels. */
+    /** Vertical dotted line at the start of the Reverb Delay zone —
+     *  serves as the "centre divider" of the graph and marks where
+     *  the Reverb Delay drag range begins. */
+    private fun drawCenterLine(c: Canvas) {
+        val centerX = zoneStart(2)
+        c.drawLine(centerX, plotT, centerX, plotB, centerLinePaint)
+    }
+
+    /** Faint shaded silence regions whose WIDTH tracks the Pre-delay
+     *  and Reverb Delay sliders, with their TOP following the envelope
+     *  line so the shading sits cleanly beneath the diagonal envelope
+     *  rather than being a flat-topped rectangle:
+     *    - Pre-delay shading : trapezoid bounded by zoneStart(0) on the
+     *      left, the Pre-delay circle's X on the right, the envelope
+     *      on top, and plotB on the bottom.
+     *    - Reverb Delay shading : same shape, but bounded by
+     *      zoneStart(2) and the Reverb Delay circle's X. */
     private fun drawSilenceZones(c: Canvas) {
-        for (zone in listOf(0, 2)) {
-            c.drawRect(zoneStart(zone), plotT, zoneEnd(zone), plotB, silenceZonePaint)
+        val preDelayX = preDelayToX(reflectionsDelayMs)
+        if (preDelayX > zoneStart(0)) {
+            drawSilenceTrapezoid(c, zoneStart(0), preDelayX)
         }
+        val revDelayX = revDelayToX(reverbDelayMs)
+        if (revDelayX > zoneStart(2)) {
+            drawSilenceTrapezoid(c, zoneStart(2), revDelayX)
+        }
+    }
+
+    private val silencePath = Path()
+    private fun drawSilenceTrapezoid(c: Canvas, leftX: Float, rightX: Float) {
+        val leftTopY = amp01ToY(envelopeAtX(leftX))
+        val rightTopY = amp01ToY(envelopeAtX(rightX))
+        silencePath.reset()
+        silencePath.moveTo(leftX, plotB)
+        silencePath.lineTo(leftX, leftTopY)
+        silencePath.lineTo(rightX, rightTopY)
+        silencePath.lineTo(rightX, plotB)
+        silencePath.close()
+        c.drawPath(silencePath, silenceZonePaint)
     }
 
     /** Card outlines around the Early Reflections (zone 1) and Decay
