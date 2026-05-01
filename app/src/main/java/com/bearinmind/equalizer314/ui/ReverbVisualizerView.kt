@@ -221,6 +221,42 @@ class ReverbVisualizerView @JvmOverloads constructor(
     private val reverbLevelMinDb = -90f
     private val reverbLevelMaxDb = 20f
 
+    // HF Damping (Decay HF Ratio) range — matches the Decay HF slider's
+    // valueFrom/valueTo (0.1..2.0) and the API's setDecayHFRatio range.
+    // X position of the HF dot in the sub-band maps to decayHfRatio.
+    private val decayHfRatioMin = 0.1f
+    private val decayHfRatioMax = 2.0f
+
+    private fun decayHfRatioToX(ratio: Float): Float {
+        val frac = ((ratio - decayHfRatioMin) /
+            (decayHfRatioMax - decayHfRatioMin)).coerceIn(0f, 1f)
+        return zoneStart(3) + frac * (zoneEnd(3) - zoneStart(3))
+    }
+    private fun xToDecayHfRatio(x: Float): Float {
+        val frac = ((x - zoneStart(3)) /
+            (zoneEnd(3) - zoneStart(3))).coerceIn(0f, 1f)
+        return decayHfRatioMin + frac * (decayHfRatioMax - decayHfRatioMin)
+    }
+
+    private fun hfDotInnerYBounds(): Pair<Float, Float> {
+        val r = 5.5f * density
+        val dotMargin = r + 2f
+        return Pair(hfSubBandTop + dotMargin, hfSubBandBottom - dotMargin)
+    }
+    private fun decayHfRatioToY(): Float {
+        val (innerTop, innerBottom) = hfDotInnerYBounds()
+        val frac = ((decayHfRatio - decayHfRatioMin) /
+            (decayHfRatioMax - decayHfRatioMin)).coerceIn(0f, 1f)
+        return innerBottom - frac * (innerBottom - innerTop)
+    }
+    private fun yToDecayHfRatio(y: Float): Float {
+        val (innerTop, innerBottom) = hfDotInnerYBounds()
+        val span = (innerBottom - innerTop).coerceAtLeast(1f)
+        val ranged = y.coerceIn(innerTop, innerBottom)
+        val frac = (innerBottom - ranged) / span
+        return decayHfRatioMin + frac * (decayHfRatioMax - decayHfRatioMin)
+    }
+
     private val ghostPath = Path()
 
     private val controlLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -234,7 +270,7 @@ class ReverbVisualizerView @JvmOverloads constructor(
     private enum class Handle {
         ROOM, REFLECTIONS, REVERB, DECAY_HF, DECAY_END,
         SOURCE_CIRCLE, PREDELAY_CIRCLE, EARLY_CIRCLE, DECAY_CIRCLE,
-        REVDELAY_CIRCLE,
+        REVDELAY_CIRCLE, HF_DAMPING_CIRCLE,
     }
     private data class HandlePos(val x: Float, val y: Float)
     private val handlePos = HashMap<Handle, HandlePos>()
@@ -250,6 +286,8 @@ class ReverbVisualizerView @JvmOverloads constructor(
     private var decayEnd = 0f
     private var controlBandTop = 0f
     private var controlBandBottom = 0f
+    private var hfSubBandTop = 0f
+    private var hfSubBandBottom = 0f
 
     // The chart is divided into three equal-width zones across the top
     // control line:
@@ -356,13 +394,17 @@ class ReverbVisualizerView @JvmOverloads constructor(
         val sideMargin = 0f
         val bottomMargin = 0f
         val rightMargin = 4f * density
-        val topBandH = 90f * density
+        val mainBandH = 90f * density
+        val hfSubBandH = 90f * density  // matches main band so the HF box is the same height as the Decay box
+        val topBandH = mainBandH + hfSubBandH
         plotL = sideMargin
         plotR = w - rightMargin
         plotT = topBandH
         plotB = h - bottomMargin
         controlBandTop = 2f * density
-        controlBandBottom = topBandH - 2f * density
+        controlBandBottom = mainBandH - 2f * density  // main band only — HF sub-band sits below
+        hfSubBandTop = mainBandH + 2f * density
+        hfSubBandBottom = topBandH - 2f * density
 
         // Bars use a fixed layout (don't move with parameters); circles
         // slide on a stable log-ms axis below. xMaxMs is kept around for
@@ -382,9 +424,64 @@ class ReverbVisualizerView @JvmOverloads constructor(
         drawFrame(canvas)
         drawCenterLine(canvas)
         drawZoneCards(canvas)
+        drawHfDampingSubBox(canvas)
         drawTimeAxisLine(canvas)
         drawControlCircles(canvas)
         drawHandles(canvas)
+    }
+
+    /** Draws the HF Damping sub-box directly below the Decay zone box.
+     *  Inside the box: a vertical dashed line down the centre that the
+     *  dot rides (drag up/down to change decayHfRatio), plus a curved
+     *  "diagonal" from top-left to bottom-right that bends with the
+     *  same shape the actual HF damping applies to the decay tail —
+     *  smoothly drooping for ratio < 1 and sustaining for ratio > 1.
+     *  Implemented as a quadratic Bezier through (innerLeft, innerTop)
+     *  → control near the dot → (innerRight, innerBottom) so the
+     *  curve always passes through the dot at the box's centre X. */
+    private val hfCurvePath = Path()
+    private fun drawHfDampingSubBox(c: Canvas) {
+        val cornerR = 6f * density
+        val left = zoneStart(3)
+        val right = zoneEnd(3)
+        val top = hfSubBandTop
+        val bottom = hfSubBandBottom
+        c.drawRoundRect(left, top, right, bottom, cornerR, cornerR, zoneCardPaint)
+
+        // Label "HF Damping" inside the sub-box, top-left.
+        val savedAlign = controlLabelPaint.textAlign
+        controlLabelPaint.textAlign = Paint.Align.LEFT
+        val labelBaselineY = top + 12f * density - controlLabelPaint.ascent()
+        c.drawText("HF Damping", left + 8f * density, labelBaselineY, controlLabelPaint)
+        controlLabelPaint.textAlign = savedAlign
+
+        val r = 5.5f * density
+        val dotMargin = r + 2f
+        val innerLeft = left + dotMargin
+        val innerRight = right - dotMargin
+        val (innerTop, innerBottom) = hfDotInnerYBounds()
+        val centerX = (left + right) / 2f
+        val dotY = decayHfRatioToY()
+
+        // Vertical centre line — the rail the dot moves along.
+        c.drawLine(centerX, top, centerX, bottom, centerLinePaint)
+
+        // Quadratic Bezier from (innerLeft, innerTop) to (innerRight,
+        // innerBottom) passing through (centerX, dotY) at t = 0.5. To
+        // make the curve actually intersect that point, the control
+        // point Y is offset: B(0.5) = 0.25·S + 0.5·C + 0.25·E, solving
+        // for Cy gives Cy = 2·dotY − 0.5·(innerTop + innerBottom).
+        val cy = 2f * dotY - 0.5f * (innerTop + innerBottom)
+        hfCurvePath.reset()
+        hfCurvePath.moveTo(innerLeft, innerTop)
+        hfCurvePath.quadTo(centerX, cy, innerRight, innerBottom)
+        c.drawPath(hfCurvePath, centerLinePaint)
+
+        handlePos[Handle.HF_DAMPING_CIRCLE] = HandlePos(centerX, dotY)
+        val active = grabbed == Handle.HF_DAMPING_CIRCLE
+        c.drawCircle(centerX, dotY, r, handleFillPaint)
+        val ring = if (active) handleFillActivePaint else handleStrokePaint
+        c.drawCircle(centerX, dotY, r, ring)
     }
 
     /** Vertical dotted line at the start of the Reverb Delay zone —
@@ -654,12 +751,22 @@ class ReverbVisualizerView @JvmOverloads constructor(
         val nTail = 30
         val bodyTailSplit = 0.40f
         val tailCollapsed = decayTimeMs <= decayMinMs + 0.5f
+        // HF damping curve: low ratio → tail droops faster (HF dies),
+        // high ratio → tail sustains (HF lingers). API-accurate: only
+        // the decay tail bends; pre-delay / early refl / reverb delay
+        // are untouched. k = 1 / ratio so ratio = 1 → linear.
+        val hfDampingExp = (1f / decayHfRatio.coerceIn(0.1f, 2f)).coerceIn(0.5f, 5f)
+        val tailSpan = (tailEndX - tailStartX).coerceAtLeast(1f)
+        val startBaseAmp = envelopeAtX(tailStartX)
         for (i in 0 until nTail) {
             val fracT = (i + 0.5f) / nTail
             val x = tailStartX + fracT * (tailEndX - tailStartX)
             if (x > plotR) continue
-            val baseAmp = envelopeAtX(x)
-            val shrunk = if (i % 2 == 1) baseAmp * altShrink else baseAmp
+            // Bend the tail's amplitude curve from startBaseAmp at
+            // tailStartX down to 0 at tailEndX, shaped by HF damping.
+            val zoneFrac = ((x - tailStartX) / tailSpan).coerceIn(0f, 1f)
+            val curvedAmp = startBaseAmp * (1f - zoneFrac).pow(hfDampingExp)
+            val shrunk = if (i % 2 == 1) curvedAmp * altShrink else curvedAmp
             val amp = shrunk * tailLevel
             if (amp < 0.01f) continue
             val paint = when {
@@ -827,6 +934,7 @@ class ReverbVisualizerView @JvmOverloads constructor(
         val touchable = setOf(
             Handle.PREDELAY_CIRCLE, Handle.EARLY_CIRCLE,
             Handle.REVDELAY_CIRCLE, Handle.DECAY_CIRCLE,
+            Handle.HF_DAMPING_CIRCLE,
         )
         var best: Handle? = null
         var bestDist = hitRadiusPx
@@ -925,6 +1033,16 @@ class ReverbVisualizerView @JvmOverloads constructor(
                 val newDb = yToReverbLevelDb(y)
                 reverbLevelDb = newDb
                 cb?.invoke(Param.REVERB_LEVEL, newDb)
+            }
+            Handle.HF_DAMPING_CIRCLE -> {
+                // HF Damping dot rides the vertical centre line of the
+                // sub-box: Y maps to decayHfRatio in [0.1, 2.0]. Top of
+                // the box = ratio max (HF lingers, line bends up);
+                // bottom = ratio min (HF dies, line bends down). The
+                // bent diagonal in the sub-box re-renders to follow.
+                val newRatio = yToDecayHfRatio(y)
+                decayHfRatio = newRatio
+                cb?.invoke(Param.DECAY_HF, newRatio)
             }
         }
     }
