@@ -85,19 +85,26 @@ class TableEqController(
 
         val slotIndex = if (bandIndex < state.bandSlots.size) state.bandSlots[bandIndex] else bandIndex
         val slotLabel = slotIndex + 1
-        val savedColor = state.bandColors[slotIndex] ?: 0xFF333333.toInt()
-        val isLightBg = isColorLight(savedColor)
+        val hasColor = state.bandColors.containsKey(slotIndex)
+        val savedColor = state.bandColors[slotIndex] ?: 0xFF666666.toInt()
         val numBox = TextView(activity).apply {
             text = "$slotLabel"
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.5f).apply {
                 marginEnd = (4 * density).toInt()
             }
             textSize = 12f
-            setTextColor(if (!band.enabled) 0xFF666666.toInt() else if (isLightBg) 0xFF222222.toInt() else 0xFFCCCCCC.toInt())
+            setTextColor(when {
+                !band.enabled -> 0xFF666666.toInt()
+                hasColor -> savedColor
+                else -> 0xFFCCCCCC.toInt()
+            })
             gravity = android.view.Gravity.CENTER
             setPadding((4 * density).toInt(), (4 * density).toInt(), (4 * density).toInt(), (4 * density).toInt())
             background = android.graphics.drawable.GradientDrawable().apply {
-                setColor(savedColor)
+                setColor(0xFF333333.toInt())  // original solid cell fill
+                if (hasColor) {
+                    setStroke((1.5f * density).toInt(), savedColor)
+                }
                 cornerRadius = 8 * density
             }
         }
@@ -333,13 +340,18 @@ class TableEqController(
                 } else {
                     state.bandColors[slotIndex] = color
                 }
-                val applyColor = if (isNone) 0xFF333333.toInt() else color
-                val light = isColorLight(applyColor)
                 numBox.background = android.graphics.drawable.GradientDrawable().apply {
-                    setColor(applyColor)
+                    setColor(0xFF333333.toInt())  // original solid cell fill
+                    if (!isNone) {
+                        setStroke((1.5f * density).toInt(), color)
+                    }
                     cornerRadius = 8 * density
                 }
-                numBox.setTextColor(if (!enabled) 0xFF666666.toInt() else if (light) 0xFF222222.toInt() else 0xFFCCCCCC.toInt())
+                numBox.setTextColor(when {
+                    !enabled -> 0xFF666666.toInt()
+                    isNone -> 0xFFCCCCCC.toInt()
+                    else -> color
+                })
                 graphView.setBandColors(state.bandColors)
                 state.saveState()
                 bottomSheet.dismiss()
