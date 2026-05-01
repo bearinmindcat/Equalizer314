@@ -386,15 +386,19 @@ class ReverbVisualizerView @JvmOverloads constructor(
 
     /** Card outlines around the Early Reflections (zone 1) and Decay
      *  (zone 3) zones — these zones support 2-D drag so a visible
-     *  container hints at the dot's freedom of movement. The card's
-     *  left and right edges align exactly with the zone's tick marks. */
+     *  container hints at the dot's freedom of movement. The Decay
+     *  zone's right edge is inset slightly from plotR so the outline
+     *  is fully visible (the card's right edge would otherwise clip
+     *  the rightmost portion of the box). */
     private fun drawZoneCards(c: Canvas) {
         val cornerR = 8f * density
         val topPad = 2f * density
         val bottomPad = 2f * density
+        val rightInset = directSoundEdgeInset  // mirror the capsule's left inset
         for (zone in listOf(1, 3)) {
+            val isLastZone = zone == zoneCount - 1
             val left = zoneStart(zone)
-            val right = zoneEnd(zone)
+            val right = if (isLastZone) zoneEnd(zone) - rightInset else zoneEnd(zone)
             val top = controlBandTop + topPad
             val bottom = controlBandBottom - bottomPad
             c.drawRoundRect(left, top, right, bottom, cornerR, cornerR, zoneCardPaint)
