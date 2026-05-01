@@ -262,14 +262,17 @@ class ReverbVisualizerView @JvmOverloads constructor(
 
     // Direct Sound capsule layout — shared between drawBars (which
     // draws the capsule itself) and zonesLeft() (which uses the
-    // capsule's right edge as the left bound of the track-line). The
-    // capsule sits flush against the card's left and bottom edges, so
-    // there's no side inset.
+    // capsule's right edge as the left bound of the track-line).
+    // edgeInset gives the capsule a small breathing margin from the
+    // card's left and bottom edges so its full outline is clearly
+    // visible (the card's rounded corners would otherwise clip the
+    // bottom-left of the stroke). The Pre-delay zone (zone 0) begins
+    // directly at the capsule's right edge — no gap.
     private val directSoundBarW = 18f * density
-    private val directSoundGap = 4f * density
+    private val directSoundEdgeInset = 4f * density
 
     private fun zonesLeft(): Float =
-        plotL + directSoundBarW + directSoundGap
+        plotL + directSoundEdgeInset + directSoundBarW
 
     private fun zoneStart(zone: Int): Float {
         val left = zonesLeft()
@@ -477,16 +480,17 @@ class ReverbVisualizerView @JvmOverloads constructor(
     }
 
     private fun drawGhostEnvelope(c: Canvas, decayDurationMs: Float) {
-        // The envelope starts at the Direct Sound capsule's right edge
-        // (its top-right corner) and runs as a single straight line
-        // down to the plot's bottom-right corner. Pre-delay and early-
-        // reflections width move the BARS along the time axis, but the
-        // envelope shape stays fixed.
-        val capsuleRight = plotL + directSoundBarW
-        val startX = capsuleRight
-        val startY = amp01ToY(envelopeAtX(capsuleRight))
+        // The envelope starts at the Direct Sound capsule's TOPMOST
+        // point (the apex of its top arc, at the capsule's centre X)
+        // and runs as a single straight line down to the plot's bottom-
+        // right corner. The capsule is bg-filled when drawn, so the
+        // portion of the line inside the capsule is masked — visually
+        // the line appears to attach to the top of the capsule.
+        val capsuleRight = plotL + directSoundEdgeInset + directSoundBarW
+        val capsuleCenterX = capsuleRight - directSoundBarW / 2f
+        val capsuleTop = amp01ToY(envelopeAtX(capsuleRight))
         ghostPath.reset()
-        ghostPath.moveTo(startX, startY)
+        ghostPath.moveTo(capsuleCenterX, capsuleTop)
         ghostPath.lineTo(plotR, plotB)
         c.drawPath(ghostPath, ghostEnvelopePaint)
     }
@@ -513,20 +517,23 @@ class ReverbVisualizerView @JvmOverloads constructor(
 
         val preDelayX = preDelayToX(reflectionsDelayMs)
 
-        // 1. Source signal — hollow "doughnut" capsule flush against
-        //    the card's left edge and bottom edge. Outlined rounded-
-        //    rect with empty interior; the vertical label "Direct
-        //    Sound" runs up the inside. The capsule's top edge sits at
-        //    the envelope's height for x = capsule's right edge, so
-        //    the linear envelope line emerges directly from the
-        //    capsule's top-right corner instead of going past it.
+        // 1. Source signal — hollow "doughnut" capsule near the card's
+        //    bottom-left corner with a small inset so its outline is
+        //    fully visible (avoids clipping at the card's rounded
+        //    corners). The capsule's height stays the same as before;
+        //    instead, the envelope line is anchored to start at the
+        //    capsule's topmost point so the line attaches to the top
+        //    of the card. The interior of the capsule is filled with
+        //    the card's bg colour to mask the portion of the line that
+        //    passes inside the capsule.
         run {
             val barW = directSoundBarW
-            val left = plotL
-            val right = left + barW
-            val top = amp01ToY(envelopeAtX(right)) + directRingPaint.strokeWidth * 0.5f
-            val bottom = plotB - directRingPaint.strokeWidth * 0.5f
             val cornerR = barW / 2f  // fully rounded ends → capsule
+            val left = plotL + directSoundEdgeInset
+            val right = left + barW
+            val top = amp01ToY(envelopeAtX(right))
+            val bottom = plotB - directSoundEdgeInset
+            c.drawRoundRect(left, top, right, bottom, cornerR, cornerR, bgPaint)
             c.drawRoundRect(left, top, right, bottom, cornerR, cornerR, directRingPaint)
 
             // Vertical text inside, rotated -90° so it reads bottom →
