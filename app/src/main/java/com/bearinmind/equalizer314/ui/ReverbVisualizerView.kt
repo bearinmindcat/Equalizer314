@@ -347,17 +347,18 @@ class ReverbVisualizerView @JvmOverloads constructor(
 
         // The three control circles sit on a single horizontal track-
         // line near the bottom of a top control band. Above the line
-        // (still inside the band) sit the three zone labels, each
+        // (still inside the band) sit the four zone labels, each
         // centred between its zone's min/max tick marks. The bars +
         // envelope occupy the rest of the height below the band, with
-        // the bottom and side edges flush against the card's edges so
-        // the Direct Sound capsule + bar baseline read as anchored to
-        // the card's bottom-left corner.
+        // the bottom and left edges flush against the card and the
+        // right edge inset by 1 dp so all four zones share the same
+        // narrower right edge.
         val sideMargin = 0f
         val bottomMargin = 0f
+        val rightMargin = 4f * density
         val topBandH = 90f * density
         plotL = sideMargin
-        plotR = w - sideMargin
+        plotR = w - rightMargin
         plotT = topBandH
         plotB = h - bottomMargin
         controlBandTop = 2f * density
@@ -428,20 +429,16 @@ class ReverbVisualizerView @JvmOverloads constructor(
     }
 
     /** Card outlines around the Early Reflections (zone 1) and Decay
-     *  (zone 3) zones — these zones support 2-D drag so a visible
-     *  container hints at the dot's freedom of movement. The Decay
-     *  zone's right edge is inset slightly from plotR so the outline
-     *  is fully visible (the card's right edge would otherwise clip
-     *  the rightmost portion of the box). */
+     *  (zone 3) zones. Both boxes are the SAME width because plotR is
+     *  inset globally by 1 dp — the Decay box's right edge no longer
+     *  needs a special inset hack. */
     private fun drawZoneCards(c: Canvas) {
         val cornerR = 8f * density
         val topPad = 2f * density
         val bottomPad = 2f * density
-        val rightInset = directSoundEdgeInset  // mirror the capsule's left inset
         for (zone in listOf(1, 3)) {
-            val isLastZone = zone == zoneCount - 1
             val left = zoneStart(zone)
-            val right = if (isLastZone) zoneEnd(zone) - rightInset else zoneEnd(zone)
+            val right = zoneEnd(zone)
             val top = controlBandTop + topPad
             val bottom = controlBandBottom - bottomPad
             c.drawRoundRect(left, top, right, bottom, cornerR, cornerR, zoneCardPaint)

@@ -285,26 +285,44 @@ class DiffusionDensityView @JvmOverloads constructor(
         c.clipPath(path)
     }
 
+    // When the user touches near the dot's outline, we capture the
+    // offset between the dot's centre and the touch point so that
+    // throughout the drag the dot's centre stays at (touch + offset)
+    // — i.e. the user's finger sits on the ring rather than on top of
+    // the mini-dots inside.
+    private var grabOffsetX = 0f
+    private var grabOffsetY = 0f
+
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 val pad = 14f * density
                 if (event.x < plotL - pad || event.x > plotR + pad ||
                     event.y < plotT - pad || event.y > plotB + pad) return false
+                // Compute the dot's current centre position so we can
+                // stash the (centre − touch) offset for the drag.
+                val w = (plotR - plotL).coerceAtLeast(1f)
+                val hh = (plotB - plotT).coerceAtLeast(1f)
+                val curDotX = plotL + (diffusionPct / 100f) * w
+                val curDotY = plotB - (densityPct / 100f) * hh
+                grabOffsetX = curDotX - event.x
+                grabOffsetY = curDotY - event.y
                 dragging = true
                 parent?.requestDisallowInterceptTouchEvent(true)
-                applyTouch(event.x, event.y)
+                applyTouch(event.x + grabOffsetX, event.y + grabOffsetY)
                 invalidate()
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
                 if (!dragging) return false
-                applyTouch(event.x, event.y)
+                applyTouch(event.x + grabOffsetX, event.y + grabOffsetY)
                 invalidate()
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 dragging = false
+                grabOffsetX = 0f
+                grabOffsetY = 0f
                 parent?.requestDisallowInterceptTouchEvent(false)
                 invalidate()
                 return true
