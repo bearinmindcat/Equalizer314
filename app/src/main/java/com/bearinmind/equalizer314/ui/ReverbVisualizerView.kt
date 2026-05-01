@@ -265,14 +265,16 @@ class ReverbVisualizerView @JvmOverloads constructor(
     // capsule's right edge as the left bound of the track-line).
     // edgeInset gives the capsule a small breathing margin from the
     // card's left and bottom edges so its full outline is clearly
-    // visible (the card's rounded corners would otherwise clip the
-    // bottom-left of the stroke). The Pre-delay zone (zone 0) begins
-    // directly at the capsule's right edge — no gap.
+    // visible. The Pre-delay zone starts a tiny 2 dp gap past the
+    // capsule's right edge so the collapsed Early-Reflections dotted
+    // line (drawn at preDelayX when both sliders are at min) reads
+    // clearly instead of being hidden behind the capsule's outline.
     private val directSoundBarW = 18f * density
     private val directSoundEdgeInset = 4f * density
+    private val directSoundGap = 2f * density
 
     private fun zonesLeft(): Float =
-        plotL + directSoundEdgeInset + directSoundBarW
+        plotL + directSoundEdgeInset + directSoundBarW + directSoundGap
 
     private fun zoneStart(zone: Int): Float {
         val left = zonesLeft()
