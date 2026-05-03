@@ -784,21 +784,24 @@ class ReverbVisualizerView @JvmOverloads constructor(
         val nTail = 30
         val bodyTailSplit = 0.40f
         val tailCollapsed = decayTimeMs <= decayMinMs + 0.5f
-        // HF damping curve: low ratio → tail droops faster (HF dies),
-        // high ratio → tail sustains (HF lingers). API-accurate: only
-        // the decay tail bends; pre-delay / early refl / reverb delay
-        // are untouched. k = 1 / ratio so ratio = 1 → linear.
-        val hfDampingExp = (1f / decayHfRatio.coerceIn(0.1f, 2f)).coerceIn(0.5f, 5f)
+        // Bars decay from startAmp toward ZERO over the tail's span,
+        // shaped by HF damping. This mimics exponential decay so the
+        // bars look natural at any decay value, not just at max:
+        //   - ratio = 1 → linear from startAmp to 0
+        //   - ratio < 1 → concave-up, drops fast then plateaus near 0
+        //     (HF dies — looks exponential)
+        //   - ratio > 1 → concave-down, sustains then falls to 0
+        // The bars' bottom edge always reaches ~0 at tailEndX,
+        // regardless of where tailEndX sits on the chart.
         val tailSpan = (tailEndX - tailStartX).coerceAtLeast(1f)
-        val startBaseAmp = envelopeAtX(tailStartX)
+        val ampAtTailStart = envelopeAtX(tailStartX)
+        val hfDampingExp = (1f / decayHfRatio.coerceIn(0.1f, 2f)).coerceIn(0.5f, 2f)
         for (i in 0 until nTail) {
             val fracT = (i + 0.5f) / nTail
             val x = tailStartX + fracT * (tailEndX - tailStartX)
             if (x > plotR) continue
-            // Bend the tail's amplitude curve from startBaseAmp at
-            // tailStartX down to 0 at tailEndX, shaped by HF damping.
             val zoneFrac = ((x - tailStartX) / tailSpan).coerceIn(0f, 1f)
-            val curvedAmp = startBaseAmp * (1f - zoneFrac).pow(hfDampingExp)
+            val curvedAmp = ampAtTailStart * (1f - zoneFrac).pow(hfDampingExp)
             val shrunk = if (i % 2 == 1) curvedAmp * altShrink else curvedAmp
             val amp = shrunk * tailLevel
             if (amp < 0.01f) continue
