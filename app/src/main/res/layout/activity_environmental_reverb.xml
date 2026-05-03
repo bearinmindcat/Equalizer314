@@ -50,6 +50,10 @@
             android:paddingEnd="16dp"
             android:paddingBottom="32dp">
 
+            <!-- Reverb Level master card — controls roomLevelDb, the
+                 master output of the whole reverb effect (= early
+                 reflections + decay tail together). Lives at the top
+                 of the screen as the most fundamental knob. -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -60,13 +64,50 @@
                 app:strokeColor="?attr/colorOutline"
                 app:strokeWidth="1dp">
 
-                <TextView
+                <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:padding="14dp"
-                    android:text="Native session-0 reverb (android.media.audiofx.EnvironmentalReverb). Toggle the effect from the pipeline screen; sliders below tweak the reverb's parameters."
-                    android:textAppearance="@style/TextAppearance.Material3.BodySmall"
-                    android:textColor="?attr/colorOnSurfaceVariant" />
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:padding="14dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Room Level"
+                        android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
+                        android:textColor="?attr/colorOnSurface"
+                        android:layout_marginEnd="8dp" />
+
+                    <com.google.android.material.slider.Slider
+                        android:id="@+id/reverbMasterLevelSlider"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:valueFrom="-90"
+                        android:valueTo="0"
+                        android:value="-10"
+                        app:labelBehavior="gone" />
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="64dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        app:boxCornerRadiusTopStart="8dp"
+                        app:boxCornerRadiusTopEnd="8dp"
+                        app:boxCornerRadiusBottomStart="8dp"
+                        app:boxCornerRadiusBottomEnd="8dp"
+                        style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense">
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/reverbMasterLevelText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="numberSigned|numberDecimal"
+                            android:textSize="12sp"
+                            android:gravity="center"
+                            android:imeOptions="actionDone" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
             <!-- Reverb amplitude IR — wide full-width card. -->

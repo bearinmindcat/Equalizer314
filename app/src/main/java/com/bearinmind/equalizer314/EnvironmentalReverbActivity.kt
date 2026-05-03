@@ -46,6 +46,11 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
     private lateinit var diffusionText: EditText
     private lateinit var densitySlider: Slider
     private lateinit var densityText: EditText
+    // Master "Reverb Level" card at the top of the screen — drives
+    // the same roomLevelDb param as roomSlider, just with a more
+    // user-friendly label and a prominent place in the layout.
+    private lateinit var reverbMasterLevelSlider: Slider
+    private lateinit var reverbMasterLevelText: EditText
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -83,6 +88,8 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
         revDelayText = findViewById(R.id.reverbDelayText)
         reflectLevelSlider = findViewById(R.id.reverbReflectLevelSlider)
         reflectLevelText = findViewById(R.id.reverbReflectLevelText)
+        reverbMasterLevelSlider = findViewById(R.id.reverbMasterLevelSlider)
+        reverbMasterLevelText = findViewById(R.id.reverbMasterLevelText)
 
         wire(
             decayTimeSlider, decayTimeText,
@@ -99,7 +106,12 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
         wire(
             roomSlider, roomText,
             "%.0f", eqPrefs.getReverbRoomLevelDb(), eqPrefs::saveReverbRoomLevelDb
-        ) { visualizer.roomLevelDb = it }
+        ) { visualizer.roomLevelDb = it; pushSlider(reverbMasterLevelSlider, reverbMasterLevelText, "%.0f", it) }
+        // Master "Reverb Level" card at the top — same param as roomSlider.
+        wire(
+            reverbMasterLevelSlider, reverbMasterLevelText,
+            "%.0f", eqPrefs.getReverbRoomLevelDb(), eqPrefs::saveReverbRoomLevelDb
+        ) { visualizer.roomLevelDb = it; pushSlider(roomSlider, roomText, "%.0f", it) }
         wire(
             reflectDelaySlider, reflectDelayText,
             "%.0f", eqPrefs.getReverbReflectionsDelayMs(), eqPrefs::saveReverbReflectionsDelayMs
@@ -183,6 +195,7 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
             ReverbVisualizerView.Param.ROOM_LEVEL -> {
                 eqPrefs.saveReverbRoomLevelDb(value)
                 pushSlider(roomSlider, roomText, "%.0f", value)
+                pushSlider(reverbMasterLevelSlider, reverbMasterLevelText, "%.0f", value)
             }
             ReverbVisualizerView.Param.REFLECTIONS_DELAY -> {
                 eqPrefs.saveReverbReflectionsDelayMs(value)

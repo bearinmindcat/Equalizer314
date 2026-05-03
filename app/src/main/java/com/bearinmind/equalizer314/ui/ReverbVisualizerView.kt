@@ -238,23 +238,56 @@ class ReverbVisualizerView @JvmOverloads constructor(
         return decayHfRatioMin + frac * (decayHfRatioMax - decayHfRatioMin)
     }
 
-    private fun hfDotInnerYBounds(): Pair<Float, Float> {
+    private fun hfDotInnerBounds(): FloatArray {
+        // Returns [innerLeft, innerTop, innerRight, innerBottom].
         val r = 5.5f * density
         val dotMargin = r + 2f
-        return Pair(hfSubBandTop + dotMargin, hfSubBandBottom - dotMargin)
+        return floatArrayOf(
+            zoneStart(3) + dotMargin,
+            hfSubBandTop + dotMargin,
+            zoneEnd(3) - dotMargin,
+            hfSubBandBottom - dotMargin,
+        )
     }
-    private fun decayHfRatioToY(): Float {
-        val (innerTop, innerBottom) = hfDotInnerYBounds()
-        val frac = ((decayHfRatio - decayHfRatioMin) /
+
+    // Dot is constrained to the inner half of the anti-diagonal —
+    // antiDiagFrac in [0.25, 0.75] — so the Bezier control point
+    // (= 2·dot − centre) stays inside the box and the curve never
+    // balloons past the box's edges. The dot still passes through
+    // the curve exactly at its midpoint.
+    private val hfDotFracMin = 0.25f
+    private val hfDotFracMax = 0.75f
+
+    /** Map decayHfRatio onto a position along the HF sub-box's anti-
+     *  diagonal: bottom-left-ish at ratio = min, top-right-ish at
+     *  ratio = max, geometric centre at ratio = 1. The dot's range
+     *  is restricted to [0.25, 0.75] of the anti-diagonal. */
+    private fun decayHfRatioToDotPos(): Pair<Float, Float> {
+        val b = hfDotInnerBounds()
+        val ratioFrac = ((decayHfRatio - decayHfRatioMin) /
             (decayHfRatioMax - decayHfRatioMin)).coerceIn(0f, 1f)
-        return innerBottom - frac * (innerBottom - innerTop)
+        val antiDiagFrac = hfDotFracMin + ratioFrac * (hfDotFracMax - hfDotFracMin)
+        val dotX = b[0] + antiDiagFrac * (b[2] - b[0])
+        val dotY = b[3] - antiDiagFrac * (b[3] - b[1])
+        return Pair(dotX, dotY)
     }
-    private fun yToDecayHfRatio(y: Float): Float {
-        val (innerTop, innerBottom) = hfDotInnerYBounds()
-        val span = (innerBottom - innerTop).coerceAtLeast(1f)
-        val ranged = y.coerceIn(innerTop, innerBottom)
-        val frac = (innerBottom - ranged) / span
-        return decayHfRatioMin + frac * (decayHfRatioMax - decayHfRatioMin)
+
+    /** Project an arbitrary touch (x, y) onto the anti-diagonal and
+     *  convert that fraction back to a decayHfRatio value. The
+     *  projection is clamped to the dot's restricted range so the
+     *  curve always stays inside the box. */
+    private fun pointToDecayHfRatio(x: Float, y: Float): Float {
+        val b = hfDotInnerBounds()
+        val ex = b[2] - b[0]
+        val ey = b[1] - b[3]
+        val len2 = (ex * ex + ey * ey).coerceAtLeast(1f)
+        val px0 = x - b[0]
+        val py0 = y - b[3]
+        val rawFrac = (px0 * ex + py0 * ey) / len2
+        val antiDiagFrac = rawFrac.coerceIn(hfDotFracMin, hfDotFracMax)
+        val ratioFrac = ((antiDiagFrac - hfDotFracMin) /
+            (hfDotFracMax - hfDotFracMin)).coerceIn(0f, 1f)
+        return decayHfRatioMin + ratioFrac * (decayHfRatioMax - decayHfRatioMin)
     }
 
     private val ghostPath = Path()
@@ -431,14 +464,12 @@ class ReverbVisualizerView @JvmOverloads constructor(
     }
 
     /** Draws the HF Damping sub-box directly below the Decay zone box.
-     *  Inside the box: a vertical dashed line down the centre that the
-     *  dot rides (drag up/down to change decayHfRatio), plus a curved
-     *  "diagonal" from top-left to bottom-right that bends with the
-     *  same shape the actual HF damping applies to the decay tail —
-     *  smoothly drooping for ratio < 1 and sustaining for ratio > 1.
-     *  Implemented as a quadratic Bezier through (innerLeft, innerTop)
-     *  → control near the dot → (innerRight, innerBottom) so the
-     *  curve always passes through the dot at the box's centre X. */
+     *  The dot rides the box's ANTI-DIAGONAL — bottom-left at ratio
+     *  = min, top-right at ratio = max, centre = ratio 1.0 (linear).
+     *  The curve from (innerLeft, innerTop) to (innerRight, innerBottom)
+     *  always passes through the dot at its midpoint (t = 0.5), so the
+     *  same gesture both slides the dot along the diagonal AND keeps
+     *  it on the curve as the curve flexes. */
     private val hfCurvePath = Path()
     private fun drawHfDampingSubBox(c: Canvas) {
         val cornerR = 6f * density
@@ -456,32 +487,34 @@ class ReverbVisualizerView @JvmOverloads constructor(
         controlLabelPaint.textAlign = savedAlign
 
         val r = 5.5f * density
-        val dotMargin = r + 2f
-        val innerLeft = left + dotMargin
-        val innerRight = right - dotMargin
-        val (innerTop, innerBottom) = hfDotInnerYBounds()
-        val centerX = (left + right) / 2f
-        val dotY = decayHfRatioToY()
+        val b = hfDotInnerBounds()
+        val innerLeft = b[0]; val innerTop = b[1]
+        val innerRight = b[2]; val innerBottom = b[3]
+        val centerX = (innerLeft + innerRight) / 2f
+        val centerY = (innerTop + innerBottom) / 2f
+        val (dotX, dotY) = decayHfRatioToDotPos()
 
-        // Vertical centre line — the rail the dot moves along.
-        c.drawLine(centerX, top, centerX, bottom, centerLinePaint)
+        // Anti-diagonal "rail" the dot slides along.
+        c.drawLine(innerLeft, innerBottom, innerRight, innerTop, centerLinePaint)
 
-        // Quadratic Bezier from (innerLeft, innerTop) to (innerRight,
-        // innerBottom) passing through (centerX, dotY) at t = 0.5. To
-        // make the curve actually intersect that point, the control
-        // point Y is offset: B(0.5) = 0.25·S + 0.5·C + 0.25·E, solving
-        // for Cy gives Cy = 2·dotY − 0.5·(innerTop + innerBottom).
-        val cy = 2f * dotY - 0.5f * (innerTop + innerBottom)
+        // Quadratic Bezier with control point Cx = 2·dot − centre,
+        // Cy = 2·dot − centre — chosen so B(0.5) = (dotX, dotY) and
+        // the curve passes EXACTLY through the dot at its midpoint.
+        // Because the dot's range is restricted to [0.25, 0.75] of
+        // the anti-diagonal, the control point is mathematically
+        // guaranteed to stay inside the box, so the curve does too.
+        val cx = 2f * dotX - centerX
+        val cy = 2f * dotY - centerY
         hfCurvePath.reset()
         hfCurvePath.moveTo(innerLeft, innerTop)
-        hfCurvePath.quadTo(centerX, cy, innerRight, innerBottom)
+        hfCurvePath.quadTo(cx, cy, innerRight, innerBottom)
         c.drawPath(hfCurvePath, centerLinePaint)
 
-        handlePos[Handle.HF_DAMPING_CIRCLE] = HandlePos(centerX, dotY)
+        handlePos[Handle.HF_DAMPING_CIRCLE] = HandlePos(dotX, dotY)
         val active = grabbed == Handle.HF_DAMPING_CIRCLE
-        c.drawCircle(centerX, dotY, r, handleFillPaint)
+        c.drawCircle(dotX, dotY, r, handleFillPaint)
         val ring = if (active) handleFillActivePaint else handleStrokePaint
-        c.drawCircle(centerX, dotY, r, ring)
+        c.drawCircle(dotX, dotY, r, ring)
     }
 
     /** Vertical dotted line at the start of the Reverb Delay zone —
@@ -1035,12 +1068,13 @@ class ReverbVisualizerView @JvmOverloads constructor(
                 cb?.invoke(Param.REVERB_LEVEL, newDb)
             }
             Handle.HF_DAMPING_CIRCLE -> {
-                // HF Damping dot rides the vertical centre line of the
-                // sub-box: Y maps to decayHfRatio in [0.1, 2.0]. Top of
-                // the box = ratio max (HF lingers, line bends up);
-                // bottom = ratio min (HF dies, line bends down). The
-                // bent diagonal in the sub-box re-renders to follow.
-                val newRatio = yToDecayHfRatio(y)
+                // HF Damping dot rides the box's ANTI-DIAGONAL. The
+                // touch position is projected onto the diagonal and
+                // that projection's fraction maps to decayHfRatio in
+                // [0.1, 2.0]. Bottom-left = ratio min (HF dies, curve
+                // bows down). Top-right = ratio max (HF sustains,
+                // curve bows up). Centre = ratio 1.0 = straight line.
+                val newRatio = pointToDecayHfRatio(x, y)
                 decayHfRatio = newRatio
                 cb?.invoke(Param.DECAY_HF, newRatio)
             }
