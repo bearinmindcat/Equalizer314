@@ -209,6 +209,10 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
                 eqPrefs.saveReverbDelayMs(value)
                 pushSlider(revDelaySlider, revDelayText, "%.0f", value)
             }
+            ReverbVisualizerView.Param.ROOM_HF_LEVEL -> {
+                // Room HF Level — visualizer-only for now; no slider
+                // in the activity yet. Persistence can be added later.
+            }
         }
     }
 

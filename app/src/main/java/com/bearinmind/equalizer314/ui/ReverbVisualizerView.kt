@@ -32,6 +32,7 @@ class ReverbVisualizerView @JvmOverloads constructor(
     enum class Param {
         DECAY_TIME, DECAY_HF, REVERB_LEVEL, ROOM_LEVEL,
         REFLECTIONS_DELAY, REFLECTIONS_LEVEL, REVERB_DELAY,
+        ROOM_HF_LEVEL,
     }
 
     /** Identities of the bottom-row control circles. */
@@ -57,6 +58,10 @@ class ReverbVisualizerView @JvmOverloads constructor(
      *  range is 0..100 ms. */
     var reverbDelayMs: Float = 11f
         set(v) { field = v.coerceIn(0f, 100f); invalidate() }
+    /** Room HF Level (dB) — static high-frequency shelf cut applied
+     *  to the wet output. EnvironmentalReverb API range −90..0 dB. */
+    var roomHFLevelDb: Float = 0f
+        set(v) { field = v.coerceIn(-90f, 0f); invalidate() }
 
     private val density = context.resources.displayMetrics.density
 
@@ -209,6 +214,30 @@ class ReverbVisualizerView @JvmOverloads constructor(
             floatArrayOf(4f * density, 4f * density), 0f
         )
     }
+    // Two separate stream overlays in the decay zone — the LF stream
+    // is a neutral cool-grey reference (linear, doesn't bend with HF
+    // damping); the HF stream is a warm amber line that bends with
+    // decayHfRatio. Together they reveal the "two streams" the API
+    // tracks: LF and HF decaying at potentially different rates.
+    private val lfStreamPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        color = 0xFF7A8FA8.toInt()  // cool slate grey
+        strokeWidth = 1.4f * density
+        pathEffect = android.graphics.DashPathEffect(
+            floatArrayOf(3f * density, 3f * density), 0f
+        )
+        strokeJoin = Paint.Join.ROUND
+    }
+    private val hfStreamPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        color = 0xFFE6C25A.toInt()  // warm amber
+        strokeWidth = 1.6f * density
+        pathEffect = android.graphics.DashPathEffect(
+            floatArrayOf(5f * density, 4f * density), 0f
+        )
+        strokeJoin = Paint.Join.ROUND
+    }
+    private val streamOverlayPath = Path()
     // Early Reflections vertical-axis range — matches the Reflect (dB)
     // slider's valueFrom/valueTo in activity_environmental_reverb.xml
     // and the EnvironmentalReverb API's setReflectionsLevel range.
@@ -226,6 +255,12 @@ class ReverbVisualizerView @JvmOverloads constructor(
     // X position of the HF dot in the sub-band maps to decayHfRatio.
     private val decayHfRatioMin = 0.1f
     private val decayHfRatioMax = 2.0f
+
+    // HF Level (Room HF Level) range — matches the API's setRoomHFLevel
+    // range (−90..0 dB). X position of the HF Level dot in its sub-box
+    // maps to roomHFLevelDb.
+    private val roomHFLevelMinDb = -90f
+    private val roomHFLevelMaxDb = 0f
 
     private fun decayHfRatioToX(ratio: Float): Float {
         val frac = ((ratio - decayHfRatioMin) /
@@ -290,6 +325,33 @@ class ReverbVisualizerView @JvmOverloads constructor(
         return decayHfRatioMin + ratioFrac * (decayHfRatioMax - decayHfRatioMin)
     }
 
+    /** HF Level sub-box sits in zone 2's column of the HF sub-band so
+     *  it lives directly next to the HF Damping sub-box. The dot is a
+     *  simple horizontal slider — same X-only style as the Reverb
+     *  Delay circle on the main trackline. */
+    private fun roomHFLevelInnerBounds(): FloatArray {
+        val r = 5.5f * density
+        val dotMargin = r + 2f
+        return floatArrayOf(
+            zoneStart(2) + dotMargin,
+            hfSubBandTop + dotMargin,
+            zoneEnd(2) - dotMargin,
+            hfSubBandBottom - dotMargin,
+        )
+    }
+    private fun roomHFLevelToX(): Float {
+        val b = roomHFLevelInnerBounds()
+        val frac = ((roomHFLevelDb - roomHFLevelMinDb) /
+            (roomHFLevelMaxDb - roomHFLevelMinDb)).coerceIn(0f, 1f)
+        return b[0] + frac * (b[2] - b[0])
+    }
+    private fun xToRoomHFLevel(x: Float): Float {
+        val b = roomHFLevelInnerBounds()
+        val span = (b[2] - b[0]).coerceAtLeast(1f)
+        val frac = ((x - b[0]) / span).coerceIn(0f, 1f)
+        return roomHFLevelMinDb + frac * (roomHFLevelMaxDb - roomHFLevelMinDb)
+    }
+
     private val ghostPath = Path()
 
     private val controlLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -303,7 +365,7 @@ class ReverbVisualizerView @JvmOverloads constructor(
     private enum class Handle {
         ROOM, REFLECTIONS, REVERB, DECAY_HF, DECAY_END,
         SOURCE_CIRCLE, PREDELAY_CIRCLE, EARLY_CIRCLE, DECAY_CIRCLE,
-        REVDELAY_CIRCLE, HF_DAMPING_CIRCLE,
+        REVDELAY_CIRCLE, HF_DAMPING_CIRCLE, HF_LEVEL_CIRCLE,
     }
     private data class HandlePos(val x: Float, val y: Float)
     private val handlePos = HashMap<Handle, HandlePos>()
@@ -458,6 +520,7 @@ class ReverbVisualizerView @JvmOverloads constructor(
         drawCenterLine(canvas)
         drawZoneCards(canvas)
         drawHfDampingSubBox(canvas)
+        drawHfLevelSubBox(canvas)
         drawTimeAxisLine(canvas)
         drawControlCircles(canvas)
         drawHandles(canvas)
@@ -471,6 +534,87 @@ class ReverbVisualizerView @JvmOverloads constructor(
      *  same gesture both slides the dot along the diagonal AND keeps
      *  it on the curve as the curve flexes. */
     private val hfCurvePath = Path()
+    /** Two amplitude-vs-time overlays in the decay zone:
+     *    - LF stream (slate grey, dashed) → linear baseline. Doesn't
+     *      bend with HF damping; represents the LF half of the tail
+     *      that decays at the standard `decayTime` rate.
+     *    - HF stream (amber, dashed) → bends with `decayHfRatio`.
+     *      Drops below the LF line for ratio < 1 (HF dies fast),
+     *      stays above it for ratio > 1 (HF lingers).
+     *  Together these reveal the "two streams" the API actually
+     *  tracks. The bars below are the perceived combined tail. */
+    private fun drawTailStreamOverlays(
+        c: Canvas,
+        tailStartX: Float,
+        tailEndX: Float,
+        tailSpan: Float,
+        ampStart: Float,
+        tailLevel: Float,
+        hfExp: Float,
+    ) {
+        val nSamples = 32
+
+        // LF stream — linear from ampStart down to 0 across the tail.
+        streamOverlayPath.reset()
+        for (i in 0..nSamples) {
+            val zoneFrac = i.toFloat() / nSamples
+            val x = tailStartX + zoneFrac * tailSpan
+            val amp = (ampStart * (1f - zoneFrac) * tailLevel).coerceIn(0f, 1f)
+            val y = amp01ToY(amp)
+            if (i == 0) streamOverlayPath.moveTo(x, y) else streamOverlayPath.lineTo(x, y)
+        }
+        c.drawPath(streamOverlayPath, lfStreamPaint)
+
+        // HF stream — same start, but its curve bends with HF damping.
+        streamOverlayPath.reset()
+        for (i in 0..nSamples) {
+            val zoneFrac = i.toFloat() / nSamples
+            val x = tailStartX + zoneFrac * tailSpan
+            val amp = (ampStart * (1f - zoneFrac).pow(hfExp) * tailLevel).coerceIn(0f, 1f)
+            val y = amp01ToY(amp)
+            if (i == 0) streamOverlayPath.moveTo(x, y) else streamOverlayPath.lineTo(x, y)
+        }
+        c.drawPath(streamOverlayPath, hfStreamPaint)
+    }
+
+    /** HF Level — sits in zone 2's column of the HF sub-band. No
+     *  outline box — just a horizontal trackline with a dot, matching
+     *  the Reverb Delay segment of the main trackline in length:
+     *  the line spans the full zone width tick-to-tick (zoneStart(2)
+     *  → zoneEnd(2)), with the dot clamped a small dot-margin inside.
+     *  Left = −90 dB (HF cut), right = 0 dB (no cut). */
+    private fun drawHfLevelSubBox(c: Canvas) {
+        val left = zoneStart(2)
+        val right = zoneEnd(2)
+        val top = hfSubBandTop
+        val bottom = hfSubBandBottom
+
+        // "HF Level" label, top-left of the column.
+        val savedAlign = controlLabelPaint.textAlign
+        controlLabelPaint.textAlign = Paint.Align.LEFT
+        val labelBaselineY = top + 12f * density - controlLabelPaint.ascent()
+        c.drawText("HF Level", left + 8f * density, labelBaselineY, controlLabelPaint)
+        controlLabelPaint.textAlign = savedAlign
+
+        // Trackline tick-to-tick (full zone width, like Reverb Delay).
+        val cy = (top + bottom) / 2f
+        c.drawLine(left, cy, right, cy, regionDividerPaint)
+        val tickHalf = 5f * density
+        c.drawLine(left, cy - tickHalf, left, cy + tickHalf, regionDividerPaint)
+        c.drawLine(right, cy - tickHalf, right, cy + tickHalf, regionDividerPaint)
+
+        // Dot clamped a dot-margin inside so its outline never pokes
+        // past the tick marks.
+        val r = 5.5f * density
+        val dotMargin = r + 2f
+        val dotX = roomHFLevelToX().coerceIn(left + dotMargin, right - dotMargin)
+        handlePos[Handle.HF_LEVEL_CIRCLE] = HandlePos(dotX, cy)
+        val active = grabbed == Handle.HF_LEVEL_CIRCLE
+        c.drawCircle(dotX, cy, r, handleFillPaint)
+        val ring = if (active) handleFillActivePaint else handleStrokePaint
+        c.drawCircle(dotX, cy, r, ring)
+    }
+
     private fun drawHfDampingSubBox(c: Canvas) {
         val cornerR = 6f * density
         val left = zoneStart(3)
@@ -813,6 +957,13 @@ class ReverbVisualizerView @JvmOverloads constructor(
             c.drawLine(x, plotB, x, amp01ToY(amp), paint)
         }
 
+        // Draw the two-stream overlays so the API's actual model
+        // (LF decay + HF decay tracked separately) is visible.
+        if (!tailCollapsed) {
+            drawTailStreamOverlays(c, tailStartX, tailEndX, tailSpan,
+                ampAtTailStart, tailLevel, hfDampingExp)
+        }
+
         // Curve-anchor handles aren't drawn anymore; keep cached anchor
         // positions on the legacy linear-time axis for any future re-
         // enable.
@@ -970,7 +1121,7 @@ class ReverbVisualizerView @JvmOverloads constructor(
         val touchable = setOf(
             Handle.PREDELAY_CIRCLE, Handle.EARLY_CIRCLE,
             Handle.REVDELAY_CIRCLE, Handle.DECAY_CIRCLE,
-            Handle.HF_DAMPING_CIRCLE,
+            Handle.HF_DAMPING_CIRCLE, Handle.HF_LEVEL_CIRCLE,
         )
         var best: Handle? = null
         var bestDist = hitRadiusPx
@@ -1080,6 +1231,14 @@ class ReverbVisualizerView @JvmOverloads constructor(
                 val newRatio = pointToDecayHfRatio(x, y)
                 decayHfRatio = newRatio
                 cb?.invoke(Param.DECAY_HF, newRatio)
+            }
+            Handle.HF_LEVEL_CIRCLE -> {
+                // HF Level dot — horizontal slide in zone 2's column
+                // of the HF sub-band. Maps X onto roomHFLevelDb in
+                // [-90, 0] dB.
+                val newDb = xToRoomHFLevel(x)
+                roomHFLevelDb = newDb
+                cb?.invoke(Param.ROOM_HF_LEVEL, newDb)
             }
         }
     }
