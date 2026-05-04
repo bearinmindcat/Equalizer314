@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
+import android.os.SystemClock
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
@@ -94,6 +95,16 @@ class DiffusionDensityView @JvmOverloads constructor(
     private var plotR = 0f; private var plotB = 0f
     private var dragging = false
 
+    // Halo fade animation state — same pattern as the reverb
+    // visualizer's dot ripples. The halo's alpha animates from 0 to its
+    // peak on grab and back to 0 on release rather than snapping on/off.
+    private var haloStateChangeMs = 0L
+    private val haloFadeInMs = 120L
+    private val haloFadeOutMs = 220L
+    // Peak alpha matches the original 0x38 (~22 %) tint so the visual
+    // intensity at full grab is unchanged from before the fade was added.
+    private val haloPeakAlpha = 0x38 / 255f
+
     private fun computePlot(w: Float, h: Float) {
         plotL = 0f
         plotT = 0f
@@ -164,7 +175,23 @@ class DiffusionDensityView @JvmOverloads constructor(
         val dotMargin = dotR + 3f * density
         val dotX = px.coerceIn(plotL + dotMargin, plotR - dotMargin)
         val dotY = py.coerceIn(plotT + dotMargin, plotB - dotMargin)
-        if (dragging) canvas.drawCircle(dotX, dotY, dotR + 12f * density, haloPaint)
+        // Smooth fade halo: alpha eases from 0 → peak on grab and back
+        // to 0 on release, matching the reverb visualizer's dot ripples.
+        val elapsed = SystemClock.elapsedRealtime() - haloStateChangeMs
+        val haloAlphaFrac: Float
+        val animating: Boolean
+        if (dragging) {
+            haloAlphaFrac = (elapsed.toFloat() / haloFadeInMs).coerceIn(0f, 1f)
+            animating = haloAlphaFrac < 1f
+        } else {
+            haloAlphaFrac = (1f - elapsed.toFloat() / haloFadeOutMs).coerceIn(0f, 1f)
+            animating = haloAlphaFrac > 0f
+        }
+        if (haloAlphaFrac > 0.01f) {
+            haloPaint.alpha = (haloAlphaFrac * haloPeakAlpha * 255f).toInt()
+            canvas.drawCircle(dotX, dotY, dotR + 12f * density, haloPaint)
+        }
+        if (animating) postInvalidateOnAnimation()
         canvas.drawCircle(dotX, dotY, dotR, dotBgPaint)
         drawMiniDots(canvas, dotX, dotY, dotR)
         canvas.drawCircle(dotX, dotY, dotR, dotRingPaint)
@@ -308,6 +335,7 @@ class DiffusionDensityView @JvmOverloads constructor(
                 grabOffsetX = curDotX - event.x
                 grabOffsetY = curDotY - event.y
                 dragging = true
+                haloStateChangeMs = SystemClock.elapsedRealtime()
                 parent?.requestDisallowInterceptTouchEvent(true)
                 applyTouch(event.x + grabOffsetX, event.y + grabOffsetY)
                 invalidate()
@@ -321,6 +349,7 @@ class DiffusionDensityView @JvmOverloads constructor(
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 dragging = false
+                haloStateChangeMs = SystemClock.elapsedRealtime()
                 grabOffsetX = 0f
                 grabOffsetY = 0f
                 parent?.requestDisallowInterceptTouchEvent(false)

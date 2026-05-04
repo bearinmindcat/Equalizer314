@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Typeface
+import android.os.SystemClock
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
@@ -188,6 +189,18 @@ class ReverbVisualizerView @JvmOverloads constructor(
         color = 0xFFDDDDDD.toInt()
         strokeWidth = 2.5f
     }
+    // Soft grey halo drawn around the currently-grabbed dot. The
+    // halo's alpha smoothly fades in on ACTION_DOWN and out on
+    // ACTION_UP rather than appearing/disappearing instantly. Same
+    // visual language used elsewhere in the app for "active" feedback.
+    private val rippleHaloPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = 0xFFBBBBBB.toInt()
+    }
+    private var lastGrabbedHandle: Handle? = null
+    private var rippleStateChangeMs = 0L
+    private val rippleFadeInMs = 120L
+    private val rippleFadeOutMs = 220L
     // Outline drawn around zones that allow 2-D drag (Early Reflections
     // and Decay). The dot inside the card can be dragged side-to-side
     // (existing X behaviour) and up-and-down (new Y behaviour, visual-
@@ -489,8 +502,11 @@ class ReverbVisualizerView @JvmOverloads constructor(
         val sideMargin = 0f
         val bottomMargin = 0f
         val rightMargin = 4f * density
-        val mainBandH = 90f * density
-        val hfSubBandH = 90f * density  // matches main band so the HF box is the same height as the Decay box
+        // Bands are 25 % shorter than before so the boxes (Early Refl,
+        // Decay, HF Damping, HF Level) are tighter and the graph below
+        // gets more breathing room. Was 90 dp each; now 68 dp.
+        val mainBandH = 68f * density
+        val hfSubBandH = 68f * density
         val topBandH = mainBandH + hfSubBandH
         plotL = sideMargin
         plotR = w - rightMargin
@@ -609,10 +625,9 @@ class ReverbVisualizerView @JvmOverloads constructor(
         val dotMargin = r + 2f
         val dotX = roomHFLevelToX().coerceIn(left + dotMargin, right - dotMargin)
         handlePos[Handle.HF_LEVEL_CIRCLE] = HandlePos(dotX, cy)
-        val active = grabbed == Handle.HF_LEVEL_CIRCLE
+        drawRippleHaloFor(c, Handle.HF_LEVEL_CIRCLE, dotX, cy, r)
         c.drawCircle(dotX, cy, r, handleFillPaint)
-        val ring = if (active) handleFillActivePaint else handleStrokePaint
-        c.drawCircle(dotX, cy, r, ring)
+        c.drawCircle(dotX, cy, r, handleStrokePaint)
     }
 
     private fun drawHfDampingSubBox(c: Canvas) {
@@ -655,10 +670,9 @@ class ReverbVisualizerView @JvmOverloads constructor(
         c.drawPath(hfCurvePath, centerLinePaint)
 
         handlePos[Handle.HF_DAMPING_CIRCLE] = HandlePos(dotX, dotY)
-        val active = grabbed == Handle.HF_DAMPING_CIRCLE
+        drawRippleHaloFor(c, Handle.HF_DAMPING_CIRCLE, dotX, dotY, r)
         c.drawCircle(dotX, dotY, r, handleFillPaint)
-        val ring = if (active) handleFillActivePaint else handleStrokePaint
-        c.drawCircle(dotX, dotY, r, ring)
+        c.drawCircle(dotX, dotY, r, handleStrokePaint)
     }
 
     /** Vertical dotted line at the start of the Reverb Delay zone —
@@ -1074,22 +1088,66 @@ class ReverbVisualizerView @JvmOverloads constructor(
             Handle.DECAY_CIRCLE to (decayX to decayY),
         )) {
             val (x, y) = pos
-            val active = h == grabbed
+            drawRippleHaloFor(c, h, x, y, r)
             c.drawCircle(x, y, r, handleFillPaint)
-            val ring = if (active) handleFillActivePaint else handleStrokePaint
-            c.drawCircle(x, y, r, ring)
+            c.drawCircle(x, y, r, handleStrokePaint)
         }
+    }
+
+    /**
+     * Draws the soft grey halo around a dot when it is currently
+     * grabbed (or recently released). Alpha is interpolated from the
+     * elapsed time since [rippleStateChangeMs] so the halo fades in
+     * smoothly on touch and fades out smoothly on release rather than
+     * snapping on/off. Only the [lastGrabbedHandle] receives a halo.
+     *
+     * Schedules another animation frame via [postInvalidateOnAnimation]
+     * while the alpha is still in motion, so the caller doesn't have to
+     * worry about driving the animation loop.
+     */
+    private fun drawRippleHaloFor(
+        c: Canvas,
+        h: Handle,
+        x: Float,
+        y: Float,
+        dotR: Float,
+    ) {
+        if (h != lastGrabbedHandle) return
+        val elapsed = SystemClock.elapsedRealtime() - rippleStateChangeMs
+        val alpha: Float
+        val animating: Boolean
+        if (grabbed == h) {
+            alpha = (elapsed.toFloat() / rippleFadeInMs).coerceIn(0f, 1f)
+            animating = alpha < 1f
+        } else {
+            alpha = (1f - elapsed.toFloat() / rippleFadeOutMs).coerceIn(0f, 1f)
+            animating = alpha > 0f
+        }
+        if (alpha > 0.01f) {
+            // Halo radius grows with the dot a touch — same hollow
+            // ring vibe as the dot itself, scaled smaller than the
+            // bigger ripples used elsewhere in the app.
+            val haloR = dotR + 6f * density
+            // Peak alpha 0.32 keeps the halo visible without clobbering
+            // the dot or the trackline behind it.
+            rippleHaloPaint.alpha = (alpha * 0.32f * 255f).toInt()
+            c.drawCircle(x, y, haloR, rippleHaloPaint)
+        }
+        if (animating) postInvalidateOnAnimation()
     }
 
     // ---- Touch ---------------------------------------------------------
 
-    private val hitRadiusPx: Float get() = 22f * density
+    // Bumped from 22 dp → 30 dp for snappier touch acquisition.
+    private val hitRadiusPx: Float get() = 30f * density
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 val target = nearestHandle(event.x, event.y) ?: return false
                 grabbed = target
+                lastGrabbedHandle = target
+                rippleStateChangeMs = SystemClock.elapsedRealtime()
                 val pos = handlePos[target] ?: return false
                 grabOffsetX = pos.x - event.x
                 grabOffsetY = pos.y - event.y
@@ -1106,6 +1164,7 @@ class ReverbVisualizerView @JvmOverloads constructor(
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 grabbed = null
+                rippleStateChangeMs = SystemClock.elapsedRealtime()
                 isPressed = false
                 parent?.requestDisallowInterceptTouchEvent(false)
                 invalidate()
