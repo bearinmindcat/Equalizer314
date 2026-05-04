@@ -11,6 +11,7 @@ import android.view.MotionEvent
 import android.view.View
 import kotlin.math.hypot
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.pow
 
 /**
@@ -71,8 +72,11 @@ class ReverbVisualizerView @JvmOverloads constructor(
     private val bgColor = 0xFF1A1A1A.toInt()
     private val directBarColor = 0xFFE8E8E8.toInt()  // brightest — direct sound
     private val earlyBarColor = 0xFFBBBBBB.toInt()   // early reflections
+    // The decay region (body + tail) shares a single shade — the
+    // body/tail split is preserved structurally via stroke width and
+    // envelope-driven heights, but no longer via colour.
     private val bodyBarColor = 0xFF888888.toInt()    // reverb body
-    private val tailBarColor = 0xFF555555.toInt()    // decay tail
+    private val tailBarColor = bodyBarColor          // decay tail (unified)
     private val ghostEnvelopeColor = 0x44999999.toInt()
 
     // ---- Paints --------------------------------------------------------
@@ -139,6 +143,29 @@ class ReverbVisualizerView @JvmOverloads constructor(
         strokeCap = Paint.Cap.ROUND
         strokeWidth = 1.3f * density
         color = tailBarColor
+    }
+    // High-frequency overlay bar — drawn on top of each regular tail
+    // bar at the HF-damped height (using decayHfRatio's exponent),
+    // so the difference between the linear "regular" decay and the
+    // HF-damped decay is visible like a spectrum analyser's HF band.
+    // At decayHfRatio == 1 it equals the regular bar; at < 1 it's
+    // shorter (HF dies faster); at > 1 it extends taller (HF sustains).
+    private val hfBarPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeWidth = 1.6f * density
+        color = 0xFF555555.toInt()
+    }
+    // Bar segment colour drawn ABOVE the linear envelope when the
+    // HF-damped curve sits higher than linear (decayHfRatio > 1). A
+    // lighter grey, distinct from both the dark-grey HF base (555555)
+    // and the bulk-decay 888888, so the linear-line crossing is
+    // visible just like the HF-curve crossing on the damped side.
+    private val hfExcessPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeWidth = 1.6f * density
+        color = 0xFFAAAAAA.toInt()
     }
     private val ghostEnvelopePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = ghostEnvelopeColor
@@ -243,7 +270,11 @@ class ReverbVisualizerView @JvmOverloads constructor(
     }
     private val hfStreamPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        color = 0xFFE6C25A.toInt()  // warm amber
+        // Reuses the dark-grey shade that previously coloured the tail
+        // bars before they were unified with the body shade. Keeps the
+        // HF-damped curve visually distinct from the linear LF stream
+        // without re-introducing a chromatic colour.
+        color = 0xFF555555.toInt()
         strokeWidth = 1.6f * density
         pathEffect = android.graphics.DashPathEffect(
             floatArrayOf(5f * density, 4f * density), 0f
@@ -954,21 +985,43 @@ class ReverbVisualizerView @JvmOverloads constructor(
         val tailSpan = (tailEndX - tailStartX).coerceAtLeast(1f)
         val ampAtTailStart = envelopeAtX(tailStartX)
         val hfDampingExp = (1f / decayHfRatio.coerceIn(0.1f, 2f)).coerceIn(0.5f, 2f)
+        // Each bar is split into up to three coloured segments based
+        // on the relationship between the linear and HF-damped curves:
+        //   - 0 → min(lin, HF)  : dark grey 555555 (the HF zone — both
+        //     curves cover this height, so HF energy is present here)
+        //   - min → max with linAmp > hfAmp (HF damped) : 888888, the
+        //     bulk-decay region above the HF curve
+        //   - min → max with hfAmp > linAmp (HF sustained) : 0xFFAAAAAA,
+        //     the HF excess sitting above the linear envelope
+        // Both linAmp and hfAmp are computed without the alt-shrink
+        // applied to the early reflections cluster, so the bar tops
+        // trace the smooth dashed-curve overlays exactly — the colour
+        // boundary now lands ON the HF dotted line in the damped case.
         for (i in 0 until nTail) {
             val fracT = (i + 0.5f) / nTail
             val x = tailStartX + fracT * (tailEndX - tailStartX)
             if (x > plotR) continue
             val zoneFrac = ((x - tailStartX) / tailSpan).coerceIn(0f, 1f)
-            val curvedAmp = ampAtTailStart * (1f - zoneFrac).pow(hfDampingExp)
-            val shrunk = if (i % 2 == 1) curvedAmp * altShrink else curvedAmp
-            val amp = shrunk * tailLevel
-            if (amp < 0.01f) continue
-            val paint = when {
-                tailCollapsed -> bodyBarDashedPaint
-                fracT < bodyTailSplit -> bodyBarPaint
-                else -> tailBarPaint
+            val linAmp = ampAtTailStart * (1f - zoneFrac) * tailLevel
+            val hfAmp = ampAtTailStart * (1f - zoneFrac).pow(hfDampingExp) * tailLevel
+
+            if (tailCollapsed) {
+                if (linAmp >= 0.01f) {
+                    c.drawLine(x, plotB, x, amp01ToY(linAmp), bodyBarDashedPaint)
+                }
+                continue
             }
-            c.drawLine(x, plotB, x, amp01ToY(amp), paint)
+
+            val minAmp = min(linAmp, hfAmp)
+            val maxAmp = max(linAmp, hfAmp)
+
+            if (minAmp >= 0.01f) {
+                c.drawLine(x, plotB, x, amp01ToY(minAmp), hfBarPaint)
+            }
+            if (maxAmp - minAmp > 0.01f) {
+                val topPaint = if (linAmp > hfAmp) bodyBarPaint else hfExcessPaint
+                c.drawLine(x, amp01ToY(minAmp), x, amp01ToY(maxAmp), topPaint)
+            }
         }
 
         // Draw the two-stream overlays so the API's actual model
