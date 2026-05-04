@@ -72,10 +72,10 @@ class ReverbVisualizerView @JvmOverloads constructor(
     private val bgColor = 0xFF1A1A1A.toInt()
     private val directBarColor = 0xFFE8E8E8.toInt()  // brightest — direct sound
     private val earlyBarColor = 0xFFBBBBBB.toInt()   // early reflections
-    // The decay region (body + tail) shares a single shade — the
-    // body/tail split is preserved structurally via stroke width and
-    // envelope-driven heights, but no longer via colour.
-    private val bodyBarColor = 0xFF888888.toInt()    // reverb body
+    // The "regular decay" reflections (linear envelope, no HF damping
+    // applied) are drawn in a brighter shade so they read as the
+    // primary signal; the HF-damped portions get a darker shade below.
+    private val bodyBarColor = 0xFFBBBBBB.toInt()    // regular decay (bright)
     private val tailBarColor = bodyBarColor          // decay tail (unified)
     private val ghostEnvelopeColor = 0x44999999.toInt()
 
@@ -154,7 +154,9 @@ class ReverbVisualizerView @JvmOverloads constructor(
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
         strokeWidth = 1.6f * density
-        color = 0xFF555555.toInt()
+        // Darker shade for the HF-damped portion of the bar — paired
+        // with the brighter [bodyBarColor] used for the regular decay.
+        color = 0xFF3A3A3A.toInt()
     }
     // Bar segment colour drawn ABOVE the linear envelope when the
     // HF-damped curve sits higher than linear (decayHfRatio > 1). A
@@ -165,7 +167,10 @@ class ReverbVisualizerView @JvmOverloads constructor(
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
         strokeWidth = 1.6f * density
-        color = 0xFFAAAAAA.toInt()
+        // HF-sustained excess shares the same dark shade as the HF
+        // base so all HF-related portions read as one tone, leaving
+        // the bright bodyBarColor exclusively to the regular decay.
+        color = 0xFF3A3A3A.toInt()
     }
     private val ghostEnvelopePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = ghostEnvelopeColor
@@ -254,19 +259,17 @@ class ReverbVisualizerView @JvmOverloads constructor(
             floatArrayOf(4f * density, 4f * density), 0f
         )
     }
-    // Two separate stream overlays in the decay zone — the LF stream
-    // is a neutral cool-grey reference (linear, doesn't bend with HF
-    // damping); the HF stream is a warm amber line that bends with
-    // decayHfRatio. Together they reveal the "two streams" the API
-    // tracks: LF and HF decaying at potentially different rates.
+    // White dotted line tracing the linear (non-HF, regular) decay
+    // envelope. Round-capped, very short "on" segments + larger "off"
+    // gaps give a true dotted (rather than dashed) appearance.
     private val lfStreamPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        color = 0xFF7A8FA8.toInt()  // cool slate grey
-        strokeWidth = 1.4f * density
+        color = 0xFFFFFFFF.toInt()
+        strokeCap = Paint.Cap.ROUND
+        strokeWidth = 1.6f * density
         pathEffect = android.graphics.DashPathEffect(
-            floatArrayOf(3f * density, 3f * density), 0f
+            floatArrayOf(0.1f * density, 4f * density), 0f
         )
-        strokeJoin = Paint.Join.ROUND
     }
     private val hfStreamPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -601,7 +604,9 @@ class ReverbVisualizerView @JvmOverloads constructor(
     ) {
         val nSamples = 32
 
-        // LF stream — linear from ampStart down to 0 across the tail.
+        // Linear (regular) decay — white dotted line tracing the
+        // un-damped envelope so the user can see the linear reference
+        // even when the HF curve dominates the bar shapes.
         streamOverlayPath.reset()
         for (i in 0..nSamples) {
             val zoneFrac = i.toFloat() / nSamples
@@ -612,7 +617,7 @@ class ReverbVisualizerView @JvmOverloads constructor(
         }
         c.drawPath(streamOverlayPath, lfStreamPaint)
 
-        // HF stream — same start, but its curve bends with HF damping.
+        // HF stream — bends with HF damping.
         streamOverlayPath.reset()
         for (i in 0..nSamples) {
             val zoneFrac = i.toFloat() / nSamples
@@ -985,6 +990,20 @@ class ReverbVisualizerView @JvmOverloads constructor(
         val tailSpan = (tailEndX - tailStartX).coerceAtLeast(1f)
         val ampAtTailStart = envelopeAtX(tailStartX)
         val hfDampingExp = (1f / decayHfRatio.coerceIn(0.1f, 2f)).coerceIn(0.5f, 2f)
+        // Modulate every HF-related grey by HF Level (roomHFLevelDb).
+        // At 0 dB (no shelf cut) the HF parts reach 0xBB — the same
+        // bright shade used for the regular decay (bodyBarColor) — so
+        // a fully open HF visually merges with the bulk signal. At
+        // −90 dB they slide down to 0x40 (still readable against the
+        // 0x1A background). All three HF paints share the same value
+        // so the dashed overlay, the bottom shared region, and the
+        // sustained-HF excess move together.
+        val hfLevel01 = ((roomHFLevelDb + 90f) / 90f).coerceIn(0f, 1f)
+        val hfGrey = (0x40 + (0xBB - 0x40) * hfLevel01).toInt().coerceIn(0, 255)
+        val hfColor = (0xFF shl 24) or (hfGrey shl 16) or (hfGrey shl 8) or hfGrey
+        hfBarPaint.color = hfColor
+        hfExcessPaint.color = hfColor
+        hfStreamPaint.color = hfColor
         // Each bar is split into up to three coloured segments based
         // on the relationship between the linear and HF-damped curves:
         //   - 0 → min(lin, HF)  : dark grey 555555 (the HF zone — both
