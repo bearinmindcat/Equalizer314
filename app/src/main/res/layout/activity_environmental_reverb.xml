@@ -111,31 +111,13 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Reverb amplitude IR — visualizer-only card, sits directly
-                 above the "Reverb Parameters" card so the two read as
-                 a single stacked unit. -->
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="286dp"
-                app:cardBackgroundColor="#FF1A1A1A"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp"
-                app:strokeWidth="1dp"
-                app:strokeColor="#FF333333">
-
-                <com.bearinmind.equalizer314.ui.ReverbVisualizerView
-                    android:id="@+id/reverbVisualizer"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent" />
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- Reverb Parameters — its own outlined card attached to
-                 the bottom of the graph card. Click the header to
-                 expand the slider list. -->
+            <!-- Reverb amplitude IR — visualizer at the top, then a
+                 click-to-expand "Reverb Parameters" panel below it,
+                 all inside ONE outlined card so the dropdown reads
+                 as part of the graph card. -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
                 android:layout_marginBottom="12dp"
                 app:cardBackgroundColor="#FF1A1A1A"
                 app:cardCornerRadius="16dp"
@@ -147,6 +129,33 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical">
+
+                    <com.bearinmind.equalizer314.ui.ReverbVisualizerView
+                        android:id="@+id/reverbVisualizer"
+                        android:layout_width="match_parent"
+                        android:layout_height="286dp" />
+
+                    <!-- Reverb Parameters wrapped in a nested
+                         MaterialCardView so a rounded outline wraps
+                         around just the params section. The card
+                         spans the full width (no left/right
+                         indentation) and its bottom edge sits on
+                         the outer card's bottom edge — only its
+                         TOP corners are rounded, creating a clean
+                         "rounded card" cap above the dropdown. -->
+                    <com.google.android.material.card.MaterialCardView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        app:cardBackgroundColor="#FF1A1A1A"
+                        app:cardCornerRadius="14dp"
+                        app:cardElevation="0dp"
+                        app:strokeWidth="1dp"
+                        app:strokeColor="#FF333333">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical">
 
                     <LinearLayout
                         android:id="@+id/graphParamsHeader"
@@ -323,6 +332,8 @@
                             </com.google.android.material.textfield.TextInputLayout>
                         </LinearLayout>
                     </LinearLayout>
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 

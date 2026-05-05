@@ -1134,7 +1134,7 @@
                             <TextView
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:text="Configue and re-order DynamicsProcessing &amp; other audio effects with session 0"
+                                android:text="Configure session based audio effects pipeline"
                                 android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                                 android:textColor="?attr/colorOnSurfaceVariant"
                                 android:paddingTop="4dp" />
