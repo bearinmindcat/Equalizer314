@@ -40,6 +40,7 @@ object ApoConverter {
         if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
             try {
                 val json = if (trimmed.startsWith("[")) JSONArray(trimmed) else JSONObject(trimmed)
+                tryWrappedPresetArray(json)?.let { return Result.Ok(it, "EQ preset (wrapped JSON)") }
                 tryPowerampParametric(json)?.let { return Result.Ok(it, "Poweramp parametric EQ") }
                 tryPowerampGraphic(json)?.let { return Result.Ok(it, "Poweramp graphic EQ") }
                 tryWaveletPreset(json)?.let { return Result.Ok(it, "Wavelet preset (JSON)") }
@@ -63,6 +64,61 @@ object ApoConverter {
             Regex("""(?im)^\s*filter\s+\d+\s*:""").containsMatchIn(s) ||
             // Wavelet shares a "Filter N: ..." block with no Preamp; still APO.
             low.contains(" pk ") || low.contains(" lsc ") || low.contains(" hsc ")
+    }
+
+    // ---- Wrapped preset array (e.g. third-party EQ exports) -------------
+
+    /**
+     * Handles JSON of the form `[{"name": ..., "preamp": ..., "bands": [...]}]`
+     * — a top-level array whose first element is a preset wrapper. Each
+     * band uses numeric `type` codes:
+     *   0 = low-shelf (LSC), 1 = high-shelf (HSC), 2 = peaking (PK).
+     * `q == 0` is treated as "no Q specified" → fall back to 1.41 (the
+     * graphic-EQ default), since some exporters zero the field for
+     * graphic-style bands.
+     */
+    private fun tryWrappedPresetArray(any: Any): String? {
+        val arr = (any as? JSONArray) ?: return null
+        if (arr.length() == 0) return null
+        val first = arr.optJSONObject(0) ?: return null
+        val bands = first.optJSONArray("bands") ?: first.optJSONArray("Bands") ?: return null
+        if (bands.length() == 0) return null
+        // Sniff: at least one band must look like a band object (have a
+        // frequency field). Otherwise this is some other shape that
+        // happens to have a "bands" key.
+        val firstBand = bands.optJSONObject(0) ?: return null
+        if (firstBand.optDoubleAny("frequency", "freq", "f", "hz") == null) return null
+
+        val sb = StringBuilder()
+        val preamp = first.optDoubleAny("preamp", "Preamp", "preampDb") ?: 0.0
+        sb.append("Preamp: ").append(formatDb(preamp)).append(" dB\n")
+        var idx = 1
+        for (i in 0 until bands.length()) {
+            val b = bands.optJSONObject(i) ?: continue
+            val freq = b.optDoubleAny("frequency", "freq", "f", "hz") ?: continue
+            val gain = b.optDoubleAny("gain", "g", "db") ?: continue
+            val rawQ = b.optDoubleAny("q", "Q") ?: 0.0
+            val q = if (rawQ <= 0.0) 1.41 else rawQ
+            val token = mapBandTypeCode(b.opt("type"))
+            sb.append("Filter ").append(idx++).append(": ON ").append(token)
+                .append(" Fc ").append(roundFreq(freq)).append(" Hz")
+                .append(" Gain ").append(formatDb(gain)).append(" dB")
+                .append(" Q ").append(formatQ(q)).append('\n')
+        }
+        return if (idx > 1) sb.toString() else null
+    }
+
+    /** Numeric or string type → APO filter token. Numeric codes follow
+     *  the convention used by the wrapped-preset format above. */
+    private fun mapBandTypeCode(typeRaw: Any?): String = when (typeRaw) {
+        is Number -> when (typeRaw.toInt()) {
+            0 -> "LSC"
+            1 -> "HSC"
+            2 -> "PK"
+            else -> "PK"
+        }
+        is String -> mapPowerampType(typeRaw) ?: "PK"
+        else -> "PK"
     }
 
     // ---- Poweramp parametric --------------------------------------------
