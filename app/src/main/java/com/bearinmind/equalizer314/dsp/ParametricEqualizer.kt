@@ -7,7 +7,13 @@ import kotlin.math.tanh
  * Parametric Equalizer - Custom DSP implementation
  * Allows full control over frequency, gain, and filter type for each band
  */
-class ParametricEqualizer(private val sampleRate: Int = 44100) {
+// sampleRate defaults to 48000 (the Android device-output rate on
+// virtually every modern device). EqStateManager overrides this with
+// the actual rate from AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE for
+// the audio-path instances; non-audio callers (preset import, target
+// curve, auto-EQ) accept the default since their use is for response-
+// curve computation only.
+class ParametricEqualizer(private val sampleRate: Int = 48000) {
 
     data class EqualizerBand(
         var frequency: Float,      // Hz (20-20000)

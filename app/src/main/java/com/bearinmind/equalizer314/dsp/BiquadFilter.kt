@@ -10,7 +10,15 @@ class BiquadFilter(
     var frequency: Float,
     var gain: Float,
     var filterType: FilterType,
-    private val sampleRate: Int = 44100,
+    // Default to 48000 Hz — what virtually every modern Android device's
+    // audio HAL runs at. The audio-path instances (created via
+    // EqStateManager) override this with the actual device rate from
+    // AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE; utility callers (preset
+    // import, target curve fitting, auto-EQ) use the default since they
+    // only compute response curves for visualization and the per-band-
+    // gain pipeline doesn't care about the design rate beyond <1 dB
+    // accuracy in the bass region.
+    private val sampleRate: Int = 48000,
     var q: Double = 0.707  // Q factor (0.1 to 10.0, default Butterworth)
 ) {
     enum class FilterType {

@@ -30,13 +30,25 @@ class EqStateManager(
 
     enum class ActiveChannel { BOTH, LEFT, RIGHT }
 
+    // Query the device's actual audio output sample rate so the biquad
+    // coefficients we compute match the rate DynamicsProcessing actually
+    // runs at. Falling back to 48000 keeps things sensible if the
+    // property is missing or unparsable.
+    private val deviceSampleRate: Int = run {
+        val am = context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+        val raw = am.getProperty(android.media.AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)
+        val parsed = raw?.toIntOrNull()
+        android.util.Log.d("EqStateManager", "Device output sample rate: $raw (using ${parsed ?: 48000})")
+        parsed ?: 48000
+    }
+
     // The three EQ instances backing per-channel editing. When Channel Side EQ
     // is off, only bothEq is used (applied to both channels). When Channel
     // Side EQ is on, leftEq goes to ch0 and rightEq goes to ch1, with
     // activeChannel deciding which one is the current editing target.
-    private val bothEq: ParametricEqualizer = ParametricEqualizer()
-    private val leftEq: ParametricEqualizer = ParametricEqualizer()
-    private val rightEq: ParametricEqualizer = ParametricEqualizer()
+    private val bothEq: ParametricEqualizer = ParametricEqualizer(deviceSampleRate)
+    private val leftEq: ParametricEqualizer = ParametricEqualizer(deviceSampleRate)
+    private val rightEq: ParametricEqualizer = ParametricEqualizer(deviceSampleRate)
 
     var parametricEq: ParametricEqualizer = bothEq
         private set
