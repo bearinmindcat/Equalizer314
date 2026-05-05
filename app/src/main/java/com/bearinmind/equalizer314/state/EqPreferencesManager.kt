@@ -321,6 +321,8 @@ class EqPreferencesManager(context: Context) {
     fun getReverbReflectionsLevelDb(): Float = prefs.getFloat("reverbReflectionsLevelDb", -10f)
     fun saveReverbDelayMs(v: Float) { prefs.edit().putFloat("reverbDelayMs", v).apply() }
     fun getReverbDelayMs(): Float = prefs.getFloat("reverbDelayMs", 11f)
+    fun saveReverbRoomHFLevelDb(v: Float) { prefs.edit().putFloat("reverbRoomHFLevelDb", v).apply() }
+    fun getReverbRoomHFLevelDb(): Float = prefs.getFloat("reverbRoomHFLevelDb", 0f)
     fun saveReverbDiffusionPct(v: Float) { prefs.edit().putFloat("reverbDiffusionPct", v).apply() }
     fun getReverbDiffusionPct(): Float = prefs.getFloat("reverbDiffusionPct", 100f)
     fun saveReverbDensityPct(v: Float) { prefs.edit().putFloat("reverbDensityPct", v).apply() }

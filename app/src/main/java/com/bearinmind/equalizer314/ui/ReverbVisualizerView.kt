@@ -259,6 +259,18 @@ class ReverbVisualizerView @JvmOverloads constructor(
             floatArrayOf(4f * density, 4f * density), 0f
         )
     }
+    // Dashed Bezier in the HF Damping sub-box. Same dash pattern as
+    // [centerLinePaint] but its colour is recomputed every frame from
+    // roomHFLevelDb so it tracks the HF Level visualisation alongside
+    // the bars and the main HF stream line.
+    private val hfCurvePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        color = 0xFF666666.toInt()
+        strokeWidth = 1f * density
+        pathEffect = android.graphics.DashPathEffect(
+            floatArrayOf(4f * density, 4f * density), 0f
+        )
+    }
     // White dotted line tracing the linear (non-HF, regular) decay
     // envelope. Round-capped, very short "on" segments + larger "off"
     // gaps give a true dotted (rather than dashed) appearance.
@@ -641,12 +653,9 @@ class ReverbVisualizerView @JvmOverloads constructor(
         val top = hfSubBandTop
         val bottom = hfSubBandBottom
 
-        // "HF Level" label, top-left of the column.
-        val savedAlign = controlLabelPaint.textAlign
-        controlLabelPaint.textAlign = Paint.Align.LEFT
-        val labelBaselineY = top + 12f * density - controlLabelPaint.ascent()
-        c.drawText("HF Level", left + 8f * density, labelBaselineY, controlLabelPaint)
-        controlLabelPaint.textAlign = savedAlign
+        // "HF Level" label, top-centred above the trackline.
+        val labelBaselineY = top + 4f * density - controlLabelPaint.ascent()
+        c.drawText("HF Level", (left + right) / 2f, labelBaselineY, controlLabelPaint)
 
         // Trackline tick-to-tick (full zone width, like Reverb Delay).
         val cy = (top + bottom) / 2f
@@ -674,12 +683,9 @@ class ReverbVisualizerView @JvmOverloads constructor(
         val bottom = hfSubBandBottom
         c.drawRoundRect(left, top, right, bottom, cornerR, cornerR, zoneCardPaint)
 
-        // Label "HF Damping" inside the sub-box, top-left.
-        val savedAlign = controlLabelPaint.textAlign
-        controlLabelPaint.textAlign = Paint.Align.LEFT
-        val labelBaselineY = top + 12f * density - controlLabelPaint.ascent()
-        c.drawText("HF Damping", left + 8f * density, labelBaselineY, controlLabelPaint)
-        controlLabelPaint.textAlign = savedAlign
+        // Label "HF Damping" inside the sub-box, top-centred.
+        val labelBaselineY = top + 4f * density - controlLabelPaint.ascent()
+        c.drawText("HF Damping", (left + right) / 2f, labelBaselineY, controlLabelPaint)
 
         val r = 5.5f * density
         val b = hfDotInnerBounds()
@@ -689,8 +695,11 @@ class ReverbVisualizerView @JvmOverloads constructor(
         val centerY = (innerTop + innerBottom) / 2f
         val (dotX, dotY) = decayHfRatioToDotPos()
 
-        // Anti-diagonal "rail" the dot slides along.
-        c.drawLine(innerLeft, innerBottom, innerRight, innerTop, centerLinePaint)
+        // Anti-diagonal "rail" the dot slides along — uses the same
+        // semi-transparent grey [regionDividerPaint] as every other
+        // trackline (Pre-delay, Reverb Delay, HF Level…) so all the
+        // dot rails read as one consistent reference colour.
+        c.drawLine(innerLeft, innerBottom, innerRight, innerTop, regionDividerPaint)
 
         // Quadratic Bezier with control point Cx = 2·dot − centre,
         // Cy = 2·dot − centre — chosen so B(0.5) = (dotX, dotY) and
@@ -703,7 +712,7 @@ class ReverbVisualizerView @JvmOverloads constructor(
         hfCurvePath.reset()
         hfCurvePath.moveTo(innerLeft, innerTop)
         hfCurvePath.quadTo(cx, cy, innerRight, innerBottom)
-        c.drawPath(hfCurvePath, centerLinePaint)
+        c.drawPath(hfCurvePath, hfCurvePaint)
 
         handlePos[Handle.HF_DAMPING_CIRCLE] = HandlePos(dotX, dotY)
         drawRippleHaloFor(c, Handle.HF_DAMPING_CIRCLE, dotX, dotY, r)
@@ -829,9 +838,11 @@ class ReverbVisualizerView @JvmOverloads constructor(
 
         // Zone labels — fixed positions, NOT attached to the dragged
         // circles. Each label is centred between its zone's min/max
-        // ticks (i.e. the zone midpoint) and sits above the line.
+        // ticks and pinned to the TOP of the band so every indicator
+        // (pre-delay, early reflections, reverb delay, decay, hf level,
+        // hf damping) reads as a top-centred caption for its area.
         val labels = arrayOf("Pre-delay", "Early Reflections", "Reverb Delay", "Decay")
-        val labelY = lineY - 6f * density - controlLabelPaint.descent()
+        val labelY = controlBandTop + 4f * density - controlLabelPaint.ascent()
         for (zone in 0 until zoneCount) {
             val zoneMidX = (zoneStart(zone) + zoneEnd(zone)) / 2f
             c.drawText(labels[zone], zoneMidX, labelY, controlLabelPaint)
@@ -1004,6 +1015,7 @@ class ReverbVisualizerView @JvmOverloads constructor(
         hfBarPaint.color = hfColor
         hfExcessPaint.color = hfColor
         hfStreamPaint.color = hfColor
+        hfCurvePaint.color = hfColor
         // Each bar is split into up to three coloured segments based
         // on the relationship between the linear and HF-damped curves:
         //   - 0 → min(lin, HF)  : dark grey 555555 (the HF zone — both

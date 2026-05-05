@@ -1,9 +1,14 @@
 package com.bearinmind.equalizer314
 
 import android.os.Bundle
+import android.view.View
 import android.widget.EditText
 import android.widget.ImageButton
+import android.widget.ImageView
+import android.widget.LinearLayout
 import androidx.appcompat.app.AppCompatActivity
+import androidx.transition.AutoTransition
+import androidx.transition.TransitionManager
 import com.bearinmind.equalizer314.state.EqPreferencesManager
 import com.bearinmind.equalizer314.ui.DiffusionDensityColumnsView
 import com.bearinmind.equalizer314.ui.DiffusionDensityView
@@ -42,6 +47,8 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
     private lateinit var revDelayText: EditText
     private lateinit var reflectLevelSlider: Slider
     private lateinit var reflectLevelText: EditText
+    private lateinit var roomHFLevelSlider: Slider
+    private lateinit var roomHFLevelText: EditText
     private lateinit var diffusionSlider: Slider
     private lateinit var diffusionText: EditText
     private lateinit var densitySlider: Slider
@@ -73,6 +80,7 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
         visualizer.reverbDelayMs = eqPrefs.getReverbDelayMs()
         visualizer.diffusionPct = eqPrefs.getReverbDiffusionPct()
         visualizer.densityPct = eqPrefs.getReverbDensityPct()
+        visualizer.roomHFLevelDb = eqPrefs.getReverbRoomHFLevelDb()
 
         decayTimeSlider = findViewById(R.id.reverbDecayTimeSlider)
         decayTimeText = findViewById(R.id.reverbDecayTimeText)
@@ -88,6 +96,8 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
         revDelayText = findViewById(R.id.reverbDelayText)
         reflectLevelSlider = findViewById(R.id.reverbReflectLevelSlider)
         reflectLevelText = findViewById(R.id.reverbReflectLevelText)
+        roomHFLevelSlider = findViewById(R.id.reverbRoomHFLevelSlider)
+        roomHFLevelText = findViewById(R.id.reverbRoomHFLevelText)
         reverbMasterLevelSlider = findViewById(R.id.reverbMasterLevelSlider)
         reverbMasterLevelText = findViewById(R.id.reverbMasterLevelText)
 
@@ -124,6 +134,10 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
             reflectLevelSlider, reflectLevelText,
             "%.0f", eqPrefs.getReverbReflectionsLevelDb(), eqPrefs::saveReverbReflectionsLevelDb
         ) { visualizer.reflectionsLevelDb = it }
+        wire(
+            roomHFLevelSlider, roomHFLevelText,
+            "%.0f", eqPrefs.getReverbRoomHFLevelDb(), eqPrefs::saveReverbRoomHFLevelDb
+        ) { visualizer.roomHFLevelDb = it }
         diffusionSlider = findViewById(R.id.reverbDiffusionSlider)
         diffusionText = findViewById(R.id.reverbDiffusionText)
         densitySlider = findViewById(R.id.reverbDensitySlider)
@@ -173,6 +187,27 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
         // Drag handles on the visualizer route back here so the slider,
         // text input, and persisted value all stay in sync.
         visualizer.onParameterChanged = { param, value -> applyVisualizerChange(param, value) }
+
+        // Click-to-expand "Graph parameters" panel inside the IR card.
+        // TransitionManager animates both the dropdown's height change
+        // and every card below it shifting to make room, so the whole
+        // screen slides as one piece instead of snapping.
+        val scrollContent = findViewById<LinearLayout>(R.id.reverbScrollContent)
+        val graphParamsHeader = findViewById<LinearLayout>(R.id.graphParamsHeader)
+        val graphParamsContent = findViewById<LinearLayout>(R.id.graphParamsContent)
+        val graphParamsChevron = findViewById<ImageView>(R.id.graphParamsChevron)
+        graphParamsHeader.setOnClickListener {
+            val expanded = graphParamsContent.visibility == View.VISIBLE
+            TransitionManager.beginDelayedTransition(
+                scrollContent,
+                AutoTransition().apply { duration = 220L },
+            )
+            graphParamsContent.visibility = if (expanded) View.GONE else View.VISIBLE
+            graphParamsChevron.animate()
+                .rotation(if (expanded) 90f else 270f)
+                .setDuration(220L)
+                .start()
+        }
     }
 
     private fun applyVisualizerChange(
@@ -210,8 +245,8 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
                 pushSlider(revDelaySlider, revDelayText, "%.0f", value)
             }
             ReverbVisualizerView.Param.ROOM_HF_LEVEL -> {
-                // Room HF Level — visualizer-only for now; no slider
-                // in the activity yet. Persistence can be added later.
+                eqPrefs.saveReverbRoomHFLevelDb(value)
+                pushSlider(roomHFLevelSlider, roomHFLevelText, "%.0f", value)
             }
         }
     }
