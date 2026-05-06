@@ -1082,9 +1082,10 @@ class ReverbVisualizerView @JvmOverloads constructor(
     }
 
     private fun drawFrame(c: Canvas) {
-        // Just the bottom baseline. No top arrow, no side rails, no
-        // region dividers — keep the plot as clean as possible.
-        c.drawLine(plotL, plotB, plotR, plotB, frameLinePaint)
+        // No baseline drawn — the bars rise from the bottom of the
+        // plot rect, which already provides a clean visual bottom
+        // edge via the card's outline. A horizontal baseline line
+        // here added an unwanted white-ish stripe under the graph.
     }
 
     private fun drawRegionLabels(c: Canvas) {
