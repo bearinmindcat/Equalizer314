@@ -3363,6 +3363,16 @@ class MainActivity : AppCompatActivity() {
         updateAutoEqStatus()
         updateTargetStatus()
 
+        // Check if the experimental DP engine toggle changed in
+        // ExperimentalActivity. If so, push it through state manager
+        // which tears down + rebuilds the live DP instance with the
+        // new variant + band count. Doing it here means the user can
+        // A/B between legacy and experimental without reopening.
+        val expDpModeNow = eqPrefs.getExperimentalDpMode()
+        if (expDpModeNow != stateManager.experimentalDpMode) {
+            stateManager.applyExperimentalDpMode(expDpModeNow)
+        }
+
         // Check if Simple EQ was toggled in experimental settings
         val simpleEqEnabled = eqPrefs.getSimpleEqEnabled()
         if (simpleEqEnabled && stateManager.currentEqUiMode != EqUiMode.SIMPLE) {

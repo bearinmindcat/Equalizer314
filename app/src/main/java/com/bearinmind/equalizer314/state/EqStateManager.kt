@@ -67,6 +67,12 @@ class EqStateManager(
     var preampGainDb: Float = 0f
     var autoGainEnabled: Boolean = false
 
+    // Experimental DP engine mode — mirrors prefs key "experimentalDpMode".
+    // When flipped via [setExperimentalDpMode] the live DP instance is
+    // torn down and rebuilt with the matching variant + band count so
+    // the user can A/B without restarting the app.
+    var experimentalDpMode: Boolean = false
+
     // Limiter
     var limiterEnabled: Boolean = true
     var limiterAttackMs: Float = 1f
@@ -146,6 +152,7 @@ class EqStateManager(
         // Restore preamp & auto-gain
         preampGainDb = eqPrefs.getPreampGain()
         autoGainEnabled = eqPrefs.getAutoGainEnabled()
+        experimentalDpMode = eqPrefs.getExperimentalDpMode()
 
         // Restore channel side options
         channelBalancePercent = eqPrefs.getChannelBalancePercent()
@@ -180,11 +187,40 @@ class EqStateManager(
         val dm = eqService?.dynamicsManager ?: return
         dm.preampGainDb = preampGainDb
         dm.autoGainEnabled = autoGainEnabled
+        dm.experimentalDpMode = experimentalDpMode
         dm.channelBalancePercent = channelBalancePercent
         dm.leftChannelGainDb = leftChannelGainDb
         dm.rightChannelGainDb = rightChannelGainDb
         val (lEq, rEq) = getChannelEqs()
         eqService?.updateEqPerChannel(lEq, rEq)
+    }
+
+    /**
+     * Flip the experimental DP engine mode. Persists the new value,
+     * updates [DynamicsProcessingManager.experimentalDpMode], and
+     * restarts the live DP instance with the matching variant + band
+     * count so the change takes effect immediately. No app restart
+     * needed for A/B testing.
+     *
+     * Named [applyExperimentalDpMode] (not setExperimentalDpMode) to
+     * avoid a JVM signature clash with the auto-generated property
+     * setter for [experimentalDpMode].
+     */
+    fun applyExperimentalDpMode(enabled: Boolean) {
+        if (experimentalDpMode == enabled) return
+        experimentalDpMode = enabled
+        eqPrefs.saveExperimentalDpMode(enabled)
+        val dm = eqService?.dynamicsManager ?: return
+        dm.experimentalDpMode = enabled
+        if (isProcessing) {
+            // Tear down + rebuild DP with the new variant. start() reads
+            // experimentalDpMode and chooses VARIANT_FAVOR_TIME_RESOLUTION
+            // + 32 bands when on, FAVOR_FREQUENCY_RESOLUTION + 128 bands
+            // when off.
+            val (lEq, _) = getChannelEqs()
+            dm.start(lEq)
+            pushEqUpdate()
+        }
     }
 
     private val updateHandler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -401,6 +437,7 @@ class EqStateManager(
         val dm = service.dynamicsManager
         dm.preampGainDb = preampGainDb
         dm.autoGainEnabled = autoGainEnabled
+        dm.experimentalDpMode = experimentalDpMode
         dm.channelBalancePercent = channelBalancePercent
         dm.leftChannelGainDb = leftChannelGainDb
         dm.rightChannelGainDb = rightChannelGainDb

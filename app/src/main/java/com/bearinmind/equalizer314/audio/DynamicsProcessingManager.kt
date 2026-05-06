@@ -55,6 +55,20 @@ class DynamicsProcessingManager {
     var leftChannelGainDb: Float = 0f      // -12..12
     var rightChannelGainDb: Float = 0f     // -12..12
 
+    /**
+     * Experimental DP engine mode. When false (legacy), the engine uses
+     * [DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION] with the
+     * full 128-band per-band gain feed — the original 0.0.6-beta path.
+     * When true (experimental), it switches to
+     * [DynamicsProcessing.VARIANT_FAVOR_TIME_RESOLUTION] with 32 bands —
+     * the candidate fix for the bass-boom / thin-treble bug.
+     *
+     * EqStateManager hydrates this from prefs at startup and re-applies
+     * it (via [restartForVariantChange]) whenever the user flips the
+     * experimental toggle.
+     */
+    var experimentalDpMode: Boolean = false
+
     // Background thread for the per-band binder calls. Each EQ update issues
     // 2 × numBands setPreEqBandByChannelIndex() transactions; running them
     // on the UI thread blocks both rendering and (under contention) the
@@ -72,10 +86,29 @@ class DynamicsProcessingManager {
 
         stop() // Clean up any existing instance
 
+        // Switch the per-band-gain feed AND the DP engine variant
+        // together based on [experimentalDpMode]. Legacy path uses
+        // 128 bands + frequency-favoured FFT (~2048-4096 pt). Experimental
+        // path uses 32 bands + time-favoured FFT (~512-1024 pt) which
+        // should clean up the bass-boom + thin-treble artifacts. Both
+        // paths leave the existing 32–128 band-count slider working
+        // (it clamps to [32, 128]); experimental mode just starts at
+        // the floor of that range.
+        if (experimentalDpMode) {
+            ParametricToDpConverter.setNumBands(32)
+        } else {
+            ParametricToDpConverter.setNumBands(128)
+        }
         val bandCount = ParametricToDpConverter.numBands
+        val variant = if (experimentalDpMode) {
+            DynamicsProcessing.VARIANT_FAVOR_TIME_RESOLUTION
+        } else {
+            DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION
+        }
+        Log.d(TAG, "DP variant=${if (experimentalDpMode) "TIME" else "FREQUENCY"} bands=$bandCount (experimental=$experimentalDpMode)")
 
         val config = DynamicsProcessing.Config.Builder(
-            DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,
+            variant,
             2,          // channel count (stereo)
             true,       // pre-EQ enabled
             bandCount,  // pre-EQ band count

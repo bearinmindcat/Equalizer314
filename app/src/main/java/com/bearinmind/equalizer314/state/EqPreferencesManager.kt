@@ -490,6 +490,14 @@ class EqPreferencesManager(context: Context) {
     fun saveExperimentalUnlocked(unlocked: Boolean) { prefs.edit().putBoolean("experimentalUnlocked", unlocked).apply() }
     fun getExperimentalUnlocked(): Boolean = prefs.getBoolean("experimentalUnlocked", false)
 
+    // Experimental DP engine mode — toggle between the legacy 128-band /
+    // FAVOR_FREQUENCY_RESOLUTION pipeline and the new 32-band /
+    // FAVOR_TIME_RESOLUTION pipeline meant to fix the bass-boom + thin-
+    // treble bug. Defaults to OFF (legacy behaviour) so existing presets
+    // sound the same on upgrade until the user opts in.
+    fun saveExperimentalDpMode(enabled: Boolean) { prefs.edit().putBoolean("experimentalDpMode", enabled).apply() }
+    fun getExperimentalDpMode(): Boolean = prefs.getBoolean("experimentalDpMode", false)
+
     // Channel Side EQ — per-channel (L/R) EQ mode. Stored only; no runtime effect yet.
     fun saveChannelSideEqEnabled(enabled: Boolean) { prefs.edit().putBoolean("channelSideEqEnabled", enabled).apply() }
     fun getChannelSideEqEnabled(): Boolean = prefs.getBoolean("channelSideEqEnabled", false)
