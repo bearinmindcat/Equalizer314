@@ -46,8 +46,8 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
             canToggle = false
         ),
         DYNAMICS_PROCESSING(
-            "DynamicsProcessing API",
-            "EQ, MBC, and Limiter — currently the active processing chain",
+            "Dynamics Processing",
+            "Main audio processing chain for EQ, MBC & Limiting",
             canToggle = false
         ),
         ENVIRONMENTAL_REVERB(

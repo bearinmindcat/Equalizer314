@@ -31,6 +31,11 @@ object ApoConverter {
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return Result.Err("File is empty")
 
+        // AutoEQ "GraphicEQ" single-line format (used by Wavelet's
+        // headphone-correction exports + AutoEQ's downloads):
+        //   "GraphicEQ: 20 -5.5; 21 -5.5; 22 -5.5; ..."
+        tryAutoEqGraphicEq(trimmed)?.let { return Result.Ok(it, "AutoEQ GraphicEQ") }
+
         // Already APO? (Wavelet / Equalizer APO config.txt)
         if (looksLikeApo(trimmed)) {
             return Result.Ok(trimmed, "Wavelet / APO (passthrough)")
@@ -54,6 +59,78 @@ object ApoConverter {
         tryPowerampSettingsString(trimmed)?.let { return Result.Ok(it, "Poweramp graphic EQ (settings string)") }
 
         return Result.Err("Unrecognised file format")
+    }
+
+    // ---- AutoEQ GraphicEQ -----------------------------------------------
+
+    /**
+     * Parses AutoEQ's "GraphicEQ" single-line format.
+     *
+     *   "GraphicEQ: 20 -5.5; 21 -5.5; 22 -5.5; 23 -5.5; ..."
+     *
+     * AutoEQ outputs ~120 points at roughly 1/24-octave spacing. Emitting
+     * one PK per point would give 120+ filters, which is unusable in a
+     * normal parametric EQ. Instead we feed the curve through [EqFitter]
+     * to fit it to a small number of well-placed PK / shelf filters
+     * (default 10) — same algorithm AutoEQ itself uses to generate
+     * parametric presets from frequency-response measurements.
+     */
+    private fun tryAutoEqGraphicEq(s: String): String? {
+        if (!s.lowercase().startsWith("graphiceq")) return null
+        // Strip the "GraphicEQ:" or "GraphicEQ " prefix.
+        val payload = s.substringAfter(':', "").ifEmpty { s.substringAfter(' ', "") }.trim()
+        if (payload.isEmpty()) return null
+
+        val rawFreqs = mutableListOf<Float>()
+        val rawLevels = mutableListOf<Float>()
+        for (chunk in payload.split(';')) {
+            val pair = chunk.trim().split(Regex("\\s+"), limit = 2)
+            if (pair.size != 2) continue
+            val f = pair[0].toFloatOrNull() ?: continue
+            val g = pair[1].toFloatOrNull() ?: continue
+            if (f <= 0f) continue
+            rawFreqs.add(f)
+            rawLevels.add(g)
+        }
+        if (rawFreqs.size < 10) return null
+
+        // Sort by frequency (some files come in order, but be safe).
+        val indices = rawFreqs.indices.sortedBy { rawFreqs[it] }
+        val target = FreqResponse(
+            FloatArray(indices.size) { rawFreqs[indices[it]] },
+            FloatArray(indices.size) { rawLevels[indices[it]] },
+        )
+        // Treat the GraphicEQ curve as the TARGET and a flat 0 dB
+        // line as the measurement. EqFitter then computes correction
+        // filters whose composite response matches the GraphicEQ curve.
+        val flatMeasurement = FreqResponse(
+            target.frequencies,
+            FloatArray(target.frequencies.size) { 0f },
+        )
+        val profile = try {
+            EqFitter.computeCorrection(flatMeasurement, target, numBands = 10)
+        } catch (e: Exception) {
+            // If the fitter blows up for any reason, fall back to a
+            // dense PK emit (still better than no import at all).
+            val bands = indices.map { rawFreqs[it] to rawLevels[it] }
+            return formatPeakingFilters(bands, preampDb = 0f, q = 6f)
+        }
+
+        // Render the fitted profile as APO text.
+        val sb = StringBuilder()
+        sb.append("Preamp: ").append(formatDb(profile.preampDb.toDouble())).append(" dB\n")
+        for ((idx, f) in profile.filters.withIndex()) {
+            val token = when (f.filterType.uppercase()) {
+                "LSC", "LOWSHELF", "LS" -> "LSC"
+                "HSC", "HIGHSHELF", "HS" -> "HSC"
+                else -> "PK"
+            }
+            sb.append("Filter ").append(idx + 1).append(": ON ").append(token)
+                .append(" Fc ").append(roundFreq(f.frequency.toDouble())).append(" Hz")
+                .append(" Gain ").append(formatDb(f.gain.toDouble())).append(" dB")
+                .append(" Q ").append(formatQ(f.q.toDouble())).append('\n')
+        }
+        return sb.toString()
     }
 
     // ---- Heuristics ------------------------------------------------------

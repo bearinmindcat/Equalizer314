@@ -39,23 +39,19 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
     private lateinit var decayHfText: EditText
     private lateinit var reverbLevelSlider: Slider
     private lateinit var reverbLevelText: EditText
-    private lateinit var roomSlider: Slider
-    private lateinit var roomText: EditText
     private lateinit var reflectDelaySlider: Slider
     private lateinit var reflectDelayText: EditText
     private lateinit var revDelaySlider: Slider
     private lateinit var revDelayText: EditText
     private lateinit var reflectLevelSlider: Slider
     private lateinit var reflectLevelText: EditText
+    private lateinit var earlyReflWidthSlider: Slider
+    private lateinit var earlyReflWidthText: EditText
     private lateinit var roomHFLevelSlider: Slider
     private lateinit var roomHFLevelText: EditText
-    private lateinit var diffusionSlider: Slider
-    private lateinit var diffusionText: EditText
-    private lateinit var densitySlider: Slider
-    private lateinit var densityText: EditText
-    // Master "Reverb Level" card at the top of the screen — drives
-    // the same roomLevelDb param as roomSlider, just with a more
-    // user-friendly label and a prominent place in the layout.
+    // Master "Room Level" card at the top of the screen — the only
+    // slider that drives roomLevelDb now that the redundant bottom
+    // "Room (dB)" row has been removed.
     private lateinit var reverbMasterLevelSlider: Slider
     private lateinit var reverbMasterLevelText: EditText
 
@@ -81,6 +77,7 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
         visualizer.diffusionPct = eqPrefs.getReverbDiffusionPct()
         visualizer.densityPct = eqPrefs.getReverbDensityPct()
         visualizer.roomHFLevelDb = eqPrefs.getReverbRoomHFLevelDb()
+        visualizer.earlyReflectionsWidthMs = eqPrefs.getReverbEarlyReflectionsWidthMs()
 
         decayTimeSlider = findViewById(R.id.reverbDecayTimeSlider)
         decayTimeText = findViewById(R.id.reverbDecayTimeText)
@@ -88,14 +85,14 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
         decayHfText = findViewById(R.id.reverbDecayHfText)
         reverbLevelSlider = findViewById(R.id.reverbLevelSlider)
         reverbLevelText = findViewById(R.id.reverbLevelText)
-        roomSlider = findViewById(R.id.reverbRoomSlider)
-        roomText = findViewById(R.id.reverbRoomText)
         reflectDelaySlider = findViewById(R.id.reverbReflectDelaySlider)
         reflectDelayText = findViewById(R.id.reverbReflectDelayText)
         revDelaySlider = findViewById(R.id.reverbDelaySlider)
         revDelayText = findViewById(R.id.reverbDelayText)
         reflectLevelSlider = findViewById(R.id.reverbReflectLevelSlider)
         reflectLevelText = findViewById(R.id.reverbReflectLevelText)
+        earlyReflWidthSlider = findViewById(R.id.reverbEarlyReflWidthSlider)
+        earlyReflWidthText = findViewById(R.id.reverbEarlyReflWidthText)
         roomHFLevelSlider = findViewById(R.id.reverbRoomHFLevelSlider)
         roomHFLevelText = findViewById(R.id.reverbRoomHFLevelText)
         reverbMasterLevelSlider = findViewById(R.id.reverbMasterLevelSlider)
@@ -113,15 +110,11 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
             reverbLevelSlider, reverbLevelText,
             "%.0f", eqPrefs.getReverbReverbLevelDb(), eqPrefs::saveReverbReverbLevelDb
         ) { visualizer.reverbLevelDb = it }
-        wire(
-            roomSlider, roomText,
-            "%.0f", eqPrefs.getReverbRoomLevelDb(), eqPrefs::saveReverbRoomLevelDb
-        ) { visualizer.roomLevelDb = it; pushSlider(reverbMasterLevelSlider, reverbMasterLevelText, "%.0f", it) }
-        // Master "Reverb Level" card at the top — same param as roomSlider.
+        // Master "Room Level" card at the top — sole slider for roomLevelDb.
         wire(
             reverbMasterLevelSlider, reverbMasterLevelText,
             "%.0f", eqPrefs.getReverbRoomLevelDb(), eqPrefs::saveReverbRoomLevelDb
-        ) { visualizer.roomLevelDb = it; pushSlider(roomSlider, roomText, "%.0f", it) }
+        ) { visualizer.roomLevelDb = it }
         wire(
             reflectDelaySlider, reflectDelayText,
             "%.0f", eqPrefs.getReverbReflectionsDelayMs(), eqPrefs::saveReverbReflectionsDelayMs
@@ -131,6 +124,11 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
             "%.0f", eqPrefs.getReverbDelayMs(), eqPrefs::saveReverbDelayMs
         ) { visualizer.reverbDelayMs = it }
         wire(
+            earlyReflWidthSlider, earlyReflWidthText,
+            "%.0f", eqPrefs.getReverbEarlyReflectionsWidthMs(),
+            eqPrefs::saveReverbEarlyReflectionsWidthMs
+        ) { visualizer.earlyReflectionsWidthMs = it }
+        wire(
             reflectLevelSlider, reflectLevelText,
             "%.0f", eqPrefs.getReverbReflectionsLevelDb(), eqPrefs::saveReverbReflectionsLevelDb
         ) { visualizer.reflectionsLevelDb = it }
@@ -138,29 +136,12 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
             roomHFLevelSlider, roomHFLevelText,
             "%.0f", eqPrefs.getReverbRoomHFLevelDb(), eqPrefs::saveReverbRoomHFLevelDb
         ) { visualizer.roomHFLevelDb = it }
-        diffusionSlider = findViewById(R.id.reverbDiffusionSlider)
-        diffusionText = findViewById(R.id.reverbDiffusionText)
-        densitySlider = findViewById(R.id.reverbDensitySlider)
-        densityText = findViewById(R.id.reverbDensityText)
-
-        wire(diffusionSlider, diffusionText, "%.0f", eqPrefs.getReverbDiffusionPct(),
-            eqPrefs::saveReverbDiffusionPct
-        ) {
-            visualizer.diffusionPct = it
-            xyGraph.diffusionPct = it
-            xyColumns.diffusionPct = it
-        }
-        wire(densitySlider, densityText, "%.0f", eqPrefs.getReverbDensityPct(),
-            eqPrefs::saveReverbDensityPct
-        ) {
-            visualizer.densityPct = it
-            xyGraph.densityPct = it
-            xyColumns.densityPct = it
-        }
 
         // Seed both XY widgets with persisted values + listen for live
-        // drags from either. Each one updates prefs, the visualizer, the
-        // sliders, and the *other* XY widget so they stay in lockstep.
+        // drags from either. Each one updates prefs, the visualizer,
+        // and the *other* XY widget so they stay in lockstep. Diffusion
+        // and Density no longer have dedicated sliders — the X/Y graph
+        // and the column-bar widget are the only inputs for them.
         val initialDiff = eqPrefs.getReverbDiffusionPct()
         val initialDens = eqPrefs.getReverbDensityPct()
         xyGraph.diffusionPct = initialDiff; xyGraph.densityPct = initialDens
@@ -170,8 +151,6 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
             eqPrefs.saveReverbDensityPct(dens)
             visualizer.diffusionPct = diff
             visualizer.densityPct = dens
-            pushSlider(diffusionSlider, diffusionText, "%.0f", diff)
-            pushSlider(densitySlider, densityText, "%.0f", dens)
         }
         xyGraph.onChanged = { diff, dens ->
             xyColumns.diffusionPct = diff
@@ -229,7 +208,6 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
             }
             ReverbVisualizerView.Param.ROOM_LEVEL -> {
                 eqPrefs.saveReverbRoomLevelDb(value)
-                pushSlider(roomSlider, roomText, "%.0f", value)
                 pushSlider(reverbMasterLevelSlider, reverbMasterLevelText, "%.0f", value)
             }
             ReverbVisualizerView.Param.REFLECTIONS_DELAY -> {
@@ -247,6 +225,10 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
             ReverbVisualizerView.Param.ROOM_HF_LEVEL -> {
                 eqPrefs.saveReverbRoomHFLevelDb(value)
                 pushSlider(roomHFLevelSlider, roomHFLevelText, "%.0f", value)
+            }
+            ReverbVisualizerView.Param.EARLY_REFLECTIONS_WIDTH -> {
+                eqPrefs.saveReverbEarlyReflectionsWidthMs(value)
+                pushSlider(earlyReflWidthSlider, earlyReflWidthText, "%.0f", value)
             }
         }
     }

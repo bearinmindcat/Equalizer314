@@ -35,6 +35,7 @@ class ReverbVisualizerView @JvmOverloads constructor(
         DECAY_TIME, DECAY_HF, REVERB_LEVEL, ROOM_LEVEL,
         REFLECTIONS_DELAY, REFLECTIONS_LEVEL, REVERB_DELAY,
         ROOM_HF_LEVEL,
+        EARLY_REFLECTIONS_WIDTH,
     }
 
     /** Identities of the bottom-row control circles. */
@@ -841,7 +842,7 @@ class ReverbVisualizerView @JvmOverloads constructor(
         // ticks and pinned to the TOP of the band so every indicator
         // (pre-delay, early reflections, reverb delay, decay, hf level,
         // hf damping) reads as a top-centred caption for its area.
-        val labels = arrayOf("Pre-delay", "Early Reflections", "Reverb Delay", "Decay")
+        val labels = arrayOf("Pre-delay", "Early Reflections", "Reverb Delay", "Reverb Tail")
         val labelY = controlBandTop + 4f * density - controlLabelPaint.ascent()
         for (zone in 0 until zoneCount) {
             val zoneMidX = (zoneStart(zone) + zoneEnd(zone)) / 2f
@@ -1339,9 +1340,11 @@ class ReverbVisualizerView @JvmOverloads constructor(
                 // (top of card = louder, bottom = quieter). Dragging
                 // the dot up makes the early-reflection bars taller;
                 // the Reflect (dB) slider tracks the dot in real time.
-                earlyReflectionsWidthMs = xToEarly(x)
+                val newWidth = xToEarly(x)
+                earlyReflectionsWidthMs = newWidth
                 val newDb = yToReflectionsLevelDb(y)
                 reflectionsLevelDb = newDb
+                cb?.invoke(Param.EARLY_REFLECTIONS_WIDTH, newWidth)
                 cb?.invoke(Param.REFLECTIONS_LEVEL, newDb)
             }
             Handle.REVDELAY_CIRCLE -> {

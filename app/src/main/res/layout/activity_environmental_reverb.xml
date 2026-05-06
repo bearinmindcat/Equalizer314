@@ -228,26 +228,67 @@
                             </com.google.android.material.textfield.TextInputLayout>
                         </LinearLayout>
 
-                        <!-- Early Reflections (Reflections Level) -->
+                        <!-- Early Reflections pair (X = Decay/spread, Y = Level).
+                             Each box has a small line piece attached directly
+                             to its outline edge — top row has the piece BELOW
+                             its box, bottom row has it ABOVE. The two pieces
+                             meet at the row boundary, so the visible line
+                             always connects to the box outlines and never
+                             extends inside the boxes. -->
+                        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:orientation="horizontal" android:gravity="center_vertical">
+                            <TextView android:layout_width="120dp" android:layout_height="wrap_content"
+                                android:text="Early Reflect. Decay (ms)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                                android:textColor="#FFAAAAAA" />
+                            <com.google.android.material.slider.Slider android:id="@+id/reverbEarlyReflWidthSlider"
+                                android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                                android:valueFrom="0" android:valueTo="1000" android:value="268"
+                                app:labelBehavior="gone" />
+                            <LinearLayout android:layout_width="64dp" android:layout_height="wrap_content"
+                                android:layout_gravity="bottom"
+                                android:layout_marginStart="4dp" android:orientation="vertical">
+                                <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    app:hintEnabled="false"
+                                    app:boxCornerRadiusTopStart="8dp" app:boxCornerRadiusTopEnd="8dp"
+                                    app:boxCornerRadiusBottomStart="8dp" app:boxCornerRadiusBottomEnd="8dp"
+                                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense">
+                                    <com.google.android.material.textfield.TextInputEditText android:id="@+id/reverbEarlyReflWidthText"
+                                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                                        android:inputType="numberDecimal" android:textSize="12sp"
+                                        android:gravity="center" android:imeOptions="actionDone" />
+                                </com.google.android.material.textfield.TextInputLayout>
+                                <View android:layout_width="2dp" android:layout_height="6dp"
+                                    android:layout_gravity="center_horizontal" android:background="#FF666666" />
+                            </LinearLayout>
+                        </LinearLayout>
+
                         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="4dp">
                             <TextView android:layout_width="120dp" android:layout_height="wrap_content"
-                                android:text="Early Refl (dB)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                                android:text="Early Reflect. Level (dB)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                                 android:textColor="#FFAAAAAA" />
                             <com.google.android.material.slider.Slider android:id="@+id/reverbReflectLevelSlider"
                                 android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
                                 android:valueFrom="-90" android:valueTo="10" android:value="-10"
                                 app:labelBehavior="gone" />
-                            <com.google.android.material.textfield.TextInputLayout android:layout_width="64dp"
-                                android:layout_height="wrap_content" android:layout_marginStart="4dp"
-                                app:boxCornerRadiusTopStart="8dp" app:boxCornerRadiusTopEnd="8dp"
-                                app:boxCornerRadiusBottomStart="8dp" app:boxCornerRadiusBottomEnd="8dp"
-                                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense">
-                                <com.google.android.material.textfield.TextInputEditText android:id="@+id/reverbReflectLevelText"
-                                    android:layout_width="match_parent" android:layout_height="wrap_content"
-                                    android:inputType="numberDecimal|numberSigned" android:textSize="12sp"
-                                    android:gravity="center" android:imeOptions="actionDone" />
-                            </com.google.android.material.textfield.TextInputLayout>
+                            <LinearLayout android:layout_width="64dp" android:layout_height="wrap_content"
+                                android:layout_gravity="top"
+                                android:layout_marginStart="4dp" android:orientation="vertical">
+                                <View android:layout_width="2dp" android:layout_height="6dp"
+                                    android:layout_gravity="center_horizontal" android:background="#FF666666" />
+                                <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    app:hintEnabled="false"
+                                    app:boxCornerRadiusTopStart="8dp" app:boxCornerRadiusTopEnd="8dp"
+                                    app:boxCornerRadiusBottomStart="8dp" app:boxCornerRadiusBottomEnd="8dp"
+                                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense">
+                                    <com.google.android.material.textfield.TextInputEditText android:id="@+id/reverbReflectLevelText"
+                                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                                        android:inputType="numberDecimal|numberSigned" android:textSize="12sp"
+                                        android:gravity="center" android:imeOptions="actionDone" />
+                                </com.google.android.material.textfield.TextInputLayout>
+                            </LinearLayout>
                         </LinearLayout>
 
                         <!-- Reverb Delay -->
@@ -272,25 +313,62 @@
                             </com.google.android.material.textfield.TextInputLayout>
                         </LinearLayout>
 
-                        <!-- Decay -->
+                        <!-- Reverb Decay pair (X = Decay ms, Y = Level dB).
+                             Same line-attached-to-box construction as the
+                             Early Reflections pair above. -->
                         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                            android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="4dp">
+                            android:orientation="horizontal" android:gravity="center_vertical">
                             <TextView android:layout_width="120dp" android:layout_height="wrap_content"
-                                android:text="Decay (ms)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                                android:text="Reverb Decay (ms)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                                 android:textColor="#FFAAAAAA" />
                             <com.google.android.material.slider.Slider android:id="@+id/reverbDecayTimeSlider"
                                 android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
                                 android:valueFrom="100" android:valueTo="20000" android:value="1490" app:labelBehavior="gone" />
-                            <com.google.android.material.textfield.TextInputLayout android:layout_width="64dp"
-                                android:layout_height="wrap_content" android:layout_marginStart="4dp"
-                                app:boxCornerRadiusTopStart="8dp" app:boxCornerRadiusTopEnd="8dp"
-                                app:boxCornerRadiusBottomStart="8dp" app:boxCornerRadiusBottomEnd="8dp"
-                                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense">
-                                <com.google.android.material.textfield.TextInputEditText android:id="@+id/reverbDecayTimeText"
-                                    android:layout_width="match_parent" android:layout_height="wrap_content"
-                                    android:inputType="numberDecimal" android:textSize="12sp"
-                                    android:gravity="center" android:imeOptions="actionDone" />
-                            </com.google.android.material.textfield.TextInputLayout>
+                            <LinearLayout android:layout_width="64dp" android:layout_height="wrap_content"
+                                android:layout_gravity="bottom"
+                                android:layout_marginStart="4dp" android:orientation="vertical">
+                                <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    app:hintEnabled="false"
+                                    app:boxCornerRadiusTopStart="8dp" app:boxCornerRadiusTopEnd="8dp"
+                                    app:boxCornerRadiusBottomStart="8dp" app:boxCornerRadiusBottomEnd="8dp"
+                                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense">
+                                    <com.google.android.material.textfield.TextInputEditText android:id="@+id/reverbDecayTimeText"
+                                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                                        android:inputType="numberDecimal" android:textSize="12sp"
+                                        android:gravity="center" android:imeOptions="actionDone" />
+                                </com.google.android.material.textfield.TextInputLayout>
+                                <View android:layout_width="2dp" android:layout_height="6dp"
+                                    android:layout_gravity="center_horizontal" android:background="#FF666666" />
+                            </LinearLayout>
+                        </LinearLayout>
+
+                        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="4dp">
+                            <TextView android:layout_width="120dp" android:layout_height="wrap_content"
+                                android:text="Reverb Level (dB)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                                android:textColor="#FFAAAAAA" />
+                            <com.google.android.material.slider.Slider android:id="@+id/reverbLevelSlider"
+                                android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                                android:valueFrom="-90" android:valueTo="20" android:value="-26"
+                                app:labelBehavior="gone" />
+                            <LinearLayout android:layout_width="64dp" android:layout_height="wrap_content"
+                                android:layout_gravity="top"
+                                android:layout_marginStart="4dp" android:orientation="vertical">
+                                <View android:layout_width="2dp" android:layout_height="6dp"
+                                    android:layout_gravity="center_horizontal" android:background="#FF666666" />
+                                <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    app:hintEnabled="false"
+                                    app:boxCornerRadiusTopStart="8dp" app:boxCornerRadiusTopEnd="8dp"
+                                    app:boxCornerRadiusBottomStart="8dp" app:boxCornerRadiusBottomEnd="8dp"
+                                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense">
+                                    <com.google.android.material.textfield.TextInputEditText android:id="@+id/reverbLevelText"
+                                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                                        android:inputType="numberDecimal|numberSigned" android:textSize="12sp"
+                                        android:gravity="center" android:imeOptions="actionDone" />
+                                </com.google.android.material.textfield.TextInputLayout>
+                            </LinearLayout>
                         </LinearLayout>
 
                         <!-- HF Level (room HF level) — new slider; mirrors
@@ -387,110 +465,6 @@
                 </com.google.android.material.card.MaterialCardView>
             </LinearLayout>
 
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp"
-                app:strokeWidth="0dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <!-- Reverb Level -->
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="4dp">
-                        <TextView android:layout_width="120dp" android:layout_height="wrap_content"
-                            android:text="Reverb (dB)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
-                            android:textColor="?attr/colorOnSurfaceVariant" />
-                        <com.google.android.material.slider.Slider android:id="@+id/reverbLevelSlider"
-                            android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-                            android:valueFrom="-90" android:valueTo="20" android:value="-26"
-                            app:labelBehavior="gone" />
-                        <com.google.android.material.textfield.TextInputLayout android:layout_width="64dp"
-                            android:layout_height="wrap_content" android:layout_marginStart="4dp"
-                            app:boxCornerRadiusTopStart="8dp" app:boxCornerRadiusTopEnd="8dp"
-                            app:boxCornerRadiusBottomStart="8dp" app:boxCornerRadiusBottomEnd="8dp"
-                            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense">
-                            <com.google.android.material.textfield.TextInputEditText android:id="@+id/reverbLevelText"
-                                android:layout_width="match_parent" android:layout_height="wrap_content"
-                                android:inputType="numberDecimal|numberSigned" android:textSize="12sp"
-                                android:gravity="center" android:imeOptions="actionDone" />
-                        </com.google.android.material.textfield.TextInputLayout>
-                    </LinearLayout>
-
-                    <!-- Room Level -->
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="4dp">
-                        <TextView android:layout_width="120dp" android:layout_height="wrap_content"
-                            android:text="Room (dB)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
-                            android:textColor="?attr/colorOnSurfaceVariant" />
-                        <com.google.android.material.slider.Slider android:id="@+id/reverbRoomSlider"
-                            android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-                            android:valueFrom="-90" android:valueTo="0" android:value="-10"
-                            app:labelBehavior="gone" />
-                        <com.google.android.material.textfield.TextInputLayout android:layout_width="64dp"
-                            android:layout_height="wrap_content" android:layout_marginStart="4dp"
-                            app:boxCornerRadiusTopStart="8dp" app:boxCornerRadiusTopEnd="8dp"
-                            app:boxCornerRadiusBottomStart="8dp" app:boxCornerRadiusBottomEnd="8dp"
-                            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense">
-                            <com.google.android.material.textfield.TextInputEditText android:id="@+id/reverbRoomText"
-                                android:layout_width="match_parent" android:layout_height="wrap_content"
-                                android:inputType="numberDecimal|numberSigned" android:textSize="12sp"
-                                android:gravity="center" android:imeOptions="actionDone" />
-                        </com.google.android.material.textfield.TextInputLayout>
-                    </LinearLayout>
-
-                    <!-- Diffusion -->
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="4dp">
-                        <TextView android:layout_width="120dp" android:layout_height="wrap_content"
-                            android:text="Diffusion (%)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
-                            android:textColor="?attr/colorOnSurfaceVariant" />
-                        <com.google.android.material.slider.Slider android:id="@+id/reverbDiffusionSlider"
-                            android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-                            android:valueFrom="0" android:valueTo="100" android:value="100"
-                            app:labelBehavior="gone" />
-                        <com.google.android.material.textfield.TextInputLayout android:layout_width="64dp"
-                            android:layout_height="wrap_content" android:layout_marginStart="4dp"
-                            app:boxCornerRadiusTopStart="8dp" app:boxCornerRadiusTopEnd="8dp"
-                            app:boxCornerRadiusBottomStart="8dp" app:boxCornerRadiusBottomEnd="8dp"
-                            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense">
-                            <com.google.android.material.textfield.TextInputEditText android:id="@+id/reverbDiffusionText"
-                                android:layout_width="match_parent" android:layout_height="wrap_content"
-                                android:inputType="numberDecimal" android:textSize="12sp"
-                                android:gravity="center" android:imeOptions="actionDone" />
-                        </com.google.android.material.textfield.TextInputLayout>
-                    </LinearLayout>
-
-                    <!-- Density -->
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:orientation="horizontal" android:gravity="center_vertical">
-                        <TextView android:layout_width="120dp" android:layout_height="wrap_content"
-                            android:text="Density (%)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
-                            android:textColor="?attr/colorOnSurfaceVariant" />
-                        <com.google.android.material.slider.Slider android:id="@+id/reverbDensitySlider"
-                            android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-                            android:valueFrom="0" android:valueTo="100" android:value="100"
-                            app:labelBehavior="gone" />
-                        <com.google.android.material.textfield.TextInputLayout android:layout_width="64dp"
-                            android:layout_height="wrap_content" android:layout_marginStart="4dp"
-                            app:boxCornerRadiusTopStart="8dp" app:boxCornerRadiusTopEnd="8dp"
-                            app:boxCornerRadiusBottomStart="8dp" app:boxCornerRadiusBottomEnd="8dp"
-                            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense">
-                            <com.google.android.material.textfield.TextInputEditText android:id="@+id/reverbDensityText"
-                                android:layout_width="match_parent" android:layout_height="wrap_content"
-                                android:inputType="numberDecimal" android:textSize="12sp"
-                                android:gravity="center" android:imeOptions="actionDone" />
-                        </com.google.android.material.textfield.TextInputLayout>
-                    </LinearLayout>
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
         </LinearLayout>
     </ScrollView>
 </LinearLayout>
