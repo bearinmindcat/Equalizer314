@@ -52,19 +52,7 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
         ),
         ENVIRONMENTAL_REVERB(
             "Environmental Reverb",
-            "Decay, diffusion, density, reflections — native session-0 reverb"
-        ),
-        VIRTUALIZER(
-            "Virtualizer",
-            "Stereo widening / headphone surround"
-        ),
-        BASS_BOOST(
-            "Bass Boost",
-            "Single-knob bass boost"
-        ),
-        HAPTIC_GENERATOR(
-            "Haptic Generator",
-            "Generate haptic feedback from low-frequency content (API 31+)"
+            ""
         ),
         AUDIO_OUTPUT(
             "Audio Output",
@@ -323,6 +311,11 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
             val effect = items[position]
             holder.title.text = effect.title
             holder.description.text = effect.description
+            // Hide the second line entirely when an effect has no
+            // description, so the title doesn't sit above an empty
+            // grey gap.
+            holder.description.visibility =
+                if (effect.description.isEmpty()) View.GONE else View.VISIBLE
             if (effect.isFixed) {
                 // Bookend cards (input / output) can't be moved — hide the
                 // handle entirely so the row reads as a fixed pipeline node.

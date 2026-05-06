@@ -51,34 +51,35 @@
             android:paddingEnd="16dp"
             android:paddingBottom="32dp">
 
-            <!-- Reverb Level master card — controls roomLevelDb, the
-                 master output of the whole reverb effect (= early
-                 reflections + decay tail together). Lives at the top
-                 of the screen as the most fundamental knob. -->
+            <!-- Room Level master card — styled like the main EQ
+                 screen's Preamp card (filled surface, no outline,
+                 compact padding) so the two screens read as a
+                 consistent design language. -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
-                app:cardBackgroundColor="@android:color/transparent"
+                app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
-                app:strokeColor="?attr/colorOutline"
-                app:strokeWidth="1dp">
+                app:strokeWidth="0dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
                     android:gravity="center_vertical"
-                    android:padding="14dp">
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:paddingTop="0dp"
+                    android:paddingBottom="0dp">
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Room Level"
-                        android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
-                        android:textColor="?attr/colorOnSurface"
-                        android:layout_marginEnd="8dp" />
+                        android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                        android:textColor="?attr/colorOnSurfaceVariant" />
 
                     <com.google.android.material.slider.Slider
                         android:id="@+id/reverbMasterLevelSlider"
@@ -88,12 +89,14 @@
                         android:valueFrom="-90"
                         android:valueTo="0"
                         android:value="-10"
+                        app:tickVisible="false"
                         app:labelBehavior="gone" />
 
                     <com.google.android.material.textfield.TextInputLayout
                         android:layout_width="64dp"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="4dp"
+                        app:hintEnabled="false"
                         app:boxCornerRadiusTopStart="8dp"
                         app:boxCornerRadiusTopEnd="8dp"
                         app:boxCornerRadiusBottomStart="8dp"
@@ -103,6 +106,9 @@
                             android:id="@+id/reverbMasterLevelText"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
+                            android:paddingTop="6dp"
+                            android:paddingBottom="6dp"
+                            android:minHeight="0dp"
                             android:inputType="numberSigned|numberDecimal"
                             android:textSize="12sp"
                             android:gravity="center"
