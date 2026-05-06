@@ -862,24 +862,22 @@ class ReverbVisualizerView @JvmOverloads constructor(
     }
 
     private fun drawGhostEnvelope(c: Canvas, decayDurationMs: Float) {
-        // The envelope starts at the Direct Sound capsule's TOPMOST
-        // point (the apex of its top arc, at the capsule's centre X)
-        // and runs as a single straight line down to the plot's bottom-
-        // right corner. The capsule is bg-filled when drawn, so the
-        // portion of the line inside the capsule is masked — visually
-        // the line appears to attach to the top of the capsule.
-        val capsuleRight = plotL + directSoundEdgeInset + directSoundBarW
-        val capsuleCenterX = capsuleRight - directSoundBarW / 2f
-        val capsuleTop = amp01ToY(envelopeAtX(capsuleRight))
+        // The envelope is the EXACT plot-rect diagonal — top-left to
+        // bottom-right. Same line every bar's top samples through
+        // [envelopeAtX], so bars can never overshoot it. The Direct
+        // Sound capsule's bg fill masks the portion of the line that
+        // passes inside the capsule, so visually the line still reads
+        // as "attaching" to the top of the capsule.
         ghostPath.reset()
-        ghostPath.moveTo(capsuleCenterX, capsuleTop)
+        ghostPath.moveTo(plotL, plotT)
         ghostPath.lineTo(plotR, plotB)
         c.drawPath(ghostPath, ghostEnvelopePaint)
     }
 
     /** Linear amplitude (0..1) at a given x: 1.0 at the left edge,
-     *  0.0 at the right edge. All bars sample this so their heights
-     *  drop top-left to bottom-right regardless of region. */
+     *  0.0 at the right edge. Bars sample this so their heights drop
+     *  top-left to bottom-right along the SAME line drawn by
+     *  [drawGhostEnvelope] — guaranteed upper bound. */
     private fun envelopeAtX(x: Float): Float {
         val plotW = (plotR - plotL).coerceAtLeast(1f)
         return (1f - (x - plotL) / plotW).coerceIn(0f, 1f)
