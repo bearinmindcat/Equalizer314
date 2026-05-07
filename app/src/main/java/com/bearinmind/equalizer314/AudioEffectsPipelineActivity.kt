@@ -16,6 +16,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bearinmind.equalizer314.state.EqPreferencesManager
 import com.google.android.material.card.MaterialCardView
+import com.google.android.material.materialswitch.MaterialSwitch
 
 /**
  * Lets the user drag-reorder the audio-effects pipeline. The visual order
@@ -74,6 +75,18 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
         eqPrefs = EqPreferencesManager(this)
 
         findViewById<ImageButton>(R.id.audioPipelineBackButton).setOnClickListener { finish() }
+
+        // Experimental DP Engine toggle — persists immediately. The
+        // live DP restart happens in MainActivity.onResume the next
+        // time we return there (it diff-checks the pref against the
+        // running state and calls EqStateManager.applyExperimentalDpMode
+        // if it changed).
+        findViewById<MaterialSwitch>(R.id.audioPipelineExpDpModeSwitch).apply {
+            isChecked = eqPrefs.getExperimentalDpMode()
+            setOnCheckedChangeListener { _, isChecked ->
+                eqPrefs.saveExperimentalDpMode(isChecked)
+            }
+        }
 
         recyclerView = findViewById(R.id.audioPipelineRecyclerView)
         recyclerView.layoutManager = LinearLayoutManager(this)

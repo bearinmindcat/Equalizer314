@@ -62,16 +62,28 @@ class ExperimentalActivity : AppCompatActivity() {
         val slider = findViewById<Slider>(R.id.expDpBandCountSlider)
         val text = findViewById<EditText>(R.id.expDpBandCountText)
 
-        // Force default value at runtime (ignore anything previously saved).
-        eqPrefs.saveDpBandCount(128)
-        slider.value = 128f
-        text.setText("128")
+        // Hydrate from prefs and let the user adjust 32–128 bands.
+        // Re-enabled (was previously force-locked at 128) so testers can
+        // A/B band-count vs the experimental DP variant toggle.
+        val saved = eqPrefs.getDpBandCount().coerceIn(32, 128)
+        slider.value = saved.toFloat()
+        text.setText(saved.toString())
 
-        // Disabled for release — no-op listeners, controls grayed out.
-        slider.isEnabled = false
-        text.isEnabled = false
-        slider.alpha = 0.4f
-        text.alpha = 0.4f
+        slider.addOnChangeListener { _, value, fromUser ->
+            if (!fromUser) return@addOnChangeListener
+            val v = value.toInt().coerceIn(32, 128)
+            text.setText(v.toString())
+            eqPrefs.saveDpBandCount(v)
+        }
+        text.setOnEditorActionListener { _, _, _ ->
+            val v = text.text.toString().toIntOrNull()?.coerceIn(32, 128)
+            if (v != null) {
+                slider.value = v.toFloat()
+                text.setText(v.toString())
+                eqPrefs.saveDpBandCount(v)
+            }
+            true
+        }
     }
 
     private fun setupGainCompensation() {

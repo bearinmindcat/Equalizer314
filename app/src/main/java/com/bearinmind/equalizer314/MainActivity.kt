@@ -2228,6 +2228,14 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+        // Re-push EQ so DynamicsProcessingManager re-evaluates the
+        // direct-graphic-vs-feature-aware path flag against the new mode.
+        // Without this the live DP keeps using whatever path was active
+        // before the switch until the next slider tick / band edit.
+        stateManager.pushEqUpdate()
+        // Refresh the red experimental-DP overlay so it shows the new
+        // path (feature-aware ↔ direct) the moment the mode changes.
+        stateManager.updateDpBandVisualization(eqGraphView)
         eqGraphView.invalidate()
     }
 
@@ -3371,6 +3379,9 @@ class MainActivity : AppCompatActivity() {
         val expDpModeNow = eqPrefs.getExperimentalDpMode()
         if (expDpModeNow != stateManager.experimentalDpMode) {
             stateManager.applyExperimentalDpMode(expDpModeNow)
+            // Refresh the red overlay so it appears/disappears on the
+            // graph the moment the user returns from AudioEffectsPipeline.
+            stateManager.updateDpBandVisualization(eqGraphView)
         }
 
         // Check if Simple EQ was toggled in experimental settings

@@ -188,6 +188,15 @@ class EqStateManager(
         dm.preampGainDb = preampGainDb
         dm.autoGainEnabled = autoGainEnabled
         dm.experimentalDpMode = experimentalDpMode
+        // Direct-graphic path is only meaningful when experimental is on;
+        // the flag itself is independent of experimentalDpMode (DP only
+        // honours it when both are true), but tying it to UI mode keeps
+        // parametric correct (biquad math) and graphic / table / simple
+        // bypassing the biquad chain so DP sees the raw user values.
+        dm.useDirectGraphicPath = when (currentEqUiMode) {
+            EqUiMode.GRAPHIC, EqUiMode.TABLE, EqUiMode.SIMPLE -> true
+            EqUiMode.PARAMETRIC -> false
+        }
         dm.channelBalancePercent = channelBalancePercent
         dm.leftChannelGainDb = leftChannelGainDb
         dm.rightChannelGainDb = rightChannelGainDb
@@ -221,6 +230,12 @@ class EqStateManager(
             dm.start(lEq)
             pushEqUpdate()
         }
+        // The red experimental-DP overlay is gated by [experimentalDpMode];
+        // toggling it on/off needs to refresh the graph immediately so the
+        // user sees the line appear/disappear without waiting for the next
+        // EQ edit. Caller is responsible for invoking
+        // updateDpBandVisualization on the active graph view (MainActivity
+        // does this in its onResume detection path).
     }
 
     private val updateHandler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -391,9 +406,33 @@ class EqStateManager(
     }
 
     fun updateDpBandVisualization(graphView: EqGraphView) {
+        // Grey overlay (legacy log-spaced reference) — unchanged from
+        // before. Always computed so the user can keep the dotted-grey
+        // line on regardless of experimental state.
         val centers = ParametricToDpConverter.centerFrequencies
         val gains = ParametricToDpConverter.convert(parametricEq)
         graphView.updateDpBandData(centers, gains)
+
+        // Red overlay (experimental DP feed): mirrors the path
+        // DynamicsProcessingManager picks based on experimentalDpMode +
+        // currentEqUiMode. Lets the user see exactly what DP is being
+        // fed in experimental mode — the red line is the real DP curve.
+        if (experimentalDpMode) {
+            val isDirectMode = when (currentEqUiMode) {
+                EqUiMode.GRAPHIC, EqUiMode.TABLE, EqUiMode.SIMPLE -> true
+                EqUiMode.PARAMETRIC -> false
+            }
+            val converted = if (isDirectMode) {
+                ParametricToDpConverter.convertDirect(parametricEq)
+            } else {
+                ParametricToDpConverter.convertFeatureAware(parametricEq)
+            }
+            graphView.showExperimentalDpCurve = true
+            graphView.updateExperimentalDpData(converted.cutoffs, converted.gains)
+        } else {
+            graphView.showExperimentalDpCurve = false
+            graphView.updateExperimentalDpData(null, null)
+        }
     }
 
     fun loadPreset(name: String, graphView: EqGraphView) {
@@ -438,6 +477,10 @@ class EqStateManager(
         dm.preampGainDb = preampGainDb
         dm.autoGainEnabled = autoGainEnabled
         dm.experimentalDpMode = experimentalDpMode
+        dm.useDirectGraphicPath = when (currentEqUiMode) {
+            EqUiMode.GRAPHIC, EqUiMode.TABLE, EqUiMode.SIMPLE -> true
+            EqUiMode.PARAMETRIC -> false
+        }
         dm.channelBalancePercent = channelBalancePercent
         dm.leftChannelGainDb = leftChannelGainDb
         dm.rightChannelGainDb = rightChannelGainDb
