@@ -633,7 +633,6 @@ class MbcActivity : AppCompatActivity() {
 
         // Graph with MBC band visualization
         graphView = findViewById(R.id.mbcGraphView)
-        graphView.showDpBands = false
         graphView.showSaturationCurve = false
         graphView.showBandPoints = false
         val eq = ParametricEqualizer()

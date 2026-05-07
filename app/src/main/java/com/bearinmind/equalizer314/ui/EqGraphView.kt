@@ -58,23 +58,7 @@ class EqGraphView @JvmOverloads constructor(
     private var spectrumData: FloatArray? = null
     private var spectrumEnabled = true
 
-    // DP band visualization
-    private var dpCenterFrequencies: FloatArray? = null
-    private var dpGains: FloatArray? = null
-    var showDpBands = false
     var showBandPoints = true
-
-    // Experimental-DP overlay (red line). Mirrors the (cutoff, gain) array
-    // DynamicsProcessingManager actually feeds DP when the experimental
-    // toggle is on — feature-aware in parametric, direct in graphic/table/
-    // simple. Drawn as a piecewise-linear curve in (log f, dB) space because
-    // that's exactly how DP interpolates between cutoffs internally; the
-    // line is the *actual* gain DP applies, not the parametric biquad sum.
-    // Only rendered when [showExperimentalDpCurve] is true (gated to
-    // experimental mode by EqStateManager).
-    private var experimentalDpFreqs: FloatArray? = null
-    private var experimentalDpGains: FloatArray? = null
-    var showExperimentalDpCurve = false
 
     // MBC band visualization
     var mbcCrossovers: FloatArray? = null       // crossover frequencies (N-1 for N bands)
@@ -157,20 +141,6 @@ class EqGraphView @JvmOverloads constructor(
     private val mbcTriTouchPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0x14AAAAAA.toInt()  // colorPrimary (#AAAAAA) at 8% alpha — exact Material3 Slider halo
         style = Paint.Style.FILL
-    }
-
-    private val dpCurveLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xAA555555.toInt()  // dark grey solid line
-        strokeWidth = 2f
-        style = Paint.Style.STROKE
-    }
-
-    // Red overlay used by [drawExperimentalDpCurve] — shows the actual
-    // (cutoff, gain) feed DynamicsProcessing receives in experimental mode.
-    private val experimentalDpCurvePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xCCE53935.toInt()  // Material red, ~80 % alpha
-        strokeWidth = 2.5f
-        style = Paint.Style.STROKE
     }
 
     // Graphic mode paints
@@ -369,23 +339,6 @@ class EqGraphView @JvmOverloads constructor(
     /** Spectrum renderer — set by MainActivity when visualizer is active */
     var spectrumRenderer: com.bearinmind.equalizer314.audio.SpectrumAnalyzerRenderer? = null
 
-    fun updateDpBandData(centerFreqs: FloatArray, gains: FloatArray) {
-        dpCenterFrequencies = centerFreqs
-        dpGains = gains
-        invalidate()
-    }
-
-    /** Update the experimental-DP curve data. Pass the (cutoff, gain) pairs
-     *  that match what DynamicsProcessingManager is actually feeding DP in
-     *  experimental mode (feature-aware for parametric, direct for graphic
-     *  /table/simple). When `null` is passed for either array, clears the
-     *  red overlay. */
-    fun updateExperimentalDpData(freqs: FloatArray?, gains: FloatArray?) {
-        experimentalDpFreqs = freqs
-        experimentalDpGains = gains
-        invalidate()
-    }
-
     fun updateBandLevels() {
         parametricEq?.let { eq ->
             val bands = eq.getAllBands()
@@ -475,22 +428,8 @@ class EqGraphView @JvmOverloads constructor(
             }
         }
 
-        // Draw DP band sample points (behind curve and dots)
-        if (showDpBands) {
-            drawDpBands(canvas, vPad, graphWidth, graphHeight)
-        }
-
         calculatePointPositions(vPad, graphWidth, graphHeight)
         if (showEqCurve) drawCurve(canvas, vPad, graphWidth, graphHeight)
-
-        // Experimental-DP curve (red): the actual (cutoff, gain) feed DP
-        // receives in experimental mode. Drawn AFTER the EQ curve so it's
-        // always visible on top — in parametric mode the feature-aware
-        // samples sit right on the bell-sum curve, so anything below it
-        // gets painted over and disappears.
-        if (showExperimentalDpCurve) {
-            drawExperimentalDpCurve(canvas, vPad, graphWidth, graphHeight)
-        }
 
         if (showBandPoints) {
             drawPoints(canvas)
@@ -818,75 +757,6 @@ class EqGraphView @JvmOverloads constructor(
         }
     }
 
-    private fun drawDpBands(canvas: Canvas, vPad: Float, graphWidth: Float, graphHeight: Float) {
-        val centers = dpCenterFrequencies ?: return
-        val gains = dpGains ?: return
-        if (centers.size != gains.size || centers.isEmpty()) return
-
-        // Build a path connecting all DP sample points with a dotted line
-        val path = Path()
-        var started = false
-
-        for (i in centers.indices) {
-            val freq = centers[i]
-            if (freq < graphMinFreq || freq > graphMaxFreq) continue
-
-            val x = freqToX(freq, graphWidth)
-            val gainNorm = ((gains[i] - minGain) / (maxGain - minGain)).coerceIn(0f, 1f)
-            val y = vPad + graphHeight * (1f - gainNorm)
-
-            if (!started) {
-                path.moveTo(x, y)
-                started = true
-            } else {
-                path.lineTo(x, y)
-            }
-        }
-
-        // Draw the dotted line connecting all points
-        canvas.drawPath(path, dpCurveLinePaint)
-    }
-
-    /**
-     * Red overlay: the (cutoff, gain) feed DP is actually receiving in
-     * experimental mode. Sorted by frequency, then connected with straight
-     * line segments — that's exactly how DP interpolates between cutoffs
-     * internally, so the red line is what the DP engine "sees" as a curve.
-     *
-     * In parametric mode the red line shows the feature-aware sampling
-     * (cluster of points around each filter centre + per-Q supports). In
-     * graphic / table modes it shows the user's points connected directly,
-     * which is what Wavelet / Poweramp / RootlessJamesDSP would show.
-     */
-    private fun drawExperimentalDpCurve(canvas: Canvas, vPad: Float, graphWidth: Float, graphHeight: Float) {
-        val freqs = experimentalDpFreqs ?: return
-        val gains = experimentalDpGains ?: return
-        if (freqs.size != gains.size || freqs.isEmpty()) return
-
-        // Sort by frequency so the line segments are monotonic — DP feeds
-        // can have anchors interleaved with log-spaced fillers, which
-        // arrive in cutoff order but a defensive sort costs nothing.
-        val order = freqs.indices.sortedBy { freqs[it] }
-        val path = Path()
-        var started = false
-
-        for (idx in order) {
-            val freq = freqs[idx]
-            if (freq < graphMinFreq || freq > graphMaxFreq) continue
-            val x = freqToX(freq, graphWidth)
-            val gainNorm = ((gains[idx] - minGain) / (maxGain - minGain)).coerceIn(0f, 1f)
-            val y = vPad + graphHeight * (1f - gainNorm)
-
-            if (!started) {
-                path.moveTo(x, y)
-                started = true
-            } else {
-                path.lineTo(x, y)
-            }
-        }
-
-        canvas.drawPath(path, experimentalDpCurvePaint)
-    }
 
     private fun drawGraphicBars(canvas: Canvas, vPad: Float, graphWidth: Float, graphHeight: Float) {
         if (bandPoints.isEmpty()) return

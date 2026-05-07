@@ -67,18 +67,14 @@ class EqStateManager(
     var preampGainDb: Float = 0f
     var autoGainEnabled: Boolean = false
 
-    // Experimental DP engine mode — mirrors prefs key "experimentalDpMode".
-    // When flipped via [setExperimentalDpMode] the live DP instance is
-    // torn down and rebuilt with the matching variant + band count so
-    // the user can A/B without restarting the app.
-    var experimentalDpMode: Boolean = false
-
-    // Limiter
+    // Limiter — defaults match Wavelet's a6/z.java:105 baseline
+    // (1 ms attack, 60 ms release, 10:1 ratio, −2 dB threshold, 0 dB
+    // post-gain).
     var limiterEnabled: Boolean = true
     var limiterAttackMs: Float = 1f
-    var limiterReleaseMs: Float = 50f
+    var limiterReleaseMs: Float = 60f
     var limiterRatio: Float = 10f
-    var limiterThresholdDb: Float = -0.5f
+    var limiterThresholdDb: Float = -2f
     var limiterPostGainDb: Float = 0f
 
     // Channel Side Options
@@ -152,7 +148,6 @@ class EqStateManager(
         // Restore preamp & auto-gain
         preampGainDb = eqPrefs.getPreampGain()
         autoGainEnabled = eqPrefs.getAutoGainEnabled()
-        experimentalDpMode = eqPrefs.getExperimentalDpMode()
 
         // Restore channel side options
         channelBalancePercent = eqPrefs.getChannelBalancePercent()
@@ -187,12 +182,9 @@ class EqStateManager(
         val dm = eqService?.dynamicsManager ?: return
         dm.preampGainDb = preampGainDb
         dm.autoGainEnabled = autoGainEnabled
-        dm.experimentalDpMode = experimentalDpMode
-        // Direct-graphic path is only meaningful when experimental is on;
-        // the flag itself is independent of experimentalDpMode (DP only
-        // honours it when both are true), but tying it to UI mode keeps
-        // parametric correct (biquad math) and graphic / table / simple
-        // bypassing the biquad chain so DP sees the raw user values.
+        // The DP conversion path is per UI mode: parametric uses biquad
+        // math (convertFeatureAware), graphic/table/simple bypass the
+        // biquad chain so DP sees the user's (freq, gain) verbatim.
         dm.useDirectGraphicPath = when (currentEqUiMode) {
             EqUiMode.GRAPHIC, EqUiMode.TABLE, EqUiMode.SIMPLE -> true
             EqUiMode.PARAMETRIC -> false
@@ -202,40 +194,6 @@ class EqStateManager(
         dm.rightChannelGainDb = rightChannelGainDb
         val (lEq, rEq) = getChannelEqs()
         eqService?.updateEqPerChannel(lEq, rEq)
-    }
-
-    /**
-     * Flip the experimental DP engine mode. Persists the new value,
-     * updates [DynamicsProcessingManager.experimentalDpMode], and
-     * restarts the live DP instance with the matching variant + band
-     * count so the change takes effect immediately. No app restart
-     * needed for A/B testing.
-     *
-     * Named [applyExperimentalDpMode] (not setExperimentalDpMode) to
-     * avoid a JVM signature clash with the auto-generated property
-     * setter for [experimentalDpMode].
-     */
-    fun applyExperimentalDpMode(enabled: Boolean) {
-        if (experimentalDpMode == enabled) return
-        experimentalDpMode = enabled
-        eqPrefs.saveExperimentalDpMode(enabled)
-        val dm = eqService?.dynamicsManager ?: return
-        dm.experimentalDpMode = enabled
-        if (isProcessing) {
-            // Tear down + rebuild DP with the new variant. start() reads
-            // experimentalDpMode and chooses VARIANT_FAVOR_TIME_RESOLUTION
-            // + 32 bands when on, FAVOR_FREQUENCY_RESOLUTION + 128 bands
-            // when off.
-            val (lEq, _) = getChannelEqs()
-            dm.start(lEq)
-            pushEqUpdate()
-        }
-        // The red experimental-DP overlay is gated by [experimentalDpMode];
-        // toggling it on/off needs to refresh the graph immediately so the
-        // user sees the line appear/disappear without waiting for the next
-        // EQ edit. Caller is responsible for invoking
-        // updateDpBandVisualization on the active graph view (MainActivity
-        // does this in its onResume detection path).
     }
 
     private val updateHandler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -405,41 +363,11 @@ class EqStateManager(
         return eqService?.dynamicsManager?.lastAutoGainOffset ?: 0f
     }
 
-    fun updateDpBandVisualization(graphView: EqGraphView) {
-        // Grey overlay (legacy log-spaced reference) — unchanged from
-        // before. Always computed so the user can keep the dotted-grey
-        // line on regardless of experimental state.
-        val centers = ParametricToDpConverter.centerFrequencies
-        val gains = ParametricToDpConverter.convert(parametricEq)
-        graphView.updateDpBandData(centers, gains)
-
-        // Red overlay (experimental DP feed): mirrors the path
-        // DynamicsProcessingManager picks based on experimentalDpMode +
-        // currentEqUiMode. Lets the user see exactly what DP is being
-        // fed in experimental mode — the red line is the real DP curve.
-        if (experimentalDpMode) {
-            val isDirectMode = when (currentEqUiMode) {
-                EqUiMode.GRAPHIC, EqUiMode.TABLE, EqUiMode.SIMPLE -> true
-                EqUiMode.PARAMETRIC -> false
-            }
-            val converted = if (isDirectMode) {
-                ParametricToDpConverter.convertDirect(parametricEq)
-            } else {
-                ParametricToDpConverter.convertFeatureAware(parametricEq)
-            }
-            graphView.showExperimentalDpCurve = true
-            graphView.updateExperimentalDpData(converted.cutoffs, converted.gains)
-        } else {
-            graphView.showExperimentalDpCurve = false
-            graphView.updateExperimentalDpData(null, null)
-        }
-    }
 
     fun loadPreset(name: String, graphView: EqGraphView) {
         parametricEq.loadPreset(name)
         graphView.updateBandLevels()
         eqPrefs.savePresetName(name)
-        updateDpBandVisualization(graphView)
         pushEqUpdate()
     }
 
@@ -476,7 +404,6 @@ class EqStateManager(
         val dm = service.dynamicsManager
         dm.preampGainDb = preampGainDb
         dm.autoGainEnabled = autoGainEnabled
-        dm.experimentalDpMode = experimentalDpMode
         dm.useDirectGraphicPath = when (currentEqUiMode) {
             EqUiMode.GRAPHIC, EqUiMode.TABLE, EqUiMode.SIMPLE -> true
             EqUiMode.PARAMETRIC -> false

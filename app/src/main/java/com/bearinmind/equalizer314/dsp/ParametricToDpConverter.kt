@@ -7,31 +7,37 @@ import kotlin.math.pow
 import kotlin.math.sqrt
 
 /**
- * Converts parametric EQ settings (with Q, filter types, bell curves)
- * into DynamicsProcessing-compatible band gains.
+ * Converts parametric EQ settings into DynamicsProcessing-compatible
+ * (cutoff, gain) pairs.
  *
- * Samples the composite frequency response of the parametric EQ at N
- * log-spaced frequencies, producing (cutoffFrequency, gain) pairs that
- * approximate the parametric curves using DynamicsProcessing's FFT engine.
+ * Two paths:
+ *   • [convertFeatureAware] — for parametric mode. Samples the biquad
+ *     composite at every parametric centre + per-filter-type support
+ *     points around each, with Wavelet's frequency table as fillers.
+ *   • [convertDirect] — for graphic / table / simple modes. Each band's
+ *     stored (frequency, gain) pair fed straight to DP, no biquad math.
+ *     Same approach Wavelet / Poweramp / RootlessJamesDSP use.
+ *
+ * The cutoff layout is always Wavelet's 127-band frequency table
+ * (decompiled from `a6.z.f608g[]`) — these are the EXACT frequencies
+ * AutoEQ's `GraphicEQ.txt` format uses, so a graphic profile import
+ * lands every (freq, gain) pair on a real DP cutoff with zero
+ * interpolation error.
  */
 object ParametricToDpConverter {
 
-    var numBands: Int = 128
+    var numBands: Int = 127
         private set
     private const val MIN_FREQ = 10f
     private const val MAX_FREQ = 22000f
 
     /**
-     * Wavelet's 128-band frequency table (decompiled from
-     * com.pittvandewitt.wavelet's `a6.z.f608g[]` field). 127 entries.
-     * These are the EXACT frequencies AutoEQ's GraphicEQ.txt format uses
-     * — Wavelet was deliberately built around this layout so a graphic
-     * profile import lands every (freq, gain) pair on a real DP cutoff
-     * with zero interpolation error.
-     *
-     * 314Eq's experimental path now uses these for the same reason:
-     * eliminating the 0.3-0.8 dB-per-bin interpolation drift between
-     * our log-spaced cutoffs and AutoEQ's expected positions.
+     * Wavelet's 127-band frequency table (decompiled from
+     * com.pittvandewitt.wavelet's `a6.z.f608g[]` field). These are the
+     * EXACT frequencies AutoEQ's `GraphicEQ.txt` format uses — Wavelet
+     * was deliberately built around this layout so a graphic profile
+     * import lands every (freq, gain) pair on a real DP cutoff with
+     * zero interpolation error.
      */
     private val WAVELET_FREQUENCIES = floatArrayOf(
         20f, 21f, 22f, 23f, 24f, 26f, 27f, 29f, 30f, 32f,
@@ -49,50 +55,15 @@ object ParametricToDpConverter {
         14305f, 15110f, 15961f, 16860f, 17809f, 18812f, 19871f
     )
 
-    /** When true, [cutoffFrequencies] returns Wavelet's exact 127-band
-     *  layout instead of computed log-spaced values. Set by
-     *  DynamicsProcessingManager when [experimentalDpMode] is on. */
-    var useWaveletLayout: Boolean = false
-        set(value) {
-            if (field != value) {
-                field = value
-                _cutoffFrequencies = null // invalidate cache
-            }
-        }
-
-    private var _cutoffFrequencies: FloatArray? = null
-
-    /** Cutoff frequencies (upper edge of each band). Recomputed when
-     *  [numBands] or [useWaveletLayout] changes. */
+    /** Wavelet's 127-band cutoff frequencies (upper edge of each band). */
     val cutoffFrequencies: FloatArray
-        get() {
-            var cached = _cutoffFrequencies
-            val expectedSize = if (useWaveletLayout) WAVELET_FREQUENCIES.size else numBands
-            if (cached == null || cached.size != expectedSize) {
-                cached = if (useWaveletLayout) {
-                    WAVELET_FREQUENCIES.copyOf()
-                } else {
-                    computeCutoffs(numBands)
-                }
-                _cutoffFrequencies = cached
-            }
-            return cached
-        }
+        get() = WAVELET_FREQUENCIES.copyOf()
 
     fun setNumBands(count: Int) {
-        numBands = count.coerceIn(32, 128)
-        _cutoffFrequencies = null // invalidate cache
-    }
-
-    private fun computeCutoffs(bandCount: Int): FloatArray {
-        val cutoffs = FloatArray(bandCount)
-        val logMin = log10(MIN_FREQ)
-        val logMax = log10(MAX_FREQ)
-        for (i in 0 until bandCount) {
-            val logFreq = logMin + (i + 1).toFloat() / bandCount * (logMax - logMin)
-            cutoffs[i] = 10f.pow(logFreq)
-        }
-        return cutoffs
+        // Currently fixed at Wavelet's 127. The setter is kept so
+        // DynamicsProcessingManager can ask for "127" explicitly during
+        // start() and any future variants can be added without renaming.
+        numBands = WAVELET_FREQUENCIES.size
     }
 
     /** Center frequencies (geometric mean of each band's edges). */
@@ -105,15 +76,6 @@ object ParametricToDpConverter {
             }
         }
 
-    /**
-     * Sample the parametric EQ's composite frequency response at each band's
-     * geometric center, returning the gain in dB for each band.
-     */
-    fun convert(eq: ParametricEqualizer): FloatArray {
-        val centers = centerFrequencies
-        return FloatArray(numBands) { i -> eq.getFrequencyResponse(centers[i]) }
-    }
-
     /** Cutoff + gain pair returned by [convertFeatureAware] / [convertDirect].
      *  Both arrays always have length [numBands]; cutoff[i] pairs with gain[i]. */
     data class ConvertedBands(val cutoffs: FloatArray, val gains: FloatArray)
@@ -121,32 +83,18 @@ object ParametricToDpConverter {
     /**
      * Direct path for graphic / table / simple modes — no biquad math.
      *
-     * Wavelet, Poweramp, RootlessJamesDSP all hand DP `(freq, gain)` pairs
-     * verbatim from the user's input. 314Eq's legacy + feature-aware paths
-     * route every UI mode through [ParametricEqualizer]'s bell-filter chain
-     * first, which means even in graphic mode each user point becomes a
-     * BELL, all the BELLs interact, and DP sees the smoothed sum — not the
-     * raw values. That's a 1–2 dB-per-band wander relative to the user's
-     * actual graph.
+     * Each enabled band's `(frequency, gain)` pair is fed straight to
+     * DP using Wavelet's 127-band frequency table as cutoffs. For
+     * frequencies between user points, gains are linearly interpolated
+     * in (log f, dB) space. Same data flow Wavelet / Poweramp /
+     * RootlessJamesDSP use.
      *
-     * This path skips the biquad model entirely:
-     *   - Each enabled band's `frequency` becomes a DP cutoff.
-     *   - Each enabled band's `gain` (dB) becomes the DP gain at that cutoff.
-     *   - No Q, no filter type, no composite — exactly what JamesDSP /
-     *     Wavelet / Poweramp do. Filter types are ignored (graphic mode
-     *     only has BELLs anyway; if the user has a real shelf or pass
-     *     filter they should be in parametric mode where biquad math is
-     *     correct).
-     *
-     * Remaining DP slots (when the user has fewer than [numBands] points)
-     * are filled with log-spaced cutoffs whose gains are linearly
-     * interpolated between the user's points in (log f, dB) space — same
-     * behaviour DP would do internally between cutoffs, so explicit fill
-     * doesn't change the audible curve, it just gives a complete band feed.
+     * For an AutoEQ `GraphicEQ.txt` import (whose freqs are already at
+     * Wavelet's 127 positions), every user value lands exactly on a DP
+     * cutoff with zero interpolation error.
      */
     fun convertDirect(eq: ParametricEqualizer): ConvertedBands {
-        // 1. Collect enabled (freq, gain) pairs in freq-sorted order. Drop
-        //    out-of-range and disabled bands.
+        // 1. Collect enabled (freq, gain) pairs in freq-sorted order.
         data class Pt(val f: Float, val g: Float)
         val pts = mutableListOf<Pt>()
         for (i in 0 until eq.getBandCount()) {
@@ -158,145 +106,49 @@ object ParametricToDpConverter {
         }
         pts.sortBy { it.f }
 
-        // When using Wavelet's exact frequency layout (decompiled from
-        // a6.z.f608g[]), use those 127 freqs verbatim as cutoffs and
-        // interpolate gains from user points. This matches Wavelet 1:1
-        // — for AutoEQ GraphicEQ.txt loads, every freq lands exactly on
-        // a Wavelet cutoff so there's zero interpolation error when the
-        // user's freqs and Wavelet's freqs already align.
-        if (useWaveletLayout) {
-            val cutoffs = WAVELET_FREQUENCIES.copyOf()
-            if (pts.isEmpty()) return ConvertedBands(cutoffs, FloatArray(cutoffs.size) { 0f })
-            val freqs = FloatArray(pts.size) { pts[it].f }
-            val gains = FloatArray(pts.size) { pts[it].g }
-            val outGains = FloatArray(cutoffs.size) { i ->
-                val f = cutoffs[i]
-                if (f <= freqs[0]) gains[0]
-                else if (f >= freqs[freqs.size - 1]) gains[freqs.size - 1]
-                else {
-                    var lo = 0; var hi = freqs.size - 1
-                    while (lo + 1 < hi) {
-                        val mid = (lo + hi) ushr 1
-                        if (freqs[mid] <= f) lo = mid else hi = mid
-                    }
-                    val t = (log10(f) - log10(freqs[lo])) /
-                            (log10(freqs[hi]) - log10(freqs[lo]))
-                    gains[lo] + t * (gains[hi] - gains[lo])
-                }
-            }
-            return ConvertedBands(cutoffs, outGains)
-        }
-
-        val total = numBands
-
-        // 2. Empty EQ → flat 0 dB at the cached log-spaced cutoffs.
-        if (pts.isEmpty()) {
-            return ConvertedBands(cutoffFrequencies.copyOf(), FloatArray(total) { 0f })
-        }
-
-        // 3. Linear interpolation in (log f, dB). Endpoints clamp to the
-        //    nearest user point (no extrapolation past the user's range).
+        // 2. Use Wavelet's 127 freqs verbatim as cutoffs and interpolate
+        //    gains from user points in (log f, dB) space.
+        val cutoffs = WAVELET_FREQUENCIES.copyOf()
+        if (pts.isEmpty()) return ConvertedBands(cutoffs, FloatArray(cutoffs.size) { 0f })
         val freqs = FloatArray(pts.size) { pts[it].f }
         val gains = FloatArray(pts.size) { pts[it].g }
-        fun gainAt(f: Float): Float {
-            if (f <= freqs[0]) return gains[0]
-            val n = freqs.size
-            if (f >= freqs[n - 1]) return gains[n - 1]
-            var lo = 0
-            var hi = n - 1
-            while (lo + 1 < hi) {
-                val mid = (lo + hi) ushr 1
-                if (freqs[mid] <= f) lo = mid else hi = mid
-            }
-            val t = (log10(f) - log10(freqs[lo])) /
-                    (log10(freqs[hi]) - log10(freqs[lo]))
-            return gains[lo] + t * (gains[hi] - gains[lo])
-        }
-
-        // 4. Build the cutoff list: every user freq is an anchor (must
-        //    survive dedup), the rest is log-spaced filler so DP has all
-        //    [total] slots filled. Anchors win the same priority dedup as
-        //    [convertFeatureAware] so a user point at e.g. 5500 Hz never
-        //    gets snapped to a nearby log-spaced 5477.
-        val logMin = log10(MIN_FREQ)
-        val logMax = log10(MAX_FREQ)
-        val baseCount = (total - pts.size).coerceAtLeast(0)
-        data class Cand(val f: Float, val isAnchor: Boolean)
-        val merged = mutableListOf<Cand>()
-        for (p in pts) merged.add(Cand(p.f, true))
-        if (baseCount > 0) {
-            for (i in 0 until baseCount) {
-                val logF = logMin + (i + 0.5f) / baseCount * (logMax - logMin)
-                merged.add(Cand(10f.pow(logF), false))
+        val outGains = FloatArray(cutoffs.size) { i ->
+            val f = cutoffs[i]
+            if (f <= freqs[0]) gains[0]
+            else if (f >= freqs[freqs.size - 1]) gains[freqs.size - 1]
+            else {
+                var lo = 0; var hi = freqs.size - 1
+                while (lo + 1 < hi) {
+                    val mid = (lo + hi) ushr 1
+                    if (freqs[mid] <= f) lo = mid else hi = mid
+                }
+                val t = (log10(f) - log10(freqs[lo])) /
+                        (log10(freqs[hi]) - log10(freqs[lo]))
+                gains[lo] + t * (gains[hi] - gains[lo])
             }
         }
-        merged.sortBy { it.f }
-
-        // 5. Dedup within 0.5 % relative tolerance — anchors always win.
-        val deduped = mutableListOf<Cand>()
-        for (c in merged) {
-            val last = deduped.lastOrNull()
-            if (last == null || (c.f - last.f) > last.f * 0.005f) {
-                deduped.add(c)
-            } else if (c.isAnchor && !last.isAnchor) {
-                deduped[deduped.size - 1] = c
-            }
-        }
-
-        // 6. Pad up to [total] at the largest log-gap if dedup left holes.
-        while (deduped.size < total) {
-            var bestIdx = 0
-            var bestGap = 0f
-            for (i in 0 until deduped.size - 1) {
-                val gap = ln(deduped[i + 1].f / deduped[i].f)
-                if (gap > bestGap) { bestGap = gap; bestIdx = i }
-            }
-            val insertF = sqrt(deduped[bestIdx].f * deduped[bestIdx + 1].f)
-            deduped.add(bestIdx + 1, Cand(insertF, false))
-        }
-
-        val capped = deduped.take(total)
-        val cutoffs = FloatArray(total) { capped[it].f }
-        val outGains = FloatArray(total) { gainAt(cutoffs[it]) }
         return ConvertedBands(cutoffs, outGains)
     }
 
     /**
-     * Feature-aware sampling: instead of pure log-spaced cutoffs, this
-     * variant injects each enabled parametric band's *centre frequency*
-     * into the cutoff list before log-fill. That guarantees every
-     * narrow peak/dip in the parametric profile (e.g. Q=10 corrections
-     * around 7–8 kHz) lands on an actual sample point, instead of
-     * being attenuated because the peak fell between two log-spaced
-     * centres.
+     * Feature-aware sampling for parametric mode: places anchor points
+     * at every enabled parametric band's centre frequency plus per-
+     * filter-type support points along its characteristic magnitude
+     * shape, then fills remaining slots from Wavelet's 127-band table.
      *
-     * Diagnostic comparison (Samson SR850 AutoEQ profile, log-spaced):
-     *   src[7] BELL 7878 Hz +7.00 dB Q=10 → was sampled at +2.21 dB
-     *   (4.8 dB error) because the nearest log-spaced centres at
-     *   7681 and 8157 Hz both miss the narrow peak. With feature-aware
-     *   sampling we add 7878 Hz directly to the cutoffs and the +7 dB
-     *   is captured exactly.
+     * Without this, a Q=10 BELL at 7878 Hz +7 dB would be sampled at
+     * the nearest log-spaced cutoffs (7681 / 8157 Hz), missing the
+     * narrow peak entirely — DP would render ~+2 dB instead of +7 dB.
+     * With the anchor at exactly 7878 Hz, the peak is captured.
      *
      * Returns a [ConvertedBands] with both cutoffs and gains so the
-     * caller can hand them to DP together (DP needs the cutoffs to
-     * change too — they're no longer the static [cutoffFrequencies]).
+     * caller can hand them to DP together.
      */
     fun convertFeatureAware(eq: ParametricEqualizer): ConvertedBands {
-        val total = if (useWaveletLayout) WAVELET_FREQUENCIES.size else numBands
-        val logMin = log10(MIN_FREQ)
-        val logMax = log10(MAX_FREQ)
+        val total = WAVELET_FREQUENCIES.size
 
-        // 1. For each enabled source filter, place an anchor point at
-        //    the filter's centre frequency and several support points
-        //    along its characteristic magnitude shape. Support count
-        //    and spacing are scaled by:
-        //      • filter type   (resonance vs slope vs flat)
-        //      • Q             (narrower → tighter, denser inner points)
-        //      • |gain| dB     (negligible bells/shelves don't burn slots)
-        //      • frequency Hz  (out-of-range supports clipped to 10–22 kHz)
-        //    anchorPeaks are "must keep" in dedup; supports beat
-        //    log-spaced fillers but lose to anchors. See
-        //    [supportsForBand] for the per-type rules.
+        // 1. For each enabled source filter, place an anchor at fc and
+        //    several support points along its magnitude shape.
         val anchorPeaks = mutableListOf<Float>()
         val supportPoints = mutableListOf<Float>()
         for (i in 0 until eq.getBandCount()) {
@@ -311,8 +163,7 @@ object ParametricToDpConverter {
         }
 
         // Cap the feature budget: anchors get unlimited slots, supports
-        // share whatever's left up to 60 % of total. Reserves at least
-        // 40 % for log-spaced fillers so the broad curve isn't ignored.
+        // share whatever's left up to 60 % of total.
         val featureBudget = (total * 6 / 10).coerceAtLeast(anchorPeaks.size)
         val supportsKept = supportPoints
             .sorted()
@@ -320,38 +171,23 @@ object ParametricToDpConverter {
             .take((featureBudget - anchorPeaks.size).coerceAtLeast(0))
         val effectivePeaksAll = (anchorPeaks + supportsKept).sorted()
 
-        // 2. Fill the rest with sample points. When [useWaveletLayout]
-        //    is on, draw fillers from Wavelet's 127-band table so the
-        //    broad-curve sampling matches AutoEQ's expected positions
-        //    exactly. Otherwise fall back to centred log-spaced fillers.
+        // 2. Fill the rest from Wavelet's 127-band table — broad-curve
+        //    sampling matches AutoEQ's expected positions exactly.
         val baseCount = (total - effectivePeaksAll.size).coerceAtLeast(0)
         val basePoints = mutableListOf<Float>()
-        if (useWaveletLayout) {
-            // Iterate Wavelet's table, take every Nth entry to fill
-            // baseCount slots. Cheap stride without re-computing logs.
-            if (baseCount > 0) {
-                val step = (WAVELET_FREQUENCIES.size.toFloat() / baseCount).coerceAtLeast(1f)
-                var idx = 0f
-                repeat(baseCount) {
-                    val ix = idx.toInt().coerceIn(0, WAVELET_FREQUENCIES.size - 1)
-                    basePoints.add(WAVELET_FREQUENCIES[ix])
-                    idx += step
-                }
-            }
-        } else {
-            for (i in 0 until baseCount) {
-                val logFreq = logMin + (i + 0.5f) / baseCount * (logMax - logMin)
-                basePoints.add(10f.pow(logFreq))
+        if (baseCount > 0) {
+            val step = (WAVELET_FREQUENCIES.size.toFloat() / baseCount).coerceAtLeast(1f)
+            var idx = 0f
+            repeat(baseCount) {
+                val ix = idx.toInt().coerceIn(0, WAVELET_FREQUENCIES.size - 1)
+                basePoints.add(WAVELET_FREQUENCIES[ix])
+                idx += step
             }
         }
 
-        // 3. Merge, sort, dedupe within 0.5 % relative tolerance — but
-        //    when a parametric anchor and a log-spaced point are both
-        //    within tolerance, the anchor wins (gets kept, log-spaced
-        //    point is dropped). This is what last build's "5500 deduped
-        //    to 5477" bug was: the parametric peak lost the tie.
-        // Merge: tag each candidate so we can prefer anchors / support.
-        // Priority: anchor (2) > support (1) > log-spaced (0).
+        // 3. Merge, sort, dedupe within 0.5 % tolerance — anchors win
+        //    against any nearby filler / support.
+        // Priority: anchor (2) > support (1) > Wavelet-table filler (0).
         data class Candidate(val freq: Float, val priority: Int)
         val merged = mutableListOf<Candidate>()
         for (f in basePoints) merged.add(Candidate(f, 0))
@@ -364,12 +200,11 @@ object ParametricToDpConverter {
             if (last == null || (c.freq - last.freq) > last.freq * 0.005f) {
                 deduped.add(c)
             } else if (c.priority > last.priority) {
-                // Replace lower-priority neighbour with this higher-priority one.
                 deduped[deduped.size - 1] = c
             }
         }
 
-        // 4. Pad back up to exactly [total] points by inserting at the
+        // 4. Pad up to exactly [total] points by inserting at the
         //    largest log-gap. DP needs all band slots filled.
         while (deduped.size < total) {
             var bestIdx = 0
@@ -389,36 +224,13 @@ object ParametricToDpConverter {
     }
 
     /**
-     * Per-filter-type support points for [convertFeatureAware].
-     *
-     * Returns frequencies (Hz) that bracket the filter's characteristic
+     * Per-filter-type support points for [convertFeatureAware]. See the
+     * earlier git history for the full per-type rules. Returns
+     * frequencies (Hz) that bracket the filter's characteristic
      * magnitude shape so DP's piecewise-linear reconstruction stays
      * faithful to the parametric curve. The anchor at fc is added by
      * the caller — this function returns only the *additional* shaping
      * points.
-     *
-     * Rules:
-     * - **BELL** — gain-dependent + Q-dependent. <0.5 dB skipped (negligible
-     *   composite contribution). Q ≤ 3: octave bracket f×{0.5, 0.75, 1.33, 2}.
-     *   Q ∈ (3, 7]: bandwidth-fraction f ± bw/{8, 4}. Q > 7: tighter
-     *   f ± bw/{16, 8, 4, 2} (8 supports) — needed for Q=10 corrections.
-     * - **BAND_PASS** — peak gain = Q (RBJ constant skirt) so density is
-     *   purely Q-driven; gain param is ignored.
-     * - **NOTCH** — full-depth dip at fc regardless of gain; tighter inner
-     *   points (bw/16) capture the steep drop.
-     * - **LOW_SHELF / HIGH_SHELF (2nd-order)** — Q > 1.5 introduces a
-     *   resonance ripple at fc, so we add f × 0.71 / 1.41 to the broad
-     *   octave bracket. <0.5 dB skipped.
-     * - **LOW_SHELF_1 / HIGH_SHELF_1 (1st-order)** — gentle 6 dB/oct slope,
-     *   broad octave bracket only. <0.5 dB skipped.
-     * - **LOW_PASS / HIGH_PASS (2nd-order)** — Q > 1.5 has a resonance peak
-     *   AT fc; bandwidth-fraction supports added on top of f × {0.5, 0.71,
-     *   1.41, 2}. Gain is irrelevant (always passband 0 dB / stopband -∞).
-     * - **LOW_PASS_1 / HIGH_PASS_1 (1st-order)** — gentle slope, no
-     *   resonance; just f × {0.5, 2}.
-     * - **ALL_PASS** — flat magnitude (only phase changes); no shape to
-     *   sample, return empty. The anchor at fc still gets added so the
-     *   filter's existence is logged in the (cutoff, gain) dump.
      */
     private fun supportsForBand(band: ParametricEqualizer.EqualizerBand): List<Float> {
         val f = band.frequency

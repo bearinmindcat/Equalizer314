@@ -86,7 +86,6 @@ class MainActivity : AppCompatActivity() {
         preampText.setText(String.format("%.1f", stateManager.preampGainDb))
         eqGraphView.updateBandLevels()
         bandToggleManager.setupToggles()
-        stateManager.updateDpBandVisualization(eqGraphView)
         stateManager.pushEqUpdate()
         val preset = eqPrefs.getPresetName()
         presetDropdown.setText(preset, false)
@@ -408,7 +407,6 @@ class MainActivity : AppCompatActivity() {
         dpBandCountSlider.value = savedBandCount.toFloat()
         dpBandCountText.setText(savedBandCount.toString())
 
-        eqGraphView.showDpBands = true
         eqGraphView.showSaturationCurve = false
 
         updateBottomBarHighlight(isEqPage = true)
@@ -425,7 +423,6 @@ class MainActivity : AppCompatActivity() {
     private fun initControllers() {
         val onEqChanged = {
             stateManager.pushEqUpdate()
-            stateManager.updateDpBandVisualization(eqGraphView)
         }
 
         val onBandCountChanged = {
@@ -487,7 +484,6 @@ class MainActivity : AppCompatActivity() {
         updateEqToggleUI()
         eqGraphView.updateBandLevels()
         bandToggleManager.setupToggles()
-        stateManager.updateDpBandVisualization(eqGraphView)
 
         // Always have a band selected in parametric mode
         if (stateManager.currentEqUiMode == EqUiMode.PARAMETRIC && stateManager.parametricEq.getBandCount() > 0) {
@@ -1648,7 +1644,6 @@ class MainActivity : AppCompatActivity() {
             stateManager.loadPreset(presetName, eqGraphView)
             presetDropdown.setText(presetName, false)
             bandToggleManager.updateIcons()
-            stateManager.updateDpBandVisualization(eqGraphView)
             if (stateManager.currentEqUiMode == EqUiMode.TABLE) tableController.buildTable()
             if (stateManager.currentEqUiMode == EqUiMode.GRAPHIC) graphicController.buildSliders(graphicController.targetCardHeight)
         }
@@ -1670,7 +1665,6 @@ class MainActivity : AppCompatActivity() {
             // listener flushes the final value.
             stateManager.pushEqUpdateThrottled()
             updateBandInputs(bandIndex)
-            stateManager.updateDpBandVisualization(eqGraphView)
             if (stateManager.currentEqUiMode == EqUiMode.TABLE) tableController.buildTable()
             if (stateManager.currentEqUiMode == EqUiMode.GRAPHIC) graphicController.updateSliderValues()
         }
@@ -1690,7 +1684,6 @@ class MainActivity : AppCompatActivity() {
             dpBandCountText.setText(count.toString())
             ParametricToDpConverter.setNumBands(count)
             eqPrefs.saveDpBandCount(count)
-            stateManager.updateDpBandVisualization(eqGraphView)
             stateManager.pushEqUpdate()
         }
 
@@ -1701,7 +1694,6 @@ class MainActivity : AppCompatActivity() {
                 dpBandCountSlider.value = count.toFloat()
                 ParametricToDpConverter.setNumBands(count)
                 eqPrefs.saveDpBandCount(count)
-                stateManager.updateDpBandVisualization(eqGraphView)
                 stateManager.pushEqUpdate()
                 dpBandCountText.clearFocus()
             }
@@ -1917,7 +1909,6 @@ class MainActivity : AppCompatActivity() {
                 // the Simple EQ response. Without this call the overlay keeps
                 // rendering the Simple curve as a ghost outline until the user
                 // touches the graph and triggers a separate refresh path.
-                stateManager.updateDpBandVisualization(eqGraphView)
             }
         }
         // Save the advanced EQ state before entering SIMPLE mode.
@@ -2235,7 +2226,6 @@ class MainActivity : AppCompatActivity() {
         stateManager.pushEqUpdate()
         // Refresh the red experimental-DP overlay so it shows the new
         // path (feature-aware ↔ direct) the moment the mode changes.
-        stateManager.updateDpBandVisualization(eqGraphView)
         eqGraphView.invalidate()
     }
 
@@ -2352,7 +2342,6 @@ class MainActivity : AppCompatActivity() {
             val bandIndex = eqGraphView.getActiveBandIndex() ?: return@addOnChangeListener
             eqGraphView.setQ(bandIndex, value.toDouble())
             stateManager.pushEqUpdate()
-            stateManager.updateDpBandVisualization(eqGraphView)
         }
 
         // Double-tap to reset sliders to default values
@@ -2379,7 +2368,6 @@ class MainActivity : AppCompatActivity() {
             val bandIndex = eqGraphView.getActiveBandIndex() ?: return@addDoubleTapReset
             eqGraphView.setQ(bandIndex, defaultQ.toDouble())
             stateManager.pushEqUpdate()
-            stateManager.updateDpBandVisualization(eqGraphView)
         }
     }
 
@@ -2466,7 +2454,6 @@ class MainActivity : AppCompatActivity() {
         val bandIndex = eqGraphView.getActiveBandIndex() ?: return
         eqGraphView.setQ(bandIndex, clamped)
         stateManager.pushEqUpdate()
-        stateManager.updateDpBandVisualization(eqGraphView)
     }
 
     private fun applyBandHz(hz: Float) {
@@ -2475,7 +2462,6 @@ class MainActivity : AppCompatActivity() {
         stateManager.parametricEq.updateBand(bandIndex, hz, band.gain, band.filterType, band.q)
         eqGraphView.updateBandLevels()
         stateManager.pushEqUpdate()
-        stateManager.updateDpBandVisualization(eqGraphView)
     }
 
     private fun applyBandDb(db: Float) {
@@ -2493,7 +2479,6 @@ class MainActivity : AppCompatActivity() {
         stateManager.parametricEq.updateBand(bandIndex, band.frequency, effectiveDb, band.filterType, band.q)
         eqGraphView.updateBandLevels()
         stateManager.pushEqUpdate()
-        stateManager.updateDpBandVisualization(eqGraphView)
     }
 
     private fun showPresetsBottomSheet() {
@@ -2973,7 +2958,6 @@ class MainActivity : AppCompatActivity() {
         updateBandInputs(bandIndex)
         bandToggleManager.updateIcons()
         bandToggleManager.updateSelection(bandIndex)
-        stateManager.updateDpBandVisualization(eqGraphView)
         stateManager.pushEqUpdate()
         stateManager.eqPrefs.saveState(stateManager.parametricEq, stateManager.bandSlots)
         stateManager.persistLeftRightIfCse()
@@ -3308,7 +3292,6 @@ class MainActivity : AppCompatActivity() {
         eqGraphView.setParametricEqualizer(eq)
         eqGraphView.updateBandLevels()
         stateManager.pushEqUpdate()
-        stateManager.updateDpBandVisualization(eqGraphView)
 
         val count = eq.getBandCount()
         if (count > 0) {
@@ -3370,19 +3353,6 @@ class MainActivity : AppCompatActivity() {
         com.bearinmind.equalizer314.ui.BottomNavHelper.updateStatus(this, eqPrefs)
         updateAutoEqStatus()
         updateTargetStatus()
-
-        // Check if the experimental DP engine toggle changed in
-        // ExperimentalActivity. If so, push it through state manager
-        // which tears down + rebuilds the live DP instance with the
-        // new variant + band count. Doing it here means the user can
-        // A/B between legacy and experimental without reopening.
-        val expDpModeNow = eqPrefs.getExperimentalDpMode()
-        if (expDpModeNow != stateManager.experimentalDpMode) {
-            stateManager.applyExperimentalDpMode(expDpModeNow)
-            // Refresh the red overlay so it appears/disappears on the
-            // graph the moment the user returns from AudioEffectsPipeline.
-            stateManager.updateDpBandVisualization(eqGraphView)
-        }
 
         // Check if Simple EQ was toggled in experimental settings
         val simpleEqEnabled = eqPrefs.getSimpleEqEnabled()

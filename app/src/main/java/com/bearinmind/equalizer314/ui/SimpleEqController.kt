@@ -145,7 +145,6 @@ class SimpleEqController(
             showSaturationCurve = false
             minGain = -12f              // match simple EQ range: ±12dB
             maxGain = 12f               // grid lines at +6, +12, -6, -12
-            showDpBands = false
             showEqCurve = true
             showCurveFill = true   // fill between curve and 0dB line
             verticalPadding = 40f  // scaled down from 80f for half-height graph

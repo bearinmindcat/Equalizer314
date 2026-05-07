@@ -58,61 +58,6 @@
             android:textColor="?attr/colorOnSurfaceVariant" />
     </com.google.android.material.card.MaterialCardView>
 
-    <!-- Experimental DP Engine toggle. Lives here (not in the locked
-         Experimental settings) so beta testers can A/B between the
-         legacy and experimental audio engines without the unlock
-         gate. OFF (default) = 128 bands + frequency-favoured FFT;
-         ON = 32 bands + time-favoured FFT (candidate fix for the
-         bass-boom + thin-treble bug). Flipping the switch tears down
-         and rebuilds the live DynamicsProcessing instance. -->
-    <com.google.android.material.card.MaterialCardView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginEnd="16dp"
-        android:layout_marginBottom="12dp"
-        app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
-        app:cardCornerRadius="16dp"
-        app:cardElevation="0dp"
-        app:strokeWidth="0dp">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:padding="14dp">
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Experimental DP Engine"
-                    android:textAppearance="@style/TextAppearance.Material3.TitleSmall"
-                    android:textColor="?attr/colorOnSurface" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="OFF: legacy 128 log-spaced bands.\nON: feature-aware sampling — DP bands are placed AT each parametric filter centre so high-Q peaks/dips (e.g. Q=10 corrections at 7–8 kHz) land exactly on a sample point and aren't softened. Also writes a (cutoff, gain) dump to logcat (tag DynamicsProcessingMgr)."
-                    android:textAppearance="@style/TextAppearance.Material3.BodySmall"
-                    android:textColor="?attr/colorOnSurfaceVariant"
-                    android:paddingTop="2dp" />
-            </LinearLayout>
-
-            <com.google.android.material.materialswitch.MaterialSwitch
-                android:id="@+id/audioPipelineExpDpModeSwitch"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="16dp" />
-        </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
-
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/audioPipelineRecyclerView"
         android:layout_width="match_parent"

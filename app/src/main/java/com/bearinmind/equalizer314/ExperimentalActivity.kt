@@ -32,24 +32,16 @@ class ExperimentalActivity : AppCompatActivity() {
         findViewById<android.widget.ImageButton>(R.id.backButton).setOnClickListener { finish() }
 
         setupDpBandCount()
-        setupExperimentalDpMode()
         setupGainCompensation()
-    }
 
-    /**
-     * Toggle for the experimental DP engine pipeline. When ON the audio
-     * engine uses 32 bands + VARIANT_FAVOR_TIME_RESOLUTION; when OFF it
-     * uses the legacy 128 bands + VARIANT_FAVOR_FREQUENCY_RESOLUTION.
-     * This screen only persists the pref — MainActivity picks the
-     * change up on its next onResume and triggers a live DP restart so
-     * the user can A/B without reopening the app.
-     */
-    private fun setupExperimentalDpMode() {
-        val switch = findViewById<MaterialSwitch>(R.id.expDpModeSwitch)
-        switch.isChecked = eqPrefs.getExperimentalDpMode()
-        switch.setOnCheckedChangeListener { _, isChecked ->
-            eqPrefs.saveExperimentalDpMode(isChecked)
-        }
+        // Hide the legacy "Experimental DP Engine" switch row — the
+        // experimental path is now the only path. Keeping the view
+        // hidden (rather than removing the layout XML) preserves the
+        // surrounding card structure for the remaining rows.
+        findViewById<android.view.View>(R.id.expDpModeSwitch)
+            ?.let { switch ->
+                (switch.parent as? android.view.View)?.visibility = android.view.View.GONE
+            }
     }
 
     // NOTE: DP Band Count and Gain Compensation are intentionally disabled for
