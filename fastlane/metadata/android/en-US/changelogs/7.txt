@@ -1,0 +1,10 @@
+- DynamicsProcessing engine reworked to match Wavelet and Poweramp Equalizer. Decompiled both reference apps to align the DP setup byte-for-byte where the public API allows.
+- Band layout is now Wavelet's exact 127-band frequency table — the same positions AutoEQ's GraphicEQ.txt files use. Loading a graphic profile lands every (freq, gain) pair on a real DP cutoff with zero interpolation drift.
+- EQ updates are now atomic per channel: one `setPreEqByChannelIndex(channel, Eq)` call instead of 256 per-band-per-channel calls. No more "warble" / partial-state smear during slider drags or preset switches.
+- Preamp, channel balance, and per-side gain now route through DP's input-gain stage (`setInputGainbyChannel`) instead of being baked into every band gain. Band gains stay as pure EQ shape so DP's headroom logic doesn't compete with balance / per-side gain settings.
+- Explicit `setPreferredFrameDuration(10 ms)` on the DP Config — short FFT window for cleaner transient handling on snares / cymbals / sibilance.
+- Stage population order matches Wavelet's flow: limiter → MBC dummy band → pre-EQ → setEnabled. Avoids momentary "default EQ" pop on power-on.
+- `dp.hasControl()` guard before every band write — silently skips when another audio app stole the session, lets the existing reclaim path recreate when control is regained.
+- MBC stage is always allocated with at least one band (a disabled passthrough band when MBC is user-off). Matches Wavelet's allocation pattern.
+- Limiter defaults updated to Wavelet's reference values (60 ms release, −2 dB threshold) for better behaviour out of the box.
+- Removed the temporary "Experimental DP Engine" toggle — the experimental path is now the only path. Removed the red DP overlay on the graph (was a debug visualization).
