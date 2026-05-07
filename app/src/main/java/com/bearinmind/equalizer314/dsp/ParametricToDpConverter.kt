@@ -21,14 +21,59 @@ object ParametricToDpConverter {
     private const val MIN_FREQ = 10f
     private const val MAX_FREQ = 22000f
 
+    /**
+     * Wavelet's 128-band frequency table (decompiled from
+     * com.pittvandewitt.wavelet's `a6.z.f608g[]` field). 127 entries.
+     * These are the EXACT frequencies AutoEQ's GraphicEQ.txt format uses
+     * — Wavelet was deliberately built around this layout so a graphic
+     * profile import lands every (freq, gain) pair on a real DP cutoff
+     * with zero interpolation error.
+     *
+     * 314Eq's experimental path now uses these for the same reason:
+     * eliminating the 0.3-0.8 dB-per-bin interpolation drift between
+     * our log-spaced cutoffs and AutoEQ's expected positions.
+     */
+    private val WAVELET_FREQUENCIES = floatArrayOf(
+        20f, 21f, 22f, 23f, 24f, 26f, 27f, 29f, 30f, 32f,
+        34f, 36f, 38f, 40f, 43f, 45f, 48f, 50f, 53f, 56f,
+        59f, 63f, 66f, 70f, 74f, 78f, 83f, 87f, 92f, 97f,
+        103f, 109f, 115f, 121f, 128f, 136f, 143f, 151f, 160f, 169f,
+        178f, 188f, 199f, 210f, 222f, 235f, 248f, 262f, 277f, 292f,
+        309f, 326f, 345f, 364f, 385f, 406f, 429f, 453f, 479f, 506f,
+        534f, 565f, 596f, 630f, 665f, 703f, 743f, 784f, 829f, 875f,
+        924f, 977f, 1032f, 1090f, 1151f, 1216f, 1284f, 1357f, 1433f, 1514f,
+        1599f, 1689f, 1784f, 1885f, 1991f, 2103f, 2221f, 2347f, 2479f, 2618f,
+        2766f, 2921f, 3086f, 3260f, 3443f, 3637f, 3842f, 4058f, 4287f, 4528f,
+        4783f, 5052f, 5337f, 5637f, 5955f, 6290f, 6644f, 7018f, 7414f, 7831f,
+        8272f, 8738f, 9230f, 9749f, 10298f, 10878f, 11490f, 12137f, 12821f, 13543f,
+        14305f, 15110f, 15961f, 16860f, 17809f, 18812f, 19871f
+    )
+
+    /** When true, [cutoffFrequencies] returns Wavelet's exact 127-band
+     *  layout instead of computed log-spaced values. Set by
+     *  DynamicsProcessingManager when [experimentalDpMode] is on. */
+    var useWaveletLayout: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                _cutoffFrequencies = null // invalidate cache
+            }
+        }
+
     private var _cutoffFrequencies: FloatArray? = null
 
-    /** Log-spaced cutoff frequencies (upper edge of each band). Recomputed when numBands changes. */
+    /** Cutoff frequencies (upper edge of each band). Recomputed when
+     *  [numBands] or [useWaveletLayout] changes. */
     val cutoffFrequencies: FloatArray
         get() {
             var cached = _cutoffFrequencies
-            if (cached == null || cached.size != numBands) {
-                cached = computeCutoffs(numBands)
+            val expectedSize = if (useWaveletLayout) WAVELET_FREQUENCIES.size else numBands
+            if (cached == null || cached.size != expectedSize) {
+                cached = if (useWaveletLayout) {
+                    WAVELET_FREQUENCIES.copyOf()
+                } else {
+                    computeCutoffs(numBands)
+                }
                 _cutoffFrequencies = cached
             }
             return cached
@@ -100,8 +145,6 @@ object ParametricToDpConverter {
      * doesn't change the audible curve, it just gives a complete band feed.
      */
     fun convertDirect(eq: ParametricEqualizer): ConvertedBands {
-        val total = numBands
-
         // 1. Collect enabled (freq, gain) pairs in freq-sorted order. Drop
         //    out-of-range and disabled bands.
         data class Pt(val f: Float, val g: Float)
@@ -114,6 +157,37 @@ object ParametricToDpConverter {
             pts.add(Pt(f, band.gain))
         }
         pts.sortBy { it.f }
+
+        // When using Wavelet's exact frequency layout (decompiled from
+        // a6.z.f608g[]), use those 127 freqs verbatim as cutoffs and
+        // interpolate gains from user points. This matches Wavelet 1:1
+        // — for AutoEQ GraphicEQ.txt loads, every freq lands exactly on
+        // a Wavelet cutoff so there's zero interpolation error when the
+        // user's freqs and Wavelet's freqs already align.
+        if (useWaveletLayout) {
+            val cutoffs = WAVELET_FREQUENCIES.copyOf()
+            if (pts.isEmpty()) return ConvertedBands(cutoffs, FloatArray(cutoffs.size) { 0f })
+            val freqs = FloatArray(pts.size) { pts[it].f }
+            val gains = FloatArray(pts.size) { pts[it].g }
+            val outGains = FloatArray(cutoffs.size) { i ->
+                val f = cutoffs[i]
+                if (f <= freqs[0]) gains[0]
+                else if (f >= freqs[freqs.size - 1]) gains[freqs.size - 1]
+                else {
+                    var lo = 0; var hi = freqs.size - 1
+                    while (lo + 1 < hi) {
+                        val mid = (lo + hi) ushr 1
+                        if (freqs[mid] <= f) lo = mid else hi = mid
+                    }
+                    val t = (log10(f) - log10(freqs[lo])) /
+                            (log10(freqs[hi]) - log10(freqs[lo]))
+                    gains[lo] + t * (gains[hi] - gains[lo])
+                }
+            }
+            return ConvertedBands(cutoffs, outGains)
+        }
+
+        val total = numBands
 
         // 2. Empty EQ → flat 0 dB at the cached log-spaced cutoffs.
         if (pts.isEmpty()) {
@@ -208,7 +282,7 @@ object ParametricToDpConverter {
      * change too — they're no longer the static [cutoffFrequencies]).
      */
     fun convertFeatureAware(eq: ParametricEqualizer): ConvertedBands {
-        val total = numBands
+        val total = if (useWaveletLayout) WAVELET_FREQUENCIES.size else numBands
         val logMin = log10(MIN_FREQ)
         val logMax = log10(MAX_FREQ)
 
@@ -246,12 +320,29 @@ object ParametricToDpConverter {
             .take((featureBudget - anchorPeaks.size).coerceAtLeast(0))
         val effectivePeaksAll = (anchorPeaks + supportsKept).sorted()
 
-        // 2. Fill the rest with log-spaced sample points (centred log).
+        // 2. Fill the rest with sample points. When [useWaveletLayout]
+        //    is on, draw fillers from Wavelet's 127-band table so the
+        //    broad-curve sampling matches AutoEQ's expected positions
+        //    exactly. Otherwise fall back to centred log-spaced fillers.
         val baseCount = (total - effectivePeaksAll.size).coerceAtLeast(0)
         val basePoints = mutableListOf<Float>()
-        for (i in 0 until baseCount) {
-            val logFreq = logMin + (i + 0.5f) / baseCount * (logMax - logMin)
-            basePoints.add(10f.pow(logFreq))
+        if (useWaveletLayout) {
+            // Iterate Wavelet's table, take every Nth entry to fill
+            // baseCount slots. Cheap stride without re-computing logs.
+            if (baseCount > 0) {
+                val step = (WAVELET_FREQUENCIES.size.toFloat() / baseCount).coerceAtLeast(1f)
+                var idx = 0f
+                repeat(baseCount) {
+                    val ix = idx.toInt().coerceIn(0, WAVELET_FREQUENCIES.size - 1)
+                    basePoints.add(WAVELET_FREQUENCIES[ix])
+                    idx += step
+                }
+            }
+        } else {
+            for (i in 0 until baseCount) {
+                val logFreq = logMin + (i + 0.5f) / baseCount * (logMax - logMin)
+                basePoints.add(10f.pow(logFreq))
+            }
         }
 
         // 3. Merge, sort, dedupe within 0.5 % relative tolerance — but

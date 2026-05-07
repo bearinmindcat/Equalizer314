@@ -100,14 +100,20 @@ class DynamicsProcessingManager {
 
         stop() // Clean up any existing instance
 
-        // [experimentalDpMode] now ONLY controls diagnostic logging —
-        // both states use 128 bands + FAVOR_FREQUENCY_RESOLUTION (the
-        // proven-working combo on tester devices). When ON, every EQ
-        // update logs the full (cutoff, gain) pair list plus the
-        // preamp / auto-gain / channel offsets being baked in. Compare
-        // those values against the source AutoEQ profile to see where
-        // the curve is being misrepresented.
-        ParametricToDpConverter.setNumBands(128)
+        // Band layout selection.
+        //   • Experimental: 127 bands with Wavelet's exact frequency
+        //     table (decompiled from a6.z.f608g[]). Matches AutoEQ
+        //     GraphicEQ.txt's 127 fixed positions, so a graphic profile
+        //     loads with zero interpolation error vs Wavelet behaviour.
+        //   • Legacy: 128 bands at computed log-spaced cutoffs (the
+        //     0.0.6-beta path).
+        if (experimentalDpMode) {
+            ParametricToDpConverter.setNumBands(127)
+            ParametricToDpConverter.useWaveletLayout = true
+        } else {
+            ParametricToDpConverter.setNumBands(128)
+            ParametricToDpConverter.useWaveletLayout = false
+        }
         val bandCount = ParametricToDpConverter.numBands
         val variant = DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION
         Log.d(TAG, "DP variant=FREQUENCY bands=$bandCount (experimental=$experimentalDpMode)")
@@ -352,8 +358,21 @@ class DynamicsProcessingManager {
         }
 
         val (leftOffsetDb, rightOffsetDb) = computeChannelOffsets()
-        for (i in leftGains.indices) leftGains[i] += leftOffsetDb
-        for (i in rightGains.indices) rightGains[i] += rightOffsetDb
+        // Channel-offset routing.
+        //   • Experimental: route per-channel offsets through DP's
+        //     input-gain stage instead of baking into band gains.
+        //     Wavelet's exact pattern (a6/b0.smali calls
+        //     setInputGainbyChannel(0, left) + setInputGainbyChannel(1,
+        //     right) with potentially different values per side).
+        //     Combined with the preamp routing already moved to the
+        //     input-gain stage, this leaves the band gains as pure EQ
+        //     shape — DP's headroom logic doesn't have to compete with
+        //     the user's balance/per-side-gain settings.
+        //   • Legacy: bake into band gains as before (0.0.6-beta).
+        if (!experimentalDpMode) {
+            for (i in leftGains.indices) leftGains[i] += leftOffsetDb
+            for (i in rightGains.indices) rightGains[i] += rightOffsetDb
+        }
 
         // Diagnostic dump — only when experimental mode is on. Writes
         // every band's cutoff and the *final* gain (after preamp +
@@ -397,19 +416,39 @@ class DynamicsProcessingManager {
         val n = ParametricToDpConverter.numBands
         val cutoffsSnap = cutoffs
         val useBatch = experimentalDpMode
-        val inputGainDb = if (experimentalDpMode) preampGainDb else 0f
+        // Experimental input-gain composition (Wavelet pattern).
+        //   inputGain[ch] = preamp + autoGain + channelOffset[ch]
+        // Auto-gain is baked into the band gains in the path above (it
+        // shifts every band by the same amount), so we don't double-add
+        // it here. Preamp and channel-offset are flat per-channel
+        // shifts and belong on the input-gain stage.
+        val leftInputGainDb = if (experimentalDpMode) preampGainDb + leftOffsetDb else 0f
+        val rightInputGainDb = if (experimentalDpMode) preampGainDb + rightOffsetDb else 0f
         val job = Runnable {
             try {
                 if (useBatch) {
-                    // Push preamp via DP's input-gain stage (Wavelet pattern)
-                    // before the EQ bands. Channel offsets remain baked into
-                    // band gains since they're per-channel asymmetric (left
-                    // and right may differ), which the input-gain stage
-                    // can't represent in a single call.
+                    // Wavelet calls dp.hasControl() before applying any
+                    // settings (a6/n0.smali "if (dp.hasControl())"). If
+                    // another app stole control of session 0 since our
+                    // last update, all setters silently no-op without
+                    // hasControl. Skip the whole apply if we don't have
+                    // control — the reclaimSession listener will trigger
+                    // a re-create when control is regained.
+                    if (!dp.hasControl()) {
+                        Log.w(TAG, "DP lost control — skipping band write")
+                        return@Runnable
+                    }
+                    // Push preamp + per-channel offset via DP's input-gain
+                    // stage — Wavelet's a6/b0.smali pattern of calling
+                    // setInputGainbyChannel(0, left) + setInputGainbyChannel(1, right)
+                    // with potentially different values per side. Keeps
+                    // band gains as pure EQ shape so DP's headroom logic
+                    // doesn't have to compete with balance/per-side-gain.
                     try {
-                        dp.setInputGainAllChannelsTo(inputGainDb)
+                        dp.setInputGainbyChannel(0, leftInputGainDb)
+                        dp.setInputGainbyChannel(1, rightInputGainDb)
                     } catch (e: Throwable) {
-                        Log.w(TAG, "setInputGainAllChannelsTo failed", e)
+                        Log.w(TAG, "setInputGainbyChannel failed", e)
                     }
                     val leftEqObj = DynamicsProcessing.Eq(true, true, n)
                     val rightEqObj = DynamicsProcessing.Eq(true, true, n)
