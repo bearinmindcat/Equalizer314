@@ -1127,7 +1127,7 @@
                             <TextView
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:text="Audio Effects Pipeline"
+                                android:text="Audio Effects Pipeline - NOT READY"
                                 android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                                 android:textColor="?attr/colorOnSurface" />
 
