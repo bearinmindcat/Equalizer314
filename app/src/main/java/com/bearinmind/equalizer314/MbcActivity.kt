@@ -767,10 +767,13 @@ class MbcActivity : AppCompatActivity() {
                 bands[index + 1].cutoff = freq
                 saveBand(index + 1)
             }
-            // Sync cutoff slider/text if the selected band is affected
+            // Sync cutoff slider/text if the selected band is affected.
+            // The slider is in 0..1000 log-space units (see freqToSlider),
+            // NOT raw Hz — assigning b.cutoff (which is Hz) directly
+            // crashes Material Slider's validateValues at the next draw.
             if (index == selectedBand || index + 1 == selectedBand) {
                 val b = bands[selectedBand]
-                cutoffSlider.value = b.cutoff.coerceIn(20f, 20000f)
+                cutoffSlider.value = freqToSlider(b.cutoff.coerceIn(20f, 20000f))
                 cutoffText.setText(b.cutoff.toInt().toString())
             }
         }
