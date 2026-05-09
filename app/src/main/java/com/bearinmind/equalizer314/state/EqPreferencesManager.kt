@@ -475,7 +475,12 @@ class EqPreferencesManager(context: Context) {
     fun saveSimpleEqGains(gains: FloatArray) {
         val arr = JSONArray()
         for (g in gains) arr.put(g.toDouble())
-        prefs.edit().putString("simpleEqGains", arr.toString()).apply()
+        // .commit() (synchronous) instead of .apply() — Simple gains
+        // are the user's source of truth for their per-band edits and
+        // a write lost to abrupt process death (Bluetooth A2DP teardown,
+        // force-stop) was the visible drift bug. .commit() guarantees
+        // the bytes hit disk before this call returns.
+        prefs.edit().putString("simpleEqGains", arr.toString()).commit()
     }
     fun getSimpleEqGains(): FloatArray? {
         val str = prefs.getString("simpleEqGains", null) ?: return null

@@ -81,56 +81,6 @@ object ParametricToDpConverter {
     data class ConvertedBands(val cutoffs: FloatArray, val gains: FloatArray)
 
     /**
-     * Direct path for graphic / table / simple modes — no biquad math.
-     *
-     * Each enabled band's `(frequency, gain)` pair is fed straight to
-     * DP using Wavelet's 127-band frequency table as cutoffs. For
-     * frequencies between user points, gains are linearly interpolated
-     * in (log f, dB) space. Same data flow Wavelet / Poweramp /
-     * RootlessJamesDSP use.
-     *
-     * For an AutoEQ `GraphicEQ.txt` import (whose freqs are already at
-     * Wavelet's 127 positions), every user value lands exactly on a DP
-     * cutoff with zero interpolation error.
-     */
-    fun convertDirect(eq: ParametricEqualizer): ConvertedBands {
-        // 1. Collect enabled (freq, gain) pairs in freq-sorted order.
-        data class Pt(val f: Float, val g: Float)
-        val pts = mutableListOf<Pt>()
-        for (i in 0 until eq.getBandCount()) {
-            val band = eq.getBand(i) ?: continue
-            if (!band.enabled) continue
-            val f = band.frequency
-            if (f !in MIN_FREQ..MAX_FREQ) continue
-            pts.add(Pt(f, band.gain))
-        }
-        pts.sortBy { it.f }
-
-        // 2. Use Wavelet's 127 freqs verbatim as cutoffs and interpolate
-        //    gains from user points in (log f, dB) space.
-        val cutoffs = WAVELET_FREQUENCIES.copyOf()
-        if (pts.isEmpty()) return ConvertedBands(cutoffs, FloatArray(cutoffs.size) { 0f })
-        val freqs = FloatArray(pts.size) { pts[it].f }
-        val gains = FloatArray(pts.size) { pts[it].g }
-        val outGains = FloatArray(cutoffs.size) { i ->
-            val f = cutoffs[i]
-            if (f <= freqs[0]) gains[0]
-            else if (f >= freqs[freqs.size - 1]) gains[freqs.size - 1]
-            else {
-                var lo = 0; var hi = freqs.size - 1
-                while (lo + 1 < hi) {
-                    val mid = (lo + hi) ushr 1
-                    if (freqs[mid] <= f) lo = mid else hi = mid
-                }
-                val t = (log10(f) - log10(freqs[lo])) /
-                        (log10(freqs[hi]) - log10(freqs[lo]))
-                gains[lo] + t * (gains[hi] - gains[lo])
-            }
-        }
-        return ConvertedBands(cutoffs, outGains)
-    }
-
-    /**
      * Feature-aware sampling for parametric mode: places anchor points
      * at every enabled parametric band's centre frequency plus per-
      * filter-type support points along its characteristic magnitude

@@ -3379,6 +3379,15 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
+        // Belt-and-suspenders save: onPause already saves on the way to
+        // background, but onStop runs more reliably when the system is
+        // about to abruptly tear down the process (low-memory kill,
+        // Bluetooth A2DP disconnect cascade). Re-flushing here makes
+        // sure any edits made between onPause and onStop also persist.
+        if (stateManager.currentEqUiMode == EqUiMode.SIMPLE) {
+            simpleEqController.saveGains()
+        }
+        stateManager.saveState()
         if (stateManager.serviceBound) {
             try { unbindService(stateManager.serviceConnection) } catch (_: Exception) {}
             stateManager.serviceBound = false

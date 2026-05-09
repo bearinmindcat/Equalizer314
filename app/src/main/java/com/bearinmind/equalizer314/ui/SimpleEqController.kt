@@ -37,6 +37,19 @@ class SimpleEqController(
     private var undoBtn: View? = null
     private var redoBtn: View? = null
 
+    // Debounced persist of Simple-EQ gains. Each ACTION_MOVE on a bar
+    // schedules a flush 250 ms in the future, cancelling any prior
+    // pending flush. Drag-end and lifecycle saves call saveGains()
+    // directly. Without this, edits only landed on disk when the
+    // activity reached onPause — abrupt process death (Bluetooth A2DP
+    // teardown, force-stop, system memory pressure) lost user edits.
+    private val persistHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val persistRunnable = Runnable { saveGains() }
+    private fun scheduleGainPersist() {
+        persistHandler.removeCallbacks(persistRunnable)
+        persistHandler.postDelayed(persistRunnable, 250L)
+    }
+
     private fun saveSnapshot() {
         val eq = state.parametricEq
         val snap = FloatArray(FREQUENCIES.size) { i -> eq.getBand(i)?.gain ?: 0f }
@@ -184,8 +197,16 @@ class SimpleEqController(
                 eq.updateBand(bandIndex, FREQUENCIES[bandIndex], roundedGain, BiquadFilter.FilterType.BELL, Q)
                 miniGraph?.invalidate() // live preview of curve changes
                 onEqChanged()
+                scheduleGainPersist()   // debounced SharedPrefs flush
             }
-            onDragEnd = { saveSnapshot() }
+            onDragEnd = {
+                saveSnapshot()
+                // Force an immediate flush at drag-end so the user's
+                // last value survives an abrupt process kill before
+                // the 250 ms debounce window expires.
+                persistHandler.removeCallbacks(persistRunnable)
+                saveGains()
+            }
         }
         barsView = bars
         bCard.addView(bars)

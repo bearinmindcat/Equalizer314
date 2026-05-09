@@ -74,19 +74,6 @@ class DynamicsProcessingManager {
     var leftChannelGainDb: Float = 0f      // -12..12
     var rightChannelGainDb: Float = 0f     // -12..12
 
-    /**
-     * Whether the active UI mode is "graphic-style" (graphic / table /
-     * simple) vs parametric. Set by EqStateManager based on the user's
-     * current UI mode. Controls which conversion path runs:
-     *   • true  → [ParametricToDpConverter.convertDirect]: each band's
-     *     stored (frequency, gain) pair fed straight to DP, no biquad
-     *     math (matches Wavelet's graphic / Poweramp behaviour).
-     *   • false → [ParametricToDpConverter.convertFeatureAware]: biquad
-     *     composite sampled with anchors at every parametric centre +
-     *     per-filter-type support points.
-     */
-    var useDirectGraphicPath: Boolean = false
-
     // Background thread for the binder calls. Each EQ update issues one
     // setPreEqByChannelIndex transaction per channel; running them on the
     // UI thread blocks both rendering and (under contention) the audio
@@ -265,32 +252,19 @@ class DynamicsProcessingManager {
         // The expensive part — binder transactions into AudioFlinger —
         // is dispatched to the worker thread.
         //
-        // Path selection by UI mode:
-        //   • graphic / table / simple → convertDirect: user
-        //     (freq, gain) pairs verbatim, no biquad math (Wavelet /
-        //     Poweramp pattern).
-        //   • parametric → convertFeatureAware: biquad composite
-        //     sampled at every parametric centre + per-filter-type
-        //     support points around each.
-        val cutoffs: FloatArray
-        val leftGains: FloatArray
-        val rightGains: FloatArray
-        val pathTag: String
-        if (useDirectGraphicPath) {
-            val l = ParametricToDpConverter.convertDirect(leftEq)
-            cutoffs = l.cutoffs
-            leftGains = l.gains
-            rightGains = if (leftEq === rightEq) leftGains.copyOf()
-                else ParametricToDpConverter.convertDirect(rightEq).gains
-            pathTag = "direct"
-        } else {
-            val l = ParametricToDpConverter.convertFeatureAware(leftEq)
-            cutoffs = l.cutoffs
-            leftGains = l.gains
-            rightGains = if (leftEq === rightEq) leftGains.copyOf()
-                else ParametricToDpConverter.convertFeatureAware(rightEq).gains
-            pathTag = "feature-aware"
-        }
+        // Single conversion path for every UI mode: feature-aware
+        // sampling places anchor cutoffs at every filter's centre
+        // frequency + per-filter-type support points around each, then
+        // fills remaining slots from Wavelet's 127-band table. The gain
+        // at each cutoff is `eq.getFrequencyResponse(f)` — the same
+        // biquad-summed value the on-screen graph draws. This way the
+        // audio always agrees with the graph, regardless of whether the
+        // user is editing in parametric / graphic / table / simple mode.
+        val l = ParametricToDpConverter.convertFeatureAware(leftEq)
+        val cutoffs = l.cutoffs
+        val leftGains = l.gains
+        val rightGains = if (leftEq === rightEq) leftGains.copyOf()
+            else ParametricToDpConverter.convertFeatureAware(rightEq).gains
 
         // Auto-gain: bring the loudest band to ≤ 0 dB. Applied as a flat
         // shift to all bands so it preserves EQ shape.
@@ -317,7 +291,23 @@ class DynamicsProcessingManager {
         Log.d(TAG, "[DUMP] preamp=${"%.2f".format(preampGainDb)} dB, " +
             "autoGain=$autoGainEnabled (offset=${"%.2f".format(lastAutoGainOffset)} dB), " +
             "channelOffsets L=${"%.2f".format(leftOffsetDb)} R=${"%.2f".format(rightOffsetDb)} dB, " +
-            "bands=${cutoffs.size}, path=$pathTag")
+            "bands=${cutoffs.size}")
+        run {
+            val sb = StringBuilder("[DUMP] (cutoff Hz, L gain dB, R gain dB) per band:\n")
+            for (i in cutoffs.indices) {
+                sb.append("  [%3d] cutoff=%-9.1f L=%+6.2f R=%+6.2f\n"
+                    .format(i, cutoffs[i], leftGains[i], rightGains[i]))
+            }
+            sb.toString().split('\n').forEach { line ->
+                if (line.isNotEmpty()) Log.d(TAG, line)
+            }
+            Log.d(TAG, "[DUMP] Parametric source bands (left EQ):")
+            for (i in 0 until leftEq.getBandCount()) {
+                val b = leftEq.getBand(i) ?: continue
+                Log.d(TAG, "  src[%2d] type=%-12s freq=%-8.1f Hz gain=%+6.2f dB Q=%.3f enabled=%s"
+                    .format(i, b.filterType.name, b.frequency, b.gain, b.q, b.enabled))
+            }
+        }
 
         val n = ParametricToDpConverter.numBands
         val cutoffsSnap = cutoffs

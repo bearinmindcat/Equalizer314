@@ -182,13 +182,6 @@ class EqStateManager(
         val dm = eqService?.dynamicsManager ?: return
         dm.preampGainDb = preampGainDb
         dm.autoGainEnabled = autoGainEnabled
-        // The DP conversion path is per UI mode: parametric uses biquad
-        // math (convertFeatureAware), graphic/table/simple bypass the
-        // biquad chain so DP sees the user's (freq, gain) verbatim.
-        dm.useDirectGraphicPath = when (currentEqUiMode) {
-            EqUiMode.GRAPHIC, EqUiMode.TABLE, EqUiMode.SIMPLE -> true
-            EqUiMode.PARAMETRIC -> false
-        }
         dm.channelBalancePercent = channelBalancePercent
         dm.leftChannelGainDb = leftChannelGainDb
         dm.rightChannelGainDb = rightChannelGainDb
@@ -404,10 +397,6 @@ class EqStateManager(
         val dm = service.dynamicsManager
         dm.preampGainDb = preampGainDb
         dm.autoGainEnabled = autoGainEnabled
-        dm.useDirectGraphicPath = when (currentEqUiMode) {
-            EqUiMode.GRAPHIC, EqUiMode.TABLE, EqUiMode.SIMPLE -> true
-            EqUiMode.PARAMETRIC -> false
-        }
         dm.channelBalancePercent = channelBalancePercent
         dm.leftChannelGainDb = leftChannelGainDb
         dm.rightChannelGainDb = rightChannelGainDb
@@ -466,7 +455,17 @@ class EqStateManager(
     }
 
     fun saveState() {
-        eqPrefs.saveState(parametricEq, bandSlots)
+        // Don't pollute the "bands" pref with Simple-mode band data. In
+        // Simple mode `parametricEq` holds the 10 fixed BELL bands —
+        // writing them to "bands" would overwrite the user's advanced
+        // EQ. The advanced EQ is preserved separately via
+        // [eqPrefs.saveAdvancedEqBackup] when the user enters Simple
+        // mode; that's the canonical source on next launch. Simple
+        // gains have their own pref ("simpleEqGains") written by
+        // [SimpleEqController.saveGains].
+        if (currentEqUiMode != EqUiMode.SIMPLE) {
+            eqPrefs.saveState(parametricEq, bandSlots)
+        }
         persistLeftRightIfCse()
         eqPrefs.saveBandColors(bandColors)
         eqPrefs.savePreampGain(preampGainDb)

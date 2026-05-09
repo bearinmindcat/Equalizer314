@@ -61,6 +61,15 @@ class SimpleEqBarsView @JvmOverloads constructor(
     private var lastTapBand = -1
     private var doubleTapReset = false // skip ACTION_MOVE after double-tap reset
 
+    // Drag-from-original-position model: ACTION_DOWN doesn't snap the
+    // bar to the touch's Y position. Instead it records where the
+    // finger started (touchDownY) and what the bar's gain was at that
+    // moment (touchDownGain). ACTION_MOVE applies the finger's *delta*
+    // since DOWN to that starting gain. So a tap leaves the bar
+    // unchanged; only a swipe up/down moves it.
+    private var touchDownY = 0f
+    private var touchDownGain = 0f
+
     // Pop-out animation: the active bar scales wider when being dragged
     private val popScales = FloatArray(BAND_COUNT) { 1f }
     private var popAnimator: android.animation.ValueAnimator? = null
@@ -189,7 +198,9 @@ class SimpleEqBarsView @JvmOverloads constructor(
                     activeBand = band
                     doubleTapReset = false
                     animatePop(band, true) // pop out the active bar
-                    // Double-tap detection
+                    // Double-tap detection — second tap on the same band
+                    // within 300 ms still resets that bar to 0 dB. Single
+                    // tap (no swipe) leaves the bar where it is.
                     val now = System.currentTimeMillis()
                     if (now - lastTapTime < 300 && band == lastTapBand) {
                         gains[band] = 0f
@@ -198,10 +209,11 @@ class SimpleEqBarsView @JvmOverloads constructor(
                         lastTapTime = 0
                         doubleTapReset = true // ignore ACTION_MOVE until finger lifts
                     } else {
-                        val gain = yToGain(event.y)
-                        gains[band] = gain
-                        onGainChanged?.invoke(band, gain)
-                        invalidate()
+                        // Don't change the bar's gain on touch-down.
+                        // Record the starting finger Y and the bar's
+                        // current gain so ACTION_MOVE can apply a delta.
+                        touchDownY = event.y
+                        touchDownGain = gains[band]
                         lastTapTime = now
                         lastTapBand = band
                     }
@@ -211,9 +223,14 @@ class SimpleEqBarsView @JvmOverloads constructor(
             }
             MotionEvent.ACTION_MOVE -> {
                 if (activeBand >= 0 && !doubleTapReset) {
-                    val gain = yToGain(event.y)
-                    gains[activeBand] = gain
-                    onGainChanged?.invoke(activeBand, gain)
+                    // Convert finger movement to a gain delta. Moving
+                    // the finger up (smaller Y) should INCREASE the
+                    // gain, hence (touchDownY - event.y).
+                    val pxPerDb = getBarHeight() / (MAX_DB - MIN_DB)
+                    val deltaDb = (touchDownY - event.y) / pxPerDb
+                    val newGain = (touchDownGain + deltaDb).coerceIn(MIN_DB, MAX_DB)
+                    gains[activeBand] = newGain
+                    onGainChanged?.invoke(activeBand, newGain)
                     invalidate()
                     return true
                 }
