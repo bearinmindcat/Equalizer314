@@ -46,6 +46,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var eqPrefs: EqPreferencesManager
 
     private var pendingExportText: String? = null
+    // Once-per-process gate so we don't fire the POST_NOTIFICATIONS
+    // dialog every time the user taps the power button. Combined with
+    // not returning early from startProcessing(), this prevents the
+    // recursive freeze when notifications are OS-disabled.
+    private var notificationPermissionRequested = false
     private val presetExportLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -2658,13 +2663,21 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+        // POST_NOTIFICATIONS is only needed to *display* the foreground-service
+        // notification. The service starts fine without it on API 33+ — the
+        // notification is just silently suppressed. Don't gate the EQ on it,
+        // and don't return early: the previous behaviour caused an infinite
+        // recursion freeze when notifications were OS-disabled (the system
+        // returned DENIED immediately, onRequestPermissionsResult retried
+        // startProcessing(), which re-requested → loop on the main thread).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+            && !notificationPermissionRequested
+            && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
                 != android.content.pm.PackageManager.PERMISSION_GRANTED
-            ) {
-                requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 100)
-                return
-            }
+        ) {
+            notificationPermissionRequested = true
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 100)
+            // fall through — power-on continues regardless of grant result
         }
 
         // Start animation first, then do heavy work after a frame so animation plays smoothly
@@ -3403,7 +3416,19 @@ class MainActivity : AppCompatActivity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 100) {
-            startProcessing()
+            // Don't retry startProcessing() here — the original call already
+            // proceeded with power-on (see startProcessing's notification
+            // permission block). Retrying would re-enter the same path and
+            // freeze the UI when notifications are OS-disabled.
+            if (grantResults.isNotEmpty()
+                && grantResults[0] != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                Toast.makeText(
+                    this,
+                    "Notifications disabled — EQ will run without the Turn Off notification.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
         }
         if (requestCode == 200 && grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
             visualizerHelper.start(eqGraphView)
