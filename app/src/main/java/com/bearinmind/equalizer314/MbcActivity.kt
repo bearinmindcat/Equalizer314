@@ -1455,15 +1455,19 @@ class MbcActivity : AppCompatActivity() {
 
         // Add new band with defaults
         bands.add(MbcBandData(cutoff = DEFAULT_CUTOFFS.getOrElse(bandCount - 1) { 10000f }))
-        saveBand(bandCount - 1)
 
-        // Recompute crossovers
+        // Recompute crossovers BEFORE saveBand. saveBand → syncMbcParamsToGraph
+        // iterates over the new bands.size and reads crossoverFreqs[i] /
+        // [i-1]; if crossovers are still at the old size, the loop walks
+        // past the end and crashes with ArrayIndexOutOfBoundsException.
         val defaults = DEFAULT_CROSSOVERS_BY_COUNT[bandCount] ?: logSpacedCrossovers(bandCount)
         crossoverFreqs = FloatArray(bandCount - 1) { i ->
             if (i < oldBandCount - 1) crossoverFreqs.getOrElse(i) { defaults[i] }
             else defaults.getOrElse(i) { 1000f }
         }
         for (i in crossoverFreqs.indices) eqPrefs.saveMbcCrossover(i, crossoverFreqs[i])
+
+        saveBand(bandCount - 1)
 
         // Update graph
         graphView.mbcCrossovers = crossoverFreqs
