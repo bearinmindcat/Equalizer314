@@ -66,11 +66,14 @@
             app:endIconTint="@color/dropdown_end_icon_tint"
             app:hintTextColor="?attr/colorOnSurfaceVariant">
 
-            <com.google.android.material.textfield.MaterialAutoCompleteTextView
+            <com.bearinmind.equalizer314.ui.DropdownAutoCompleteTextView
                 android:id="@+id/deviceRowPresetDropdown"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:inputType="none" />
+                android:cursorVisible="false"
+                android:inputType="none"
+                android:longClickable="false"
+                android:textIsSelectable="false" />
         </com.google.android.material.textfield.TextInputLayout>
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>
