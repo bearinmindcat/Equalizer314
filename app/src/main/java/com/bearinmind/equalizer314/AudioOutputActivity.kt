@@ -100,6 +100,16 @@ class AudioOutputActivity : AppCompatActivity() {
         devicesChevron = findViewById(R.id.devicesChevron)
         currentDeviceDropdownLayout = findViewById(R.id.currentDevicePresetLayout)
         currentDeviceDropdown = findViewById(R.id.currentDevicePresetDropdown)
+        // Touches are intercepted by the TextInputLayout (which holds the
+        // ripple foreground); forward them to opening the popup so the
+        // dropdown still toggles when the user taps the box.
+        currentDeviceDropdownLayout.setOnClickListener {
+            if (currentDeviceDropdown.isPopupShowing) {
+                currentDeviceDropdown.dismissDropDown()
+            } else {
+                currentDeviceDropdown.showDropDown()
+            }
+        }
 
         // Restore the last expand/collapse choice; default expanded.
         devicesExpanded = getPreferences(MODE_PRIVATE).getBoolean(PREF_DEVICES_EXPANDED, true)
@@ -282,6 +292,13 @@ class AudioOutputActivity : AppCompatActivity() {
             false,
         )
         dropdown.setAdapter(PresetDropdownAdapter(this, entries))
+
+        // The TextInputLayout owns the ripple foreground + touch handling;
+        // route its clicks into opening / dismissing the dropdown popup.
+        val presetLayout = card.findViewById<TextInputLayout>(R.id.deviceRowPresetLayout)
+        presetLayout.setOnClickListener {
+            if (dropdown.isPopupShowing) dropdown.dismissDropDown() else dropdown.showDropDown()
+        }
 
         dropdown.setOnItemClickListener { _, _, position, _ ->
             val pick = entries[position].displayName

@@ -28,10 +28,11 @@ class DropdownAutoCompleteTextView @JvmOverloads constructor(
     defStyleAttr: Int = com.google.android.material.R.attr.autoCompleteTextViewStyle,
 ) : MaterialAutoCompleteTextView(context, attrs, defStyleAttr) {
 
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.action == MotionEvent.ACTION_UP) {
-            performClick()
-        }
-        return true
-    }
+    // Don't call super (which runs EditText's insertion-handle code) AND
+    // don't consume the touch — return false so the gesture bubbles up
+    // to the parent TextInputLayout. The parent owns the ripple
+    // foreground + the showDropDown() click handler; it animates ripple
+    // and opens the popup using standard View touch processing, so we
+    // never have to manage pressed-state by hand.
+    override fun onTouchEvent(event: MotionEvent): Boolean = false
 }

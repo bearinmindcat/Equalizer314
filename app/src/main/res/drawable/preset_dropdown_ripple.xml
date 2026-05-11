@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ripple drawable for the preset dropdown's TextInputLayout.
+     Wrapped in an InsetDrawable so the ripple stays inside the
+     OutlinedBox's actual outline bounds:
+       - insetTop = 8dp — the OutlinedBox draws its outline through
+         the vertical centre of the floated "Preset" label, leaving
+         ~half-the-label-height of space above the box top edge.
+         Without this inset, the ripple foreground covers that empty
+         label area and bleeds past the top of the outline.
+       - corner radius 4dp matches the Material3 OutlinedBox default
+         `boxCornerRadiusTopStart` etc., clipping the ripple to the
+         outline's rounded corners. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:insetTop="8dp">
+
+    <ripple android:color="?attr/colorControlHighlight">
+        <item android:id="@android:id/mask">
+            <shape android:shape="rectangle">
+                <solid android:color="@android:color/white" />
+                <corners android:radius="4dp" />
+            </shape>
+        </item>
+    </ripple>
+</inset>
