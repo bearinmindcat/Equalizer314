@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Stateful color list pinning the preset dropdown's end-icon chevron
+     to `?attr/colorOnSurfaceVariant` regardless of state. The end icon
+     otherwise tints primary on focus. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_enabled="false" android:color="?attr/colorOnSurfaceVariant" />
+    <item android:state_pressed="true" android:color="?attr/colorOnSurfaceVariant" />
+    <item android:state_focused="true" android:color="?attr/colorOnSurfaceVariant" />
+    <item android:state_hovered="true" android:color="?attr/colorOnSurfaceVariant" />
+    <item android:color="?attr/colorOnSurfaceVariant" />
+</selector>

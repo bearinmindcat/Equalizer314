@@ -72,7 +72,8 @@
                     android:textColor="?attr/colorOnSurfaceVariant" />
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Current device card -->
+            <!-- Section label sits OUTSIDE the card, like every other
+                 section header on this screen. -->
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -82,14 +83,18 @@
                 android:layout_marginBottom="6dp"
                 android:paddingStart="4dp" />
 
+            <!-- Outline card wraps just the device name + preset
+                 dropdown, not the section label. -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/currentlyRoutedCard"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="20dp"
+                android:layout_marginBottom="12dp"
+                app:cardBackgroundColor="@android:color/transparent"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
-                app:strokeWidth="0dp">
+                app:strokeColor="?attr/colorOutline"
+                app:strokeWidth="1dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -111,7 +116,13 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
-                        android:hint="Preset">
+                        android:hint="Preset"
+                        android:textColorHint="?attr/colorOnSurfaceVariant"
+                        app:boxStrokeColor="@color/dropdown_box_stroke"
+                        app:boxStrokeWidth="1dp"
+                        app:boxStrokeWidthFocused="1dp"
+                        app:endIconTint="@color/dropdown_end_icon_tint"
+                        app:hintTextColor="?attr/colorOnSurfaceVariant">
 
                         <com.google.android.material.textfield.MaterialAutoCompleteTextView
                             android:id="@+id/currentDevicePresetDropdown"
@@ -122,7 +133,8 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Devices list header — tap to collapse / expand -->
+            <!-- Devices section — no outer wrapping card. Each device
+                 in the list below is its own card (see item_device_row). -->
             <LinearLayout
                 android:id="@+id/devicesHeader"
                 android:layout_width="match_parent"

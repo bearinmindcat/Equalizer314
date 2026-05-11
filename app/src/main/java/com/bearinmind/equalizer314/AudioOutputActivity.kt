@@ -209,6 +209,9 @@ class AudioOutputActivity : AppCompatActivity() {
                     Toast.makeText(this, "Bound \"$pick\" to $label", Toast.LENGTH_SHORT).show()
                 }
             }
+            // Drop focus so the TextInputLayout returns to its idle
+            // outline color instead of staying highlighted in primary.
+            currentDeviceDropdown.clearFocus()
             // Keep both views in sync — the active device also shows up
             // as a row in the Devices list.
             refreshActiveDevice()
@@ -295,6 +298,7 @@ class AudioOutputActivity : AppCompatActivity() {
                     Toast.makeText(this, "Bound \"$pick\" to $label", Toast.LENGTH_SHORT).show()
                 }
             }
+            dropdown.clearFocus()
             refreshActiveDevice()
         }
 
