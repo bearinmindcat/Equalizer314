@@ -14,6 +14,7 @@ import androidx.core.app.NotificationCompat
 import com.bearinmind.equalizer314.MainActivity
 import com.bearinmind.equalizer314.R
 import com.bearinmind.equalizer314.dsp.ParametricEqualizer
+import com.bearinmind.equalizer314.state.EqPreferencesManager
 
 class EqService : Service() {
 
@@ -40,6 +41,12 @@ class EqService : Service() {
 
     val dynamicsManager = DynamicsProcessingManager()
     private val binder = EqBinder()
+
+    /** Public so [com.bearinmind.equalizer314.AudioOutputActivity] can
+     *  read the currently routed device for its "Active" pin. */
+    var routingMonitor: AudioRoutingMonitor? = null
+        private set
+    private var routeCoordinator: RouteSwitchCoordinator? = null
 
     // Volume change listener
     private val volumeReceiver = object : BroadcastReceiver() {
@@ -69,6 +76,20 @@ class EqService : Service() {
                 IntentFilter("android.media.VOLUME_CHANGED_ACTION")
             )
         }
+
+        // Per-output-device EQ auto-switching. Detection lives in this
+        // service so it keeps working when MainActivity is closed.
+        val eqPrefs = EqPreferencesManager(this)
+        val coordinator = RouteSwitchCoordinator(this, eqPrefs, dynamicsManager)
+        val monitor = AudioRoutingMonitor(this).apply {
+            onRouteChange = { coordinator.onRouteChange(it) }
+            // Auto-populate the Audio Output screen's "seen" list as
+            // soon as devices appear — even before they're routed to.
+            onDeviceSeen = { key, label -> eqPrefs.rememberSeenDevice(key, label) }
+        }
+        routingMonitor = monitor
+        routeCoordinator = coordinator
+        monitor.start()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -114,6 +135,9 @@ class EqService : Service() {
 
     override fun onDestroy() {
         try { unregisterReceiver(volumeReceiver) } catch (_: Exception) {}
+        routingMonitor?.stop()
+        routingMonitor = null
+        routeCoordinator = null
         dynamicsManager.stop()
         Log.d(TAG, "EqService destroyed")
         super.onDestroy()

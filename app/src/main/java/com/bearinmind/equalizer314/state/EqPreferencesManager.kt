@@ -10,6 +10,12 @@ import org.json.JSONObject
 class EqPreferencesManager(context: Context) {
 
     private val prefs = context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE)
+    private val bindingsPrefs = context.getSharedPreferences("device_bindings", Context.MODE_PRIVATE)
+
+    /** A device → preset binding. `key` is the stable device identity
+     *  (e.g. `"BT:00:1A:7D:DA:71:13"`), `label` is the human-friendly
+     *  name shown in the UI, `presetName` is a key into `custom_presets`. */
+    data class Binding(val key: String, val label: String, val presetName: String)
 
     fun saveState(eq: ParametricEqualizer, slots: List<Int>? = null) {
         val bandsJson = JSONArray()
@@ -534,5 +540,73 @@ class EqPreferencesManager(context: Context) {
             .remove("simple_preset_$name")
             .putStringSet("simple_preset_names", names)
             .apply()
+    }
+
+    // ---- Device bindings (per-output-device EQ auto-switching) ----
+
+    fun saveDeviceBinding(b: Binding) {
+        val json = JSONObject()
+            .put("key", b.key)
+            .put("label", b.label)
+            .put("presetName", b.presetName)
+        bindingsPrefs.edit().putString("binding_${b.key}", json.toString()).apply()
+    }
+
+    fun getDeviceBinding(key: String): Binding? {
+        val str = bindingsPrefs.getString("binding_$key", null) ?: return null
+        return runCatching {
+            val o = JSONObject(str)
+            Binding(o.getString("key"), o.getString("label"), o.getString("presetName"))
+        }.getOrNull()
+    }
+
+    fun getAllDeviceBindings(): List<Binding> {
+        val out = mutableListOf<Binding>()
+        for ((k, _) in bindingsPrefs.all) {
+            if (!k.startsWith("binding_")) continue
+            val str = bindingsPrefs.getString(k, null) ?: continue
+            runCatching {
+                val o = JSONObject(str)
+                out.add(Binding(o.getString("key"), o.getString("label"), o.getString("presetName")))
+            }
+        }
+        return out
+    }
+
+    fun removeDeviceBinding(key: String) {
+        bindingsPrefs.edit().remove("binding_$key").apply()
+    }
+
+    /** Snapshot of the live EQ state taken just before an auto-switch
+     *  applied a device-bound preset, so MainActivity's Undo snackbar
+     *  can restore it. Stored as the same JSON shape custom presets use,
+     *  but in its own key so it can't collide with named presets. */
+    fun saveLastManualState(json: String?) {
+        if (json == null) bindingsPrefs.edit().remove("lastManualState").apply()
+        else bindingsPrefs.edit().putString("lastManualState", json).apply()
+    }
+
+    fun getLastManualState(): String? = bindingsPrefs.getString("lastManualState", null)
+
+    /** True the first time we ever saw `key`. Used by the Audio Output
+     *  screen to populate the "devices seen" list — every new device
+     *  that arrives in the routing callback is recorded here. */
+    fun rememberSeenDevice(key: String, label: String) {
+        bindingsPrefs.edit().putString("seen_$key", label).apply()
+    }
+
+    /** Returns `(key, label)` pairs for every device the app has seen. */
+    fun getAllSeenDevices(): List<Pair<String, String>> {
+        val out = mutableListOf<Pair<String, String>>()
+        for ((k, v) in bindingsPrefs.all) {
+            if (!k.startsWith("seen_")) continue
+            val label = v as? String ?: continue
+            out.add(k.removePrefix("seen_") to label)
+        }
+        return out
+    }
+
+    fun forgetSeenDevice(key: String) {
+        bindingsPrefs.edit().remove("seen_$key").apply()
     }
 }

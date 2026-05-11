@@ -190,6 +190,10 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
                 startActivity(android.content.Intent(this, EnvironmentalReverbActivity::class.java))
                 overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
             }
+            EffectId.AUDIO_OUTPUT -> {
+                startActivity(android.content.Intent(this, AudioOutputActivity::class.java))
+                overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+            }
             else -> { /* detail screens for the other effects land later */ }
         }
     }

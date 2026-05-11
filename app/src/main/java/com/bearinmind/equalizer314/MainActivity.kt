@@ -35,7 +35,7 @@ import com.google.android.material.slider.Slider
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import kotlin.math.pow
 
-class MainActivity : AppCompatActivity() {
+class  MainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "Equalizer314"
