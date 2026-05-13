@@ -61,7 +61,6 @@
             android:hint="Preset"
             android:clickable="true"
             android:focusable="true"
-            android:foreground="@drawable/preset_dropdown_ripple"
             android:textColorHint="?attr/colorOnSurfaceVariant"
             app:boxStrokeColor="@color/dropdown_box_stroke"
             app:boxStrokeWidth="1dp"

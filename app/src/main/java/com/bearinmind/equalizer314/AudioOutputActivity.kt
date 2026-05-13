@@ -27,6 +27,7 @@ import com.bearinmind.equalizer314.state.EqPreferencesManager
 import com.bearinmind.equalizer314.ui.PresetDropdownAdapter
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
+import com.google.android.material.color.MaterialColors
 import com.google.android.material.textfield.TextInputLayout
 import org.json.JSONArray
 import org.json.JSONObject
@@ -110,6 +111,7 @@ class AudioOutputActivity : AppCompatActivity() {
                 currentDeviceDropdown.showDropDown()
             }
         }
+        applyBoxOutlineRipple(currentDeviceDropdownLayout, currentDeviceDropdown)
 
         // Restore the last expand/collapse choice; default expanded.
         devicesExpanded = getPreferences(MODE_PRIVATE).getBoolean(PREF_DEVICES_EXPANDED, true)
@@ -299,6 +301,7 @@ class AudioOutputActivity : AppCompatActivity() {
         presetLayout.setOnClickListener {
             if (dropdown.isPopupShowing) dropdown.dismissDropDown() else dropdown.showDropDown()
         }
+        applyBoxOutlineRipple(presetLayout, dropdown)
 
         dropdown.setOnItemClickListener { _, _, position, _ ->
             val pick = entries[position].displayName
@@ -338,6 +341,56 @@ class AudioOutputActivity : AppCompatActivity() {
     }
 
     // ---- Helpers -------------------------------------------------------
+
+    /**
+     * Builds a ripple foreground whose drawable bounds match the actual
+     * outlined-box rectangle, so the ripple stops at every outline edge
+     * instead of bleeding into the label area above or stopping short
+     * of it. Hard-coded inset values never lined up because the offset
+     * depends on the floated label's vertical centre, which varies
+     * with font scale.
+     *
+     * In OutlinedBox mode the box drawable is set as the inner
+     * AutoCompleteTextView's background — its bounds equal the
+     * AutoCompleteTextView's bounds. `offsetDescendantRectToMyCoords`
+     * translates those into the TextInputLayout's coordinate space,
+     * giving us the exact outline rect to inset the ripple to.
+     */
+    private fun applyBoxOutlineRipple(layout: TextInputLayout, dropdown: android.view.View) {
+        layout.viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                if (dropdown.width <= 0 || dropdown.height <= 0 || layout.width <= 0) return true
+                layout.viewTreeObserver.removeOnPreDrawListener(this)
+
+                val rect = android.graphics.Rect(0, 0, dropdown.width, dropdown.height)
+                layout.offsetDescendantRectToMyCoords(dropdown, rect)
+
+                val cornerRadius = layout.boxCornerRadiusTopStart
+                val highlightColor = MaterialColors.getColor(
+                    layout,
+                    com.google.android.material.R.attr.colorControlHighlight,
+                )
+                val mask = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                    this.cornerRadius = cornerRadius
+                    setColor(android.graphics.Color.WHITE)
+                }
+                val ripple = android.graphics.drawable.RippleDrawable(
+                    android.content.res.ColorStateList.valueOf(highlightColor),
+                    null,
+                    mask,
+                )
+                layout.foreground = android.graphics.drawable.InsetDrawable(
+                    ripple,
+                    rect.left,
+                    rect.top,
+                    (layout.width - rect.right).coerceAtLeast(0),
+                    (layout.height - rect.bottom).coerceAtLeast(0),
+                )
+                return true
+            }
+        })
+    }
 
     private fun listCustomPresetNames(): List<String> {
         val prefs = getSharedPreferences("custom_presets", MODE_PRIVATE)
