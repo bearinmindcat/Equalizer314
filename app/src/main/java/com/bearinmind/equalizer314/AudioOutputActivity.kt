@@ -370,22 +370,70 @@ class AudioOutputActivity : AppCompatActivity() {
                     layout,
                     com.google.android.material.R.attr.colorControlHighlight,
                 )
-                val mask = android.graphics.drawable.GradientDrawable().apply {
+                val density = resources.displayMetrics.density
+
+                // Main outline mask — covers the full outline rect.
+                val outlineMask = android.graphics.drawable.GradientDrawable().apply {
                     shape = android.graphics.drawable.GradientDrawable.RECTANGLE
                     this.cornerRadius = cornerRadius
                     setColor(android.graphics.Color.WHITE)
                 }
-                val ripple = android.graphics.drawable.RippleDrawable(
+                // Bump mask above the outline at the "Preset" label
+                // position. Combined with the outline mask via
+                // LayerDrawable, the ripple's clipping region becomes
+                // the union of the two — outline + a small rounded
+                // tab above it that follows the label.
+                //
+                // Position is computed from the floated label's actual
+                // measured width and Material3's known horizontal
+                // padding (16dp from outline.left for the EditText's
+                // text baseline, ~4dp cutout padding around the label
+                // text), so the bump always tracks the label even
+                // across font scales.
+                val labelText = (layout.hint ?: "Preset").toString()
+                val labelTextSizePx = 12f * resources.displayMetrics.scaledDensity
+                val labelMeasuredWidth = android.graphics.Paint().apply {
+                    textSize = labelTextSizePx
+                    typeface = android.graphics.Typeface.DEFAULT
+                }.measureText(labelText)
+                val labelCutoutPaddingPx = (4 * density).toInt()
+                val labelHorizontalInsetPx = (16 * density).toInt()
+                val bumpHeightPx = (labelTextSizePx + 2 * 2 * density).toInt()
+                val bumpLeft = rect.left + labelHorizontalInsetPx - labelCutoutPaddingPx
+                val bumpRight = bumpLeft + labelMeasuredWidth.toInt() + 2 * labelCutoutPaddingPx
+                val bumpTop = (rect.top - bumpHeightPx / 2).coerceAtLeast(0)
+                val bumpBottom = rect.top + bumpHeightPx / 2
+                val bumpCornerRadius = bumpHeightPx / 2f  // pill shape
+
+                val labelBumpMask = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                    this.cornerRadius = bumpCornerRadius
+                    setColor(android.graphics.Color.WHITE)
+                }
+
+                val mask = android.graphics.drawable.LayerDrawable(
+                    arrayOf(outlineMask, labelBumpMask)
+                ).apply {
+                    setLayerInset(
+                        0,
+                        rect.left,
+                        rect.top,
+                        (layout.width - rect.right).coerceAtLeast(0),
+                        (layout.height - rect.bottom).coerceAtLeast(0),
+                    )
+                    setLayerInset(
+                        1,
+                        bumpLeft,
+                        bumpTop,
+                        (layout.width - bumpRight).coerceAtLeast(0),
+                        (layout.height - bumpBottom).coerceAtLeast(0),
+                    )
+                }
+
+                layout.foreground = android.graphics.drawable.RippleDrawable(
                     android.content.res.ColorStateList.valueOf(highlightColor),
                     null,
                     mask,
-                )
-                layout.foreground = android.graphics.drawable.InsetDrawable(
-                    ripple,
-                    rect.left,
-                    rect.top,
-                    (layout.width - rect.right).coerceAtLeast(0),
-                    (layout.height - rect.bottom).coerceAtLeast(0),
                 )
                 return true
             }
