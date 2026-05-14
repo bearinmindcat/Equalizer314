@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- Device row. Single outlined card wraps the drag handle (left) and
+     the device label + preset dropdown (right). Handle lives entirely
+     inside the outline. Right padding equals the left effective inset
+     (handle + spacing) so the device-name text and preset dropdown
+     sit at the same distance from the card border on both sides. -->
+<com.bearinmind.equalizer314.ui.NotchedDeviceCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/deviceRowCard"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginBottom="12dp"
@@ -13,71 +20,80 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="8dp"
+        android:paddingEnd="48dp"
         android:paddingTop="12dp"
         android:paddingBottom="12dp">
 
-        <!-- Label + active badge row -->
+        <ImageView
+            android:id="@+id/deviceRowDragHandle"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:padding="4dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_menu_handle"
+            android:background="@drawable/handle_ripple"
+            android:clickable="true"
+            android:focusable="true"
+            android:contentDescription="Drag handle" />
+
         <LinearLayout
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:orientation="vertical">
 
             <TextView
                 android:id="@+id/deviceRowName"
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
                 android:singleLine="true"
                 android:ellipsize="end"
                 android:textAppearance="@style/TextAppearance.Material3.TitleSmall"
                 android:textColor="?attr/colorOnSurface" />
 
             <TextView
-                android:id="@+id/deviceRowActiveBadge"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Active"
-                android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
-                android:textColor="?attr/colorPrimary"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp"
-                android:paddingTop="4dp"
-                android:paddingBottom="4dp"
-                android:visibility="gone" />
-        </LinearLayout>
-
-        <!-- Preset dropdown — SAME style + widget hierarchy as the
-             Current Device card so the two look identical. -->
-        <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/deviceRowPresetLayout"
-            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:hint="Preset"
-            android:clickable="true"
-            android:focusable="true"
-            android:textColorHint="?attr/colorOnSurfaceVariant"
-            app:boxStrokeColor="@color/dropdown_box_stroke"
-            app:boxStrokeWidth="1dp"
-            app:boxStrokeWidthFocused="1dp"
-            app:endIconTint="@color/dropdown_end_icon_tint"
-            app:hintTextColor="?attr/colorOnSurfaceVariant">
-
-            <com.bearinmind.equalizer314.ui.DropdownAutoCompleteTextView
-                android:id="@+id/deviceRowPresetDropdown"
+                android:id="@+id/deviceRowKey"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:clickable="false"
-                android:cursorVisible="false"
-                android:focusable="false"
-                android:inputType="none"
-                android:longClickable="false"
-                android:textIsSelectable="false" />
-        </com.google.android.material.textfield.TextInputLayout>
+                android:layout_marginTop="2dp"
+                android:singleLine="true"
+                android:ellipsize="end"
+                android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                android:textColor="?attr/colorOnSurfaceVariant" />
+
+            <!-- Preset dropdown — SAME style + widget hierarchy as the
+                 Current Device card so the two look identical. -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/deviceRowPresetLayout"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:hint="Preset"
+                android:clickable="true"
+                android:focusable="true"
+                android:textColorHint="?attr/colorOnSurfaceVariant"
+                app:boxStrokeColor="@color/dropdown_box_stroke"
+                app:boxStrokeWidth="1dp"
+                app:boxStrokeWidthFocused="1dp"
+                app:endIconTint="@color/dropdown_end_icon_tint"
+                app:hintTextColor="?attr/colorOnSurfaceVariant">
+
+                <com.bearinmind.equalizer314.ui.DropdownAutoCompleteTextView
+                    android:id="@+id/deviceRowPresetDropdown"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:clickable="false"
+                    android:cursorVisible="false"
+                    android:focusable="false"
+                    android:inputType="none"
+                    android:longClickable="false"
+                    android:textIsSelectable="false" />
+            </com.google.android.material.textfield.TextInputLayout>
+        </LinearLayout>
     </LinearLayout>
-</com.google.android.material.card.MaterialCardView>
+</com.bearinmind.equalizer314.ui.NotchedDeviceCardView>

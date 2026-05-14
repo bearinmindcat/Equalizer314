@@ -609,4 +609,22 @@ class EqPreferencesManager(context: Context) {
     fun forgetSeenDevice(key: String) {
         bindingsPrefs.edit().remove("seen_$key").apply()
     }
+
+    /** Persist the user's drag-to-reorder ordering of seen devices.
+     *  Stored as a JSON array of device keys. Devices not in this list
+     *  (e.g. a newly-discovered device) fall back to alphabetical-by-key
+     *  ordering at the end. */
+    fun saveDevicesOrder(keys: List<String>) {
+        val arr = JSONArray()
+        for (k in keys) arr.put(k)
+        bindingsPrefs.edit().putString("devices_order", arr.toString()).apply()
+    }
+
+    fun getDevicesOrder(): List<String> {
+        val str = bindingsPrefs.getString("devices_order", null) ?: return emptyList()
+        return runCatching {
+            val arr = JSONArray(str)
+            List(arr.length()) { arr.getString(it) }
+        }.getOrDefault(emptyList())
+    }
 }

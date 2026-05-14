@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Circular ripple for the drag handle. Using an explicit oval mask
+     so the ripple shape is bounded and visible — `?attr/selectableItem
+     BackgroundBorderless` can render too subtly on some OEM skins. -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="?attr/colorControlHighlight">
+    <item android:id="@android:id/mask">
+        <shape android:shape="oval">
+            <solid android:color="@android:color/white" />
+        </shape>
+    </item>
+</ripple>

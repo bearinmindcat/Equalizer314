@@ -82,4 +82,17 @@ object DeviceIdentity {
         Bucket.SPEAKER -> 1
         null -> 0
     }
+
+    /** Friendly second-line display for a stored device key. For BT
+     *  the MAC is the meaningful identifier so we show it; for the
+     *  other buckets the product name is already on the first line so
+     *  the second line just states the connection type. */
+    fun displayKey(key: String): String = when {
+        key.startsWith("BT:") -> key.removePrefix("BT:")
+        key.startsWith("BT-NAME:") -> "Bluetooth"
+        key.startsWith("USB:") -> "USB"
+        key.startsWith("WIRED:") -> "Wired"
+        key.startsWith("SPEAKER:") -> "Speaker"
+        else -> key.trimEnd(':')
+    }
 }

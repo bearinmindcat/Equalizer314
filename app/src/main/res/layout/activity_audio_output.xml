@@ -110,6 +110,16 @@
                         android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                         android:textColor="?attr/colorOnSurface" />
 
+                    <TextView
+                        android:id="@+id/activeDeviceKey"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:singleLine="true"
+                        android:ellipsize="end"
+                        android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                        android:textColor="?attr/colorOnSurfaceVariant" />
+
                     <com.google.android.material.textfield.TextInputLayout
                         android:id="@+id/currentDevicePresetLayout"
                         style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
@@ -141,7 +151,10 @@
             </com.google.android.material.card.MaterialCardView>
 
             <!-- Devices section — no outer wrapping card. Each device
-                 in the list below is its own card (see item_device_row). -->
+                 in the list below is its own card (see item_device_row).
+                 No layout_marginBottom — header's paddingBottom alone
+                 gives the same 6dp gap to the device cards as the
+                 Current Device label has to its own card. -->
             <LinearLayout
                 android:id="@+id/devicesHeader"
                 android:layout_width="match_parent"
@@ -151,7 +164,6 @@
                 android:background="?attr/selectableItemBackground"
                 android:clickable="true"
                 android:focusable="true"
-                android:layout_marginBottom="6dp"
                 android:paddingStart="4dp"
                 android:paddingEnd="4dp"
                 android:paddingTop="6dp"
@@ -182,11 +194,14 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
 
-                <LinearLayout
+                <androidx.recyclerview.widget.RecyclerView
                     android:id="@+id/devicesList"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical" />
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
+                    android:nestedScrollingEnabled="false"
+                    android:overScrollMode="never" />
 
                 <!-- Empty state -->
                 <TextView

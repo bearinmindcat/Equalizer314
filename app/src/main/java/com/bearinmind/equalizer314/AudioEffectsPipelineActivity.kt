@@ -94,7 +94,12 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
                 eqPrefs.setAudioEffectEnabled(effect.name, newState)
             },
             onHandleTouch = { vh -> touchHelper.startDrag(vh) },
-            onCardClick = { effect -> openDetailScreen(effect) }
+            onCardClick = { effect -> openDetailScreen(effect) },
+            descriptionFor = { effect ->
+                if (effect == EffectId.AUDIO_OUTPUT) {
+                    currentAudioOutputDescription() ?: effect.description
+                } else effect.description
+            },
         )
         recyclerView.adapter = adapter
         touchHelper.attachToRecyclerView(recyclerView)
@@ -203,6 +208,42 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
         overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Re-bind the Audio Output card so its description picks up
+        // any device that was connected / disconnected while this
+        // screen wasn't visible.
+        val pos = items.indexOf(EffectId.AUDIO_OUTPUT)
+        if (pos >= 0 && ::adapter.isInitialized) adapter.notifyItemChanged(pos)
+    }
+
+    /**
+     * Picks the currently routed output via the same priority rules
+     * the Audio Output screen uses (`DeviceIdentity.priority`) and
+     * returns "<device label> · <display key>". Returns null when no
+     * tracked output is connected — caller falls back to the static
+     * enum description.
+     */
+    private fun currentAudioOutputDescription(): String? {
+        val am = getSystemService(android.media.AudioManager::class.java) ?: return null
+        var best: android.media.AudioDeviceInfo? = null
+        var bestPriority = 0
+        for (d in am.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)) {
+            if (!d.isSink) continue
+            com.bearinmind.equalizer314.audio.DeviceIdentity.keyOf(d) ?: continue
+            val p = com.bearinmind.equalizer314.audio.DeviceIdentity.priority(d)
+            if (p > bestPriority) {
+                bestPriority = p
+                best = d
+            }
+        }
+        val active = best ?: return null
+        val label = com.bearinmind.equalizer314.audio.DeviceIdentity.labelOf(active)
+        val key = com.bearinmind.equalizer314.audio.DeviceIdentity.keyOf(active) ?: return label
+        val keyDisplay = com.bearinmind.equalizer314.audio.DeviceIdentity.displayKey(key)
+        return if (keyDisplay.isNotEmpty()) "$label · $keyDisplay" else label
+    }
+
     // ---- Adapter --------------------------------------------------------
 
     private class PipelineAdapter(
@@ -211,6 +252,11 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
         private val onToggle: (EffectId) -> Unit,
         private val onHandleTouch: (RecyclerView.ViewHolder) -> Unit,
         private val onCardClick: (EffectId) -> Unit,
+        /** Override for an effect's description. Audio Output uses this
+         *  to show the current device name + connection type instead of
+         *  the static "Speakers, headphones, or other connected output"
+         *  fallback. Defaults to the enum's `description`. */
+        private val descriptionFor: (EffectId) -> String = { it.description },
     ) : RecyclerView.Adapter<PipelineAdapter.ViewHolder>() {
 
         override fun getItemCount() = items.size
@@ -314,12 +360,13 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val effect = items[position]
             holder.title.text = effect.title
-            holder.description.text = effect.description
+            val desc = descriptionFor(effect)
+            holder.description.text = desc
             // Hide the second line entirely when an effect has no
             // description, so the title doesn't sit above an empty
             // grey gap.
             holder.description.visibility =
-                if (effect.description.isEmpty()) View.GONE else View.VISIBLE
+                if (desc.isEmpty()) View.GONE else View.VISIBLE
             if (effect.isFixed) {
                 // Bookend cards (input / output) can't be moved — hide the
                 // handle entirely so the row reads as a fixed pipeline node.

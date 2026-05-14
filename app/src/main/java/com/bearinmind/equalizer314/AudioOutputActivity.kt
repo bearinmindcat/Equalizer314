@@ -1,5 +1,6 @@
 package com.bearinmind.equalizer314
 
+import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -24,11 +25,15 @@ import com.bearinmind.equalizer314.audio.AudioRoutingMonitor
 import com.bearinmind.equalizer314.audio.DeviceIdentity
 import com.bearinmind.equalizer314.audio.EqService
 import com.bearinmind.equalizer314.state.EqPreferencesManager
+import com.bearinmind.equalizer314.ui.NotchedDeviceCardView
 import com.bearinmind.equalizer314.ui.PresetDropdownAdapter
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.textfield.TextInputLayout
+import androidx.recyclerview.widget.ItemTouchHelper
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -41,9 +46,12 @@ import org.json.JSONObject
 class AudioOutputActivity : AppCompatActivity() {
 
     private lateinit var eqPrefs: EqPreferencesManager
-    private lateinit var devicesList: LinearLayout
+    private lateinit var devicesList: RecyclerView
     private lateinit var emptyState: TextView
+    private lateinit var devicesAdapter: DevicesAdapter
+    private lateinit var dragTouchHelper: ItemTouchHelper
     private lateinit var activeDeviceLabel: TextView
+    private lateinit var activeDeviceKey: TextView
     private lateinit var currentlyRoutedCard: MaterialCardView
     private lateinit var devicesHeader: LinearLayout
     private lateinit var devicesBody: LinearLayout
@@ -51,6 +59,10 @@ class AudioOutputActivity : AppCompatActivity() {
     private lateinit var currentDeviceDropdown: MaterialAutoCompleteTextView
     private lateinit var currentDeviceDropdownLayout: TextInputLayout
     private var devicesExpanded = true
+    // Suppresses the click-handler's reopen when a popup auto-dismisses
+    // via outside-tap on the dropdown box itself — the same touch that
+    // dismisses also fires our click handler and would re-open the popup.
+    private var currentDeviceLastDismissAt = 0L
 
     private var eqService: EqService? = null
     private var serviceBound = false
@@ -94,8 +106,72 @@ class AudioOutputActivity : AppCompatActivity() {
         findViewById<ImageButton>(R.id.audioOutputBackButton).setOnClickListener { finish() }
         currentlyRoutedCard = findViewById(R.id.currentlyRoutedCard)
         activeDeviceLabel = findViewById(R.id.activeDeviceLabel)
+        activeDeviceKey = findViewById(R.id.activeDeviceKey)
         devicesList = findViewById(R.id.devicesList)
         emptyState = findViewById(R.id.devicesEmptyState)
+
+        // RecyclerView setup + ItemTouchHelper-driven drag-to-reorder.
+        devicesAdapter = DevicesAdapter()
+        devicesList.layoutManager = LinearLayoutManager(this)
+        devicesList.adapter = devicesAdapter
+        devicesList.isNestedScrollingEnabled = false
+        dragTouchHelper = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
+            ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0,
+        ) {
+            override fun isLongPressDragEnabled() = false
+            override fun isItemViewSwipeEnabled() = false
+
+            override fun onMove(
+                rv: RecyclerView,
+                from: RecyclerView.ViewHolder,
+                to: RecyclerView.ViewHolder,
+            ): Boolean {
+                devicesAdapter.moveItem(from.bindingAdapterPosition, to.bindingAdapterPosition)
+                return true
+            }
+
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
+
+            override fun onSelectedChanged(
+                viewHolder: RecyclerView.ViewHolder?,
+                actionState: Int,
+            ) {
+                super.onSelectedChanged(viewHolder, actionState)
+                if (actionState == ItemTouchHelper.ACTION_STATE_DRAG &&
+                    viewHolder is DevicesAdapter.VH) {
+                    val handle = viewHolder.handle
+                    // Hold the handle's pressed state during the drag
+                    // so the ripple stays lit. The press is post()'ed
+                    // because ItemTouchHelper fires this callback
+                    // BEFORE dispatching ACTION_CANCEL to the handle
+                    // View — without posting, the cancel would
+                    // re-set isPressed=false immediately after.
+                    handle.post { handle.isPressed = true }
+                    // Make the card opaque while it's being dragged so
+                    // it visually covers rows underneath it instead of
+                    // showing them through the transparent fill.
+                    val surfaceColor = MaterialColors.getColor(
+                        viewHolder.itemView,
+                        com.google.android.material.R.attr.colorSurface,
+                    )
+                    viewHolder.card.setCardBackgroundColor(surfaceColor)
+                }
+            }
+
+            override fun clearView(rv: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
+                super.clearView(rv, viewHolder)
+                if (viewHolder is DevicesAdapter.VH) {
+                    // Drag ended — release the press state so the ripple fades.
+                    viewHolder.handle.isPressed = false
+                    // Restore the transparent fill so the row blends
+                    // back into the page once dropped.
+                    viewHolder.card.setCardBackgroundColor(android.graphics.Color.TRANSPARENT)
+                }
+                // Persist on drag end so the order survives across launches.
+                eqPrefs.saveDevicesOrder(devicesAdapter.currentOrder())
+            }
+        })
+        dragTouchHelper.attachToRecyclerView(devicesList)
         devicesHeader = findViewById(R.id.devicesHeader)
         devicesBody = findViewById(R.id.devicesBody)
         devicesChevron = findViewById(R.id.devicesChevron)
@@ -104,7 +180,17 @@ class AudioOutputActivity : AppCompatActivity() {
         // Touches are intercepted by the TextInputLayout (which holds the
         // ripple foreground); forward them to opening the popup so the
         // dropdown still toggles when the user taps the box.
+        currentDeviceDropdown.setOnDismissListener {
+            currentDeviceLastDismissAt = System.currentTimeMillis()
+        }
         currentDeviceDropdownLayout.setOnClickListener {
+            // If the popup was just dismissed (within ~300ms) by an
+            // outside-tap on this box, that same touch also fired this
+            // click — don't reopen.
+            if (System.currentTimeMillis() - currentDeviceLastDismissAt < 300) {
+                currentDeviceLastDismissAt = 0L
+                return@setOnClickListener
+            }
             if (currentDeviceDropdown.isPopupShowing) {
                 currentDeviceDropdown.dismissDropDown()
             } else {
@@ -171,18 +257,26 @@ class AudioOutputActivity : AppCompatActivity() {
             activeKey = null
             activeLabel = null
             activeDeviceLabel.text = "No current device"
+            activeDeviceKey.text = ""
+            activeDeviceKey.visibility = View.GONE
             currentDeviceDropdownLayout.visibility = View.GONE
             return
         }
         activeKey = DeviceIdentity.keyOf(active)
         activeLabel = DeviceIdentity.labelOf(active)
-        // Same "<label> · <key>" format as the device rows so the
-        // Current Device card reads identically to its row counterpart.
-        val keyDisplay = activeKey?.trimEnd(':').orEmpty()
-        activeDeviceLabel.text = if (keyDisplay.isNotEmpty() && activeLabel != null) {
-            "$activeLabel · $keyDisplay"
+        activeDeviceLabel.text = activeLabel ?: "Current output"
+        // Device key stacked on a second line below the label —
+        // routed through DeviceIdentity.displayKey so USB / wired /
+        // speaker show "USB" / "Wired" / "Speaker" rather than
+        // duplicating the product name from the first line, while
+        // Bluetooth still shows the MAC.
+        val keyDisplay = activeKey?.let { DeviceIdentity.displayKey(it) }.orEmpty()
+        if (keyDisplay.isNotEmpty()) {
+            activeDeviceKey.text = keyDisplay
+            activeDeviceKey.visibility = View.VISIBLE
         } else {
-            activeLabel ?: "Current output"
+            activeDeviceKey.text = ""
+            activeDeviceKey.visibility = View.GONE
         }
         val binding = activeKey?.let { eqPrefs.getDeviceBinding(it) }
 
@@ -234,7 +328,6 @@ class AudioOutputActivity : AppCompatActivity() {
     // ---- Devices list --------------------------------------------------
 
     private fun refreshDevices() {
-        devicesList.removeAllViews()
         val seen = eqPrefs.getAllSeenDevices().toMutableList()
         // Make sure the currently active device is in the list even if
         // it was never explicitly remembered (e.g. first launch).
@@ -243,101 +336,183 @@ class AudioOutputActivity : AppCompatActivity() {
         if (activeKey != null && activeLabel != null && seen.none { it.first == activeKey }) {
             seen.add(0, activeKey to activeLabel)
         }
-        // Pin the active device to the top of the list.
-        seen.sortByDescending { it.first == activeKey }
+        // Apply user-saved drag order if present. Devices not yet in
+        // the saved order are appended in their natural (insertion)
+        // order, with the active device pinned first.
+        val savedOrder = eqPrefs.getDevicesOrder()
+        val byKey = seen.associateBy { it.first }
+        val ordered = mutableListOf<Pair<String, String>>()
+        for (k in savedOrder) byKey[k]?.let { ordered.add(it) }
+        for (item in seen) if (ordered.none { it.first == item.first }) ordered.add(item)
 
-        if (seen.isEmpty()) {
+        if (ordered.isEmpty()) {
             emptyState.visibility = View.VISIBLE
+            devicesAdapter.setItems(emptyList())
             return
         }
         emptyState.visibility = View.GONE
-        for ((key, label) in seen) {
-            devicesList.addView(buildDeviceRow(key, label, isActive = key == activeKey))
-        }
+        devicesAdapter.setItems(ordered)
     }
 
-    private fun buildDeviceRow(key: String, label: String, isActive: Boolean): View {
-        // Inflate from XML so the dropdown picks up the same
-        // `Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu`
-        // style the Current Device card uses — guaranteeing pixel-identical
-        // boxes between the two.
-        val card = layoutInflater.inflate(R.layout.item_device_row, devicesList, false) as MaterialCardView
+    /**
+     * RecyclerView adapter for the Devices list. Each row is the
+     * `item_device_row.xml` layout (drag handle on the left + outlined
+     * card on the right). The handle's `setOnTouchListener` starts an
+     * [ItemTouchHelper] drag, which produces `onMove` / `clearView`
+     * callbacks back in the activity to reorder + persist the list.
+     */
+    private inner class DevicesAdapter : RecyclerView.Adapter<DevicesAdapter.VH>() {
 
-        // Combined "<label> · <key>" line, mirroring the Target-status
-        // pattern in MainActivity.updateTargetStatus(). Trailing colons
-        // on keys with no value (e.g. "SPEAKER:", "WIRED:") are stripped
-        // so the result reads "Phone speaker · SPEAKER" not "...SPEAKER:".
-        val keyDisplay = key.trimEnd(':')
-        card.findViewById<TextView>(R.id.deviceRowName).text = "$label · $keyDisplay"
-        card.findViewById<TextView>(R.id.deviceRowActiveBadge).apply {
-            visibility = if (isActive) View.VISIBLE else View.GONE
-            if (isActive) {
-                val density = resources.displayMetrics.density
-                val tc = android.util.TypedValue()
-                context.theme.resolveAttribute(com.google.android.material.R.attr.colorPrimary, tc, true)
-                background = android.graphics.drawable.GradientDrawable().apply {
-                    cornerRadius = 12 * density
-                    setStroke((1 * density).toInt(), tc.data)
+        private val items = mutableListOf<Pair<String, String>>()
+
+        fun setItems(newItems: List<Pair<String, String>>) {
+            items.clear()
+            items.addAll(newItems)
+            notifyDataSetChanged()
+        }
+
+        fun moveItem(from: Int, to: Int) {
+            if (from < 0 || to < 0 || from >= items.size || to >= items.size) return
+            val moved = items.removeAt(from)
+            items.add(to, moved)
+            notifyItemMoved(from, to)
+        }
+
+        fun currentOrder(): List<String> = items.map { it.first }
+
+        inner class VH(view: android.view.View) : RecyclerView.ViewHolder(view) {
+            val name: TextView = view.findViewById(R.id.deviceRowName)
+            val keyText: TextView = view.findViewById(R.id.deviceRowKey)
+            val presetLayout: TextInputLayout = view.findViewById(R.id.deviceRowPresetLayout)
+            val dropdown: MaterialAutoCompleteTextView = view.findViewById(R.id.deviceRowPresetDropdown)
+            val handle: android.widget.ImageView = view.findViewById(R.id.deviceRowDragHandle)
+            // Top-level is a FrameLayout; the notched card and the
+            // drag handle live as siblings inside it.
+            val card: NotchedDeviceCardView = view.findViewById(R.id.deviceRowCard)
+            // Suppresses the click-handler's reopen when this row's
+            // popup auto-dismisses via outside-tap on the dropdown box.
+            var lastDismissAt = 0L
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+            val view = layoutInflater.inflate(R.layout.item_device_row, parent, false)
+            return VH(view)
+        }
+
+        override fun getItemCount() = items.size
+
+        @SuppressLint("ClickableViewAccessibility")
+        override fun onBindViewHolder(holder: VH, position: Int) {
+            val (key, label) = items[position]
+
+            // Device name on top, key stacked on the line below. The
+            // second line is routed through DeviceIdentity.displayKey
+            // so USB / wired / speaker show "USB" / "Wired" / "Speaker"
+            // rather than duplicating the product name; Bluetooth
+            // still shows the MAC because it's the unique identifier.
+            val keyDisplay = DeviceIdentity.displayKey(key)
+            holder.name.text = label
+            if (keyDisplay.isNotEmpty()) {
+                holder.keyText.text = keyDisplay
+                holder.keyText.visibility = View.VISIBLE
+            } else {
+                holder.keyText.text = ""
+                holder.keyText.visibility = View.GONE
+            }
+
+            val knownNames = listCustomPresetNames()
+            val binding = eqPrefs.getDeviceBinding(key)
+            val currentSelection = binding?.presetName ?: "(none)"
+            val missing = binding != null && binding.presetName !in knownNames
+            val entries = buildPresetEntries(if (missing) binding!!.presetName else null)
+
+            val dropdown = holder.dropdown
+            dropdown.setText(
+                if (missing) "${binding!!.presetName} (missing)" else currentSelection,
+                false,
+            )
+            dropdown.setAdapter(PresetDropdownAdapter(this@AudioOutputActivity, entries))
+
+            // The TextInputLayout owns the ripple foreground + touch
+            // handling; route its clicks into opening / dismissing the
+            // dropdown popup. The dismiss-listener + 300ms suppression
+            // avoids the reopen cycle when an outside-tap on the box
+            // both dismisses the popup AND fires this click.
+            dropdown.setOnDismissListener {
+                holder.lastDismissAt = System.currentTimeMillis()
+            }
+            holder.presetLayout.setOnClickListener {
+                if (System.currentTimeMillis() - holder.lastDismissAt < 300) {
+                    holder.lastDismissAt = 0L
+                    return@setOnClickListener
+                }
+                if (dropdown.isPopupShowing) dropdown.dismissDropDown() else dropdown.showDropDown()
+            }
+            applyBoxOutlineRipple(holder.presetLayout, dropdown)
+
+            dropdown.setOnItemClickListener { _, _, pos, _ ->
+                val pick = entries[pos].displayName
+                when {
+                    pick == "(none)" -> {
+                        eqPrefs.removeDeviceBinding(key)
+                        Toast.makeText(this@AudioOutputActivity, "Unbound $label", Toast.LENGTH_SHORT).show()
+                    }
+                    pick.endsWith(" (missing)") -> {
+                        // Picked the dangling entry — keep the binding as-is.
+                    }
+                    else -> {
+                        eqPrefs.saveDeviceBinding(EqPreferencesManager.Binding(key, label, pick))
+                        Toast.makeText(this@AudioOutputActivity, "Bound \"$pick\" to $label", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                dropdown.clearFocus()
+                refreshActiveDevice()
+            }
+
+            // Long-press the card → "Forget device" option.
+            holder.card.setOnLongClickListener {
+                PopupMenu(this@AudioOutputActivity, holder.card).apply {
+                    menu.add("Forget device")
+                    setOnMenuItemClickListener {
+                        eqPrefs.forgetSeenDevice(key)
+                        eqPrefs.removeDeviceBinding(key)
+                        refreshDevices()
+                        true
+                    }
+                    show()
+                }
+                true
+            }
+
+            // Drag handle — touching it kicks off ItemTouchHelper's
+            // drag. The pressed-state lifecycle is driven manually so
+            // the ripple stays lit for the whole gesture:
+            //   DOWN → isPressed = true (ripple starts)
+            //   UP   → isPressed = false (tap-without-drag releases)
+            //   CANCEL → consume the event so View.onTouchEvent never
+            //     runs and never sets isPressed=false. ItemTouchHelper
+            //     dispatches a CANCEL to this view when it takes over
+            //     the touch stream for a drag — without consuming, the
+            //     framework's default cancel handler would kill the
+            //     ripple mid-drag. The drag's eventual end fires
+            //     clearView() in the ItemTouchHelper callback, which
+            //     releases isPressed there instead.
+            holder.handle.setOnTouchListener { v, event ->
+                when (event.actionMasked) {
+                    android.view.MotionEvent.ACTION_DOWN -> {
+                        v.isPressed = true
+                        dragTouchHelper.startDrag(holder)
+                        false
+                    }
+                    android.view.MotionEvent.ACTION_UP -> {
+                        v.isPressed = false
+                        false
+                    }
+                    android.view.MotionEvent.ACTION_CANCEL -> true
+                    else -> false
                 }
             }
         }
-
-        val knownNames = listCustomPresetNames()
-        val binding = eqPrefs.getDeviceBinding(key)
-        val currentSelection = binding?.presetName ?: "(none)"
-        val missing = binding != null && binding.presetName !in knownNames
-        val entries = buildPresetEntries(if (missing) binding!!.presetName else null)
-
-        val dropdown = card.findViewById<MaterialAutoCompleteTextView>(R.id.deviceRowPresetDropdown)
-        dropdown.setText(
-            if (missing) "${binding!!.presetName} (missing)" else currentSelection,
-            false,
-        )
-        dropdown.setAdapter(PresetDropdownAdapter(this, entries))
-
-        // The TextInputLayout owns the ripple foreground + touch handling;
-        // route its clicks into opening / dismissing the dropdown popup.
-        val presetLayout = card.findViewById<TextInputLayout>(R.id.deviceRowPresetLayout)
-        presetLayout.setOnClickListener {
-            if (dropdown.isPopupShowing) dropdown.dismissDropDown() else dropdown.showDropDown()
-        }
-        applyBoxOutlineRipple(presetLayout, dropdown)
-
-        dropdown.setOnItemClickListener { _, _, position, _ ->
-            val pick = entries[position].displayName
-            when {
-                pick == "(none)" -> {
-                    eqPrefs.removeDeviceBinding(key)
-                    Toast.makeText(this, "Unbound $label", Toast.LENGTH_SHORT).show()
-                }
-                pick.endsWith(" (missing)") -> {
-                    // Picked the dangling entry — keep the binding as-is, no change.
-                }
-                else -> {
-                    eqPrefs.saveDeviceBinding(EqPreferencesManager.Binding(key, label, pick))
-                    Toast.makeText(this, "Bound \"$pick\" to $label", Toast.LENGTH_SHORT).show()
-                }
-            }
-            dropdown.clearFocus()
-            refreshActiveDevice()
-        }
-
-        // Long-press the row → "Forget device" option
-        card.setOnLongClickListener {
-            PopupMenu(this, card).apply {
-                menu.add("Forget device")
-                setOnMenuItemClickListener {
-                    eqPrefs.forgetSeenDevice(key)
-                    eqPrefs.removeDeviceBinding(key)
-                    refreshDevices()
-                    true
-                }
-                show()
-            }
-            true
-        }
-
-        return card
     }
 
     // ---- Helpers -------------------------------------------------------
@@ -392,15 +567,30 @@ class AudioOutputActivity : AppCompatActivity() {
                 // across font scales.
                 val labelText = (layout.hint ?: "Preset").toString()
                 val labelTextSizePx = 12f * resources.displayMetrics.scaledDensity
+                // Use the same typeface + letter spacing the dropdown
+                // itself uses so the measurement tracks what Material's
+                // CollapsingTextHelper actually paints onscreen.
                 val labelMeasuredWidth = android.graphics.Paint().apply {
                     textSize = labelTextSizePx
-                    typeface = android.graphics.Typeface.DEFAULT
+                    typeface = (dropdown as? android.widget.TextView)?.typeface
+                        ?: android.graphics.Typeface.DEFAULT
+                    if (dropdown is android.widget.TextView) {
+                        letterSpacing = dropdown.letterSpacing
+                    }
                 }.measureText(labelText)
                 val labelCutoutPaddingPx = (4 * density).toInt()
                 val labelHorizontalInsetPx = (16 * density).toInt()
                 val bumpHeightPx = (labelTextSizePx + 2 * 2 * density).toInt()
-                val bumpLeft = rect.left + labelHorizontalInsetPx - labelCutoutPaddingPx
-                val bumpRight = bumpLeft + labelMeasuredWidth.toInt() + 2 * labelCutoutPaddingPx
+                // Bump spans from cutout-left (the label text's left
+                // minus 4dp cutout padding) to cutout-right (label
+                // text's right + 4dp). That's the exact width of the
+                // outline cutout Material draws around the floated
+                // label, so the bump aligns with the end of the
+                // visible label text.
+                val labelTextLeft = rect.left + labelHorizontalInsetPx
+                val labelTextRight = labelTextLeft + labelMeasuredWidth.toInt()
+                val bumpLeft = labelTextLeft - labelCutoutPaddingPx
+                val bumpRight = labelTextRight + labelCutoutPaddingPx
                 val bumpTop = (rect.top - bumpHeightPx / 2).coerceAtLeast(0)
                 val bumpBottom = rect.top + bumpHeightPx / 2
                 val bumpCornerRadius = bumpHeightPx / 2f  // pill shape
