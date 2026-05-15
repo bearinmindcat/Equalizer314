@@ -11,11 +11,16 @@ class EqPreferencesManager(context: Context) {
 
     private val prefs = context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE)
     private val bindingsPrefs = context.getSharedPreferences("device_bindings", Context.MODE_PRIVATE)
+    private val appBindingsPrefs = context.getSharedPreferences("app_bindings", Context.MODE_PRIVATE)
 
     /** A device → preset binding. `key` is the stable device identity
      *  (e.g. `"BT:00:1A:7D:DA:71:13"`), `label` is the human-friendly
      *  name shown in the UI, `presetName` is a key into `custom_presets`. */
     data class Binding(val key: String, val label: String, val presetName: String)
+
+    /** A per-app → preset binding for sessions that broadcast
+     *  OPEN_AUDIO_EFFECT_CONTROL_SESSION. */
+    data class AppBinding(val packageName: String, val presetName: String)
 
     fun saveState(eq: ParametricEqualizer, slots: List<Int>? = null) {
         val bandsJson = JSONArray()
@@ -626,5 +631,71 @@ class EqPreferencesManager(context: Context) {
             val arr = JSONArray(str)
             List(arr.length()) { arr.getString(it) }
         }.getOrDefault(emptyList())
+    }
+
+    // ---- App bindings (per-package EQ on session-open broadcasts) ----
+
+    fun saveAppBinding(binding: AppBinding) {
+        val json = JSONObject()
+            .put("packageName", binding.packageName)
+            .put("presetName", binding.presetName)
+        appBindingsPrefs.edit().putString("binding_${binding.packageName}", json.toString()).apply()
+    }
+
+    fun getAppBinding(packageName: String): AppBinding? {
+        val str = appBindingsPrefs.getString("binding_$packageName", null) ?: return null
+        return runCatching {
+            val o = JSONObject(str)
+            AppBinding(o.getString("packageName"), o.getString("presetName"))
+        }.getOrNull()
+    }
+
+    fun getAllAppBindings(): List<AppBinding> {
+        val out = mutableListOf<AppBinding>()
+        for ((k, _) in appBindingsPrefs.all) {
+            if (!k.startsWith("binding_")) continue
+            val str = appBindingsPrefs.getString(k, null) ?: continue
+            runCatching {
+                val o = JSONObject(str)
+                out.add(AppBinding(o.getString("packageName"), o.getString("presetName")))
+            }
+        }
+        return out
+    }
+
+    fun removeAppBinding(packageName: String) {
+        appBindingsPrefs.edit().remove("binding_$packageName").apply()
+    }
+
+    /** Records that a session-broadcasting app has been seen so the
+     *  Channel Input screen can list it even before the user
+     *  explicitly binds a preset. */
+    fun rememberSeenApp(packageName: String) {
+        appBindingsPrefs.edit().putBoolean("seen_$packageName", true).apply()
+    }
+
+    fun getAllSeenApps(): List<String> {
+        val out = mutableListOf<String>()
+        for ((k, _) in appBindingsPrefs.all) {
+            if (!k.startsWith("seen_")) continue
+            out.add(k.removePrefix("seen_"))
+        }
+        return out
+    }
+
+    fun forgetSeenApp(packageName: String) {
+        appBindingsPrefs.edit().remove("seen_$packageName").apply()
+    }
+
+    /** Routing mode for how the EQ attaches to audio:
+     *   0 = GLOBAL_ONLY — session 0 only (current default behaviour)
+     *   1 = PER_APP_ONLY — only attach when apps broadcast a session
+     *   2 = BOTH — session 0 plus per-app overlays
+     */
+    fun getAudioRoutingMode(): Int =
+        appBindingsPrefs.getInt("audio_routing_mode", 0)
+
+    fun saveAudioRoutingMode(mode: Int) {
+        appBindingsPrefs.edit().putInt("audio_routing_mode", mode).apply()
     }
 }

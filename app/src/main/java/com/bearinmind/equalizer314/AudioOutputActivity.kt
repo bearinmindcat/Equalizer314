@@ -234,6 +234,26 @@ class AudioOutputActivity : AppCompatActivity() {
         }
     }
 
+    /** Pick the highest-priority connected output by querying
+     *  AudioManager directly. Used as a fallback when the service's
+     *  AudioRoutingMonitor isn't running or its dedupe means it
+     *  never emitted for the current device. */
+    private fun pickActiveOutputDirect(): android.media.AudioDeviceInfo? {
+        val am = getSystemService(android.media.AudioManager::class.java) ?: return null
+        var best: android.media.AudioDeviceInfo? = null
+        var bestPri = 0
+        for (d in am.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)) {
+            if (!d.isSink) continue
+            DeviceIdentity.keyOf(d) ?: continue
+            val p = DeviceIdentity.priority(d)
+            if (p > bestPri) {
+                bestPri = p
+                best = d
+            }
+        }
+        return best
+    }
+
     override fun onStop() {
         super.onStop()
         if (serviceBound) {
@@ -252,7 +272,13 @@ class AudioOutputActivity : AppCompatActivity() {
 
     private fun refreshActiveDevice() {
         val monitor = eqService?.routingMonitor
-        val active = monitor?.pickActiveOutput()
+        // Prefer the service's monitor (it has live add/remove
+        // callbacks) but fall back to a direct AudioManager scan so
+        // the Current Device card still shows something when the EQ
+        // service isn't running (Power button off) or when the
+        // monitor's stale-key dedupe means it never emitted for the
+        // current output (e.g. USB was connected before service start).
+        val active = monitor?.pickActiveOutput() ?: pickActiveOutputDirect()
         if (active == null) {
             activeKey = null
             activeLabel = null

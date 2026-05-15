@@ -24,6 +24,18 @@ class EqService : Service() {
         private const val NOTIFICATION_ID = 1
         const val ACTION_STOP = "com.bearinmind.equalizer314.STOP_EQ"
         const val ACTION_EQ_STOPPED = "com.bearinmind.equalizer314.EQ_STOPPED"
+        // Forwarded from AudioSessionReceiver when an audio-effect
+        // control session opens / closes for a per-app session.
+        const val ACTION_ATTACH_SESSION = "com.bearinmind.equalizer314.ATTACH_SESSION"
+        const val ACTION_DETACH_SESSION = "com.bearinmind.equalizer314.DETACH_SESSION"
+        const val ACTION_APPLY_ROUTING_MODE = "com.bearinmind.equalizer314.APPLY_ROUTING_MODE"
+        /** Fired by EnvironmentalReverbActivity and the pipeline's reverb
+         *  card toggle. Service re-reads reverb prefs and pushes them to
+         *  every currently attached per-session reverb (creating /
+         *  releasing reverbs as the toggle state requires). */
+        const val ACTION_APPLY_REVERB = "com.bearinmind.equalizer314.APPLY_REVERB"
+        const val EXTRA_SESSION_ID = "session_id"
+        const val EXTRA_PACKAGE_NAME = "package_name"
 
         fun start(context: Context) {
             val intent = Intent(context, EqService::class.java)
@@ -47,6 +59,12 @@ class EqService : Service() {
     var routingMonitor: AudioRoutingMonitor? = null
         private set
     private var routeCoordinator: RouteSwitchCoordinator? = null
+
+    /** Owns the per-app DynamicsProcessing instances attached via
+     *  OPEN_AUDIO_EFFECT_CONTROL_SESSION broadcasts. Public so the
+     *  Channel Input screen could read it for diagnostics later. */
+    var sessionEffects: SessionEffectManager? = null
+        private set
 
     // Volume change listener
     private val volumeReceiver = object : BroadcastReceiver() {
@@ -90,16 +108,66 @@ class EqService : Service() {
         routingMonitor = monitor
         routeCoordinator = coordinator
         monitor.start()
+
+        // Per-app session attachment (Wavelet-style OPEN/CLOSE
+        // broadcasts handled by AudioSessionReceiver, forwarded here).
+        sessionEffects = SessionEffectManager(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
-            dynamicsManager.stop()
-            sendBroadcast(Intent(ACTION_EQ_STOPPED).setPackage(packageName))
-            @Suppress("DEPRECATION")
-            stopForeground(true)
-            stopSelf()
-            return START_NOT_STICKY
+        when (intent?.action) {
+            ACTION_STOP -> {
+                dynamicsManager.stop()
+                sessionEffects?.releaseAll()
+                sendBroadcast(Intent(ACTION_EQ_STOPPED).setPackage(packageName))
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            ACTION_ATTACH_SESSION -> {
+                startForeground(NOTIFICATION_ID, buildNotification())
+                val sessionId = intent.getIntExtra(EXTRA_SESSION_ID, 0)
+                val pkg = intent.getStringExtra(EXTRA_PACKAGE_NAME).orEmpty()
+                sessionEffects?.attach(sessionId, pkg)
+                return START_STICKY
+            }
+            ACTION_DETACH_SESSION -> {
+                val sessionId = intent.getIntExtra(EXTRA_SESSION_ID, 0)
+                sessionEffects?.detach(sessionId)
+                // Don't stopSelf — other sessions / the global DP may
+                // still be active. Service lifecycle is otherwise
+                // managed by the EQ on/off flow.
+                return START_STICKY
+            }
+            ACTION_APPLY_REVERB -> {
+                startForeground(NOTIFICATION_ID, buildNotification())
+                sessionEffects?.applyReverbParamsToAll()
+                return START_STICKY
+            }
+            ACTION_APPLY_ROUTING_MODE -> {
+                startForeground(NOTIFICATION_ID, buildNotification())
+                // When the user picks Session-based, stop the global
+                // DP so bound apps don't get their EQ applied twice
+                // (once on session 0, once on their per-app session).
+                // Session-based is "Wavelet-style": only per-session
+                // effects, never a parallel session-0 instance.
+                val prefs = EqPreferencesManager(this)
+                if (prefs.getAudioRoutingMode() == 1) {
+                    dynamicsManager.stop()
+                    sendBroadcast(Intent(ACTION_EQ_STOPPED).setPackage(packageName))
+                }
+                // Re-evaluate per-session reverbs — applyReverbParamsToAll
+                // handles both "mode just became Session-based with the
+                // reverb toggle on → attach" and "mode just left
+                // Session-based → release" symmetrically.
+                sessionEffects?.applyReverbParamsToAll()
+                // When the user picks System-wide, we don't auto-start
+                // the global DP here — MainActivity owns the EQ
+                // instance (band data, preamp, MBC config). The user
+                // tapping the Power button restarts it cleanly.
+                return START_STICKY
+            }
         }
 
         startForeground(NOTIFICATION_ID, buildNotification())
@@ -138,6 +206,8 @@ class EqService : Service() {
         routingMonitor?.stop()
         routingMonitor = null
         routeCoordinator = null
+        sessionEffects?.releaseAll()
+        sessionEffects = null
         dynamicsManager.stop()
         Log.d(TAG, "EqService destroyed")
         super.onDestroy()

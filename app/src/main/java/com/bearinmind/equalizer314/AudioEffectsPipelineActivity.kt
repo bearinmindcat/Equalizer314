@@ -92,6 +92,19 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
                 val newState = !(enabledMap[effect] ?: false)
                 enabledMap[effect] = newState
                 eqPrefs.setAudioEffectEnabled(effect.name, newState)
+                if (effect == EffectId.ENVIRONMENTAL_REVERB) {
+                    // Let the service attach (or release) per-session
+                    // reverbs to match the new toggle state.
+                    val intent = android.content.Intent(this, com.bearinmind.equalizer314.audio.EqService::class.java)
+                        .setAction(com.bearinmind.equalizer314.audio.EqService.ACTION_APPLY_REVERB)
+                    try {
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                            startForegroundService(intent)
+                        } else {
+                            startService(intent)
+                        }
+                    } catch (_: Throwable) { /* service may not be running */ }
+                }
             },
             onHandleTouch = { vh -> touchHelper.startDrag(vh) },
             onCardClick = { effect -> openDetailScreen(effect) },
@@ -197,6 +210,10 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
             }
             EffectId.AUDIO_OUTPUT -> {
                 startActivity(android.content.Intent(this, AudioOutputActivity::class.java))
+                overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+            }
+            EffectId.AUDIO_INPUT -> {
+                startActivity(android.content.Intent(this, ChannelInputActivity::class.java))
                 overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
             }
             else -> { /* detail screens for the other effects land later */ }

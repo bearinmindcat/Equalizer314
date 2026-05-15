@@ -8,6 +8,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- Needed to list installed apps in the Channel Input screen so
+         the user can pre-assign EQ presets to apps that have not yet
+         broadcast an audio-effect session. Required on API 30+. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
 
     <application
         android:allowBackup="true"
@@ -89,6 +94,10 @@
             android:exported="false"
             android:theme="@style/Theme.Equalizer314" />
         <activity
+            android:name="com.bearinmind.equalizer314.ChannelInputActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Equalizer314" />
+        <activity
             android:name="com.bearinmind.equalizer314.EnvironmentalReverbActivity"
             android:exported="false"
             android:theme="@style/Theme.Equalizer314" />
@@ -97,6 +106,20 @@
             android:name="com.bearinmind.equalizer314.audio.EqService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+
+        <!-- Receives session-open / session-close broadcasts from
+             music apps that opt in to the standard Android audio-
+             effect control session pattern (Spotify, Poweramp, AIMP,
+             etc.). On OPEN we attach a per-session DynamicsProcessing
+             with the user's bound preset; on CLOSE we release it. -->
+        <receiver
+            android:name="com.bearinmind.equalizer314.audio.AudioSessionReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.media.action.OPEN_AUDIO_EFFECT_CONTROL_SESSION" />
+                <action android:name="android.media.action.CLOSE_AUDIO_EFFECT_CONTROL_SESSION" />
+            </intent-filter>
+        </receiver>
 
     </application>
 

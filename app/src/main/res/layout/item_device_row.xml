@@ -23,7 +23,7 @@
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:paddingStart="8dp"
-        android:paddingEnd="48dp"
+        android:paddingEnd="8dp"
         android:paddingTop="12dp"
         android:paddingBottom="12dp">
 
@@ -94,6 +94,59 @@
                     android:longClickable="false"
                     android:textIsSelectable="false" />
             </com.google.android.material.textfield.TextInputLayout>
+        </LinearLayout>
+
+        <!-- Right-side action buttons. No-op for now (UI placement).
+             Both use Outlined style so the "inside" of each is the
+             same (transparent over the card surface); the X is
+             distinguished by a red icon tint. 32dp × 32dp squares to
+             leave the dropdown the same width on both sides. -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginStart="8dp"
+            android:gravity="center">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/deviceRowRemoveButton"
+                style="@style/Widget.Material3.Button.IconButton.Outlined"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="0dp"
+                android:insetLeft="0dp"
+                android:insetTop="0dp"
+                android:insetRight="0dp"
+                android:insetBottom="0dp"
+                app:cornerRadius="10dp"
+                app:icon="@drawable/ic_close"
+                app:iconSize="14dp"
+                app:iconTint="#FFEF9A9A"
+                app:iconPadding="0dp"
+                app:iconGravity="textStart"
+                android:contentDescription="Remove device" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/deviceRowHideButton"
+                style="@style/Widget.Material3.Button.IconButton.Outlined"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginTop="6dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="0dp"
+                android:insetLeft="0dp"
+                android:insetTop="0dp"
+                android:insetRight="0dp"
+                android:insetBottom="0dp"
+                app:cornerRadius="10dp"
+                app:icon="@drawable/ic_visibility"
+                app:iconSize="14dp"
+                app:iconPadding="0dp"
+                app:iconGravity="textStart"
+                android:contentDescription="Toggle visibility" />
         </LinearLayout>
     </LinearLayout>
 </com.bearinmind.equalizer314.ui.NotchedDeviceCardView>
