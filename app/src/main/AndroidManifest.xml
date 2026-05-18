@@ -13,6 +13,20 @@
          broadcast an audio-effect session. Required on API 30+. -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
+    <!-- Used by AudioPolicyDumpParser to read audioserver's
+         AudioPlaybackConfiguration table via the reflected
+         ServiceManager.getService("audio").dumpAsync(...) call, which
+         is how Wavelet and Poweramp EQ recover session IDs for apps
+         that don't broadcast OPEN_AUDIO_EFFECT_CONTROL_SESSION
+         (YouTube, Netflix, Chrome, etc.). DUMP is signature-protected
+         and won't be granted to non-system apps on stock Android, but
+         the dumpAsync call typically still succeeds on OEM ROMs
+         because audioserver's per-binder dump permission check is
+         permissive. Failure is handled gracefully — the parser returns
+         an empty map and the listener falls back to the public-API
+         path (package name without session ID). -->
+    <uses-permission android:name="android.permission.DUMP"
+        tools:ignore="ProtectedPermissions" />
 
     <application
         android:allowBackup="true"
@@ -120,6 +134,30 @@
                 <action android:name="android.media.action.CLOSE_AUDIO_EFFECT_CONTROL_SESSION" />
             </intent-filter>
         </receiver>
+
+        <!-- NotificationListenerService used purely as a privilege gate.
+             Binding to this service is the only way Android grants apps
+             MEDIA_CONTENT_CONTROL, which we need so that
+             MediaSessionManager.getActiveSessions(ourComponent) returns
+             sessions from other apps. We never read notifications:
+             onNotificationPosted/Removed are no-ops and we declare
+             disabled_filter_types covering every category, telling the
+             system to send us nothing. Same pattern Wavelet and
+             Poweramp EQ use. -->
+        <service
+            android:name="com.bearinmind.equalizer314.audio.PlaybackListenerService"
+            android:exported="false"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.notification.disabled_filter_types"
+                android:value="ongoing|silent|conversations|alerting" />
+            <meta-data
+                android:name="android.service.notification.default_filter_types"
+                android:value="" />
+        </service>
 
     </application>
 

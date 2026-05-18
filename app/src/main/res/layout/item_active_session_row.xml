@@ -45,4 +45,12 @@
             android:singleLine="true"
             android:ellipsize="end" />
     </LinearLayout>
+
+    <!-- Source badge — BROADCAST (filled speaker) vs DETECTED (outlined). -->
+    <ImageView
+        android:id="@+id/sessionRowSourceBadge"
+        android:layout_width="20dp"
+        android:layout_height="20dp"
+        android:layout_marginStart="8dp"
+        android:contentDescription="@null" />
 </LinearLayout>

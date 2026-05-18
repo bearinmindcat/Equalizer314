@@ -1,0 +1,14 @@
+<!-- Outlined volume / speaker glyph used as the "Detected" (NLS path)
+     source badge in the Now playing list. Same path as ic_volume_filled
+     but rendered in ?attr/colorOnSurfaceVariant for the dimmer/dimmer-
+     priority look. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorOnSurfaceVariant">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M7,9v6h4l5,5V4l-5,5H7zM14,8.83v6.34L10.83,12 14,8.83zM4,9h2v6H4z" />
+</vector>

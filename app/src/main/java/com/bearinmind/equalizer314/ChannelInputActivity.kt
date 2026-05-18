@@ -22,6 +22,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.NotificationManagerCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bearinmind.equalizer314.audio.EqService
@@ -29,6 +30,7 @@ import com.bearinmind.equalizer314.audio.SessionEffectManager
 import com.bearinmind.equalizer314.state.EqPreferencesManager
 import com.bearinmind.equalizer314.ui.PresetDropdownAdapter
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
@@ -55,11 +57,22 @@ class ChannelInputActivity : AppCompatActivity() {
     private lateinit var emptyState: TextView
     private lateinit var appsAdapter: AppsAdapter
 
-    // "Current session" panel — only shown in Session-based mode.
+    // "Now playing" panel — always visible. Shows both broadcast-attached
+    // and NLS-detected sessions.
     private lateinit var currentSessionSection: LinearLayout
     private lateinit var currentSessionList: RecyclerView
     private lateinit var currentSessionEmpty: TextView
     private lateinit var sessionsAdapter: ActiveSessionsAdapter
+
+    // Persistent "Session detection" toggle card. Always visible — the
+    // button label, body, and title change to reflect whether the user
+    // currently has Notification access granted. Tapping the button
+    // always opens system Settings (the only place Android lets the
+    // user flip the listener bind).
+    private lateinit var enableDetectionCard: MaterialCardView
+    private lateinit var enableDetectionTitle: TextView
+    private lateinit var enableDetectionBody: TextView
+    private lateinit var enableDetectionButton: MaterialButton
 
     // Bound EqService so we can read the live set of attached sessions
     // (SessionEffectManager.getActiveSessions). Null when the service
@@ -135,8 +148,23 @@ class ChannelInputActivity : AppCompatActivity() {
         currentSessionList.adapter = sessionsAdapter
         currentSessionList.isNestedScrollingEnabled = false
 
+        enableDetectionCard = findViewById(R.id.enableDetectionCard)
+        enableDetectionTitle = findViewById(R.id.enableDetectionTitle)
+        enableDetectionBody = findViewById(R.id.enableDetectionBody)
+        enableDetectionButton = findViewById(R.id.enableDetectionButton)
+        enableDetectionButton.setOnClickListener {
+            // Both ON and OFF states route to the same system Settings
+            // screen — Android doesn't allow third-party apps to flip
+            // BIND_NOTIFICATION_LISTENER_SERVICE directly. The user
+            // toggles it there; we re-sync the UI on the next onResume.
+            try {
+                startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            } catch (_: Throwable) {
+                Toast.makeText(this, "Could not open Notification access settings", Toast.LENGTH_SHORT).show()
+            }
+        }
+
         setupRoutingModeChips()
-        updateCurrentSessionVisibility()
         loadApps()
     }
 
@@ -156,6 +184,37 @@ class ChannelInputActivity : AppCompatActivity() {
             serviceConnection,
             Context.BIND_AUTO_CREATE,
         )
+        refreshDetectionCtaVisibility()
+        refreshCurrentSessions()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // User may have toggled the listener in Settings while we were
+        // in the background — re-check on every return.
+        refreshDetectionCtaVisibility()
+    }
+
+    /** The card stays visible in both states so the user can turn
+     *  detection on AND off. The button label / body copy varies based
+     *  on whether [NotificationManagerCompat.getEnabledListenerPackages]
+     *  currently includes us. Both states open the system Settings
+     *  screen — Android doesn't let third-party apps flip the listener
+     *  bind directly. */
+    private fun refreshDetectionCtaVisibility() {
+        val granted = NotificationManagerCompat
+            .getEnabledListenerPackages(this)
+            .contains(packageName)
+        enableDetectionCard.visibility = View.VISIBLE
+        if (granted) {
+            enableDetectionTitle.text = "Session detection is on"
+            enableDetectionBody.text = "Apps currently playing audio appear under \"Now playing.\" Tap below to manage Notification access in system Settings."
+            enableDetectionButton.text = "Manage in Settings"
+        } else {
+            enableDetectionTitle.text = "Session detection is off"
+            enableDetectionBody.text = "To list YouTube, Netflix, Chrome, games etc., grant Notification access. We never read your notifications — this is the only Android API that exposes active media sessions to apps."
+            enableDetectionButton.text = "Enable detection"
+        }
     }
 
     override fun onStop() {
@@ -163,12 +222,6 @@ class ChannelInputActivity : AppCompatActivity() {
         try { unbindService(serviceConnection) } catch (_: Throwable) {}
         eqService = null
         super.onStop()
-    }
-
-    private fun updateCurrentSessionVisibility() {
-        val sessionMode = eqPrefs.getAudioRoutingMode() == 1
-        currentSessionSection.visibility = if (sessionMode) View.VISIBLE else View.GONE
-        if (sessionMode) refreshCurrentSessions()
     }
 
     private fun refreshCurrentSessions() {
@@ -189,7 +242,7 @@ class ChannelInputActivity : AppCompatActivity() {
                     val info = pm.getApplicationInfo(s.packageName, 0)
                     pm.getApplicationIcon(info) to pm.getApplicationLabel(info).toString()
                 }.getOrElse { null to s.packageName }
-                SessionRow(s.sessionId, s.packageName, label, icon, s.presetName)
+                SessionRow(s.sessionId, s.packageName, label, icon, s.presetName, s.source)
             }.sortedBy { it.label.lowercase() }
             sessionsAdapter.setItems(rows)
         }
@@ -211,7 +264,6 @@ class ChannelInputActivity : AppCompatActivity() {
             val id = checkedIds.firstOrNull() ?: return@setOnCheckedStateChangeListener
             val newMode = if (id == R.id.routingModePerApp) 1 else 0
             eqPrefs.saveAudioRoutingMode(newMode)
-            updateCurrentSessionVisibility()
             // Tell the service to apply the new mode — if Session-
             // based was just selected, the service stops the global
             // DP so we don't end up double-EQing bound apps.
@@ -325,6 +377,7 @@ class ChannelInputActivity : AppCompatActivity() {
         val label: String,
         val icon: Drawable?,
         val presetName: String?,
+        val source: SessionEffectManager.AttachSource,
     )
 
     private inner class ActiveSessionsAdapter : RecyclerView.Adapter<ActiveSessionsAdapter.VH>() {
@@ -340,6 +393,7 @@ class ChannelInputActivity : AppCompatActivity() {
             val icon: ImageView = view.findViewById(R.id.sessionRowIcon)
             val name: TextView = view.findViewById(R.id.sessionRowName)
             val meta: TextView = view.findViewById(R.id.sessionRowMeta)
+            val sourceBadge: ImageView = view.findViewById(R.id.sessionRowSourceBadge)
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
@@ -354,8 +408,34 @@ class ChannelInputActivity : AppCompatActivity() {
             val r = items[position]
             holder.icon.setImageDrawable(r.icon)
             holder.name.text = r.label
+            // BROADCAST = the app told us about its session via the
+            // OPEN intent → we can attach effects authoritatively.
+            // DETECTED = we recovered it from the audio dump → if the
+            // dump didn't surface a sessionId (some OEMs lock the dump
+            // down), we render the row with the marker -1 set by the
+            // public-API fallback path.
+            val hasRealSession = r.sessionId > 0
+            val sourceTag = when (r.source) {
+                SessionEffectManager.AttachSource.BROADCAST -> "Bound"
+                SessionEffectManager.AttachSource.DETECTED ->
+                    if (!hasRealSession) "Detected (no session)" else "Detected"
+            }
             val preset = r.presetName?.let { "preset: $it" } ?: "no preset bound"
-            holder.meta.text = "${r.packageName} • session ${r.sessionId} • $preset"
+            // Real audioserver session IDs are always positive — only
+            // surface them when we have one. Synthetic negative IDs
+            // (assigned when audioserver's dumpsys is locked down) are
+            // implementation detail and stay out of the UI.
+            holder.meta.text = if (hasRealSession) {
+                "${r.packageName} • session ${r.sessionId} • $sourceTag • $preset"
+            } else {
+                "${r.packageName} • $sourceTag • $preset"
+            }
+            holder.sourceBadge.setImageResource(
+                when (r.source) {
+                    SessionEffectManager.AttachSource.BROADCAST -> R.drawable.ic_volume_filled
+                    SessionEffectManager.AttachSource.DETECTED -> R.drawable.ic_volume_outline
+                }
+            )
         }
     }
 

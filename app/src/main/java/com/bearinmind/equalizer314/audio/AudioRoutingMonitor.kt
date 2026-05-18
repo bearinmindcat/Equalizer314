@@ -47,6 +47,15 @@ class AudioRoutingMonitor(
      *  as soon as it's plugged in, not only once it's been routed to. */
     var onDeviceSeen: ((key: String, label: String) -> Unit)? = null
 
+    /** Fires (debounced, main thread) on **every** device add/remove —
+     *  regardless of whether the active sink's key actually changed.
+     *  [onRouteChange] short-circuits on same-key events; this one
+     *  doesn't, so callers can use it to react to internal route /
+     *  sample-rate changes a `DynamicsProcessing` needs to track.
+     *  Matches Poweramp's `e80.java` `AudioDeviceCallback` →
+     *  `s90.java:377-400` per-session rebuild pattern. */
+    var onRouteRebuild: (() -> Unit)? = null
+
     private val audioManager =
         context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private val handler = Handler(Looper.getMainLooper())
@@ -115,6 +124,10 @@ class AudioRoutingMonitor(
     }
 
     private fun recomputeAndEmit() {
+        // Always notify rebuild listeners — sample-rate / internal route
+        // changes can happen without the active-sink key changing.
+        onRouteRebuild?.invoke()
+
         val active = pickActiveOutput() ?: return
         val key = DeviceIdentity.keyOf(active) ?: return
         val label = DeviceIdentity.labelOf(active)

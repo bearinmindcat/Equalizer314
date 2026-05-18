@@ -105,23 +105,29 @@
                     android:text="Session-based" />
             </com.google.android.material.chip.ChipGroup>
 
-            <!-- Current session (only visible in Session-based mode).
-                 Lists every app that is currently broadcasting an
-                 OPEN_AUDIO_EFFECT_CONTROL_SESSION — its package, the
-                 session ID Android assigned, and the bound preset (if
-                 any). Updated live via SessionEffectManager.ACTION_SESSIONS_CHANGED. -->
+            <!-- CTA shown until the user grants Notification access — see
+                 PlaybackListenerService for why we need it (privilege gate
+                 only; no notifications are read). -->
+            <include layout="@layout/card_enable_detection" />
+
+            <!-- "Now playing": every app currently producing audio. Includes
+                 apps that broadcast OPEN_AUDIO_EFFECT_CONTROL_SESSION
+                 (Spotify, Poweramp, AIMP — "Bound" badge) and apps detected
+                 via the dump-parse path (YouTube, Netflix — "Detected" badge).
+                 Visible in both routing modes; only the DP attach is gated
+                 by Session-based mode. Updated live via
+                 SessionEffectManager.ACTION_SESSIONS_CHANGED. -->
             <LinearLayout
                 android:id="@+id/currentSessionSection"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:layout_marginBottom="16dp"
-                android:visibility="gone">
+                android:layout_marginBottom="16dp">
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Current session"
+                    android:text="Now playing"
                     android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                     android:textColor="?attr/colorOnSurfaceVariant"
                     android:paddingStart="4dp"
@@ -157,7 +163,8 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:padding="14dp"
-                            android:text="No app is broadcasting an audio-effect session right now. Start playback in a media app to see it here."
+                            android:text="No sessions detected"
+                            android:gravity="center"
                             android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                             android:textColor="?attr/colorOnSurfaceVariant" />
                     </LinearLayout>

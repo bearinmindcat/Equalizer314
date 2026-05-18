@@ -34,6 +34,20 @@ class EqService : Service() {
          *  every currently attached per-session reverb (creating /
          *  releasing reverbs as the toggle state requires). */
         const val ACTION_APPLY_REVERB = "com.bearinmind.equalizer314.APPLY_REVERB"
+        /** Fired by [PlaybackListenerService] after each debounced
+         *  dump-parse cycle. Carries [EXTRA_DETECTED_BUNDLE] — a Bundle
+         *  whose keys are package names and values are `int[]` session
+         *  IDs. The service decodes it and routes to
+         *  [SessionEffectManager.observeDetectedPlayback]. */
+        const val ACTION_PLAYBACK_DETECTED = "com.bearinmind.equalizer314.PLAYBACK_DETECTED"
+        const val EXTRA_DETECTED_BUNDLE = "detected_bundle"
+        /** Fired by [PlaybackListenerService.onListenerDisconnected] when
+         *  the user revokes Notification access (or the system unbinds
+         *  the listener for any other reason). The service tells the
+         *  manager to release every per-session effect attached via the
+         *  detection path; broadcast-source effects survive because they
+         *  have their own CLOSE lifecycle. */
+        const val ACTION_RELEASE_DETECTED = "com.bearinmind.equalizer314.RELEASE_DETECTED"
         const val EXTRA_SESSION_ID = "session_id"
         const val EXTRA_PACKAGE_NAME = "package_name"
 
@@ -99,19 +113,27 @@ class EqService : Service() {
         // service so it keeps working when MainActivity is closed.
         val eqPrefs = EqPreferencesManager(this)
         val coordinator = RouteSwitchCoordinator(this, eqPrefs, dynamicsManager)
+        // Per-app session attachment (Wavelet-style OPEN/CLOSE
+        // broadcasts handled by AudioSessionReceiver, forwarded here).
+        // Created BEFORE the AudioRoutingMonitor so the monitor's
+        // onRouteRebuild listener can reach into it.
+        sessionEffects = SessionEffectManager(this)
+
         val monitor = AudioRoutingMonitor(this).apply {
             onRouteChange = { coordinator.onRouteChange(it) }
             // Auto-populate the Audio Output screen's "seen" list as
             // soon as devices appear — even before they're routed to.
             onDeviceSeen = { key, label -> eqPrefs.rememberSeenDevice(key, label) }
+            // On any device add/remove (route flip, USB-DAC plugged,
+            // BT codec swap, internal sample-rate change), rebuild
+            // every per-session DP so the effect tracks the new format.
+            // Matches Poweramp's e80.java + s90.java:377-400 path —
+            // Wavelet skips this and is known to glitch on USB swaps.
+            onRouteRebuild = { sessionEffects?.onRoutingModeChanged() }
         }
         routingMonitor = monitor
         routeCoordinator = coordinator
         monitor.start()
-
-        // Per-app session attachment (Wavelet-style OPEN/CLOSE
-        // broadcasts handled by AudioSessionReceiver, forwarded here).
-        sessionEffects = SessionEffectManager(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -145,6 +167,27 @@ class EqService : Service() {
                 sessionEffects?.applyReverbParamsToAll()
                 return START_STICKY
             }
+            ACTION_RELEASE_DETECTED -> {
+                startForeground(NOTIFICATION_ID, buildNotification())
+                sessionEffects?.releaseDetected()
+                return START_STICKY
+            }
+            ACTION_PLAYBACK_DETECTED -> {
+                startForeground(NOTIFICATION_ID, buildNotification())
+                val bundle = intent.getBundleExtra(EXTRA_DETECTED_BUNDLE)
+                val detected: Map<String, Set<Int>> = if (bundle == null) {
+                    emptyMap()
+                } else {
+                    val out = mutableMapOf<String, Set<Int>>()
+                    for (key in bundle.keySet()) {
+                        val ints = bundle.getIntArray(key) ?: continue
+                        out[key] = ints.toSet()
+                    }
+                    out
+                }
+                sessionEffects?.observeDetectedPlayback(detected)
+                return START_STICKY
+            }
             ACTION_APPLY_ROUTING_MODE -> {
                 startForeground(NOTIFICATION_ID, buildNotification())
                 // When the user picks Session-based, stop the global
@@ -162,6 +205,10 @@ class EqService : Service() {
                 // reverb toggle on → attach" and "mode just left
                 // Session-based → release" symmetrically.
                 sessionEffects?.applyReverbParamsToAll()
+                // DPs are independent of reverbs — onRoutingModeChanged
+                // releases per-session DPs when leaving Session-based and
+                // re-attaches them when entering.
+                sessionEffects?.onRoutingModeChanged()
                 // When the user picks System-wide, we don't auto-start
                 // the global DP here — MainActivity owns the EQ
                 // instance (band data, preamp, MBC config). The user
