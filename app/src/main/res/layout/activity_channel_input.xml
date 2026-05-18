@@ -52,7 +52,9 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <!-- Description card -->
+            <!-- Description card — temporarily hidden. The plan is to
+                 surface this copy as a tooltip on the screen header
+                 down the road, so the markup stays for reference.
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -71,8 +73,16 @@
                     android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                     android:textColor="?attr/colorOnSurfaceVariant" />
             </com.google.android.material.card.MaterialCardView>
+            -->
 
-            <!-- Routing mode selector -->
+            <!-- CTA shown until the user grants Notification access — see
+                 PlaybackListenerService for why we need it (privilege gate
+                 only; no notifications are read). -->
+            <include layout="@layout/card_enable_detection" />
+
+            <!-- Routing mode selector — placed directly under the
+                 Session detection card so the two top-level toggles
+                 read as one settings group. -->
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -86,7 +96,8 @@
                 android:id="@+id/routingModeChips"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
+                android:layout_marginBottom="12dp"
+                app:chipSpacingHorizontal="8dp"
                 app:singleSelection="true"
                 app:selectionRequired="true">
 
@@ -95,20 +106,25 @@
                     style="@style/Widget.Material3.Chip.Filter"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="System-wide" />
+                    android:text="System-wide"
+                    android:textSize="14sp"
+                    app:chipMinHeight="44dp"
+                    app:chipStartPadding="14dp"
+                    app:chipEndPadding="14dp"
+                    app:checkedIconVisible="false" />
 
                 <com.google.android.material.chip.Chip
                     android:id="@+id/routingModePerApp"
                     style="@style/Widget.Material3.Chip.Filter"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Session-based" />
+                    android:text="Session-based"
+                    android:textSize="14sp"
+                    app:chipMinHeight="44dp"
+                    app:chipStartPadding="14dp"
+                    app:chipEndPadding="14dp"
+                    app:checkedIconVisible="false" />
             </com.google.android.material.chip.ChipGroup>
-
-            <!-- CTA shown until the user grants Notification access — see
-                 PlaybackListenerService for why we need it (privilege gate
-                 only; no notifications are read). -->
-            <include layout="@layout/card_enable_detection" />
 
             <!-- "Now playing": every app currently producing audio. Includes
                  apps that broadcast OPEN_AUDIO_EFFECT_CONTROL_SESSION
@@ -122,7 +138,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:layout_marginBottom="16dp">
+                android:layout_marginBottom="12dp">
 
                 <TextView
                     android:layout_width="match_parent"
@@ -133,42 +149,27 @@
                     android:paddingStart="4dp"
                     android:paddingBottom="6dp" />
 
-                <com.google.android.material.card.MaterialCardView
+                <!-- No outer wrapper card — each row is its own outlined
+                     card, matching the Apps list below. -->
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/currentSessionList"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    app:cardBackgroundColor="@android:color/transparent"
-                    app:cardCornerRadius="16dp"
-                    app:cardElevation="0dp"
-                    app:strokeColor="?attr/colorOutline"
-                    app:strokeWidth="1dp">
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
+                    android:nestedScrollingEnabled="false"
+                    android:overScrollMode="never"
+                    android:visibility="gone" />
 
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="4dp">
-
-                        <androidx.recyclerview.widget.RecyclerView
-                            android:id="@+id/currentSessionList"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:clipChildren="false"
-                            android:clipToPadding="false"
-                            android:nestedScrollingEnabled="false"
-                            android:overScrollMode="never"
-                            android:visibility="gone" />
-
-                        <TextView
-                            android:id="@+id/currentSessionEmpty"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:padding="14dp"
-                            android:text="No sessions detected"
-                            android:gravity="center"
-                            android:textAppearance="@style/TextAppearance.Material3.BodySmall"
-                            android:textColor="?attr/colorOnSurfaceVariant" />
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
+                <TextView
+                    android:id="@+id/currentSessionEmpty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:padding="14dp"
+                    android:text="No sessions detected"
+                    android:gravity="center"
+                    android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                    android:textColor="?attr/colorOnSurfaceVariant" />
             </LinearLayout>
 
             <!-- Apps list header -->

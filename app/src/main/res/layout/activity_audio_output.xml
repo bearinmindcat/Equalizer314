@@ -52,7 +52,9 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <!-- Description card -->
+            <!-- Description card — temporarily hidden. The plan is to
+                 surface this copy as a tooltip on the screen header
+                 down the road, so the markup stays for reference.
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -71,6 +73,7 @@
                     android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                     android:textColor="?attr/colorOnSurfaceVariant" />
             </com.google.android.material.card.MaterialCardView>
+            -->
 
             <!-- Section label sits OUTSIDE the card, like every other
                  section header on this screen. -->

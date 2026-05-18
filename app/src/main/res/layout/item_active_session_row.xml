@@ -1,60 +1,110 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- One row in the "Current session" panel — a single app currently
-     broadcasting an OPEN_AUDIO_EFFECT_CONTROL_SESSION. Compact two-
-     line layout: app icon + name on top, package + session id + bound
-     preset on the bottom. -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- One row in the "Now playing" panel. Layout matches the Apps-list
+     row (item_app_row.xml) plus an animated speaker pulse on the right
+     of the top sub-row. The pulse animates when the package's
+     MediaController reports STATE_PLAYING, freezes on the cone-only
+     frame when the row is present-but-silent. The preset dropdown
+     lets the user bind a preset directly without scrolling to the
+     Apps list. -->
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="horizontal"
-    android:gravity="center_vertical"
-    android:paddingStart="10dp"
-    android:paddingEnd="10dp"
-    android:paddingTop="8dp"
-    android:paddingBottom="8dp">
-
-    <ImageView
-        android:id="@+id/sessionRowIcon"
-        android:layout_width="32dp"
-        android:layout_height="32dp"
-        android:layout_marginEnd="12dp"
-        android:contentDescription="@null" />
+    android:layout_marginBottom="12dp"
+    app:cardBackgroundColor="@android:color/transparent"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="0dp"
+    app:strokeColor="?attr/colorOutline"
+    app:strokeWidth="1dp">
 
     <LinearLayout
-        android:layout_width="0dp"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:orientation="vertical">
+        android:orientation="horizontal"
+        android:gravity="top"
+        android:paddingStart="12dp"
+        android:paddingEnd="48dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp">
 
-        <TextView
-            android:id="@+id/sessionRowName"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
-            android:textColor="?attr/colorOnSurface"
-            android:singleLine="true"
-            android:ellipsize="end" />
+        <ImageView
+            android:id="@+id/sessionRowIcon"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:scaleType="fitCenter"
+            android:contentDescription="@null" />
 
-        <TextView
-            android:id="@+id/sessionRowMeta"
-            android:layout_width="match_parent"
+        <LinearLayout
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:textAppearance="@style/TextAppearance.Material3.BodySmall"
-            android:textColor="?attr/colorOnSurfaceVariant"
-            android:singleLine="true"
-            android:ellipsize="end" />
+            android:layout_weight="1"
+            android:layout_marginStart="12dp"
+            android:orientation="vertical">
+
+            <!-- Top sub-row: app label + animated pulse on the right. -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/sessionRowName"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:singleLine="true"
+                    android:ellipsize="end"
+                    android:textAppearance="@style/TextAppearance.Material3.TitleSmall"
+                    android:textColor="?attr/colorOnSurface" />
+
+                <ImageView
+                    android:id="@+id/sessionRowPulse"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginStart="8dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/anim_speaker_pulse" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/sessionRowMeta"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:singleLine="true"
+                android:ellipsize="end"
+                android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                android:textColor="?attr/colorOnSurfaceVariant" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/sessionRowPresetLayout"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:hint="Preset"
+                android:clickable="true"
+                android:focusable="true"
+                android:textColorHint="?attr/colorOnSurfaceVariant"
+                app:boxStrokeColor="@color/dropdown_box_stroke"
+                app:boxStrokeWidth="1dp"
+                app:boxStrokeWidthFocused="1dp"
+                app:endIconTint="@color/dropdown_end_icon_tint"
+                app:hintTextColor="?attr/colorOnSurfaceVariant">
+
+                <com.bearinmind.equalizer314.ui.DropdownAutoCompleteTextView
+                    android:id="@+id/sessionRowPresetDropdown"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:clickable="false"
+                    android:cursorVisible="false"
+                    android:focusable="false"
+                    android:inputType="none"
+                    android:longClickable="false"
+                    android:textIsSelectable="false" />
+            </com.google.android.material.textfield.TextInputLayout>
+        </LinearLayout>
     </LinearLayout>
-
-    <!-- Animated "now playing" pulse — speaker cone with sound waves
-         emanating. Indicates the row's app is outputting audio right
-         now. Source distinction (BROADCAST vs DETECTED) lives in the
-         meta TextView, so this is purely a "this is live" affordance. -->
-    <ImageView
-        android:id="@+id/sessionRowPulse"
-        android:layout_width="20dp"
-        android:layout_height="20dp"
-        android:layout_marginStart="8dp"
-        android:contentDescription="@null"
-        android:src="@drawable/anim_speaker_pulse" />
-</LinearLayout>
+</com.google.android.material.card.MaterialCardView>

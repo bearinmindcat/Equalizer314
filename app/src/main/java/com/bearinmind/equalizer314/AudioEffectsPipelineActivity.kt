@@ -109,9 +109,11 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
             onHandleTouch = { vh -> touchHelper.startDrag(vh) },
             onCardClick = { effect -> openDetailScreen(effect) },
             descriptionFor = { effect ->
-                if (effect == EffectId.AUDIO_OUTPUT) {
-                    currentAudioOutputDescription() ?: effect.description
-                } else effect.description
+                when (effect) {
+                    EffectId.AUDIO_OUTPUT -> currentAudioOutputDescription() ?: effect.description
+                    EffectId.AUDIO_INPUT -> currentChannelInputDescription()
+                    else -> effect.description
+                }
             },
         )
         recyclerView.adapter = adapter
@@ -227,12 +229,27 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Re-bind the Audio Output card so its description picks up
-        // any device that was connected / disconnected while this
-        // screen wasn't visible.
-        val pos = items.indexOf(EffectId.AUDIO_OUTPUT)
-        if (pos >= 0 && ::adapter.isInitialized) adapter.notifyItemChanged(pos)
+        // Re-bind the Audio Output + Channel Input cards so their
+        // descriptions pick up state that may have changed while this
+        // screen wasn't visible — current routed device for Audio
+        // Output, current routing mode for Channel Input.
+        if (::adapter.isInitialized) {
+            val outPos = items.indexOf(EffectId.AUDIO_OUTPUT)
+            if (outPos >= 0) adapter.notifyItemChanged(outPos)
+            val inPos = items.indexOf(EffectId.AUDIO_INPUT)
+            if (inPos >= 0) adapter.notifyItemChanged(inPos)
+        }
     }
+
+    /** Reads the persisted audio-routing-mode pref and returns the
+     *  user-facing label for the Channel Input pipeline card. Mode
+     *  0 = System-wide, 1 = Session-based. Stays in sync with the
+     *  chips inside ChannelInputActivity. */
+    private fun currentChannelInputDescription(): String =
+        when (eqPrefs.getAudioRoutingMode()) {
+            1 -> "Session-based"
+            else -> "System-wide"
+        }
 
     /**
      * Picks the currently routed output via the same priority rules

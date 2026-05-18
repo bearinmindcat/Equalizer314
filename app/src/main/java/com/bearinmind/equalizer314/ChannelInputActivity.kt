@@ -337,20 +337,17 @@ class ChannelInputActivity : AppCompatActivity() {
                     .filter { it.packageName in mediaCandidates }
                     .filter { it.packageName != packageName }
                     .map { info ->
-                        val label = pm.getApplicationLabel(info).toString()
-                        val priority = when {
-                            bindings.containsKey(info.packageName) -> 0
-                            seen.contains(info.packageName) -> 1
-                            else -> 2
-                        }
                         AppRow(
                             packageName = info.packageName,
-                            label = label,
+                            label = pm.getApplicationLabel(info).toString(),
                             icon = runCatching { pm.getApplicationIcon(info) }.getOrNull(),
-                            priority = priority,
                         )
                     }
-                    .sortedWith(compareBy({ it.priority }, { it.label.lowercase() }))
+                    // Pure alphabetical order — no "bring bound/seen
+                    // apps to the top." The Now playing panel above
+                    // already surfaces what's currently active, so
+                    // the Apps list stays predictable and scannable.
+                    .sortedBy { it.label.lowercase() }
             }
 
             stopLoadingAnimation()
@@ -374,7 +371,6 @@ class ChannelInputActivity : AppCompatActivity() {
         val packageName: String,
         val label: String,
         val icon: Drawable?,
-        val priority: Int,
     )
 
     private data class SessionRow(
@@ -401,7 +397,14 @@ class ChannelInputActivity : AppCompatActivity() {
             val name: TextView = view.findViewById(R.id.sessionRowName)
             val meta: TextView = view.findViewById(R.id.sessionRowMeta)
             val pulse: ImageView = view.findViewById(R.id.sessionRowPulse)
+            val presetLayout: TextInputLayout = view.findViewById(R.id.sessionRowPresetLayout)
+            val dropdown: MaterialAutoCompleteTextView = view.findViewById(R.id.sessionRowPresetDropdown)
         }
+
+        // Shared with AppsAdapter via the lastDismissAt timestamp on
+        // that adapter; we use our own here since the two lists never
+        // share a row.
+        private var lastDismissAt = 0L
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
             val view = LayoutInflater.from(parent.context)
@@ -411,46 +414,51 @@ class ChannelInputActivity : AppCompatActivity() {
 
         override fun getItemCount() = items.size
 
+        @SuppressLint("ClickableViewAccessibility")
         override fun onBindViewHolder(holder: VH, position: Int) {
             val r = items[position]
             holder.icon.setImageDrawable(r.icon)
             holder.name.text = r.label
-            // BROADCAST = the app told us about its session via the
-            // OPEN intent → we can attach effects authoritatively.
-            // DETECTED = we recovered it from the audio dump → if the
-            // dump didn't surface a sessionId (some OEMs lock the dump
-            // down), we render the row with the marker -1 set by the
-            // public-API fallback path.
-            val hasRealSession = r.sessionId > 0
-            val sourceTag = when (r.source) {
-                SessionEffectManager.AttachSource.BROADCAST -> "Bound"
-                SessionEffectManager.AttachSource.DETECTED ->
-                    if (!hasRealSession) "Detected (no session)" else "Detected"
-            }
-            val preset = r.presetName?.let { "preset: $it" } ?: "no preset bound"
-            // Real audioserver session IDs are always positive — only
-            // surface them when we have one. Synthetic negative IDs
-            // (assigned when audioserver's dumpsys is locked down) are
-            // implementation detail and stay out of the UI.
-            holder.meta.text = if (hasRealSession) {
-                "${r.packageName} • session ${r.sessionId} • $sourceTag • $preset"
-            } else {
-                "${r.packageName} • $sourceTag • $preset"
-            }
-            // Speaker pulse only animates when the package's
-            // MediaController reports STATE_PLAYING. When paused /
-            // silent we stop the animation and pin it to frame 0
-            // (cone only, no waves) so the row reads as "present but
-            // not making sound right now."
+            // Meta is just the package now — the source-tag /
+            // session-id are implementation detail, and the preset
+            // dropdown below already communicates binding state.
+            holder.meta.text = r.packageName
+
+            // Speaker pulse: animated green when actively outputting,
+            // static dim cone when present-but-silent. Tint is driven
+            // off the ImageView so the AnimationDrawable's per-frame
+            // tint metadata stays consistent across the loop.
             val pulse = holder.pulse.drawable as? android.graphics.drawable.AnimationDrawable
             if (pulse != null) {
                 if (r.isPlaying) {
+                    holder.pulse.imageTintList = android.content.res.ColorStateList.valueOf(
+                        androidx.core.content.ContextCompat.getColor(
+                            this@ChannelInputActivity, R.color.pulse_active_green,
+                        )
+                    )
                     if (!pulse.isRunning) pulse.start()
                 } else {
                     pulse.stop()
                     pulse.selectDrawable(0)
+                    holder.pulse.imageTintList = android.content.res.ColorStateList.valueOf(
+                        com.google.android.material.color.MaterialColors.getColor(
+                            holder.pulse,
+                            com.google.android.material.R.attr.colorOnSurfaceVariant,
+                        )
+                    )
                 }
             }
+
+            // Same dropdown behavior as the Apps list — pick a preset
+            // here and the binding applies to this package immediately.
+            bindPresetDropdown(
+                presetLayout = holder.presetLayout,
+                dropdown = holder.dropdown,
+                packageName = r.packageName,
+                appLabel = r.label,
+                getLastDismiss = { lastDismissAt },
+                setLastDismiss = { lastDismissAt = it },
+            )
         }
     }
 
@@ -487,47 +495,66 @@ class ChannelInputActivity : AppCompatActivity() {
             holder.icon.setImageDrawable(row.icon)
             holder.name.text = row.label
             holder.pkg.text = row.packageName
-
-            val knownNames = listCustomPresetNames()
-            val binding = eqPrefs.getAppBinding(row.packageName)
-            val currentSelection = binding?.presetName ?: "(none)"
-            val missing = binding != null && binding.presetName !in knownNames
-            val entries = buildPresetEntries(if (missing) binding!!.presetName else null)
-
-            val dropdown = holder.dropdown
-            dropdown.setText(
-                if (missing) "${binding!!.presetName} (missing)" else currentSelection,
-                false,
+            bindPresetDropdown(
+                presetLayout = holder.presetLayout,
+                dropdown = holder.dropdown,
+                packageName = row.packageName,
+                appLabel = row.label,
+                getLastDismiss = { lastDismissAt },
+                setLastDismiss = { lastDismissAt = it },
             )
-            dropdown.setAdapter(PresetDropdownAdapter(this@ChannelInputActivity, entries))
+        }
+    }
 
-            dropdown.setOnDismissListener {
-                lastDismissAt = System.currentTimeMillis()
-            }
-            holder.presetLayout.setOnClickListener {
-                if (System.currentTimeMillis() - lastDismissAt < 300) {
-                    lastDismissAt = 0L
-                    return@setOnClickListener
-                }
-                if (dropdown.isPopupShowing) dropdown.dismissDropDown() else dropdown.showDropDown()
-            }
-            applyBoxOutlineRipple(holder.presetLayout, dropdown)
+    /** Wire up a preset-binding dropdown for a row. Shared between
+     *  AppsAdapter and ActiveSessionsAdapter — both let the user pick
+     *  a custom preset to associate with a package. Selecting "(none)"
+     *  removes the binding; selecting a missing-preset row is a no-op. */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun bindPresetDropdown(
+        presetLayout: TextInputLayout,
+        dropdown: MaterialAutoCompleteTextView,
+        packageName: String,
+        appLabel: String,
+        getLastDismiss: () -> Long,
+        setLastDismiss: (Long) -> Unit,
+    ) {
+        val knownNames = listCustomPresetNames()
+        val binding = eqPrefs.getAppBinding(packageName)
+        val currentSelection = binding?.presetName ?: "(none)"
+        val missing = binding != null && binding.presetName !in knownNames
+        val entries = buildPresetEntries(if (missing) binding!!.presetName else null)
 
-            dropdown.setOnItemClickListener { _, _, pos, _ ->
-                val pick = entries[pos].displayName
-                when {
-                    pick == "(none)" -> {
-                        eqPrefs.removeAppBinding(row.packageName)
-                        Toast.makeText(this@ChannelInputActivity, "Unbound ${row.label}", Toast.LENGTH_SHORT).show()
-                    }
-                    pick.endsWith(" (missing)") -> { /* dangling */ }
-                    else -> {
-                        eqPrefs.saveAppBinding(EqPreferencesManager.AppBinding(row.packageName, pick))
-                        Toast.makeText(this@ChannelInputActivity, "Bound \"$pick\" to ${row.label}", Toast.LENGTH_SHORT).show()
-                    }
-                }
-                dropdown.clearFocus()
+        dropdown.setText(
+            if (missing) "${binding!!.presetName} (missing)" else currentSelection,
+            false,
+        )
+        dropdown.setAdapter(PresetDropdownAdapter(this, entries))
+
+        dropdown.setOnDismissListener { setLastDismiss(System.currentTimeMillis()) }
+        presetLayout.setOnClickListener {
+            if (System.currentTimeMillis() - getLastDismiss() < 300) {
+                setLastDismiss(0L)
+                return@setOnClickListener
             }
+            if (dropdown.isPopupShowing) dropdown.dismissDropDown() else dropdown.showDropDown()
+        }
+        applyBoxOutlineRipple(presetLayout, dropdown)
+
+        dropdown.setOnItemClickListener { _, _, pos, _ ->
+            val pick = entries[pos].displayName
+            when {
+                pick == "(none)" -> {
+                    eqPrefs.removeAppBinding(packageName)
+                    Toast.makeText(this, "Unbound $appLabel", Toast.LENGTH_SHORT).show()
+                }
+                pick.endsWith(" (missing)") -> { /* dangling */ }
+                else -> {
+                    eqPrefs.saveAppBinding(EqPreferencesManager.AppBinding(packageName, pick))
+                    Toast.makeText(this, "Bound \"$pick\" to $appLabel", Toast.LENGTH_SHORT).show()
+                }
+            }
+            dropdown.clearFocus()
         }
     }
 

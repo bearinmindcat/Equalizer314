@@ -53,6 +53,21 @@ class PlaybackListenerService : NotificationListenerService() {
 
     private val snapshotRunnable = Runnable { runSnapshot() }
 
+    /** Periodic re-snapshot for the case where neither
+     *  [AudioPlaybackCallback] nor [MediaSessionManager.OnActiveSessionsChangedListener]
+     *  fires after an app exits cold (force-stop, swipe-from-recents).
+     *  Without this, `detectedKeys` keeps the stale entry and the row
+     *  lingers in the "Now playing" UI until another media app pokes
+     *  the system into firing a callback.
+     *  3 seconds is short enough that stale rows don't feel
+     *  permanent; long enough to be a rounding error against battery. */
+    private val heartbeatRunnable = object : Runnable {
+        override fun run() {
+            scheduleSnapshot("heartbeat")
+            detectorHandler?.postDelayed(this, HEARTBEAT_MS)
+        }
+    }
+
     override fun onListenerConnected() {
         super.onListenerConnected()
         Log.d(TAG, "onListenerConnected — starting playback detection")
@@ -68,6 +83,9 @@ class PlaybackListenerService : NotificationListenerService() {
             // Initial scan once the listener is alive so the UI sees
             // whatever was already playing at the moment of bind.
             scheduleSnapshot("listenerConnected")
+            // Heartbeat to clean up entries left behind when an app
+            // dies without firing a teardown callback.
+            handler.postDelayed(heartbeatRunnable, HEARTBEAT_MS)
         }
     }
 
@@ -86,6 +104,7 @@ class PlaybackListenerService : NotificationListenerService() {
         detectorThread = null
         if (handler != null) {
             handler.removeCallbacks(snapshotRunnable)
+            handler.removeCallbacks(heartbeatRunnable)
             handler.post {
                 unregisterCallbacks()
                 thread?.quitSafely()
@@ -288,5 +307,6 @@ class PlaybackListenerService : NotificationListenerService() {
     companion object {
         private const val TAG = "PlaybackListenerSvc"
         private const val DEBOUNCE_MS = 100L
+        private const val HEARTBEAT_MS = 3000L
     }
 }

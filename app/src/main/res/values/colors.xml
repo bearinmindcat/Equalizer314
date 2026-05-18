@@ -4,4 +4,9 @@
     <color name="filter_active_text">#FF000000</color>
     <color name="filter_inactive_text">#FFBBBBBB</color>
     <color name="filter_outline">#FF444444</color>
+
+    <!-- Light green used to tint the "Now playing" speaker pulse when
+         a row is actively outputting audio. Same Material Green 200
+         the MBC band picker uses for its green band. -->
+    <color name="pulse_active_green">#FFA5D6A7</color>
 </resources>
