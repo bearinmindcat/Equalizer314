@@ -51,6 +51,11 @@ class RouteSwitchCoordinator(
             return
         }
 
+        // No binding (the user picked "(none)" which deletes the entry,
+        // or the device was never bound) → leave the live DP exactly
+        // where it is. Intentional no-op: "(none)" means "don't touch
+        // what's already loaded," not "disable the EQ." A future
+        // "Disable" option would be a separate dropdown entry.
         val binding = eqPrefs.getDeviceBinding(change.key) ?: return
         val preset = loadCustomPreset(binding.presetName)
         if (preset == null) {
@@ -65,8 +70,16 @@ class RouteSwitchCoordinator(
         // Mirror the preset's `bands` array into the live `bands` key.
         val bandsJson = preset.optJSONArray("bands") ?: return
         livePrefs.edit().putString("bands", bandsJson.toString()).apply()
+        // Push the saved preamp to the live DP, not just to prefs. Without
+        // setting dynamicsManager.preampGainDb the audio path stays at the
+        // previous device's preamp value, so an AutoEQ preset's -6 dB
+        // headroom would silently get dropped every time the device routes in.
         if (preset.has("preamp")) {
-            eqPrefs.savePreampGain(preset.getDouble("preamp").toFloat())
+            val preamp = preset.getDouble("preamp").toFloat()
+            eqPrefs.savePreampGain(preamp)
+            if (dynamicsManager.isActive) {
+                dynamicsManager.preampGainDb = preamp
+            }
         }
 
         if (dynamicsManager.isActive) {
