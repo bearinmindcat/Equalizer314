@@ -104,6 +104,14 @@ class EqService : Service() {
          *  stay processed; everything in this set triggers a bypass
          *  while the stream is active, restoring it the moment the
          *  stream stops. */
+        /** Mirror of `MbcActivity.DEFAULT_CUTOFFS`. Used as the
+         *  fallback band-crossover frequencies when a fresh install
+         *  starts DP before MbcActivity has ever written per-band
+         *  crossovers to prefs. If `MbcActivity` ever changes its
+         *  defaults, this must be updated in lock-step. */
+        private val MBC_DEFAULT_CUTOFFS =
+            floatArrayOf(200f, 700f, 2000f, 5000f, 7000f, 10000f)
+
         private val BYPASS_USAGES = setOf(
             AudioAttributes.USAGE_NOTIFICATION,
             AudioAttributes.USAGE_NOTIFICATION_RINGTONE,
@@ -350,6 +358,7 @@ class EqService : Service() {
                         p.savePowerState(true)
                         setDpRunning(true)
                         syncSystemSoundBypassFromCurrent()
+                        applyPersistedMbcConfig()
                         showDpStateToast(started = true)
                         sendBroadcast(Intent(ACTION_EQ_STARTED).setPackage(packageName))
                         updateNotification()
@@ -388,6 +397,7 @@ class EqService : Service() {
                         p.savePowerState(true)
                         setDpRunning(true)
                         syncSystemSoundBypassFromCurrent()
+                        applyPersistedMbcConfig()
                         showDpStateToast(started = true)
                         sendBroadcast(Intent(ACTION_EQ_STARTED).setPackage(packageName))
                         updateNotification()
@@ -518,6 +528,38 @@ class EqService : Service() {
     }
 
     fun updateMbc(bands: List<DynamicsProcessingManager.MbcBandParams>, crossovers: FloatArray) {
+        dynamicsManager.applyMbcBands(bands, crossovers)
+    }
+
+    /** Load the persisted MBC band params and crossovers and push them
+     *  to the live DP. Idempotent — safe to call after every start
+     *  path. No-op if DP isn't running or MBC isn't enabled. Mirrors
+     *  the work `MbcActivity.pushMbcToService` does on a slider
+     *  change, but driven from prefs so it runs on cold-start without
+     *  the user ever opening MbcActivity. Fixes the "MBC says on but
+     *  isn't compressing until you touch a slider" symptom. */
+    fun applyPersistedMbcConfig() {
+        if (!dynamicsManager.isActive) return
+        if (!dynamicsManager.mbcEnabled) return
+        val p = EqPreferencesManager(this)
+        val bandCount = dynamicsManager.mbcBandCount
+        val bands = (0 until bandCount).map { i ->
+            DynamicsProcessingManager.MbcBandParams(
+                enabled = p.getMbcBandEnabled(i),
+                attackMs = p.getMbcBandAttack(i),
+                releaseMs = p.getMbcBandRelease(i),
+                ratio = p.getMbcBandRatio(i),
+                thresholdDb = p.getMbcBandThreshold(i),
+                kneeDb = p.getMbcBandKnee(i),
+                noiseGateDb = p.getMbcBandNoiseGate(i),
+                expanderRatio = p.getMbcBandExpander(i),
+                preGainDb = p.getMbcBandPreGain(i),
+                postGainDb = p.getMbcBandPostGain(i),
+            )
+        }
+        val crossovers = FloatArray(maxOf(0, bandCount - 1)) { i ->
+            p.getMbcCrossover(i, MBC_DEFAULT_CUTOFFS.getOrElse(i) { 1000f })
+        }
         dynamicsManager.applyMbcBands(bands, crossovers)
     }
 

@@ -406,6 +406,12 @@ class EqStateManager(
         dm.limiterRatio = limiterRatio
         dm.limiterThresholdDb = limiterThresholdDb
         dm.limiterPostGainDb = limiterPostGainDb
+        // MBC topology has to be set BEFORE DP is constructed so the
+        // right number of MBC bands gets allocated. The per-band
+        // params (threshold, ratio, attack…) are pushed AFTER start
+        // via applyPersistedMbcConfig — see the comment there.
+        dm.mbcEnabled = eqPrefs.getMbcEnabled()
+        dm.mbcBandCount = eqPrefs.getMbcBandCount()
         val started = service.startEq(parametricEq)
         isProcessing = started
         if (!started) {
@@ -413,6 +419,13 @@ class EqStateManager(
             Toast.makeText(context, "Failed to start DynamicsProcessing", Toast.LENGTH_SHORT).show()
             return
         }
+        // Push the saved MBC band params + crossovers to the live DP.
+        // Without this, MBC would say "on" in the UI but every band
+        // would be at DynamicsProcessing's default (ratio=1, etc.) —
+        // a no-op compressor that only "wakes up" when the user
+        // touched a slider in MbcActivity. Fixes the report in the
+        // MBC-zombie-state issue.
+        service.applyPersistedMbcConfig()
         // If Channel Side EQ is on, fan out the distinct L/R responses now
         // that DP is live.
         if (eqPrefs.getChannelSideEqEnabled()) {
