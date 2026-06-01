@@ -229,6 +229,7 @@ class  MainActivity : AppCompatActivity() {
     // Views
     private lateinit var eqGraphView: EqGraphView
     private lateinit var eqToggleButton: MaterialButton
+    private lateinit var eqPowerToggle: MaterialButton
     private lateinit var presetDropdown: MaterialAutoCompleteTextView
     private lateinit var filterTypeGroup: LinearLayout
     private lateinit var qSlider: Slider
@@ -531,6 +532,7 @@ class  MainActivity : AppCompatActivity() {
     private fun initViews() {
         eqGraphView = findViewById(R.id.eqGraphView)
         eqToggleButton = findViewById(R.id.eqToggleButton)
+        eqPowerToggle = findViewById(R.id.eqPowerToggle)
         presetDropdown = findViewById(R.id.presetSpinner)
         filterTypeGroup = findViewById(R.id.filterTypeGroup)
         qSlider = findViewById(R.id.qSlider)
@@ -762,6 +764,19 @@ class  MainActivity : AppCompatActivity() {
             resetBtn.minimumWidth = 0; resetBtn.minimumHeight = 0
             resetBtn.setPadding(0, 0, 0, 0)
             resetBtn.visibility = android.view.View.GONE
+
+            // EQ on/off toggle: occupies the (hidden) reset slot,
+            // immediately to the left of the Edit button.
+            val eqPowerLp = eqPowerToggle.layoutParams as android.widget.FrameLayout.LayoutParams
+            eqPowerLp.width = specWidth
+            eqPowerLp.height = btnHeight
+            eqPowerLp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+            eqPowerLp.leftMargin = resetLeft.coerceAtLeast(gapPx)
+            eqPowerLp.topMargin = btnTop
+            eqPowerToggle.layoutParams = eqPowerLp
+            eqPowerToggle.minimumWidth = 0; eqPowerToggle.minimumHeight = 0
+            eqPowerToggle.setPadding(0, 0, 0, 0)
+            applyEqToggleVisual(stateManager.parametricEq.isEnabled)
 
             // Undo button: below reset
             val undoLp = undoBtn.layoutParams as android.widget.FrameLayout.LayoutParams
@@ -1865,15 +1880,10 @@ class  MainActivity : AppCompatActivity() {
             if (stateManager.isProcessing) stopProcessing() else startProcessing()
         }
 
-        // EQ toggle
-        eqToggleButton.setOnClickListener {
-            val eq = stateManager.parametricEq
-            eq.isEnabled = !eq.isEnabled
-            updateEqToggleUI()
-            if (stateManager.isProcessing) {
-                stateManager.eqService?.setEqEnabled(eq.isEnabled)
-            }
-        }
+        // EQ toggle — both the text button and the graph-header icon
+        // drive the same toggle.
+        eqToggleButton.setOnClickListener { toggleEq() }
+        eqPowerToggle.setOnClickListener { toggleEq() }
 
         // Preset dropdown
         presetDropdown.setOnItemClickListener { parent, _, position, _ ->
@@ -2976,9 +2986,47 @@ class  MainActivity : AppCompatActivity() {
         com.bearinmind.equalizer314.ui.BottomNavHelper.updateStatus(this, eqPrefs)
     }
 
+    /** Flip the EQ on/off. Shared by the text button and the graph-
+     *  header icon. Toggles `parametricEq.isEnabled` and, while
+     *  processing, pushes it to the live DP via setEqEnabled. */
+    private fun toggleEq() {
+        val eq = stateManager.parametricEq
+        eq.isEnabled = !eq.isEnabled
+        // Persist immediately so the bottom-nav status label (which
+        // reads the eqEnabled pref) and the next cold start agree.
+        eqPrefs.saveEqEnabled(eq.isEnabled)
+        updateEqToggleUI()
+        com.bearinmind.equalizer314.ui.BottomNavHelper.updateStatus(this, eqPrefs)
+        if (stateManager.isProcessing) {
+            stateManager.eqService?.setEqEnabled(eq.isEnabled)
+        }
+    }
+
     private fun updateEqToggleUI() {
         val enabled = stateManager.parametricEq.isEnabled
         eqToggleButton.text = if (enabled) "EQ: ON" else "EQ: OFF"
+        if (::eqPowerToggle.isInitialized) applyEqToggleVisual(enabled)
+    }
+
+    /** Active/inactive styling for the graph-header EQ toggle. Shows
+     *  "ON" / "OFF" text, mirroring the visualizer button's lit-when-on
+     *  look: filled background + brighter stroke + bright text when EQ
+     *  is on; dim outlined when off. */
+    private fun applyEqToggleVisual(enabled: Boolean) {
+        if (!::eqPowerToggle.isInitialized) return
+        val d = resources.displayMetrics.density
+        eqPowerToggle.text = if (enabled) "ON" else "OFF"
+        if (enabled) {
+            eqPowerToggle.setBackgroundColor(0xFF555555.toInt())
+            eqPowerToggle.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+            eqPowerToggle.strokeWidth = (2 * d).toInt()
+            eqPowerToggle.setTextColor(0xFFDDDDDD.toInt())
+        } else {
+            eqPowerToggle.setBackgroundColor(0x00000000)
+            eqPowerToggle.strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+            eqPowerToggle.strokeWidth = (1 * d).toInt()
+            eqPowerToggle.setTextColor(0xFF777777.toInt())
+        }
     }
 
     // ---- Filter Type Buttons ----

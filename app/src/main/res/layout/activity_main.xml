@@ -366,6 +366,30 @@
                             app:strokeWidth="1dp"
                             android:contentDescription="Edit" />
 
+                        <!-- EQ on/off toggle. Positioned at runtime in the
+                             reset slot (immediately left of Edit) by the
+                             eqGraphView.post block in MainActivity. Mirrors
+                             the existing eqToggleButton ("EQ: ON/OFF"). -->
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/eqPowerToggle"
+                            style="?attr/materialButtonOutlinedStyle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="top|end"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            android:padding="0dp"
+                            android:text="OFF"
+                            android:textSize="9sp"
+                            android:textAllCaps="true"
+                            app:iconPadding="0dp"
+                            app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
+                            app:strokeColor="#FF444444"
+                            app:strokeWidth="1dp"
+                            android:contentDescription="Toggle EQ on or off" />
+
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/visualizerToggle"
                             style="?attr/materialButtonOutlinedStyle"

@@ -128,11 +128,12 @@ object BottomNavHelper {
         val mbcStatus = activity.findViewById<TextView>(R.id.navMbcStatus) ?: return
         val limiterStatus = activity.findViewById<TextView>(R.id.navLimiterStatus) ?: return
 
+        val eqOn = eqPrefs.getEqEnabled()
         val mbcOn = eqPrefs.getMbcEnabled()
         val limiterOn = eqPrefs.getLimiterEnabled()
 
-        eqStatus.text = "ON"
-        eqStatus.setTextColor(ON_COLOR)
+        eqStatus.text = if (eqOn) "ON" else "OFF"
+        eqStatus.setTextColor(if (eqOn) ON_COLOR else OFF_COLOR)
 
         mbcStatus.text = if (mbcOn) "ON" else "OFF"
         mbcStatus.setTextColor(if (mbcOn) ON_COLOR else OFF_COLOR)

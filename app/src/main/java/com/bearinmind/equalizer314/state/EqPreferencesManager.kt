@@ -85,6 +85,16 @@ class EqPreferencesManager(context: Context) {
         eq.isEnabled = prefs.getBoolean("eqEnabled", true)
     }
 
+    /** Whether the parametric EQ stage is enabled. Same `eqEnabled`
+     *  flag saveState/restoreState use; exposed standalone so the EQ
+     *  on/off toggle can persist it immediately and the bottom-nav
+     *  status label can read it without rebuilding the whole EQ. */
+    fun getEqEnabled(): Boolean = prefs.getBoolean("eqEnabled", true)
+
+    fun saveEqEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("eqEnabled", enabled).apply()
+    }
+
     // ---- Per-channel EQ persistence (Channel Side EQ) ------------------
 
     /** Serialize a ParametricEqualizer's bands to the compact JSON-array
