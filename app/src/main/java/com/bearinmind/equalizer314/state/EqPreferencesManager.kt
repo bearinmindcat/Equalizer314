@@ -15,8 +15,22 @@ class EqPreferencesManager(context: Context) {
 
     /** A device → preset binding. `key` is the stable device identity
      *  (e.g. `"BT:00:1A:7D:DA:71:13"`), `label` is the human-friendly
-     *  name shown in the UI, `presetName` is a key into `custom_presets`. */
+     *  name shown in the UI, `presetName` is a key into `custom_presets`
+     *  — or the reserved [DEVICE_PRESET_DISABLED] sentinel meaning
+     *  "detach DP entirely while this device is the active route." */
     data class Binding(val key: String, val label: String, val presetName: String)
+
+    companion object {
+        /** Reserved [Binding.presetName] value meaning "fully disable
+         *  (detach) DynamicsProcessing while this output device is
+         *  routed." Distinct from no binding (`(none)` — keep the
+         *  current preset) and a flat preset (DP still attached). Used
+         *  to dodge OEM output-effect conflicts (e.g. Pixel Adaptive
+         *  Sound) on a specific device. The reserved double-underscore
+         *  token makes collision with a real user preset name
+         *  effectively impossible. */
+        const val DEVICE_PRESET_DISABLED = "__disable_eq__"
+    }
 
     /** A per-app → preset binding for sessions that broadcast
      *  OPEN_AUDIO_EFFECT_CONTROL_SESSION. */

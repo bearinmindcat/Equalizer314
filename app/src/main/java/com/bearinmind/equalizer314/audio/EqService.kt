@@ -392,6 +392,10 @@ class EqService : Service() {
                 staticLastDeviceKey = change.key
                 staticLastDeviceLabel = change.label
                 coordinator.onRouteChange(change)
+                // Real physical output change → run the device lifecycle
+                // with the Fix-1 recreate enabled (Disable EQ detach,
+                // recovery, or clean re-attach on the new output).
+                handleDeviceRouteLifecycle(change.key, recreateOnActive = true)
             }
             // Auto-populate the Audio Output screen's "seen" list as
             // soon as devices appear — even before they're routed to.
@@ -652,6 +656,84 @@ class EqService : Service() {
         val key = lastDeviceKey ?: return
         val label = lastDeviceLabel ?: ""
         routeCoordinator?.onRouteChange(AudioRoutingMonitor.RouteChange(key, label))
+        // Apply disable/recovery lifecycle for the binding too, but
+        // WITHOUT the unconditional route-change recreate (no physical
+        // output change happened on a binding edit / headless start).
+        handleDeviceRouteLifecycle(key, recreateOnActive = false)
+    }
+
+    /** True while DynamicsProcessing has been detached specifically
+     *  because the active output device is bound to "Disable EQ"
+     *  ([EqPreferencesManager.DEVICE_PRESET_DISABLED]). Distinct from a
+     *  user power-off: `powerOn` stays true, so switching to a non-
+     *  disable device auto-resumes processing. */
+    @Volatile
+    private var disabledByDevice = false
+
+    /** Owns the global-DP lifecycle decisions that depend on the active
+     *  output device, so `isDpRunning` / notification / MBC / bypass
+     *  all stay consistent (no parallel ownership in the coordinator):
+     *
+     *   - device bound to "Disable EQ"  → stop DP (detach), keep
+     *     `powerOn` so it resumes elsewhere.
+     *   - DP active + [recreateOnActive] → recreate on the new output
+     *     (Fix 1: dodges the Adaptive-Sound route-transition silence).
+     *   - DP off but `powerOn` and we were device-disabled → resume via
+     *     the normal AUTO_START sequence.
+     *
+     *  [recreateOnActive] is true only for real physical route changes
+     *  (from the AudioRoutingMonitor); false for binding edits / start-
+     *  path reapplies where no output actually changed. */
+    private fun handleDeviceRouteLifecycle(deviceKey: String, recreateOnActive: Boolean) {
+        val prefs = EqPreferencesManager(this)
+        // Session-based routing doesn't use the global DP at all.
+        if (prefs.getAudioRoutingMode() == 1) return
+        if (!prefs.getDeviceAutoSwitchEnabled()) return
+        val binding = prefs.getDeviceBinding(deviceKey)
+        val isDisable = binding?.presetName == EqPreferencesManager.DEVICE_PRESET_DISABLED
+        when {
+            isDisable -> {
+                if (dynamicsManager.isActive) {
+                    dynamicsManager.stop()
+                    setDpRunning(false)
+                    disabledByDevice = true
+                    // Silent stop: sync MainActivity FAB without a toast.
+                    sendBroadcast(
+                        Intent(ACTION_EQ_STOPPED)
+                            .setPackage(packageName)
+                            .putExtra(EXTRA_SILENT_STOP, true),
+                    )
+                    updateNotification()
+                    Log.d(TAG, "Device '$deviceKey' bound to Disable EQ — DP detached")
+                }
+            }
+            dynamicsManager.isActive -> {
+                disabledByDevice = false
+                if (recreateOnActive) {
+                    if (dynamicsManager.reattachActive()) {
+                        applyPersistedMbcConfig()
+                        syncSystemSoundBypassFromCurrent()
+                        updateNotification()
+                        Log.d(TAG, "Route change → recreated global DP on new output")
+                    }
+                }
+            }
+            prefs.getPowerState() && disabledByDevice -> {
+                // Recover: a non-disable device routed in after we'd
+                // detached for a Disable device. Bring DP back via the
+                // standard AUTO_START sequence (which also re-applies
+                // this device's bound preset through reapplyCurrentDeviceBinding).
+                disabledByDevice = false
+                val svc = Intent(this, EqService::class.java)
+                    .setAction(ACTION_AUTO_START)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(svc)
+                } else {
+                    startService(svc)
+                }
+                Log.d(TAG, "Non-disable device '$deviceKey' routed in — resuming DP")
+            }
+        }
     }
 
     fun updateEq(eq: ParametricEqualizer) {

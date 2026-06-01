@@ -212,6 +212,23 @@ class DynamicsProcessingManager {
         }, 100)
     }
 
+    /** Force a clean recreate of the live DP on the *current* output
+     *  device using the last-applied EQ. Used on output route changes
+     *  (BT ↔ speaker etc.) to dodge OEM output-effect conflicts that
+     *  otherwise leave the new route muted until DP is re-toggled —
+     *  e.g. Pixel Adaptive Sound on Android 14. Equivalent to a manual
+     *  power off/on but preserves the current bands. No-op (returns
+     *  false) when DP isn't active or has no remembered EQ. Caller is
+     *  responsible for re-applying MBC per-band params / bypass after,
+     *  same as any other start(). */
+    fun reattachActive(): Boolean {
+        if (!isActive) return false
+        val eq = lastEq ?: return false
+        stop()
+        start(eq)
+        return isActive
+    }
+
     fun updateFromEqualizer(eq: ParametricEqualizer) {
         updateFromEqualizers(eq, eq)
     }

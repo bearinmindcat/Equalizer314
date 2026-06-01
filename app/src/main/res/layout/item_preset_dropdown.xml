@@ -40,4 +40,17 @@
         android:layout_width="64dp"
         android:layout_height="28dp"
         android:layout_marginStart="12dp" />
+
+    <!-- Shown in place of the curve for the "Disable EQ" entry (no
+         curve to draw). Toggled with presetRowCurve in the adapter. -->
+    <TextView
+        android:id="@+id/presetRowNA"
+        android:layout_width="64dp"
+        android:layout_height="28dp"
+        android:layout_marginStart="12dp"
+        android:gravity="center"
+        android:text="N/A"
+        android:textColor="#FFEF9A9A"
+        android:textSize="12sp"
+        android:visibility="gone" />
 </LinearLayout>

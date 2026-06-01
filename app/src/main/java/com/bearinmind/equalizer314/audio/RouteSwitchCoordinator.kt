@@ -57,6 +57,12 @@ class RouteSwitchCoordinator(
         // what's already loaded," not "disable the EQ." A future
         // "Disable" option would be a separate dropdown entry.
         val binding = eqPrefs.getDeviceBinding(change.key) ?: return
+        // "Disable EQ" binding: the global-DP detach is owned by
+        // EqService.handleDeviceRouteLifecycle (so isDpRunning /
+        // notification stay consistent). Nothing to apply here — bail
+        // before loadCustomPreset so we don't log a bogus "missing
+        // preset" for the sentinel name.
+        if (binding.presetName == EqPreferencesManager.DEVICE_PRESET_DISABLED) return
         val preset = loadCustomPreset(binding.presetName)
         if (preset == null) {
             Log.w(TAG, "Binding for '${binding.label}' references missing preset '${binding.presetName}'")

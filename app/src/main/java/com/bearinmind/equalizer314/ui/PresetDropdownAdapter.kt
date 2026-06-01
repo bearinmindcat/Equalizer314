@@ -34,7 +34,13 @@ class PresetDropdownAdapter(
      *                     (includes `channelSideEqEnabled` etc. so CSE
      *                     presets stack L/R); null for `"(none)"` /
      *                     missing-preset rows. */
-    data class Entry(val displayName: String, val presetJson: JSONObject?)
+    data class Entry(
+        val displayName: String,
+        val presetJson: JSONObject?,
+        /** "Disable EQ" sentinel row — rendered with red text and an
+         *  "N/A" placeholder instead of a curve preview. */
+        val isDisable: Boolean = false,
+    )
 
     private val inflater = LayoutInflater.from(context)
 
@@ -47,13 +53,37 @@ class PresetDropdownAdapter(
     private fun bind(position: Int, convertView: View?, parent: ViewGroup): View {
         val row = convertView ?: inflater.inflate(R.layout.item_preset_dropdown, parent, false)
         val entry = entries[position]
-        row.findViewById<TextView>(R.id.presetRowName).text = entry.displayName
-        row.findViewById<PresetCurveView>(R.id.presetRowCurve).setPreset(entry.presetJson)
+        val nameView = row.findViewById<TextView>(R.id.presetRowName)
+        val curve = row.findViewById<PresetCurveView>(R.id.presetRowCurve)
+        val naView = row.findViewById<TextView>(R.id.presetRowNA)
+        val preampView = row.findViewById<TextView>(R.id.presetRowPreamp)
+        nameView.text = entry.displayName
+
+        if (entry.isDisable) {
+            // "Disable EQ": red name, "N/A" in place of the curve, no
+            // preamp line. (Rows are recycled, so the non-disable branch
+            // below must restore the defaults.)
+            nameView.setTextColor(0xFFEF9A9A.toInt())
+            curve.visibility = View.GONE
+            naView.visibility = View.VISIBLE
+            preampView.visibility = View.GONE
+            return row
+        }
+
+        // Default (non-disable) styling — restore in case this view was
+        // recycled from a disable row.
+        nameView.setTextColor(
+            com.google.android.material.color.MaterialColors.getColor(
+                nameView, com.google.android.material.R.attr.colorOnSurface,
+            )
+        )
+        naView.visibility = View.GONE
+        curve.visibility = View.VISIBLE
+        curve.setPreset(entry.presetJson)
         // Preamp subtitle — visible only for real presets that carry
         // EQ data. Sentinel rows like "(none)" and "<name> (missing)"
         // have no JSON, so we hide the line entirely instead of
         // misleadingly showing "0.0 dB" under them.
-        val preampView = row.findViewById<TextView>(R.id.presetRowPreamp)
         val json = entry.presetJson
         if (json == null) {
             preampView.visibility = View.GONE
