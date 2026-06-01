@@ -109,6 +109,9 @@
         android:layout_marginBottom="8dp"
         android:padding="12dp"
         android:background="@drawable/autoeq_active_bg"
+        android:foreground="@drawable/ripple_rounded_header"
+        android:clickable="true"
+        android:focusable="true"
         android:visibility="gone">
 
         <LinearLayout

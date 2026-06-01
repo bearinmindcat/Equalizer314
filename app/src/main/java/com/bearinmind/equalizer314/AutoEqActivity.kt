@@ -72,6 +72,12 @@ class AutoEqActivity : AppCompatActivity() {
         activeCard = findViewById(R.id.autoEqActiveCard)
         activeName = findViewById(R.id.autoEqActiveName)
         activeSource = findViewById(R.id.autoEqActiveSource)
+        // Tapping the active (currently-applied) preset card offers to
+        // save that AutoEQ profile into the app's custom presets, so it
+        // becomes bindable to apps / devices and re-selectable from the
+        // main preset list. Same dialog as the main screen's
+        // "Save Custom Preset".
+        activeCard.setOnClickListener { promptActivePresetSave() }
         clearButton = findViewById(R.id.autoEqClearButton)
 
         adapter = HeadphoneAdapter(
@@ -184,6 +190,164 @@ class AutoEqActivity : AppCompatActivity() {
         lastAppliedProfile = profile
         Toast.makeText(this, "Applied: ${entry.name}", Toast.LENGTH_SHORT).show()
         updateActiveCard()
+    }
+
+    /** Resolve the currently-active AutoEQ profile (the one shown in
+     *  the active card) and open the save-to-presets dialog for it.
+     *  Falls back to reloading from the database / imports when
+     *  [lastAppliedProfile] is null (cold start). No-op with a toast
+     *  if nothing is currently applied. */
+    private fun promptActivePresetSave() {
+        val name = eqPrefs.getAutoEqName()
+        if (name.isNullOrBlank()) {
+            Toast.makeText(this, "No preset applied yet", Toast.LENGTH_SHORT).show()
+            return
+        }
+        var profile = lastAppliedProfile
+        if (profile == null) {
+            val source = eqPrefs.getAutoEqSource() ?: ""
+            profile = if (source == "Imported") {
+                val text = eqPrefs.getImportedPresetText(name)
+                if (text != null) AutoEqParser.parse(text) else null
+            } else {
+                val entries = database.search(name)
+                val entry = entries.firstOrNull { it.name == name && it.source == source }
+                    ?: entries.firstOrNull { it.name == name }
+                if (entry != null) database.loadProfile(entry) else null
+            }
+            lastAppliedProfile = profile
+        }
+        if (profile == null) {
+            Toast.makeText(this, "Couldn't load the active preset", Toast.LENGTH_SHORT).show()
+            return
+        }
+        promptSaveToPresets(name, profile)
+    }
+
+    /** Save-to-presets dialog, styled to match MainActivity's
+     *  "Save Custom Preset" popup. Writes the selected AutoEQ profile
+     *  into the shared `custom_presets` SharedPreferences using the
+     *  same JSON shape (preamp + bands + channelSideEqEnabled=false),
+     *  so it shows up everywhere a custom preset would: the main preset
+     *  list, the Audio Output device dropdowns, and the Channel Input
+     *  app dropdowns. */
+    private fun promptSaveToPresets(defaultBaseName: String, profile: AutoEqProfile) {
+        val density = resources.displayMetrics.density
+        val customPrefs = getSharedPreferences("custom_presets", MODE_PRIVATE)
+        val existingNames = customPrefs.getStringSet("preset_names", emptySet()) ?: emptySet()
+
+        val dialogView = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding((24 * density).toInt(), (20 * density).toInt(), (24 * density).toInt(), (16 * density).toInt())
+        }
+        val title = android.widget.TextView(this).apply {
+            text = "Save Custom Preset"
+            setTextColor(0xFFE2E2E2.toInt())
+            textSize = 20f
+            setPadding(0, 0, 0, (12 * density).toInt())
+        }
+        val inputBox = android.widget.FrameLayout(this).apply {
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = (16 * density).toInt()
+            }
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0x00000000)
+                setStroke((1 * density).toInt(), 0xFF555555.toInt())
+                cornerRadius = 12 * density
+            }
+        }
+        val input = android.widget.EditText(this).apply {
+            setText(defaultBaseName)
+            hint = defaultBaseName
+            setTextColor(0xFFFFFFFF.toInt())
+            setHintTextColor(0xFF888888.toInt())
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+            background = null
+            val pad = (14 * density).toInt()
+            setPadding(pad, pad, pad, pad)
+            isSingleLine = true
+            setSelection(text.length)
+        }
+        inputBox.addView(input)
+        val divider = android.view.View(this).apply {
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, (1 * density).toInt()).apply {
+                bottomMargin = (12 * density).toInt()
+            }
+            setBackgroundColor(0xFF444444.toInt())
+        }
+        val btnRow = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+        val cancelBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            text = "Cancel"
+            layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginEnd = (3 * density).toInt()
+            }
+            cornerRadius = (12 * density).toInt()
+            setTextColor(0xFFEF9A9A.toInt())
+            strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+            strokeWidth = (1 * density).toInt()
+            setBackgroundColor(0x00000000)
+            insetTop = 0; insetBottom = 0
+        }
+        val saveDialogBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            text = "OK"
+            layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = (3 * density).toInt()
+            }
+            cornerRadius = (12 * density).toInt()
+            setTextColor(0xFFDDDDDD.toInt())
+            setBackgroundColor(0x00000000)
+            strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+            strokeWidth = (1 * density).toInt()
+            insetTop = 0; insetBottom = 0
+        }
+        btnRow.addView(cancelBtn)
+        btnRow.addView(saveDialogBtn)
+        dialogView.addView(title)
+        dialogView.addView(inputBox)
+        dialogView.addView(divider)
+        dialogView.addView(btnRow)
+
+        val dialog = android.app.AlertDialog.Builder(this, R.style.Theme_Equalizer314_Dialog)
+            .setView(dialogView)
+            .create()
+        cancelBtn.setOnClickListener { dialog.dismiss() }
+        saveDialogBtn.setOnClickListener {
+            val name = input.text.toString().trim().ifEmpty { defaultBaseName }
+            if (name.isNotEmpty()) {
+                val bands = org.json.JSONArray()
+                for (filter in profile.filters) {
+                    val ft = com.bearinmind.equalizer314.autoeq.apoTokenToFilterType(filter.filterType)
+                    bands.put(org.json.JSONObject().apply {
+                        put("frequency", filter.frequency)
+                        put("gain", filter.gain)
+                        put("q", filter.q.toDouble())
+                        put("filterType", ft.name)
+                        put("enabled", true)
+                    })
+                }
+                val json = org.json.JSONObject().apply {
+                    put("preamp", profile.preampDb)
+                    // AutoEQ profiles are single-channel — no CSE split.
+                    put("channelSideEqEnabled", false)
+                    put("bands", bands)
+                }
+                customPrefs.edit()
+                    .putString("preset_$name", json.toString())
+                    .putStringSet("preset_names", existingNames.toMutableSet() + name)
+                    .apply()
+                Toast.makeText(this, "Saved \"$name\" to your presets", Toast.LENGTH_SHORT).show()
+            }
+            dialog.dismiss()
+        }
+        dialog.show()
     }
 
     private fun applyProfile(entry: AutoEqEntry, profile: AutoEqProfile) {
