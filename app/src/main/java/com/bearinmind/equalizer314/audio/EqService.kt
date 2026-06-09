@@ -412,6 +412,28 @@ class EqService : Service() {
         monitor.start()
     }
 
+    /** startForeground that won't crash the service when the OS refuses
+     *  the mediaPlayback FGS from the current context. Android 14+
+     *  (enforced strictly on Pixel / API 34+, and seen on Android 17)
+     *  throws ForegroundServiceStartNotAllowedException when a
+     *  mediaPlayback foreground service is started from a BOOT_COMPLETED
+     *  receiver. We catch it, stop the service cleanly (which also
+     *  satisfies the startForegroundService → startForeground contract
+     *  so there's no follow-up "did not start in time" crash), and rely
+     *  on the app-open fallback in MainActivity to bring DP up from an
+     *  allowed foreground context. Returns true only if we actually
+     *  went foreground. */
+    private fun safeStartForeground(): Boolean {
+        return try {
+            startForeground(NOTIFICATION_ID, buildNotification())
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "startForeground blocked (${e.javaClass.simpleName}): ${e.message}")
+            try { stopSelf() } catch (_: Throwable) {}
+            false
+        }
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
@@ -436,7 +458,7 @@ class EqService : Service() {
             }
             ACTION_START_FROM_TILE -> {
                 Log.d(TAG, "ACTION_START_FROM_TILE — toggle requested, dynamicsManager.isActive=${dynamicsManager.isActive}")
-                startForeground(NOTIFICATION_ID, buildNotification())
+                if (!safeStartForeground()) return START_NOT_STICKY
                 if (dynamicsManager.isActive) {
                     // Tile was tapped while the DP is already running —
                     // toggle off. Same path ACTION_STOP runs: keep the
@@ -492,7 +514,7 @@ class EqService : Service() {
             }
             ACTION_AUTO_START -> {
                 Log.d(TAG, "ACTION_AUTO_START — boot/cold-open restore, dynamicsManager.isActive=${dynamicsManager.isActive}")
-                startForeground(NOTIFICATION_ID, buildNotification())
+                if (!safeStartForeground()) return START_NOT_STICKY
                 if (dynamicsManager.isActive) return START_STICKY
                 val eq = loadPersistedParametricEq()
                 if (eq != null) {
@@ -531,7 +553,7 @@ class EqService : Service() {
                 return START_STICKY
             }
             ACTION_ATTACH_SESSION -> {
-                startForeground(NOTIFICATION_ID, buildNotification())
+                if (!safeStartForeground()) return START_NOT_STICKY
                 val sessionId = intent.getIntExtra(EXTRA_SESSION_ID, 0)
                 val pkg = intent.getStringExtra(EXTRA_PACKAGE_NAME).orEmpty()
                 sessionEffects?.attach(sessionId, pkg)
@@ -546,22 +568,22 @@ class EqService : Service() {
                 return START_STICKY
             }
             ACTION_APPLY_REVERB -> {
-                startForeground(NOTIFICATION_ID, buildNotification())
+                if (!safeStartForeground()) return START_NOT_STICKY
                 sessionEffects?.applyReverbParamsToAll()
                 return START_STICKY
             }
             ACTION_RELEASE_DETECTED -> {
-                startForeground(NOTIFICATION_ID, buildNotification())
+                if (!safeStartForeground()) return START_NOT_STICKY
                 sessionEffects?.releaseDetected()
                 return START_STICKY
             }
             ACTION_APPLY_BYPASS_PREF -> {
-                startForeground(NOTIFICATION_ID, buildNotification())
+                if (!safeStartForeground()) return START_NOT_STICKY
                 syncSystemSoundBypassFromCurrent()
                 return START_STICKY
             }
             ACTION_PLAYBACK_DETECTED -> {
-                startForeground(NOTIFICATION_ID, buildNotification())
+                if (!safeStartForeground()) return START_NOT_STICKY
                 val bundle = intent.getBundleExtra(EXTRA_DETECTED_BUNDLE)
                 val detected = mutableMapOf<String, Set<Int>>()
                 var playingNow: Set<String> = emptySet()
@@ -579,7 +601,7 @@ class EqService : Service() {
                 return START_STICKY
             }
             ACTION_APPLY_ROUTING_MODE -> {
-                startForeground(NOTIFICATION_ID, buildNotification())
+                if (!safeStartForeground()) return START_NOT_STICKY
                 // When the user picks Session-based, stop the global
                 // DP so bound apps don't get their EQ applied twice
                 // (once on session 0, once on their per-app session).
@@ -617,7 +639,7 @@ class EqService : Service() {
             }
         }
 
-        startForeground(NOTIFICATION_ID, buildNotification())
+        if (!safeStartForeground()) return START_NOT_STICKY
         return START_STICKY
     }
 
