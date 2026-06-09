@@ -66,7 +66,13 @@ class ParametricEqualizer(private val sampleRate: Int = 48000) {
         bands.add(band)
 
         val filter = BiquadFilter(frequency, gain, filterType, sampleRate, q).apply {
-            useVicanekMethod = true
+            // RBJ bell (not Vicanek). RBJ's +G and -G peaking filters are
+            // exact inverses (numerator↔denominator swap via A and 1/A),
+            // so opposite bells cancel perfectly — in the graph AND the
+            // audio (the DP converter samples this same response). Vicanek
+            // matched only DC/center/Nyquist, leaving ripple between them
+            // that broke cancellation (issue #41).
+            useVicanekMethod = false
         }
         filters.add(filter)
     }
@@ -76,7 +82,13 @@ class ParametricEqualizer(private val sampleRate: Int = 48000) {
         bands.add(index, band)
 
         val filter = BiquadFilter(frequency, gain, filterType, sampleRate, q).apply {
-            useVicanekMethod = true
+            // RBJ bell (not Vicanek). RBJ's +G and -G peaking filters are
+            // exact inverses (numerator↔denominator swap via A and 1/A),
+            // so opposite bells cancel perfectly — in the graph AND the
+            // audio (the DP converter samples this same response). Vicanek
+            // matched only DC/center/Nyquist, leaving ripple between them
+            // that broke cancellation (issue #41).
+            useVicanekMethod = false
         }
         filters.add(index, filter)
     }
