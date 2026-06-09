@@ -106,27 +106,10 @@ class SimpleEqController(
         val density = activity.resources.displayMetrics.density
         val eq = state.parametricEq
 
-        // Header — matches MBC / Limiter top bar exactly:
-        // paddingStart=16dp, paddingEnd=16dp, paddingTop=8dp, paddingBottom=8dp
-        // (same values as activity_mbc.xml lines 17-20)
-        val headerRow = LinearLayout(activity).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            setPadding(0, (8 * density).toInt(), 0, (8 * density).toInt())
-        }
-        val headerText = TextView(activity).apply {
-            text = "Simple EQ Mode"
-            setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleLarge)
-            setTextColor(com.google.android.material.color.MaterialColors.getColor(
-                activity, com.google.android.material.R.attr.colorOnSurface, 0xFFFFFFFF.toInt()))
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        }
-        headerRow.addView(headerText)
-        container.addView(headerRow)
+        // No "Simple EQ Mode" header — the mode selector card (now
+        // visible in Simple mode and highlighting the Simple tab)
+        // already signals which mode is active, so the title would be
+        // redundant.
 
         // Mini EQ graph preview — scaled-down version of the main EQ graph card
         // (same styling, half the height: 246dp → 123dp). Shows a live frequency
@@ -136,7 +119,9 @@ class SimpleEqController(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                bottomMargin = (8 * density).toInt()
+                // Consistent 12dp inter-card gap (matches bars / preamp /
+                // controls below) so Simple mode spacing is homogeneous.
+                bottomMargin = (12 * density).toInt()
             }
             radius = 16 * density
             cardElevation = 0f
@@ -172,7 +157,7 @@ class SimpleEqController(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                bottomMargin = (8 * density).toInt()
+                bottomMargin = (12 * density).toInt()
             }
             radius = 16 * density
             cardElevation = 0f
@@ -244,8 +229,10 @@ class SimpleEqController(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                topMargin = (12 * density).toInt()
-                bottomMargin = (8 * density).toInt()
+                // No top margin — the preamp card above carries the 12dp
+                // gap, so we don't double it up here.
+                topMargin = 0
+                bottomMargin = (12 * density).toInt()
             }
             radius = 16 * density
             cardElevation = 0f

@@ -31,48 +31,95 @@
                 android:paddingTop="0dp"
                 android:paddingBottom="0dp">
 
-                <!-- EQ Mode Selector -->
+                <!-- EQ Mode Selector — 2×2 grid: Parametric / Graphic on
+                     the first row, Table / Simple on the second. Buttons
+                     are slimmed top-to-bottom (insets 0, small vertical
+                     padding) and the whole group is pushed down a touch
+                     so the graph below isn't crowded by the extra row. -->
                 <LinearLayout
                     android:id="@+id/modeSelectorGroup"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:layout_marginTop="12dp"
                     android:layout_marginBottom="8dp">
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/modeParametricBtn"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
-                        android:layout_width="0dp"
+                    <LinearLayout
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:layout_marginEnd="4dp"
-                        android:text="Parametric"
-                        android:textSize="12sp"
-                        app:cornerRadius="12dp" />
+                        android:orientation="horizontal">
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/modeGraphicBtn"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:layout_marginStart="4dp"
-                        android:layout_marginEnd="4dp"
-                        android:text="Graphic"
-                        android:textSize="12sp"
-                        app:cornerRadius="12dp" />
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/modeParametricBtn"
+                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginEnd="4dp"
+                            android:text="Parametric"
+                            android:textSize="12sp"
+                            android:minHeight="0dp"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:paddingTop="7dp"
+                            android:paddingBottom="7dp"
+                            app:cornerRadius="12dp" />
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/modeTableBtn"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
-                        android:layout_width="0dp"
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/modeGraphicBtn"
+                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="4dp"
+                            android:text="Graphic"
+                            android:textSize="12sp"
+                            android:minHeight="0dp"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:paddingTop="7dp"
+                            android:paddingBottom="7dp"
+                            app:cornerRadius="12dp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:layout_marginStart="4dp"
-                        android:text="Table"
-                        android:textSize="12sp"
-                        app:cornerRadius="12dp" />
+                        android:orientation="horizontal"
+                        android:layout_marginTop="8dp">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/modeTableBtn"
+                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginEnd="4dp"
+                            android:text="Table"
+                            android:textSize="12sp"
+                            android:minHeight="0dp"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:paddingTop="7dp"
+                            android:paddingBottom="7dp"
+                            app:cornerRadius="12dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/modeSimpleBtn"
+                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="4dp"
+                            android:text="Simple"
+                            android:textSize="12sp"
+                            android:minHeight="0dp"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:paddingTop="7dp"
+                            android:paddingBottom="7dp"
+                            app:cornerRadius="12dp" />
+                    </LinearLayout>
                 </LinearLayout>
 
                 <!-- EQ Graph Card -->

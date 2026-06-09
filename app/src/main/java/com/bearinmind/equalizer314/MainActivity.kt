@@ -16,6 +16,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.doOnLayout
 import androidx.core.view.updatePadding
 import com.bearinmind.equalizer314.audio.EqService
 import com.bearinmind.equalizer314.dsp.BiquadFilter
@@ -270,6 +271,7 @@ class  MainActivity : AppCompatActivity() {
     private lateinit var modeParametricBtn: MaterialButton
     private lateinit var modeGraphicBtn: MaterialButton
     private lateinit var modeTableBtn: MaterialButton
+    private lateinit var modeSimpleBtn: MaterialButton
     private lateinit var parametricControlsCard: View
     private lateinit var hzControlRow: View
     private lateinit var tableEqCard: View
@@ -569,6 +571,7 @@ class  MainActivity : AppCompatActivity() {
         modeParametricBtn = findViewById(R.id.modeParametricBtn)
         modeGraphicBtn = findViewById(R.id.modeGraphicBtn)
         modeTableBtn = findViewById(R.id.modeTableBtn)
+        modeSimpleBtn = findViewById(R.id.modeSimpleBtn)
         parametricControlsCard = findViewById(R.id.parametricControlsCard)
         hzControlRow = findViewById(R.id.hzControlRow)
         tableEqCard = findViewById(R.id.tableEqCard)
@@ -1953,9 +1956,14 @@ class  MainActivity : AppCompatActivity() {
         setupColorSwatches()
 
         // EQ mode selector
-        modeParametricBtn.setOnClickListener { switchEqUiMode(EqUiMode.PARAMETRIC) }
-        modeGraphicBtn.setOnClickListener { switchEqUiMode(EqUiMode.GRAPHIC) }
-        modeTableBtn.setOnClickListener { switchEqUiMode(EqUiMode.TABLE) }
+        // The three "advanced" modes clear the Simple flag; the Simple
+        // card sets it. Persisting here mirrors the experimental
+        // settings switch so the choice survives a restart and the two
+        // entry points stay consistent.
+        modeParametricBtn.setOnClickListener { eqPrefs.saveSimpleEqEnabled(false); switchEqUiMode(EqUiMode.PARAMETRIC) }
+        modeGraphicBtn.setOnClickListener { eqPrefs.saveSimpleEqEnabled(false); switchEqUiMode(EqUiMode.GRAPHIC) }
+        modeTableBtn.setOnClickListener { eqPrefs.saveSimpleEqEnabled(false); switchEqUiMode(EqUiMode.TABLE) }
+        modeSimpleBtn.setOnClickListener { eqPrefs.saveSimpleEqEnabled(true); switchEqUiMode(EqUiMode.SIMPLE) }
 
         // Settings controls
         setupSettingsListeners()
@@ -2228,9 +2236,15 @@ class  MainActivity : AppCompatActivity() {
             // when the graph card was GONE in SIMPLE mode, the view's width was 0.
             // Now that it's VISIBLE again, we need to re-layout after the view has
             // its real width.
-            eqGraphView.post {
+            // Use doOnLayout (not post) — the graph card just flipped
+            // GONE→VISIBLE, so a plain post fires before it's measured
+            // (width 0) and the old code bailed permanently, leaving the
+            // header icons at their tiny default top|start/top|end
+            // positions (bunched up). doOnLayout defers until the view
+            // actually has its width from the next layout pass.
+            eqGraphView.doOnLayout {
                 val viewWidth = eqGraphView.width
-                if (viewWidth <= 0) return@post
+                if (viewWidth <= 0) return@doOnLayout
                 val vizDensity = resources.displayMetrics.density
                 val gapPx = (2 * vizDensity).toInt()
                 val vPadPx = 80
@@ -2263,6 +2277,8 @@ class  MainActivity : AppCompatActivity() {
                 reposition(vizToggle, specLeft)
                 reposition(editBtn, editLeftPx)
                 reposition(resetBtn, resetLeftPx)
+                // EQ on/off toggle shares the reset slot (left of edit).
+                reposition(findViewById(R.id.eqPowerToggle), resetLeftPx)
                 // Undo sits directly below reset; redo sits directly below edit
                 reposition(undoBtn, resetLeftPx, row2Top)
                 reposition(redoBtn, editLeftPx, row2Top)
@@ -2416,8 +2432,12 @@ class  MainActivity : AppCompatActivity() {
                 tableController.buildTable()
             }
             EqUiMode.SIMPLE -> {
-                // Hide standard EQ UI
-                modeSelectorGroup.visibility = View.GONE
+                // Keep the mode selector visible so Simple is a true peer
+                // of Parametric/Graphic/Table — the user can switch back
+                // by tapping another card. Only the graph + advanced
+                // controls are hidden; the simple sliders render below
+                // the selector (simpleEqContainer is the last child).
+                modeSelectorGroup.visibility = View.VISIBLE
                 graphCardView.visibility = View.GONE
                 eqControlsContainer.visibility = View.GONE
 
@@ -2452,17 +2472,21 @@ class  MainActivity : AppCompatActivity() {
                 simpleEqController.buildSliders()
 
                 // Reparent the existing preamp card from eqControlsContainer into
-                // simpleEqContainer (between the bars/preset area and controls card).
+                // simpleEqContainer as the last child (preamp sits below the
+                // bars / preset area). Append via childCount rather than a
+                // hardcoded index — the index shifted when the "Simple EQ Mode"
+                // header was removed, and appending is robust to future layout
+                // changes in SimpleEqController.buildSliders().
                 val preampCard = findViewById<View>(R.id.preampCardBar)
                 (preampCard.parent as? android.view.ViewGroup)?.removeView(preampCard)
-                // Insert at index 5: header(0), controls(1), graph(2), bars(3), presetPicker(4), preamp(5)
-                simpleEqContainer.addView(preampCard, 5)
+                simpleEqContainer.addView(preampCard, simpleEqContainer.childCount)
                 preampCard.translationY = 0f
-                // Set consistent 8dp bottom margin (remove the XML topMargin=8dp to
-                // avoid double-spacing since bars card already has bottomMargin=8dp)
+                // Consistent 12dp inter-card gap to match the graph / bars /
+                // controls cards (topMargin 0 so the bars card's bottom
+                // margin isn't doubled).
                 (preampCard.layoutParams as? LinearLayout.LayoutParams)?.apply {
                     topMargin = 0
-                    bottomMargin = (8 * resources.displayMetrics.density).toInt()
+                    bottomMargin = (12 * resources.displayMetrics.density).toInt()
                 }
             }
         }
@@ -2535,7 +2559,8 @@ class  MainActivity : AppCompatActivity() {
         val buttons = listOf(
             modeParametricBtn to EqUiMode.PARAMETRIC,
             modeGraphicBtn to EqUiMode.GRAPHIC,
-            modeTableBtn to EqUiMode.TABLE
+            modeTableBtn to EqUiMode.TABLE,
+            modeSimpleBtn to EqUiMode.SIMPLE
         )
         for ((btn, mode) in buttons) {
             if (mode == stateManager.currentEqUiMode) {
