@@ -12,6 +12,14 @@ class EqPreferencesManager(context: Context) {
     private val prefs = context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE)
     private val bindingsPrefs = context.getSharedPreferences("device_bindings", Context.MODE_PRIVATE)
     private val appBindingsPrefs = context.getSharedPreferences("app_bindings", Context.MODE_PRIVATE)
+    // The single shared custom-preset pool — the same file the advanced
+    // (Parametric/Graphic/Table), AutoEQ, and device-binding code use.
+    // Simple-mode presets live here too so all four modes share one pool.
+    private val customPresetsPrefs = context.getSharedPreferences("custom_presets", Context.MODE_PRIVATE)
+
+    init {
+        migrateLegacySimplePresets()
+    }
 
     /** A device → preset binding. `key` is the stable device identity
      *  (e.g. `"BT:00:1A:7D:DA:71:13"`), `label` is the human-friendly
@@ -30,6 +38,12 @@ class EqPreferencesManager(context: Context) {
          *  token makes collision with a real user preset name
          *  effectively impossible. */
         const val DEVICE_PRESET_DISABLED = "__disable_eq__"
+
+        // Simple-mode band contract. Mirrors SimpleEqController.FREQUENCIES
+        // / .Q — kept local so the state layer doesn't depend on the ui
+        // layer. If those change, change these too.
+        private val SIMPLE_FREQS = floatArrayOf(31f, 63f, 125f, 250f, 500f, 1000f, 2000f, 4000f, 8000f, 16000f)
+        private const val SIMPLE_Q = 1.414
     }
 
     /** A per-app → preset binding for sessions that broadcast
@@ -543,30 +557,145 @@ class EqPreferencesManager(context: Context) {
     fun saveRightChannelGainDb(db: Float) { prefs.edit().putFloat("rightChannelGainDb", db).apply() }
     fun getRightChannelGainDb(): Float = prefs.getFloat("rightChannelGainDb", 0f)
 
-    // Simple EQ Presets
+    // ---- Simple EQ Presets (backed by the shared custom_presets pool) ----
+    //
+    // Simple mode shares ONE custom-preset pool with the advanced
+    // (Parametric/Graphic/Table) modes. The two formats are bridged here:
+    //   • Saving a Simple preset writes a full-JSON preset of 10 BELL
+    //     bands at the fixed Simple frequencies, so it shows up in the
+    //     advanced dropdown and loads natively there.
+    //   • Loading any preset INTO Simple samples that preset's composite
+    //     response at the 10 Simple frequencies, so even an arbitrary
+    //     parametric/AutoEQ preset renders as its best 10-bar match.
     fun getSimpleEqPresetNames(): List<String> {
-        return (prefs.getStringSet("simple_preset_names", emptySet()) ?: emptySet()).sorted()
+        return (customPresetsPrefs.getStringSet("preset_names", emptySet()) ?: emptySet()).sorted()
     }
-    fun saveSimpleEqPreset(name: String, gains: FloatArray) {
-        val arr = JSONArray()
-        for (g in gains) arr.put(g.toDouble())
-        val names = (prefs.getStringSet("simple_preset_names", emptySet()) ?: emptySet()).toMutableSet() + name
-        prefs.edit()
-            .putString("simple_preset_$name", arr.toString())
-            .putStringSet("simple_preset_names", names)
+
+    fun saveSimpleEqPreset(name: String, gains: FloatArray, preamp: Float = 0f) {
+        val bands = JSONArray()
+        for (i in SIMPLE_FREQS.indices) {
+            val g = if (i < gains.size) gains[i] else 0f
+            bands.put(JSONObject().apply {
+                put("frequency", SIMPLE_FREQS[i].toDouble())
+                put("gain", g.toDouble())
+                put("q", SIMPLE_Q)
+                put("filterType", BiquadFilter.FilterType.BELL.name)
+                put("enabled", true)
+            })
+        }
+        val json = JSONObject().apply {
+            put("preamp", preamp.toDouble())
+            put("channelSideEqEnabled", false)
+            put("bands", bands)
+        }
+        val names = (customPresetsPrefs.getStringSet("preset_names", emptySet()) ?: emptySet()).toMutableSet() + name
+        customPresetsPrefs.edit()
+            .putString("preset_$name", json.toString())
+            .putStringSet("preset_names", names)
             .apply()
     }
+
+    /** Resolves any shared-pool preset down to 10 Simple-mode bar gains by
+     *  sampling its composite frequency response at the Simple
+     *  frequencies. Returns null if the preset is missing/unparseable. */
     fun getSimpleEqPresetGains(name: String): FloatArray? {
-        val str = prefs.getString("simple_preset_$name", null) ?: return null
-        val arr = JSONArray(str)
-        return FloatArray(arr.length()) { arr.getDouble(it).toFloat() }
+        val str = customPresetsPrefs.getString("preset_$name", null) ?: return null
+        return try {
+            val obj = JSONObject(str)
+            val arr = obj.getJSONArray("bands")
+
+            // Fast path: a native 10-band Simple preset (one BELL per
+            // Simple frequency). Read the per-band gains directly so a
+            // save→load round-trip is exact — sampling the composite
+            // would double-count the overlapping skirts of neighbouring
+            // bands and inflate the values.
+            if (arr.length() == SIMPLE_FREQS.size) {
+                var native = true
+                val direct = FloatArray(SIMPLE_FREQS.size)
+                for (i in 0 until arr.length()) {
+                    val b = arr.getJSONObject(i)
+                    val freq = b.getDouble("frequency").toFloat()
+                    val isBell = (b.optString("filterType", "BELL") == BiquadFilter.FilterType.BELL.name)
+                    if (!isBell || kotlin.math.abs(freq - SIMPLE_FREQS[i]) > 1f) { native = false; break }
+                    direct[i] = b.getDouble("gain").toFloat().coerceIn(-12f, 12f)
+                }
+                if (native) return direct
+            }
+
+            // General path: sample the preset's composite response at the
+            // Simple frequencies so any arbitrary parametric/AutoEQ preset
+            // renders as its best 10-bar approximation.
+            val eq = ParametricEqualizer()
+            eq.clearBands()
+            for (i in 0 until arr.length()) {
+                val b = arr.getJSONObject(i)
+                val ft = try { BiquadFilter.FilterType.valueOf(b.getString("filterType")) }
+                         catch (_: Exception) { BiquadFilter.FilterType.BELL }
+                eq.addBand(b.getDouble("frequency").toFloat(), b.getDouble("gain").toFloat(), ft, b.getDouble("q"))
+            }
+            FloatArray(SIMPLE_FREQS.size) { i ->
+                eq.getFrequencyResponse(SIMPLE_FREQS[i]).coerceIn(-12f, 12f)
+            }
+        } catch (_: Exception) { null }
     }
+
     fun deleteSimpleEqPreset(name: String) {
-        val names = (prefs.getStringSet("simple_preset_names", emptySet()) ?: emptySet()).toMutableSet() - name
-        prefs.edit()
-            .remove("simple_preset_$name")
-            .putStringSet("simple_preset_names", names)
+        val names = (customPresetsPrefs.getStringSet("preset_names", emptySet()) ?: emptySet()).toMutableSet() - name
+        customPresetsPrefs.edit()
+            .remove("preset_$name")
+            .putStringSet("preset_names", names)
             .apply()
+    }
+
+    /** Raw JSON of a shared-pool preset (or null). Lets the Simple-mode
+     *  preset picker render the exact same curve thumbnail / preamp
+     *  subtitle / filter count as the advanced picker. */
+    fun getCustomPresetJson(name: String): String? =
+        customPresetsPrefs.getString("preset_$name", null)
+
+    /** One-time migration of pre-merge Simple presets (stored under the
+     *  old `simple_preset_*` keys in eq_settings) into the shared
+     *  custom_presets pool, so users don't lose them when the pools
+     *  merge. Runs once; clears the legacy keys afterward. */
+    private fun migrateLegacySimplePresets() {
+        val legacyNames = prefs.getStringSet("simple_preset_names", null) ?: return
+        if (legacyNames.isEmpty()) {
+            prefs.edit().remove("simple_preset_names").apply()
+            return
+        }
+        val existing = (customPresetsPrefs.getStringSet("preset_names", emptySet()) ?: emptySet()).toMutableSet()
+        val editor = customPresetsPrefs.edit()
+        val legacyEditor = prefs.edit()
+        for (name in legacyNames) {
+            val legacyStr = prefs.getString("simple_preset_$name", null)
+            if (legacyStr != null && !existing.contains(name)) {
+                val gainsArr = try { JSONArray(legacyStr) } catch (_: Exception) { null }
+                if (gainsArr != null) {
+                    val bands = JSONArray()
+                    for (i in SIMPLE_FREQS.indices) {
+                        val g = if (i < gainsArr.length()) gainsArr.getDouble(i) else 0.0
+                        bands.put(JSONObject().apply {
+                            put("frequency", SIMPLE_FREQS[i].toDouble())
+                            put("gain", g)
+                            put("q", SIMPLE_Q)
+                            put("filterType", BiquadFilter.FilterType.BELL.name)
+                            put("enabled", true)
+                        })
+                    }
+                    val json = JSONObject().apply {
+                        put("preamp", 0.0)
+                        put("channelSideEqEnabled", false)
+                        put("bands", bands)
+                    }
+                    editor.putString("preset_$name", json.toString())
+                    existing.add(name)
+                }
+            }
+            legacyEditor.remove("simple_preset_$name")
+        }
+        editor.putStringSet("preset_names", existing)
+        editor.apply()
+        legacyEditor.remove("simple_preset_names").apply()
     }
 
     // ---- Device bindings (per-output-device EQ auto-switching) ----

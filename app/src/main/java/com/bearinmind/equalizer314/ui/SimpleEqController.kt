@@ -10,6 +10,7 @@ import com.bearinmind.equalizer314.dsp.BiquadFilter
 import com.bearinmind.equalizer314.state.EqPreferencesManager
 import com.bearinmind.equalizer314.state.EqStateManager
 import com.google.android.material.button.MaterialButton
+import kotlin.math.pow
 
 class SimpleEqController(
     private val activity: Activity,
@@ -445,10 +446,10 @@ class SimpleEqController(
         }
         pickerContainer.addView(saveCurrentBtn)
 
-        // List saved presets
+        // List saved presets — styled identically to the advanced
+        // (Parametric/Graphic/Table) picker rows.
         for (name in presetNames) {
-            val gains = eqPrefs.getSimpleEqPresetGains(name) ?: continue
-            pickerContainer.addView(createPresetRow(name, gains))
+            pickerContainer.addView(createPresetRow(name))
         }
     }
 
@@ -550,7 +551,7 @@ class SimpleEqController(
         cancelBtn.setOnClickListener { dialog.dismiss() }
         okBtn.setOnClickListener {
             val name = input.text.toString().trim().ifEmpty { defaultName }
-            eqPrefs.saveSimpleEqPreset(name, getCurrentGains())
+            eqPrefs.saveSimpleEqPreset(name, getCurrentGains(), state.preampGainDb)
             populatePresetPicker()
             android.widget.Toast.makeText(activity, "Saved \"$name\"", android.widget.Toast.LENGTH_SHORT).show()
             dialog.dismiss()
@@ -558,8 +559,12 @@ class SimpleEqController(
         dialog.show()
     }
 
-    private fun createPresetRow(name: String, gains: FloatArray): View {
+    private fun createPresetRow(name: String): View {
         val density = activity.resources.displayMetrics.density
+        val presetJson = eqPrefs.getCustomPresetJson(name)
+        val bandCount = try {
+            org.json.JSONObject(presetJson ?: "{}").getJSONArray("bands").length()
+        } catch (_: Exception) { 0 }
 
         val row = LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -580,50 +585,136 @@ class SimpleEqController(
             setPadding(hPad, vPad, hPad, vPad)
         }
 
-        // Preset name
+        // Left side: preset name stacked over a small preamp subtitle
+        // (matches the advanced picker rows).
         val nameText = TextView(activity).apply {
             text = name
             setTextColor(0xFFE2E2E2.toInt())
             textSize = 14f
             isSingleLine = true
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+        val presetPreamp: Double? = try {
+            org.json.JSONObject(presetJson ?: "{}").optDouble("preamp", 0.0)
+        } catch (_: Exception) { null }
+        val preampSubtitle = TextView(activity).apply {
+            text = presetPreamp?.let { PresetDropdownAdapter.formatPreamp(it) } ?: ""
+            setTextColor(0xFF888888.toInt())
+            textSize = 11f
+            isSingleLine = true
+            visibility = if (presetPreamp == null) View.GONE else View.VISIBLE
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+        val nameCol = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             gravity = Gravity.CENTER_VERTICAL
+            addView(nameText)
+            addView(preampSubtitle)
         }
 
-        // Mini 10-bar thumbnail
+        // Right side: EQ curve thumbnail + "N filters" text, same as the
+        // advanced picker.
         val thumbW = (48 * density).toInt()
         val thumbH = (24 * density).toInt()
         val thumbnail = object : View(activity) {
+            private fun buildEq(arr: org.json.JSONArray): com.bearinmind.equalizer314.dsp.ParametricEqualizer {
+                val eq = com.bearinmind.equalizer314.dsp.ParametricEqualizer()
+                eq.clearBands()
+                for (i in 0 until arr.length()) {
+                    val b = arr.getJSONObject(i)
+                    val ft = try { BiquadFilter.FilterType.valueOf(b.getString("filterType")) }
+                             catch (_: Exception) { BiquadFilter.FilterType.BELL }
+                    eq.addBand(b.getDouble("frequency").toFloat(), b.getDouble("gain").toFloat(), ft, b.getDouble("q"))
+                }
+                return eq
+            }
+
+            private fun drawCurve(
+                canvas: android.graphics.Canvas,
+                eq: com.bearinmind.equalizer314.dsp.ParametricEqualizer,
+                x0: Float, y0: Float, w: Float, h: Float, color: Int,
+            ) {
+                val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                    this.color = color; strokeWidth = 0.5f * density; style = android.graphics.Paint.Style.STROKE
+                }
+                val gridPaint = android.graphics.Paint().apply { this.color = 0xFF6A6A6A.toInt(); strokeWidth = 1f }
+                canvas.drawLine(x0, y0 + h / 2f, x0 + w, y0 + h / 2f, gridPaint)
+                canvas.drawLine(x0, y0, x0, y0 + h, gridPaint)
+                val path = android.graphics.Path()
+                val maxDb = 15f; val steps = 50
+                for (s in 0..steps) {
+                    val logF = 1.301f + (s.toFloat() / steps) * (4.342f - 1.301f)
+                    val freq = 10f.pow(logF)
+                    val db = eq.getFrequencyResponse(freq)
+                    val x = x0 + w * s / steps
+                    val y = (y0 + h / 2f - (db / maxDb) * (h / 2f)).coerceIn(y0, y0 + h)
+                    if (s == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+                canvas.drawPath(path, paint)
+            }
+
             override fun onDraw(canvas: android.graphics.Canvas) {
                 super.onDraw(canvas)
                 val w = width.toFloat(); val h = height.toFloat()
-                if (w <= 0 || h <= 0) return
-                val barW = w / (gains.size * 2f)
-                val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                    color = 0xFFAAAAAA.toInt()
-                }
-                val bgPaint = android.graphics.Paint().apply { color = 0xFF6A6A6A.toInt(); strokeWidth = 1f }
-                canvas.drawLine(0f, h / 2f, w, h / 2f, bgPaint)
-                for (i in gains.indices) {
-                    val cx = w * (i + 0.5f) / gains.size
-                    val left = cx - barW / 2f
-                    val right = cx + barW / 2f
-                    val mid = h / 2f
-                    val barH = (gains[i] / 12f) * (h / 2f)
-                    if (barH > 0) {
-                        canvas.drawRect(left, mid - barH, right, mid, paint)
-                    } else if (barH < 0) {
-                        canvas.drawRect(left, mid, right, mid - barH, paint)
+                if (w <= 0 || h <= 0 || presetJson == null) return
+                try {
+                    val obj = org.json.JSONObject(presetJson)
+                    val cseOn = obj.optBoolean("channelSideEqEnabled", false)
+                    val curveColor = 0xFFAAAAAA.toInt()
+                    if (cseOn && obj.has("leftBands") && obj.has("rightBands")) {
+                        val labelCol = 9f * density
+                        val gap = 2f * density
+                        val halfH = (h - gap) / 2f
+                        val labelPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                            color = 0xFF888888.toInt()
+                            textSize = 10f * activity.resources.displayMetrics.scaledDensity
+                            textAlign = android.graphics.Paint.Align.CENTER
+                        }
+                        val fm = labelPaint.fontMetrics
+                        val textCenterOffset = (-fm.ascent - fm.descent) / 2f
+                        canvas.drawText("L", labelCol / 2f, halfH / 2f + textCenterOffset, labelPaint)
+                        drawCurve(canvas, buildEq(obj.getJSONArray("leftBands")), labelCol, 0f, w - labelCol, halfH, curveColor)
+                        val dividerPaint = android.graphics.Paint().apply { color = 0xFF444444.toInt(); strokeWidth = 1f }
+                        canvas.drawLine(0f, halfH + gap / 2f, w, halfH + gap / 2f, dividerPaint)
+                        val rTop = halfH + gap
+                        canvas.drawText("R", labelCol / 2f, rTop + halfH / 2f + textCenterOffset, labelPaint)
+                        drawCurve(canvas, buildEq(obj.getJSONArray("rightBands")), labelCol, rTop, w - labelCol, halfH, curveColor)
+                    } else {
+                        drawCurve(canvas, buildEq(obj.getJSONArray("bands")), 0f, 0f, w, h, curveColor)
                     }
-                }
+                } catch (_: Exception) {}
             }
         }.apply {
-            layoutParams = LinearLayout.LayoutParams(thumbW, thumbH).apply {
-                marginEnd = (8 * density).toInt()
-            }
+            layoutParams = LinearLayout.LayoutParams(thumbW, thumbH)
         }
 
-        // Export button — APO format
+        val filtersText = TextView(activity).apply {
+            text = "$bandCount filters"
+            setTextColor(0xFF888888.toInt())
+            textSize = 10f
+            gravity = Gravity.CENTER
+        }
+        val rightCol = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL or Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                marginEnd = (8 * density).toInt()
+            }
+            addView(thumbnail)
+            addView(filtersText)
+        }
+
+        // Export button — full APO mapping, same as the advanced picker.
         val exportBtn = MaterialButton(activity, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
             layoutParams = LinearLayout.LayoutParams(
                 (36 * density).toInt(), (36 * density).toInt()
@@ -642,16 +733,7 @@ class SimpleEqController(
             iconSize = (18 * density).toInt()
             strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
             strokeWidth = (1 * density).toInt()
-            setOnClickListener {
-                val sb = StringBuilder()
-                sb.append("Preamp: 0.0 dB\n")
-                for (i in gains.indices) {
-                    val freq = FREQUENCIES[i]
-                    val freqInt = freq.toInt()
-                    sb.append("Filter ${i + 1}: ON PK Fc $freqInt Hz Gain ${String.format("%.1f", gains[i])} dB Q ${String.format("%.2f", Q)}\n")
-                }
-                (activity as? com.bearinmind.equalizer314.MainActivity)?.launchPresetExport(sb.toString(), "$name.txt")
-            }
+            setOnClickListener { exportPresetApo(name) }
         }
 
         // Delete button
@@ -675,12 +757,12 @@ class SimpleEqController(
             setOnClickListener { showDeleteDialog(name) }
         }
 
-        row.addView(nameText)
-        row.addView(thumbnail)
+        row.addView(nameCol)
+        row.addView(rightCol)
         row.addView(exportBtn)
         row.addView(deleteBtn)
 
-        // Tap row to load preset
+        // Tap row to load preset (sampled down to the 10 Simple bars)
         row.setOnClickListener {
             val presetGains = eqPrefs.getSimpleEqPresetGains(name) ?: return@setOnClickListener
             restoreSnapshot(presetGains)
@@ -690,6 +772,53 @@ class SimpleEqController(
         }
 
         return row
+    }
+
+    /** Build an APO config from the shared-pool preset JSON and hand it to
+     *  MainActivity's export launcher — identical mapping to the advanced
+     *  picker so exports match regardless of which mode saved the preset. */
+    private fun exportPresetApo(name: String) {
+        val presetJson = eqPrefs.getCustomPresetJson(name) ?: return
+        val obj = org.json.JSONObject(presetJson)
+        val sb = StringBuilder()
+        sb.append("Preamp: ${String.format("%.1f", obj.optDouble("preamp", 0.0))} dB\n")
+
+        fun appendFilters(bands: org.json.JSONArray, indexOffset: Int = 0) {
+            for (i in 0 until bands.length()) {
+                val b = bands.getJSONObject(i)
+                val apoType: String; val hasGain: Boolean; val hasQ: Boolean
+                when (b.getString("filterType")) {
+                    "BELL"         -> { apoType = "PK";  hasGain = true;  hasQ = true  }
+                    "LOW_SHELF"    -> { apoType = "LSC"; hasGain = true;  hasQ = true  }
+                    "HIGH_SHELF"   -> { apoType = "HSC"; hasGain = true;  hasQ = true  }
+                    "LOW_PASS"     -> { apoType = "LPQ"; hasGain = false; hasQ = true  }
+                    "HIGH_PASS"    -> { apoType = "HPQ"; hasGain = false; hasQ = true  }
+                    "LOW_SHELF_1"  -> { apoType = "LS";  hasGain = true;  hasQ = false }
+                    "HIGH_SHELF_1" -> { apoType = "HS";  hasGain = true;  hasQ = false }
+                    "LOW_PASS_1"   -> { apoType = "LP";  hasGain = false; hasQ = false }
+                    "HIGH_PASS_1"  -> { apoType = "HP";  hasGain = false; hasQ = false }
+                    "BAND_PASS"    -> { apoType = "BP";  hasGain = false; hasQ = true  }
+                    "NOTCH"        -> { apoType = "NO";  hasGain = false; hasQ = true  }
+                    "ALL_PASS"     -> { apoType = "AP";  hasGain = false; hasQ = true  }
+                    else           -> { apoType = "PK";  hasGain = true;  hasQ = true  }
+                }
+                val fc = b.getDouble("frequency").toInt()
+                val line = StringBuilder("Filter ${i + 1 + indexOffset}: ON $apoType Fc $fc Hz")
+                if (hasGain) line.append(" Gain ${String.format("%.1f", b.getDouble("gain"))} dB")
+                if (hasQ) line.append(" Q ${String.format("%.2f", b.getDouble("q"))}")
+                sb.append(line).append('\n')
+            }
+        }
+
+        val cseOn = obj.optBoolean("channelSideEqEnabled", false)
+        if (cseOn && obj.has("leftBands") && obj.has("rightBands")) {
+            val leftArr = obj.getJSONArray("leftBands")
+            sb.append("Channel: L\n"); appendFilters(leftArr)
+            sb.append("Channel: R\n"); appendFilters(obj.getJSONArray("rightBands"), indexOffset = leftArr.length())
+        } else {
+            appendFilters(obj.getJSONArray("bands"))
+        }
+        (activity as? com.bearinmind.equalizer314.MainActivity)?.launchPresetExport(sb.toString(), "$name.txt")
     }
 
     private fun showDeleteDialog(name: String) {
