@@ -1,9 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="filter_active">#FF888888</color>
-    <color name="filter_active_text">#FF000000</color>
-    <color name="filter_inactive_text">#FFBBBBBB</color>
-    <color name="filter_outline">#FF444444</color>
+    <!-- Light-theme filter/band button colors — mirrored from the dark
+         values in values-night/colors.xml (same luminance distance from
+         the surface, inverted). -->
+    <color name="filter_active">#FF7A7A7A</color>
+    <color name="filter_active_text">#FFFFFFFF</color>
+    <color name="filter_inactive_text">#FF474747</color>
+    <color name="filter_outline">#FFBEBEBE</color>
 
     <!-- Light green used to tint the "Now playing" speaker pulse when
          a row is actively outputting audio. Same Material Green 200

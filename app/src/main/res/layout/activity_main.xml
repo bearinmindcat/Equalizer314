@@ -165,7 +165,7 @@
                             android:paddingEnd="14px"
                             android:paddingTop="8px"
                             android:paddingBottom="8px"
-                            android:textColor="#FFAAAAAA"
+                            android:textColor="?attr/colorOnSurfaceVariant"
                             android:textSize="20px"
                             android:singleLine="true"
                             android:ellipsize="middle"
@@ -189,9 +189,9 @@
                             app:icon="@drawable/ic_visibility"
                             app:iconGravity="textStart"
                             app:iconPadding="0dp"
-                            app:iconTint="@null"
+                            app:iconTint="?attr/colorOnSurface"
                             app:shapeAppearanceOverlay="@style/ShapeAppearance.MbcEqButton"
-                            app:strokeColor="#FF444444"
+                            app:strokeColor="?attr/colorOutline"
                             app:strokeWidth="1dp"
                             android:contentDescription="Toggle band points" />
 
@@ -216,7 +216,7 @@
                             android:visibility="gone"
                             app:iconPadding="0dp"
                             app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
-                            app:strokeColor="#FF444444"
+                            app:strokeColor="?attr/colorOutline"
                             app:strokeWidth="1dp"
                             android:contentDescription="Toggle band point visibility" />
 
@@ -235,9 +235,9 @@
                             app:icon="@drawable/ic_band_fill"
                             app:iconGravity="textStart"
                             app:iconPadding="0dp"
-                            app:iconTint="@null"
+                            app:iconTint="?attr/colorOnSurface"
                             app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
-                            app:strokeColor="#FF444444"
+                            app:strokeColor="?attr/colorOutline"
                             app:strokeWidth="1dp"
                             android:contentDescription="Toggle per-band curves" />
 
@@ -257,9 +257,9 @@
                             app:icon="@drawable/ic_save"
                             app:iconGravity="textStart"
                             app:iconPadding="0dp"
-                            app:iconTint="@null"
+                            app:iconTint="?attr/colorOnSurface"
                             app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
-                            app:strokeColor="#FF444444"
+                            app:strokeColor="?attr/colorOutline"
                             app:strokeWidth="1dp"
                             android:contentDescription="Save preset" />
 
@@ -279,9 +279,9 @@
                             app:icon="@drawable/ic_alt_route_right"
                             app:iconGravity="textStart"
                             app:iconPadding="0dp"
-                            app:iconTint="@null"
+                            app:iconTint="?attr/colorOnSurface"
                             app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
-                            app:strokeColor="#FF444444"
+                            app:strokeColor="?attr/colorOutline"
                             app:strokeWidth="1dp"
                             android:contentDescription="Toggle channel routing" />
 
@@ -298,7 +298,7 @@
                             android:text="L"
                             android:textSize="6sp"
                             android:textStyle="bold"
-                            android:textColor="#FFE3E3E3"
+                            android:textColor="?attr/colorOnSurface"
                             android:includeFontPadding="false"
                             android:background="@drawable/bg_channel_badge"
                             android:paddingStart="2dp"
@@ -326,9 +326,9 @@
                             app:icon="@drawable/ic_settings_gear"
                             app:iconGravity="textStart"
                             app:iconPadding="0dp"
-                            app:iconTint="@null"
+                            app:iconTint="?attr/colorOnSurface"
                             app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
-                            app:strokeColor="#FF444444"
+                            app:strokeColor="?attr/colorOutline"
                             app:strokeWidth="1dp"
                             android:contentDescription="Open Settings" />
 
@@ -346,11 +346,11 @@
                             android:minHeight="0dp"
                             android:padding="3dp"
                             android:text="L"
-                            android:textColor="#FFBBBBBB"
+                            android:textColor="?attr/colorOnSurfaceVariant"
                             android:textSize="12sp"
                             android:visibility="gone"
                             app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
-                            app:strokeColor="#FF444444"
+                            app:strokeColor="?attr/colorOutline"
                             app:strokeWidth="1dp"
                             android:contentDescription="Left channel" />
 
@@ -368,11 +368,11 @@
                             android:minHeight="0dp"
                             android:padding="3dp"
                             android:text="R"
-                            android:textColor="#FFBBBBBB"
+                            android:textColor="?attr/colorOnSurfaceVariant"
                             android:textSize="12sp"
                             android:visibility="gone"
                             app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
-                            app:strokeColor="#FF444444"
+                            app:strokeColor="?attr/colorOutline"
                             app:strokeWidth="1dp"
                             android:contentDescription="Right channel" />
 
@@ -391,9 +391,9 @@
                             app:iconSize="16dp"
                             app:iconGravity="textStart"
                             app:iconPadding="0dp"
-                            app:iconTint="@null"
+                            app:iconTint="?attr/colorOnSurface"
                             app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
-                            app:strokeColor="#FF444444"
+                            app:strokeColor="?attr/colorOutline"
                             app:strokeWidth="1dp"
                             android:contentDescription="Reset to defaults" />
 
@@ -412,9 +412,9 @@
                             app:icon="@drawable/ic_undo"
                             app:iconGravity="textStart"
                             app:iconPadding="0dp"
-                            app:iconTint="@null"
+                            app:iconTint="?attr/colorOnSurface"
                             app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
-                            app:strokeColor="#FF444444"
+                            app:strokeColor="?attr/colorOutline"
                             app:strokeWidth="1dp"
                             android:contentDescription="Undo" />
 
@@ -433,9 +433,9 @@
                             app:icon="@drawable/ic_redo"
                             app:iconGravity="textStart"
                             app:iconPadding="0dp"
-                            app:iconTint="@null"
+                            app:iconTint="?attr/colorOnSurface"
                             app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
-                            app:strokeColor="#FF444444"
+                            app:strokeColor="?attr/colorOutline"
                             app:strokeWidth="1dp"
                             android:contentDescription="Redo" />
 
@@ -453,9 +453,9 @@
                             app:icon="@drawable/ic_edit"
                             app:iconGravity="textStart"
                             app:iconPadding="0dp"
-                            app:iconTint="@null"
+                            app:iconTint="?attr/colorOnSurface"
                             app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
-                            app:strokeColor="#FF444444"
+                            app:strokeColor="?attr/colorOutline"
                             app:strokeWidth="1dp"
                             android:contentDescription="Edit" />
 
@@ -479,7 +479,7 @@
                             android:textAllCaps="true"
                             app:iconPadding="0dp"
                             app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
-                            app:strokeColor="#FF444444"
+                            app:strokeColor="?attr/colorOutline"
                             app:strokeWidth="1dp"
                             android:contentDescription="Toggle EQ on or off" />
 
@@ -497,9 +497,9 @@
                             app:icon="@drawable/ic_spectrum"
                             app:iconGravity="textStart"
                             app:iconPadding="0dp"
-                            app:iconTint="@null"
+                            app:iconTint="?attr/colorOnSurface"
                             app:shapeAppearanceOverlay="@style/ShapeAppearance.SpectrumButton"
-                            app:strokeColor="#FF444444"
+                            app:strokeColor="?attr/colorOutline"
                             app:strokeWidth="1dp"
                             android:contentDescription="Toggle visualizer" />
                     </FrameLayout>
@@ -1107,9 +1107,9 @@
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
-                <!-- Simple EQ Card -->
+                <!-- Light Theme Card -->
                 <com.google.android.material.card.MaterialCardView
-                    android:id="@+id/simpleEqCard"
+                    android:id="@+id/themeCard"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
@@ -1134,21 +1134,21 @@
                             <TextView
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:text="Simple EQ"
+                                android:text="Light Theme"
                                 android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                                 android:textColor="?attr/colorOnSurface" />
 
                             <TextView
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:text="Simple 10 band graphic EQ"
+                                android:text="Switch between light &amp; dark mode"
                                 android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                                 android:textColor="?attr/colorOnSurfaceVariant"
                                 android:paddingTop="4dp" />
                         </LinearLayout>
 
                         <com.google.android.material.materialswitch.MaterialSwitch
-                            android:id="@+id/simpleEqSwitch"
+                            android:id="@+id/themeSwitch"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="16dp" />
@@ -1339,7 +1339,7 @@
                             android:background="@drawable/bg_icon_outline_ripple"
                             android:scaleType="centerInside"
                             android:contentDescription="Lock Experimental"
-                            app:tint="#FFBBBBBB" />
+                            app:tint="?attr/colorOnSurfaceVariant" />
 
                         <!-- Hidden views kept for code references -->
                         <com.google.android.material.button.MaterialButton

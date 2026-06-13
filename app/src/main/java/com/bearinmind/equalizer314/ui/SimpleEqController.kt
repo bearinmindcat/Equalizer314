@@ -162,7 +162,8 @@ class SimpleEqController(
             }
             radius = 16 * density
             cardElevation = 0f
-            setCardBackgroundColor(0xFF1E1E1E.toInt())
+            setCardBackgroundColor(com.google.android.material.color.MaterialColors.getColor(
+                activity, com.google.android.material.R.attr.colorSurfaceVariant, 0xFF1E1E1E.toInt()))
             strokeWidth = 0
         }
 

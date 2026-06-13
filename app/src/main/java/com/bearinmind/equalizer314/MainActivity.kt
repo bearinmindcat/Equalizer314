@@ -246,6 +246,22 @@ class  MainActivity : AppCompatActivity() {
     private lateinit var bandInputGroup: View
     private lateinit var pageEq: View
     private lateinit var pageSettings: View
+
+    // ---- Graph-header button palette (themed) ----
+    // The header buttons sit directly on the EQ graph card, whose
+    // background is colorSurfaceVariant (#1E1E1E dark / #E4E4E4 light).
+    // The light values mirror the dark ones at the same luminance
+    // distance from their background, so both themes keep the same
+    // contrast relationships (see themes.xml for the same convention).
+    private val isLightUi: Boolean
+        get() = (resources.configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK) !=
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+    private val graphBtnLitBg: Int get() = if (isLightUi) 0xFFADADAD.toInt() else 0xFF555555.toInt()
+    private val graphBtnLitStroke: Int get() = if (isLightUi) 0xFF7A7A7A.toInt() else 0xFF888888.toInt()
+    private val graphBtnLitContent: Int get() = if (isLightUi) 0xFF252525.toInt() else 0xFFDDDDDD.toInt()
+    private val graphBtnDimStroke: Int get() = if (isLightUi) 0xFFBEBEBE.toInt() else 0xFF444444.toInt()
+    private val graphBtnDimContent: Int get() = if (isLightUi) 0xFF7A7A7A.toInt() else 0xFF888888.toInt()
     private lateinit var navSettingsButton: ImageButton
     private lateinit var navPresetsButton: ImageButton
     private lateinit var powerFab: android.widget.ImageButton
@@ -511,6 +527,16 @@ class  MainActivity : AppCompatActivity() {
         // Ensure rows are properly ordered after views are laid out
         pageEq.post { reorderToggleRows(animate = false) }
 
+        // Restore the Settings page across activity recreation (e.g. the
+        // light/dark theme toggle calls setDefaultNightMode, which
+        // recreates the activity) so flipping the theme doesn't dump the
+        // user back on the EQ page.
+        if (savedInstanceState?.getBoolean("onSettingsPage", false) == true) {
+            pageEq.visibility = View.GONE
+            pageSettings.visibility = View.VISIBLE
+            updateBottomBarHighlight(isEqPage = false)
+        }
+
         // If the global DP is already running when the activity opens
         // (e.g. user toggled it on via the QS tile while the activity
         // was killed), reflect that in the UI and bind to the existing
@@ -722,7 +748,13 @@ class  MainActivity : AppCompatActivity() {
         val channelRBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.channelRButton)
         val vizDensity = resources.displayMetrics.density
         val gapPx = (2 * vizDensity).toInt()
-        eqGraphView.post {
+        // doOnLayout, NOT post{}: when the activity is recreated onto the
+        // Settings page (light/dark theme toggle), pageEq is GONE and the
+        // graph has width 0 at post-time — every offset would compute
+        // garbage and the header icons end up bunched. doOnLayout defers
+        // until the graph is actually laid out (first time the EQ page
+        // becomes visible), when the width is real.
+        eqGraphView.doOnLayout {
             val viewWidth = eqGraphView.width
             val vPadPx = 80
             val gridLine10k = (viewWidth * 3.0 / 3.301).toInt()
@@ -1608,8 +1640,8 @@ class  MainActivity : AppCompatActivity() {
                         presetPickerScroll.alpha = 1f
                     }.start()
                     saveBtn.setBackgroundColor(0x00000000)
-                    saveBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
-                    saveBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+                    saveBtn.strokeColor = android.content.res.ColorStateList.valueOf(graphBtnDimStroke)
+                    saveBtn.iconTint = android.content.res.ColorStateList.valueOf(graphBtnDimContent)
                     android.widget.Toast.makeText(this, "Loaded \"$name\"", android.widget.Toast.LENGTH_SHORT).show()
                 }
                 presetPickerContainer.addView(presetRow)
@@ -1627,9 +1659,9 @@ class  MainActivity : AppCompatActivity() {
                     eqControlsContainerLocal.visibility = android.view.View.GONE
                     eqControlsContainerLocal.alpha = 1f
                 }.start()
-                saveBtn.setBackgroundColor(0xFF555555.toInt())
-                saveBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
-                saveBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
+                saveBtn.setBackgroundColor(graphBtnLitBg)
+                saveBtn.strokeColor = android.content.res.ColorStateList.valueOf(graphBtnLitStroke)
+                saveBtn.iconTint = android.content.res.ColorStateList.valueOf(graphBtnLitContent)
             } else {
                 eqControlsContainerLocal.visibility = android.view.View.VISIBLE
                 eqControlsContainerLocal.alpha = 0f
@@ -1639,8 +1671,8 @@ class  MainActivity : AppCompatActivity() {
                     presetPickerScroll.alpha = 1f
                 }.start()
                 saveBtn.setBackgroundColor(0x00000000)
-                saveBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
-                saveBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+                saveBtn.strokeColor = android.content.res.ColorStateList.valueOf(graphBtnDimStroke)
+                saveBtn.iconTint = android.content.res.ColorStateList.valueOf(graphBtnDimContent)
             }
         }
         // Eye button: opens the view-options popout (ON/OFF visibility
@@ -1655,22 +1687,22 @@ class  MainActivity : AppCompatActivity() {
 
         fun paintLit(btn: com.google.android.material.button.MaterialButton, lit: Boolean) {
             if (lit) {
-                btn.setBackgroundColor(0xFF555555.toInt())
-                btn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+                btn.setBackgroundColor(graphBtnLitBg)
+                btn.strokeColor = android.content.res.ColorStateList.valueOf(graphBtnLitStroke)
                 btn.strokeWidth = (2 * vizDensity).toInt()
-                btn.setTextColor(0xFFDDDDDD.toInt())
-                btn.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
+                btn.setTextColor(graphBtnLitContent)
+                btn.iconTint = android.content.res.ColorStateList.valueOf(graphBtnLitContent)
             } else {
                 btn.setBackgroundColor(0x00000000)
-                btn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                btn.strokeColor = android.content.res.ColorStateList.valueOf(graphBtnDimStroke)
                 btn.strokeWidth = (1 * vizDensity).toInt()
-                btn.setTextColor(0xFF888888.toInt())
-                btn.iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+                btn.setTextColor(graphBtnDimContent)
+                btn.iconTint = android.content.res.ColorStateList.valueOf(graphBtnDimContent)
             }
         }
         // Initial state: eye dim (popout closed), points on.
         paintLit(bandPtsBtn, false)
-        bandPtsBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
+        bandPtsBtn.iconTint = android.content.res.ColorStateList.valueOf(graphBtnLitContent)
         onOffBtn.text = "ON"
         paintLit(onOffBtn, true)
         paintLit(fillBtn, false)
@@ -1842,9 +1874,9 @@ class  MainActivity : AppCompatActivity() {
                 redoBtn.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f)
                     .setDuration(250).setStartDelay(80).setInterpolator(android.view.animation.OvershootInterpolator(1.0f)).start()
 
-                editBtn.setBackgroundColor(0xFF555555.toInt())
-                editBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
-                editBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
+                editBtn.setBackgroundColor(graphBtnLitBg)
+                editBtn.strokeColor = android.content.res.ColorStateList.valueOf(graphBtnLitStroke)
+                editBtn.iconTint = android.content.res.ColorStateList.valueOf(graphBtnLitContent)
             } else {
                 val offsetY = -(editBtn.height.toFloat() + gapPx)
 
@@ -1864,8 +1896,8 @@ class  MainActivity : AppCompatActivity() {
                     .withEndAction { eqPowerToggle.isClickable = true }.start()
 
                 editBtn.setBackgroundColor(0x00000000)
-                editBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
-                editBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+                editBtn.strokeColor = android.content.res.ColorStateList.valueOf(graphBtnDimStroke)
+                editBtn.iconTint = android.content.res.ColorStateList.valueOf(graphBtnDimContent)
             }
         }
 
@@ -1929,16 +1961,16 @@ class  MainActivity : AppCompatActivity() {
         fun updateVizToggleStyle(active: Boolean) {
             if (active) {
                 vizToggle.alpha = 1.0f
-                vizToggle.setBackgroundColor(0xFF555555.toInt())
-                vizToggle.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+                vizToggle.setBackgroundColor(graphBtnLitBg)
+                vizToggle.strokeColor = android.content.res.ColorStateList.valueOf(graphBtnLitStroke)
                 vizToggle.strokeWidth = (2 * vizDensity).toInt()
-                vizToggle.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
+                vizToggle.iconTint = android.content.res.ColorStateList.valueOf(graphBtnLitContent)
             } else {
                 vizToggle.alpha = 1.0f
                 vizToggle.setBackgroundColor(0x00000000)
-                vizToggle.strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                vizToggle.strokeColor = android.content.res.ColorStateList.valueOf(graphBtnDimStroke)
                 vizToggle.strokeWidth = (1 * vizDensity).toInt()
-                vizToggle.iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+                vizToggle.iconTint = android.content.res.ColorStateList.valueOf(graphBtnDimContent)
             }
         }
         // Restore spectrum state from preferences
@@ -2113,17 +2145,18 @@ class  MainActivity : AppCompatActivity() {
     }
 
     private fun setupSettingsListeners() {
-        // Simple EQ toggle (settings page)
-        val simpleEqSwitch = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.simpleEqSwitch)
-        simpleEqSwitch.isChecked = eqPrefs.getSimpleEqEnabled()
-        simpleEqSwitch.setOnCheckedChangeListener { _, isChecked ->
-            eqPrefs.saveSimpleEqEnabled(isChecked)
-            if (isChecked && stateManager.currentEqUiMode != EqUiMode.SIMPLE) {
-                switchEqUiMode(EqUiMode.SIMPLE)
-            } else if (!isChecked && stateManager.currentEqUiMode == EqUiMode.SIMPLE) {
-                val fallback = try { EqUiMode.valueOf(eqPrefs.getEqUiMode()) } catch (_: Exception) { EqUiMode.PARAMETRIC }
-                switchEqUiMode(fallback)
-            }
+        // Light/dark theme toggle (settings page). Switch ON = light.
+        // setDefaultNightMode recreates all live activities, which
+        // re-inflates everything in the new palette; EqApp re-applies
+        // the saved choice on the next cold start.
+        val themeSwitch = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.themeSwitch)
+        themeSwitch.isChecked = eqPrefs.getLightTheme()
+        themeSwitch.setOnCheckedChangeListener { _, isChecked ->
+            eqPrefs.saveLightTheme(isChecked)
+            androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(
+                if (isChecked) androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO
+                else androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
+            )
         }
 
         // Channel Side EQ card (settings page) — opens the per-channel editor
@@ -3137,15 +3170,15 @@ class  MainActivity : AppCompatActivity() {
         val d = resources.displayMetrics.density
         eqPowerToggle.text = if (enabled) "ON" else "OFF"
         if (enabled) {
-            eqPowerToggle.setBackgroundColor(0xFF555555.toInt())
-            eqPowerToggle.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+            eqPowerToggle.setBackgroundColor(graphBtnLitBg)
+            eqPowerToggle.strokeColor = android.content.res.ColorStateList.valueOf(graphBtnLitStroke)
             eqPowerToggle.strokeWidth = (2 * d).toInt()
-            eqPowerToggle.setTextColor(0xFFDDDDDD.toInt())
+            eqPowerToggle.setTextColor(graphBtnLitContent)
         } else {
             eqPowerToggle.setBackgroundColor(0x00000000)
-            eqPowerToggle.strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+            eqPowerToggle.strokeColor = android.content.res.ColorStateList.valueOf(graphBtnDimStroke)
             eqPowerToggle.strokeWidth = (1 * d).toInt()
-            eqPowerToggle.setTextColor(0xFF777777.toInt())
+            eqPowerToggle.setTextColor(if (isLightUi) 0xFF8B8B8B.toInt() else 0xFF777777.toInt())
         }
     }
 
@@ -3844,6 +3877,16 @@ class  MainActivity : AppCompatActivity() {
             vizBtn.strokeWidth = (2 * d).toInt()
             vizBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
         }
+    }
+
+    override fun onSaveInstanceState(outState: android.os.Bundle) {
+        super.onSaveInstanceState(outState)
+        // Which page is open — restored in onCreate after a recreation
+        // (theme toggle / config change) so the user stays where they were.
+        outState.putBoolean(
+            "onSettingsPage",
+            ::pageSettings.isInitialized && pageSettings.visibility == View.VISIBLE
+        )
     }
 
     override fun onNewIntent(intent: Intent?) {

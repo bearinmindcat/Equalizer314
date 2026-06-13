@@ -1,41 +1,49 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Light theme palette — an exact mirror of the dark palette in
+         values-night/themes.xml: every grey sits at the same luminance
+         distance from its background as its dark counterpart, just
+         inverted (dark surface 0x0E + outline 0x44 = +54 steps → light
+         surface 0xF4 − 54 = 0xBE, etc.) so the two themes have the same
+         contrast relationships. The active palette is picked by
+         AppCompatDelegate night mode (see EqApp + the Settings toggle);
+         dark remains the default. -->
     <style name="Theme.Equalizer314" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- Primary (grey) -->
-        <item name="colorPrimary">#FFAAAAAA</item>
-        <item name="colorOnPrimary">#FF000000</item>
-        <item name="colorPrimaryContainer">#FF3A3A3A</item>
-        <item name="colorOnPrimaryContainer">#FFDDDDDD</item>
+        <item name="colorPrimary">#FF585858</item>
+        <item name="colorOnPrimary">#FFFFFFFF</item>
+        <item name="colorPrimaryContainer">#FFC8C8C8</item>
+        <item name="colorOnPrimaryContainer">#FF252525</item>
 
         <!-- Secondary -->
-        <item name="colorSecondary">#FF999999</item>
-        <item name="colorOnSecondary">#FF000000</item>
-        <item name="colorSecondaryContainer">#FF333333</item>
-        <item name="colorOnSecondaryContainer">#FFDDDDDD</item>
+        <item name="colorSecondary">#FF696969</item>
+        <item name="colorOnSecondary">#FFFFFFFF</item>
+        <item name="colorSecondaryContainer">#FFCFCFCF</item>
+        <item name="colorOnSecondaryContainer">#FF252525</item>
 
         <!-- Tertiary -->
-        <item name="colorTertiary">#FFBBBBBB</item>
-        <item name="colorOnTertiary">#FF000000</item>
-        <item name="colorTertiaryContainer">#FF3A3A3A</item>
-        <item name="colorOnTertiaryContainer">#FFDDDDDD</item>
+        <item name="colorTertiary">#FF474747</item>
+        <item name="colorOnTertiary">#FFFFFFFF</item>
+        <item name="colorTertiaryContainer">#FFC8C8C8</item>
+        <item name="colorOnTertiaryContainer">#FF252525</item>
 
         <!-- Surface / background -->
-        <item name="colorSurface">#FF0E0E0E</item>
-        <item name="colorOnSurface">#FFE2E2E2</item>
-        <item name="colorSurfaceVariant">#FF1E1E1E</item>
-        <item name="colorOnSurfaceVariant">#FFBBBBBB</item>
-        <item name="colorSurfaceContainerLow">#FF161616</item>
-        <item name="colorSurfaceContainer">#FF1C1C1C</item>
-        <item name="colorSurfaceContainerHigh">#FF252525</item>
+        <item name="colorSurface">#FFF4F4F4</item>
+        <item name="colorOnSurface">#FF202020</item>
+        <item name="colorSurfaceVariant">#FFE4E4E4</item>
+        <item name="colorOnSurfaceVariant">#FF474747</item>
+        <item name="colorSurfaceContainerLow">#FFECECEC</item>
+        <item name="colorSurfaceContainer">#FFE6E6E6</item>
+        <item name="colorSurfaceContainerHigh">#FFDDDDDD</item>
 
         <!-- Outline -->
-        <item name="colorOutline">#FF444444</item>
-        <item name="colorOutlineVariant">#FF333333</item>
+        <item name="colorOutline">#FFBEBEBE</item>
+        <item name="colorOutlineVariant">#FFCFCFCF</item>
 
         <!-- System bars -->
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightStatusBar">true</item>
     </style>
 
     <!-- Rounded dialog -->

@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Light variant (dark original in drawable-night/). Mirrors EqGraphView light palette
-     (labelBgPaint #E6E6E6 + labelStrokePaint #BEBEBE strokeWidth 2f,
+<!-- Mirrors the canvas-drawn band-info card in EqGraphView
+     (labelBgPaint #1C1C1C + labelStrokePaint #444444 strokeWidth 2f,
      corner radius 12dp). Stroke is 2px (raw) — NOT dp — so the line
      thickness matches the 2-physical-pixel stroke EqGraphView draws,
      regardless of screen density. Used by the device/preset status
      chip on the main EQ graph so the two cards look like siblings. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <solid android:color="#FFE6E6E6" />
-    <stroke android:width="2px" android:color="#FFBEBEBE" />
+    <solid android:color="#FF1C1C1C" />
+    <stroke android:width="2px" android:color="#FF444444" />
     <corners android:radius="12dp" />
 </shape>

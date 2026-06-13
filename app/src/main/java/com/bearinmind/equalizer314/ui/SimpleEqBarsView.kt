@@ -47,6 +47,24 @@ class SimpleEqBarsView @JvmOverloads constructor(
         textAlign = Paint.Align.CENTER
     }
 
+    // Paints above default to the dark palette; flip them in light mode.
+    // The view is reconstructed on theme change (the activity recreates),
+    // so a one-shot init is enough.
+    init {
+        val isLight = (resources.configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK) !=
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+        if (isLight) {
+            // Exact mirrors of the dark values (same luminance distance
+            // from the light card bg as dark, inverted) so the light
+            // theme keeps the dark theme's contrast relationships.
+            barPaint.color = 0xFF525252.toInt()        // dark #B0B0B0
+            barBgPaint.color = 0xFFD8D8D8.toInt()      // dark #2A2A2A
+            centerLinePaint.color = 0xFFBEBEBE.toInt() // dark #444444
+            labelPaint.color = 0xFF696969.toInt()      // dark #999999
+        }
+    }
+
     private val barCornerRadius = 6f * density
     // Bar sizing as % of available width — scales with screen size.
     // barWidthPct + barGapPct should sum to ~10% (one slot = 10% of width for 10 bands).

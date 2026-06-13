@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dark-theme filter/band button colors (the app's original values).
+     Light mirrors live in values/colors.xml — keep the two in step:
+     same luminance distance from the respective surface, inverted. -->
+<resources>
+    <color name="filter_active">#FF888888</color>
+    <color name="filter_active_text">#FF000000</color>
+    <color name="filter_inactive_text">#FFBBBBBB</color>
+    <color name="filter_outline">#FF444444</color>
+</resources>
