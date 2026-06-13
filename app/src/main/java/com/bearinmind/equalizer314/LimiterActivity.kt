@@ -265,17 +265,27 @@ class LimiterActivity : AppCompatActivity() {
             }
             dialog.show()
         }
+        // Graph-header button colors, themed (mirror of the dark values
+        // across the graph-card surface — same convention as MainActivity).
+        val isLightUi = (resources.configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK) !=
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val litBg = if (isLightUi) 0xFFADADAD.toInt() else 0xFF555555.toInt()
+        val litStroke = if (isLightUi) 0xFF7A7A7A.toInt() else 0xFF888888.toInt()
+        val litContent = if (isLightUi) 0xFF252525.toInt() else 0xFFDDDDDD.toInt()
+        val dimStroke = if (isLightUi) 0xFFBEBEBE.toInt() else 0xFF444444.toInt()
+        val dimContent = if (isLightUi) 0xFF7A7A7A.toInt() else 0xFF888888.toInt()
         fun updateVizStyle(active: Boolean) {
             if (active) {
-                vizToggle.setBackgroundColor(0xFF555555.toInt())
-                vizToggle.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+                vizToggle.setBackgroundColor(litBg)
+                vizToggle.strokeColor = android.content.res.ColorStateList.valueOf(litStroke)
                 vizToggle.strokeWidth = (2 * density).toInt()
-                vizToggle.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
+                vizToggle.iconTint = android.content.res.ColorStateList.valueOf(litContent)
             } else {
                 vizToggle.setBackgroundColor(0x00000000)
-                vizToggle.strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                vizToggle.strokeColor = android.content.res.ColorStateList.valueOf(dimStroke)
                 vizToggle.strokeWidth = (1 * density).toInt()
-                vizToggle.iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+                vizToggle.iconTint = android.content.res.ColorStateList.valueOf(dimContent)
             }
         }
         vizToggle.setOnClickListener {

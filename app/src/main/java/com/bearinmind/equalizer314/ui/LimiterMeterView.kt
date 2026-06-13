@@ -53,6 +53,20 @@ class LimiterMeterView @JvmOverloads constructor(
         pathEffect = DashPathEffect(floatArrayOf(4f, 3f), 0f)
     }
 
+    // Light-theme overrides — the gradient bar (green/yellow/red) and the
+    // red threshold read on both; only the dark backdrop, border, and the
+    // white peak line need flipping.
+    init {
+        val isLight = (resources.configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK) !=
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+        if (isLight) {
+            bgPaint.color = 0xFFE6E6E6.toInt()
+            borderPaint.color = 0xFFCFCFCF.toInt()
+            peakPaint.color = 0xFF333333.toInt()
+        }
+    }
+
     private val dbMin = -60f
     private val dbMax = 0f
     private val grMin = -30f

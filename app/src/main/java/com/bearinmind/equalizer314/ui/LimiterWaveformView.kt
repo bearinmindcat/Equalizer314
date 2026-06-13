@@ -76,6 +76,26 @@ class LimiterWaveformView @JvmOverloads constructor(
         color = 0xFF666666.toInt(); style = Paint.Style.FILL; alpha = 15
     }
 
+    // Light-theme overrides. The scope keeps its colored accents (red
+    // ceiling / GR trace read on both) but the dark backdrop and the
+    // light-grey traces flip so they're visible on a light card.
+    // setColor resets alpha, so re-apply the alphas after recoloring.
+    init {
+        val isLight = (resources.configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK) !=
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+        if (isLight) {
+            bgPaint.color = 0xFFE6E6E6.toInt()
+            gridPaint.color = 0xFFCFCFCF.toInt()
+            labelPaint.color = 0xFF6A6A6A.toInt()
+            ceilingTextPaint.color = 0xFF585858.toInt()
+            inputFillPaint.color = 0xFF585858.toInt(); inputFillPaint.alpha = 30
+            inputStrokePaint.color = 0xFF585858.toInt(); inputStrokePaint.alpha = 70
+            lufsLinePaint.color = 0xFF8A8A8A.toInt()
+            lufsFillPaint.color = 0xFF8A8A8A.toInt(); lufsFillPaint.alpha = 25
+        }
+    }
+
     /** Called from activity's 33ms timer — one value per frame, exactly like MBC GrTraceView */
     fun pushFrame(inputDb: Float, grDb: Float, lufsDb: Float = -80f) {
         // Smooth GR with attack/release envelope follower (same formula as MBC)

@@ -91,6 +91,31 @@ class LimiterCeilingView @JvmOverloads constructor(
         color = 0x30FFFFFF.toInt(); style = Paint.Style.FILL
     }
 
+    // True when the app is in light mode — also read in onDraw for the
+    // locally-built drag triangle paints.
+    private val isLightTheme = (resources.configuration.uiMode and
+        android.content.res.Configuration.UI_MODE_NIGHT_MASK) !=
+        android.content.res.Configuration.UI_MODE_NIGHT_YES
+
+    // Light-theme overrides — this view overlays the (now light) waveform,
+    // so its dark columns/halo and light-grey traces flip.
+    init {
+        if (isLightTheme) {
+            columnBgPaint.color = 0xCCD0D0D0.toInt()
+            inputBelowPaint.color = 0xFF585858.toInt()
+            inputAbovePaint.color = 0xFF585858.toInt()
+            ceilingLinePaint.color = 0xFF585858.toInt()
+            grFillPaint.color = 0xFF585858.toInt()
+            gridPaint.color = 0xFFCFCFCF.toInt()
+            labelPaint.color = 0xFF6A6A6A.toInt()
+            titlePaint.color = 0xFF585858.toInt()
+            valuePaint.color = 0xFF252525.toInt()
+            grValuePaint.color = 0xFF585858.toInt()
+            peakLinePaint.color = 0xFF585858.toInt()
+            haloPaint.color = 0x30000000
+        }
+    }
+
     private val topPad = 50f
     private val bottomPad = 40f
     private val sidePad = 8f  // tighter padding
@@ -186,11 +211,11 @@ class LimiterCeilingView @JvmOverloads constructor(
         triPath.close()
 
         val triBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFF1E1E1E.toInt(); style = Paint.Style.FILL
+            color = if (isLightTheme) 0xFFE6E6E6.toInt() else 0xFF1E1E1E.toInt(); style = Paint.Style.FILL
             pathEffect = CornerPathEffect(triCorner)
         }
         val triOutlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFFBBBBBB.toInt(); style = Paint.Style.STROKE; strokeWidth = 2f
+            color = if (isLightTheme) 0xFF585858.toInt() else 0xFFBBBBBB.toInt(); style = Paint.Style.STROKE; strokeWidth = 2f
             pathEffect = CornerPathEffect(triCorner)
         }
         // Triangle halo when dragging

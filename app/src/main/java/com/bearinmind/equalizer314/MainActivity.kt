@@ -527,6 +527,26 @@ class  MainActivity : AppCompatActivity() {
         // Ensure rows are properly ordered after views are laid out
         pageEq.post { reorderToggleRows(animate = false) }
 
+        // Bulletproof graph-header positioning: reposition whenever the
+        // graph's width actually changes. The one-shot post{}/doOnLayout
+        // hooks can fire at a transient width during a theme-toggle
+        // recreate (the window settles to its final width a layout pass
+        // or two later), leaving the buttons computed for the wrong
+        // width. This persistent listener catches that final settle. The
+        // `w != oldW` guard skips same-width passes so setting the
+        // buttons' layoutParams here can't loop.
+        eqGraphView.addOnLayoutChangeListener { _, left, _, right, _, oldLeft, _, oldRight, _ ->
+            val w = right - left
+            val oldW = oldRight - oldLeft
+            if (w > 0 && w != oldW && stateManager.currentEqUiMode != EqUiMode.SIMPLE) {
+                // Defer out of the layout traversal: repositioning calls
+                // requestLayout on the buttons, which mid-pass can apply
+                // against stale measurements. post{} runs it after this
+                // layout completes, reading the settled final width.
+                eqGraphView.post { relayoutGraphHeaderButtons() }
+            }
+        }
+
         // Restore the Settings page across activity recreation (e.g. the
         // light/dark theme toggle calls setDefaultNightMode, which
         // recreates the activity) so flipping the theme doesn't dump the
@@ -719,6 +739,14 @@ class  MainActivity : AppCompatActivity() {
             pageEq.visibility = View.VISIBLE
             pageSettings.visibility = View.GONE
             updateBottomBarHighlight(isEqPage = true)
+            // The graph was GONE (width 0) while Settings was showing, so
+            // the header buttons couldn't be positioned. Re-run once the
+            // graph is laid out with its real width — this is the path
+            // that fixes warped buttons after a theme toggle (which leaves
+            // the user on the Settings page across the recreate).
+            if (stateManager.currentEqUiMode != EqUiMode.SIMPLE) {
+                eqGraphView.doOnLayout { eqGraphView.post { relayoutGraphHeaderButtons() } }
+            }
         }
         val navMbcBtn = findViewById<ImageButton>(R.id.navMbcButton)
         val navLimiterBtn = findViewById<ImageButton>(R.id.navLimiterButton)
@@ -748,14 +776,17 @@ class  MainActivity : AppCompatActivity() {
         val channelRBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.channelRButton)
         val vizDensity = resources.displayMetrics.density
         val gapPx = (2 * vizDensity).toInt()
-        // doOnLayout, NOT post{}: when the activity is recreated onto the
-        // Settings page (light/dark theme toggle), pageEq is GONE and the
-        // graph has width 0 at post-time — every offset would compute
-        // garbage and the header icons end up bunched. doOnLayout defers
-        // until the graph is actually laid out (first time the EQ page
-        // becomes visible), when the width is real.
-        eqGraphView.doOnLayout {
+        // post{}, NOT doOnLayout{}: these button offsets are computed from
+        // eqGraphView.width, so they must run after the layout pass has
+        // fully settled to the final width. doOnLayout is a one-shot that
+        // fires on the FIRST layout pass — during a theme-toggle recreate
+        // that pass happens at a transient (mid-transition / pre-inset)
+        // width, which gets baked into every offset and warps the buttons.
+        // The Simple-mode GONE→VISIBLE bunching is handled separately by
+        // the re-layout block in switchEqUiMode (which has its own guard).
+        eqGraphView.post {
             val viewWidth = eqGraphView.width
+            if (viewWidth <= 0) return@post
             val vPadPx = 80
             val gridLine10k = (viewWidth * 3.0 / 3.301).toInt()
             val btnTop = gapPx
@@ -2256,6 +2287,78 @@ class  MainActivity : AppCompatActivity() {
 
     // ---- EQ UI Mode Switching ----
 
+    /** Pixel-positions the graph-header overlay buttons from the graph's
+     *  current width. Safe to call repeatedly (idempotent). Bails if the
+     *  graph isn't measured yet (width 0) — e.g. while GONE in Simple
+     *  mode. Called from the startup post{}, from switchEqUiMode after a
+     *  GONE→VISIBLE flip, and from onWindowFocusChanged so a theme-toggle
+     *  recreate re-lays-out at the *final* window width instead of the
+     *  transient mid-transition width that warped the buttons. */
+    private fun relayoutGraphHeaderButtons() {
+        if (!::eqGraphView.isInitialized) return
+        val viewWidth = eqGraphView.width
+        if (viewWidth <= 0) return
+        val vizDensity = resources.displayMetrics.density
+        val gapPx = (2 * vizDensity).toInt()
+        val vPadPx = 80
+        val gridLine10k = (viewWidth * 3.0 / 3.301).toInt()
+        val btnTop = gapPx
+        val btnHeight = vPadPx - 2 * gapPx
+        val specWidth = (viewWidth - gapPx) - (gridLine10k + gapPx)
+        val specLeft = gridLine10k + gapPx
+
+        fun reposition(btn: View, leftMargin: Int, topMargin: Int = btnTop) {
+            val lp = btn.layoutParams as? android.widget.FrameLayout.LayoutParams ?: return
+            lp.width = specWidth; lp.height = btnHeight
+            lp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+            lp.leftMargin = leftMargin; lp.topMargin = topMargin
+            btn.layoutParams = lp
+        }
+
+        val vizToggle = findViewById<View>(R.id.visualizerToggle)
+        val editBtn = findViewById<View>(R.id.editButton)
+        val resetBtn = findViewById<View>(R.id.resetButton)
+        val undoBtn = findViewById<View>(R.id.undoButton)
+        val redoBtn = findViewById<View>(R.id.redoButton)
+        val bandPtsBtn = findViewById<View>(R.id.bandPointsToggle)
+        val saveBtn = findViewById<View>(R.id.savePresetButton)
+
+        val editLeftPx = (specLeft - gapPx - specWidth).coerceAtLeast(gapPx)
+        val resetLeftPx = (specLeft - 2 * (gapPx + specWidth)).coerceAtLeast(gapPx)
+        val row2Top = btnTop + btnHeight + gapPx
+
+        reposition(vizToggle, specLeft)
+        reposition(editBtn, editLeftPx)
+        reposition(resetBtn, resetLeftPx)
+        // EQ on/off toggle shares the reset slot (left of edit).
+        reposition(findViewById(R.id.eqPowerToggle), resetLeftPx)
+        // Undo sits directly below reset; redo sits directly below edit
+        reposition(undoBtn, resetLeftPx, row2Top)
+        reposition(redoBtn, editLeftPx, row2Top)
+        reposition(bandPtsBtn, gapPx)
+        val saveLeftPx = gapPx + specWidth + gapPx
+        reposition(saveBtn, saveLeftPx)
+        // View-options popout: ON/OFF below the eye, fill toggle below save.
+        reposition(findViewById(R.id.bandPointsOnOffBtn), gapPx, row2Top)
+        reposition(findViewById(R.id.bandFillToggle), saveLeftPx, row2Top)
+
+        // Alt-route button: after save on row 1
+        val altRouteLeftPx = saveLeftPx + specWidth + gapPx
+        reposition(findViewById(R.id.altRouteButton), altRouteLeftPx)
+        // Settings gear: right of alt-route on row 1 (popout member)
+        val settingsLeftPx = altRouteLeftPx + specWidth + gapPx
+        reposition(findViewById(R.id.settingsGearButton), settingsLeftPx)
+        // L / R popout on row 2 — L below alt-route, R below settings
+        reposition(findViewById(R.id.channelLButton), altRouteLeftPx, row2Top)
+        reposition(findViewById(R.id.channelRButton), settingsLeftPx, row2Top)
+
+        // Keep the mini L/R badge glued to the alt-route button.
+        badgeAnchorAltRouteLeft = altRouteLeftPx
+        badgeAnchorSpecWidth = specWidth
+        badgeAnchorBtnTop = btnTop
+        repositionChannelBadge(findViewById(R.id.altRouteChannelBadge))
+    }
+
     private fun switchEqUiMode(mode: EqUiMode) {
         // Clean up table mode bands when leaving
         if (stateManager.currentEqUiMode == EqUiMode.TABLE && mode != EqUiMode.TABLE) {
@@ -2355,75 +2458,9 @@ class  MainActivity : AppCompatActivity() {
             bandToggleManager.setupToggles()
             eqGraphView.updateBandLevels()
 
-            // Re-position the graph overlay buttons (visibility, save, reset, edit,
-            // spectrum). They were positioned via eqGraphView.post{} at startup, but
-            // when the graph card was GONE in SIMPLE mode, the view's width was 0.
-            // Now that it's VISIBLE again, we need to re-layout after the view has
-            // its real width.
-            // Use doOnLayout (not post) — the graph card just flipped
-            // GONE→VISIBLE, so a plain post fires before it's measured
-            // (width 0) and the old code bailed permanently, leaving the
-            // header icons at their tiny default top|start/top|end
-            // positions (bunched up). doOnLayout defers until the view
-            // actually has its width from the next layout pass.
-            eqGraphView.doOnLayout {
-                val viewWidth = eqGraphView.width
-                if (viewWidth <= 0) return@doOnLayout
-                val vizDensity = resources.displayMetrics.density
-                val gapPx = (2 * vizDensity).toInt()
-                val vPadPx = 80
-                val gridLine10k = (viewWidth * 3.0 / 3.301).toInt()
-                val btnTop = gapPx
-                val btnHeight = vPadPx - 2 * gapPx
-                val specWidth = (viewWidth - gapPx) - (gridLine10k + gapPx)
-                val specLeft = gridLine10k + gapPx
-
-                fun reposition(btn: View, leftMargin: Int, topMargin: Int = btnTop) {
-                    val lp = btn.layoutParams as? android.widget.FrameLayout.LayoutParams ?: return
-                    lp.width = specWidth; lp.height = btnHeight
-                    lp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
-                    lp.leftMargin = leftMargin; lp.topMargin = topMargin
-                    btn.layoutParams = lp
-                }
-
-                val vizToggle = findViewById<View>(R.id.visualizerToggle)
-                val editBtn = findViewById<View>(R.id.editButton)
-                val resetBtn = findViewById<View>(R.id.resetButton)
-                val undoBtn = findViewById<View>(R.id.undoButton)
-                val redoBtn = findViewById<View>(R.id.redoButton)
-                val bandPtsBtn = findViewById<View>(R.id.bandPointsToggle)
-                val saveBtn = findViewById<View>(R.id.savePresetButton)
-
-                val editLeftPx = (specLeft - gapPx - specWidth).coerceAtLeast(gapPx)
-                val resetLeftPx = (specLeft - 2 * (gapPx + specWidth)).coerceAtLeast(gapPx)
-                val row2Top = btnTop + btnHeight + gapPx
-
-                reposition(vizToggle, specLeft)
-                reposition(editBtn, editLeftPx)
-                reposition(resetBtn, resetLeftPx)
-                // EQ on/off toggle shares the reset slot (left of edit).
-                reposition(findViewById(R.id.eqPowerToggle), resetLeftPx)
-                // Undo sits directly below reset; redo sits directly below edit
-                reposition(undoBtn, resetLeftPx, row2Top)
-                reposition(redoBtn, editLeftPx, row2Top)
-                reposition(bandPtsBtn, gapPx)
-                val saveLeftPx = gapPx + specWidth + gapPx
-                reposition(saveBtn, saveLeftPx)
-                // View-options popout: ON/OFF below the eye, fill toggle
-                // below the save button (row 2, left side).
-                reposition(findViewById(R.id.bandPointsOnOffBtn), gapPx, row2Top)
-                reposition(findViewById(R.id.bandFillToggle), saveLeftPx, row2Top)
-
-                // Alt-route button: after save on row 1
-                val altRouteLeftPx = saveLeftPx + specWidth + gapPx
-                reposition(findViewById(R.id.altRouteButton), altRouteLeftPx)
-                // Settings gear: right of alt-route on row 1 (popout member)
-                val settingsLeftPx = altRouteLeftPx + specWidth + gapPx
-                reposition(findViewById(R.id.settingsGearButton), settingsLeftPx)
-                // L / R popout on row 2 — L below alt-route, R below settings
-                reposition(findViewById(R.id.channelLButton), altRouteLeftPx, row2Top)
-                reposition(findViewById(R.id.channelRButton), settingsLeftPx, row2Top)
-            }
+            // Re-position the graph overlay buttons once the card has its
+            // real width again (it was width 0 while GONE in SIMPLE mode).
+            eqGraphView.doOnLayout { relayoutGraphHeaderButtons() }
         }
 
         when (mode) {
@@ -3876,6 +3913,20 @@ class  MainActivity : AppCompatActivity() {
             vizBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
             vizBtn.strokeWidth = (2 * d).toInt()
             vizBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // When the window is focused the graph is at its final laid-out
+        // width. Re-assert the header-button positions here so a
+        // light/dark theme toggle (which recreates the activity with a
+        // fade transition, during which the startup post{} can fire at a
+        // transient width) ends up correct. Skipped in Simple mode, where
+        // the graph card is hidden and the buttons don't apply.
+        if (hasFocus && ::eqGraphView.isInitialized && ::stateManager.isInitialized &&
+            stateManager.currentEqUiMode != EqUiMode.SIMPLE) {
+            eqGraphView.post { relayoutGraphHeaderButtons() }
         }
     }
 

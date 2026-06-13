@@ -2,6 +2,7 @@ package com.bearinmind.equalizer314.ui
 
 import android.app.Activity
 import android.content.Intent
+import android.content.res.Configuration
 import android.widget.ImageButton
 import android.widget.TextView
 import com.bearinmind.equalizer314.*
@@ -11,10 +12,33 @@ enum class NavScreen { EQ, MBC, LIMITER, SETTINGS }
 
 object BottomNavHelper {
 
-    private const val ACTIVE_COLOR = 0xFFDDDDDD.toInt()
-    private const val DIM_COLOR = 0xFF666666.toInt()
-    private const val ON_COLOR = 0xFFDDDDDD.toInt()
+    // The bottom bar background is colorSurfaceContainerHigh (#252525
+    // dark / #DDDDDD light). These tints are set programmatically (they
+    // override the XML's ?attr/colorOnSurface), so they must flip with
+    // the theme or the active icon turns near-white on the light bar and
+    // vanishes. Light values mirror the dark ones across the bar bg.
+    private fun isLight(activity: Activity): Boolean =
+        (activity.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) !=
+            Configuration.UI_MODE_NIGHT_YES
+    private fun activeColor(activity: Activity) = if (isLight(activity)) 0xFF252525.toInt() else 0xFFDDDDDD.toInt()
+    private fun dimColor(activity: Activity) = if (isLight(activity)) 0xFF8A8A8A.toInt() else 0xFF666666.toInt()
+    private fun onColor(activity: Activity) = if (isLight(activity)) 0xFF252525.toInt() else 0xFFDDDDDD.toInt()
     private const val OFF_COLOR = 0xFF888888.toInt()
+
+    /** Power-FAB colors per state, themed. The "on" state is the bold,
+     *  high-contrast one in both palettes (bright FAB on the dark bar /
+     *  dark FAB on the light bar); "off" recedes into the bar. */
+    private data class FabPalette(val bg: Int, val icon: Int, val stroke: Int, val ripple: Int)
+    private fun fabPalette(activity: Activity, isOn: Boolean): FabPalette {
+        val light = isLight(activity)
+        return if (isOn) {
+            if (light) FabPalette(0xFF2A2A2A.toInt(), 0xFFFFFFFF.toInt(), 0xFF888888.toInt(), 0x33FFFFFF)
+            else FabPalette(0xFFFFFFFF.toInt(), 0xFF000000.toInt(), 0xFF666666.toInt(), 0xCC000000.toInt())
+        } else {
+            if (light) FabPalette(0xFFCFCFCF.toInt(), 0xFF888888.toInt(), 0xFFBBBBBB.toInt(), 0x22000000)
+            else FabPalette(0xFF2A2A2A.toInt(), 0xFF555555.toInt(), 0xFF444444.toInt(), 0x33FFFFFF)
+        }
+    }
 
     fun setup(activity: Activity, currentScreen: NavScreen, eqPrefs: EqPreferencesManager) {
         val navEq = activity.findViewById<ImageButton>(R.id.navPresetsButton)
@@ -78,8 +102,9 @@ object BottomNavHelper {
             navLimiter to (currentScreen == NavScreen.LIMITER),
             navSettings to (currentScreen == NavScreen.SETTINGS)
         )
+        val active = activeColor(activity); val dim = dimColor(activity)
         for ((btn, isActive) in buttons) {
-            btn.setColorFilter(if (isActive) ACTIVE_COLOR else DIM_COLOR)
+            btn.setColorFilter(if (isActive) active else dim)
             // Start from default state and animate to active
             btn.scaleX = 1.0f
             btn.scaleY = 1.0f
@@ -109,8 +134,9 @@ object BottomNavHelper {
             navLimiter to (currentScreen == NavScreen.LIMITER),
             navSettings to (currentScreen == NavScreen.SETTINGS)
         )
+        val active = activeColor(activity); val dim = dimColor(activity)
         for ((btn, isActive) in buttons) {
-            btn.setColorFilter(if (isActive) ACTIVE_COLOR else DIM_COLOR)
+            btn.setColorFilter(if (isActive) active else dim)
             val targetScale = if (isActive) 1.25f else 1.0f
             val targetTransY = if (isActive) -3f * density else 0f
             btn.animate()
@@ -131,18 +157,19 @@ object BottomNavHelper {
         val eqOn = eqPrefs.getEqEnabled()
         val mbcOn = eqPrefs.getMbcEnabled()
         val limiterOn = eqPrefs.getLimiterEnabled()
+        val onCol = onColor(activity)
 
         eqStatus.text = if (eqOn) "ON" else "OFF"
-        eqStatus.setTextColor(if (eqOn) ON_COLOR else OFF_COLOR)
+        eqStatus.setTextColor(if (eqOn) onCol else OFF_COLOR)
 
         mbcStatus.text = if (mbcOn) "ON" else "OFF"
-        mbcStatus.setTextColor(if (mbcOn) ON_COLOR else OFF_COLOR)
+        mbcStatus.setTextColor(if (mbcOn) onCol else OFF_COLOR)
 
         limiterStatus.text = if (limiterOn) "ON" else "OFF"
-        limiterStatus.setTextColor(if (limiterOn) ON_COLOR else OFF_COLOR)
+        limiterStatus.setTextColor(if (limiterOn) onCol else OFF_COLOR)
     }
 
-    private fun makePowerBg(density: Float, fillColor: Int, strokeColor: Int, isOn: Boolean): android.graphics.drawable.RippleDrawable {
+    private fun makePowerBg(density: Float, fillColor: Int, strokeColor: Int, rippleColor: Int): android.graphics.drawable.RippleDrawable {
         val shape = android.graphics.drawable.GradientDrawable().apply {
             cornerRadius = 12 * density
             setColor(fillColor)
@@ -152,7 +179,6 @@ object BottomNavHelper {
             cornerRadius = 12 * density
             setColor(0xFFFFFFFF.toInt())
         }
-        val rippleColor = if (isOn) 0xCC000000.toInt() else 0x33FFFFFF.toInt()
         return android.graphics.drawable.RippleDrawable(
             android.content.res.ColorStateList.valueOf(rippleColor), shape, mask)
     }
@@ -160,10 +186,9 @@ object BottomNavHelper {
     fun setPowerFabInstant(activity: Activity, isOn: Boolean) {
         val btn = activity.findViewById<ImageButton>(R.id.powerFab) ?: return
         val density = activity.resources.displayMetrics.density
-        btn.background = makePowerBg(density,
-            if (isOn) 0xFFFFFFFF.toInt() else 0xFF2A2A2A.toInt(),
-            if (isOn) 0xFF666666.toInt() else 0xFF444444.toInt(), isOn)
-        btn.setColorFilter(if (isOn) 0xFF000000.toInt() else 0xFF555555.toInt())
+        val p = fabPalette(activity, isOn)
+        btn.background = makePowerBg(density, p.bg, p.stroke, p.ripple)
+        btn.setColorFilter(p.icon)
         btn.foreground = null
         btn.scaleX = if (isOn) 1.2f else 1.0f
         btn.scaleY = if (isOn) 1.2f else 1.0f
@@ -173,12 +198,8 @@ object BottomNavHelper {
     fun updatePowerFab(activity: Activity, isOn: Boolean) {
         val btn = activity.findViewById<ImageButton>(R.id.powerFab) ?: return
         val density = activity.resources.displayMetrics.density
-        val fromBg = if (isOn) 0xFF2A2A2A.toInt() else 0xFFFFFFFF.toInt()
-        val toBg = if (isOn) 0xFFFFFFFF.toInt() else 0xFF2A2A2A.toInt()
-        val fromIcon = if (isOn) 0xFF555555.toInt() else 0xFF000000.toInt()
-        val toIcon = if (isOn) 0xFF000000.toInt() else 0xFF555555.toInt()
-        val fromStroke = if (isOn) 0xFF444444.toInt() else 0xFF666666.toInt()
-        val toStroke = if (isOn) 0xFF666666.toInt() else 0xFF444444.toInt()
+        val fromP = fabPalette(activity, !isOn)
+        val toP = fabPalette(activity, isOn)
         val targetScale = if (isOn) 1.2f else 1.0f
         val targetTransY = if (isOn) -4f * density else 0f
 
@@ -191,7 +212,7 @@ object BottomNavHelper {
             .start()
 
         // Set up RippleDrawable once, animate inner shape
-        val ripple = makePowerBg(density, fromBg, fromStroke, isOn)
+        val ripple = makePowerBg(density, fromP.bg, fromP.stroke, fromP.ripple)
         val innerShape = ripple.getDrawable(0) as android.graphics.drawable.GradientDrawable
         btn.background = ripple
         btn.foreground = null
@@ -201,9 +222,9 @@ object BottomNavHelper {
             interpolator = android.view.animation.DecelerateInterpolator(1.5f)
             addUpdateListener { anim ->
                 val f = anim.animatedValue as Float
-                val bg = blendColor(fromBg, toBg, f)
-                val icon = blendColor(fromIcon, toIcon, f)
-                val stroke = blendColor(fromStroke, toStroke, f)
+                val bg = blendColor(fromP.bg, toP.bg, f)
+                val icon = blendColor(fromP.icon, toP.icon, f)
+                val stroke = blendColor(fromP.stroke, toP.stroke, f)
                 innerShape.setColor(bg)
                 innerShape.setStroke((1 * density).toInt(), stroke)
                 btn.setColorFilter(icon)
@@ -211,7 +232,7 @@ object BottomNavHelper {
             addListener(object : android.animation.AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: android.animation.Animator) {
                     // Set final ripple with correct color for the new state
-                    btn.background = makePowerBg(density, toBg, toStroke, isOn)
+                    btn.background = makePowerBg(density, toP.bg, toP.stroke, toP.ripple)
                 }
             })
             start()
