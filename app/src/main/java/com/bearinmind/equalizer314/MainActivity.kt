@@ -1293,38 +1293,8 @@ class  MainActivity : AppCompatActivity() {
                 saveDialogBtn.setOnClickListener {
                     val name = input.text.toString().trim().ifEmpty { defaultName }
                     if (name.isNotEmpty()) {
-                        stateManager.eqPrefs.saveState(stateManager.parametricEq)
-                        stateManager.persistLeftRightIfCse()
-                        fun serialize(eq: com.bearinmind.equalizer314.dsp.ParametricEqualizer): org.json.JSONArray {
-                            val arr = org.json.JSONArray()
-                            for (b in eq.getAllBands()) {
-                                arr.put(org.json.JSONObject().apply {
-                                    put("frequency", b.frequency)
-                                    put("gain", b.gain)
-                                    put("q", b.q)
-                                    put("filterType", b.filterType.name)
-                                    put("enabled", b.enabled)
-                                })
-                            }
-                            return arr
-                        }
-                        val json = org.json.JSONObject()
-                        json.put("preamp", stateManager.preampGainDb)
-                        val cseOn = eqPrefs.getChannelSideEqEnabled()
-                        json.put("channelSideEqEnabled", cseOn)
-                        if (cseOn) {
-                            val (lEq, rEq) = stateManager.getChannelEqs()
-                            json.put("leftBands", serialize(lEq))
-                            json.put("rightBands", serialize(rEq))
-                            // Back-compat: also write the currently-active EQ
-                            // under the legacy "bands" key so older builds
-                            // still see something.
-                            json.put("bands", serialize(stateManager.parametricEq))
-                        } else {
-                            json.put("bands", serialize(stateManager.parametricEq))
-                        }
                         prefs.edit()
-                            .putString("preset_$name", json.toString())
+                            .putString("preset_$name", buildCurrentPresetJson())
                             .putStringSet("preset_names", (presetNames.toMutableSet() + name))
                             .apply()
                         populatePresetPicker()
@@ -1702,10 +1672,131 @@ class  MainActivity : AppCompatActivity() {
                     presetExportLauncher.launch(intent)
                 }
 
+                // Overwrite button — re-saves the CURRENT EQ into this
+                // preset (handy for tweaking a loaded preset and saving the
+                // change back without making a new one / deleting the old).
+                val overwriteBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                    layoutParams = android.widget.LinearLayout.LayoutParams(
+                        (36 * density).toInt(), (36 * density).toInt()).apply {
+                        marginStart = (8 * density).toInt()
+                    }
+                    cornerRadius = (12 * density).toInt()
+                    setPadding(0, 0, 0, 0)
+                    insetTop = 0; insetBottom = 0
+                    minWidth = 0; minimumWidth = 0; minHeight = 0; minimumHeight = 0
+                    setBackgroundColor(0x00000000)
+                    icon = resources.getDrawable(R.drawable.ic_save, theme)
+                    iconGravity = com.google.android.material.button.MaterialButton.ICON_GRAVITY_TEXT_START
+                    iconPadding = 0
+                    iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+                    iconSize = (18 * density).toInt()
+                    strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                    strokeWidth = (1 * density).toInt()
+                }
+                overwriteBtn.setOnClickListener {
+                    val d = resources.displayMetrics.density
+                    // Styled identically to the "+" Save Custom Preset
+                    // dialog, but pre-filled with this preset's name and
+                    // titled / labelled for overwrite.
+                    val dlgView = android.widget.LinearLayout(this).apply {
+                        orientation = android.widget.LinearLayout.VERTICAL
+                        setPadding((24 * d).toInt(), (20 * d).toInt(), (24 * d).toInt(), (16 * d).toInt())
+                    }
+                    val dlgTitle = android.widget.TextView(this).apply {
+                        text = "Overwrite Custom Preset"
+                        setTextColor(0xFFE2E2E2.toInt()); textSize = 20f
+                        setPadding(0, 0, 0, (12 * d).toInt())
+                    }
+                    val dlgInputBox = android.widget.FrameLayout(this).apply {
+                        layoutParams = android.widget.LinearLayout.LayoutParams(
+                            android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                            bottomMargin = (16 * d).toInt()
+                        }
+                        background = android.graphics.drawable.GradientDrawable().apply {
+                            setColor(0x00000000)
+                            setStroke((1 * d).toInt(), 0xFF555555.toInt())
+                            cornerRadius = 12 * d
+                        }
+                    }
+                    val dlgInput = android.widget.EditText(this).apply {
+                        setText(name)
+                        setTextColor(0xFFFFFFFF.toInt())
+                        setHintTextColor(0xFF888888.toInt())
+                        inputType = android.text.InputType.TYPE_CLASS_TEXT
+                        background = null
+                        val pad = (14 * d).toInt()
+                        setPadding(pad, pad, pad, pad)
+                        isSingleLine = true
+                    }
+                    dlgInputBox.addView(dlgInput)
+                    val dlgDiv = android.view.View(this).apply {
+                        layoutParams = android.widget.LinearLayout.LayoutParams(
+                            android.widget.LinearLayout.LayoutParams.MATCH_PARENT, (1 * d).toInt()).apply {
+                            bottomMargin = (12 * d).toInt()
+                        }
+                        setBackgroundColor(0xFF444444.toInt())
+                    }
+                    val dlgBtnRow = android.widget.LinearLayout(this).apply {
+                        orientation = android.widget.LinearLayout.HORIZONTAL
+                        layoutParams = android.widget.LinearLayout.LayoutParams(
+                            android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
+                    }
+                    val dlgCancelBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                        text = "Cancel"
+                        layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                            marginEnd = (3 * d).toInt()
+                        }
+                        cornerRadius = (12 * d).toInt()
+                        setTextColor(0xFFEF9A9A.toInt())
+                        strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                        strokeWidth = (1 * d).toInt()
+                        setBackgroundColor(0x00000000)
+                        insetTop = 0; insetBottom = 0
+                    }
+                    val dlgOkBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                        text = "Overwrite"
+                        layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                            marginStart = (3 * d).toInt()
+                        }
+                        cornerRadius = (12 * d).toInt()
+                        setTextColor(0xFFDDDDDD.toInt())
+                        setBackgroundColor(0x00000000)
+                        strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                        strokeWidth = (1 * d).toInt()
+                        insetTop = 0; insetBottom = 0
+                    }
+                    dlgBtnRow.addView(dlgCancelBtn)
+                    dlgBtnRow.addView(dlgOkBtn)
+                    dlgView.addView(dlgTitle)
+                    dlgView.addView(dlgInputBox)
+                    dlgView.addView(dlgDiv)
+                    dlgView.addView(dlgBtnRow)
+                    val dlg = android.app.AlertDialog.Builder(this, R.style.Theme_Equalizer314_Dialog)
+                        .setView(dlgView).create()
+                    dlgCancelBtn.setOnClickListener { dlg.dismiss() }
+                    dlgOkBtn.setOnClickListener {
+                        val newName = dlgInput.text.toString().trim().ifEmpty { name }
+                        // Write the current EQ under the (possibly renamed)
+                        // preset. Same name → in-place overwrite; renamed →
+                        // saved under the new name too (added to the set).
+                        prefs.edit()
+                            .putString("preset_$newName", buildCurrentPresetJson())
+                            .putStringSet("preset_names", (presetNames.toMutableSet() + newName))
+                            .apply()
+                        populatePresetPicker()
+                        android.widget.Toast.makeText(this, "Updated \"$newName\"", android.widget.Toast.LENGTH_SHORT).show()
+                        dlg.dismiss()
+                    }
+                    dlg.show()
+                }
+
                 rightCol.addView(thumbnail)
                 rightCol.addView(filtersText)
                 presetRow.addView(nameCol)
                 presetRow.addView(rightCol)
+                presetRow.addView(overwriteBtn)
                 presetRow.addView(exportBtn)
                 presetRow.addView(deleteBtn)
                 // Tap to load preset
@@ -2266,6 +2357,42 @@ class  MainActivity : AppCompatActivity() {
     }
 
     // ---- Settings ----
+
+    /** Serializes the current EQ state (bands + preamp + Channel-Side-EQ)
+     *  to a preset JSON string. Shared by the "+" save-new flow and the
+     *  per-row overwrite, so a saved and an overwritten preset are byte-for
+     *  byte the same format. */
+    private fun buildCurrentPresetJson(): String {
+        stateManager.eqPrefs.saveState(stateManager.parametricEq)
+        stateManager.persistLeftRightIfCse()
+        fun serialize(eq: com.bearinmind.equalizer314.dsp.ParametricEqualizer): org.json.JSONArray {
+            val arr = org.json.JSONArray()
+            for (b in eq.getAllBands()) {
+                arr.put(org.json.JSONObject().apply {
+                    put("frequency", b.frequency)
+                    put("gain", b.gain)
+                    put("q", b.q)
+                    put("filterType", b.filterType.name)
+                    put("enabled", b.enabled)
+                })
+            }
+            return arr
+        }
+        val json = org.json.JSONObject()
+        json.put("preamp", stateManager.preampGainDb)
+        val cseOn = eqPrefs.getChannelSideEqEnabled()
+        json.put("channelSideEqEnabled", cseOn)
+        if (cseOn) {
+            val (lEq, rEq) = stateManager.getChannelEqs()
+            json.put("leftBands", serialize(lEq))
+            json.put("rightBands", serialize(rEq))
+            // Back-compat: also write the active EQ under the legacy "bands".
+            json.put("bands", serialize(stateManager.parametricEq))
+        } else {
+            json.put("bands", serialize(stateManager.parametricEq))
+        }
+        return json.toString()
+    }
 
     private fun updateAutoEqStatus() {
         // The AutoEQ status card moved to PresetsConversionsActivity, so on
