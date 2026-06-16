@@ -86,7 +86,7 @@ class GraphicEqController(
         isUpdating = true
         for (pos in sliderRefs.indices) {
             val bandIndex = sortedIndices.getOrNull(pos) ?: continue
-            val gain = eq.getBand(bandIndex)?.gain?.coerceIn(-12f, 12f) ?: 0f
+            val gain = eq.getBand(bandIndex)?.gain?.coerceIn(-20f, 20f) ?: 0f
             sliderRefs[pos].value = gain
         }
         isUpdating = false
@@ -230,7 +230,7 @@ class GraphicEqController(
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
             background = android.graphics.drawable.GradientDrawable().apply {
-                setColor(0xFF333333.toInt())
+                setColor(0xFF404040.toInt())
                 cornerRadius = 8 * density
             }
             setPadding(bubblePad, (4 * density).toInt(), bubblePad, (4 * density).toInt())
@@ -279,8 +279,8 @@ class GraphicEqController(
                 valueFrom = 0.1f; valueTo = 12f
                 value = band.q.toFloat().coerceIn(0.1f, 12f)
             } else {
-                valueFrom = -12f; valueTo = 12f
-                value = band.gain.coerceIn(-12f, 12f)
+                valueFrom = -20f; valueTo = 20f
+                value = band.gain.coerceIn(-20f, 20f)
             }
             rotation = 270f
             layoutParams = FrameLayout.LayoutParams(
@@ -510,7 +510,7 @@ class GraphicEqController(
             .setView(container)
             .setPositiveButton("OK") { _, _ ->
                 val hz = hzInput.text.toString().toFloatOrNull()?.coerceIn(10f, 20000f) ?: band.frequency
-                val db = if (isLpHp) band.gain else dbInput.text.toString().toFloatOrNull()?.coerceIn(-12f, 12f) ?: band.gain
+                val db = if (isLpHp) band.gain else dbInput.text.toString().toFloatOrNull()?.coerceIn(-20f, 20f) ?: band.gain
                 val q = qInput.text.toString().toDoubleOrNull()?.coerceIn(0.1, 12.0) ?: band.q
                 val b = eq.getBand(bandIndex) ?: return@setPositiveButton
                 eq.updateBand(bandIndex, hz, db, b.filterType, q)
@@ -576,7 +576,7 @@ class GraphicEqController(
                         setMargins((3 * density).toInt(), 0, (3 * density).toInt(), 0)
                     }
                     background = android.graphics.drawable.GradientDrawable().apply {
-                        setColor(0xFF333333.toInt())
+                        setColor(0xFF404040.toInt())
                         cornerRadius = 8 * density
                         setStroke((1 * density).toInt(), 0xFF666666.toInt())
                     }

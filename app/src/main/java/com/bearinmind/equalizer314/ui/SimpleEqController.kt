@@ -588,9 +588,13 @@ class SimpleEqController(
 
         // Left side: preset name stacked over a small preamp subtitle
         // (matches the advanced picker rows).
+        val isLightUi = (activity.resources.configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK) !=
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
         val nameText = TextView(activity).apply {
             text = name
-            setTextColor(0xFFE2E2E2.toInt())
+            // Dark in light mode — preset rows sit on the light surface.
+            setTextColor(if (isLightUi) 0xFF202020.toInt() else 0xFFE2E2E2.toInt())
             textSize = 14f
             isSingleLine = true
             layoutParams = LinearLayout.LayoutParams(

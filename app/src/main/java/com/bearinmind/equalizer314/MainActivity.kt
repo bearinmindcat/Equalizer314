@@ -78,6 +78,112 @@ class  MainActivity : AppCompatActivity() {
         presetExportLauncher.launch(intent)
     }
 
+    // ---- Whole-app backup / restore ----
+    private val backupExportLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val uri = result.data?.data ?: return@registerForActivityResult
+            try {
+                val json = BackupManager.exportAll(this)
+                contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(json) }
+                android.widget.Toast.makeText(this, "Backup saved", android.widget.Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                android.widget.Toast.makeText(this, "Backup failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private val backupImportLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri == null) return@registerForActivityResult
+        try {
+            val text = contentResolver.openInputStream(uri)?.bufferedReader()?.readText()
+            if (text != null && BackupManager.importAll(this, text)) {
+                android.widget.Toast.makeText(this, "Backup restored", android.widget.Toast.LENGTH_SHORT).show()
+                // Re-apply the restored theme choice, then recreate so all
+                // screens, presets, and bindings reload from the new prefs.
+                val light = getSharedPreferences("eq_settings", MODE_PRIVATE).getBoolean("lightTheme", false)
+                androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(
+                    if (light) androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO
+                    else androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
+                )
+                recreate()
+            } else {
+                android.widget.Toast.makeText(this, "Not a valid Equalizer314 backup", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            android.widget.Toast.makeText(this, "Restore failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun launchBackupExport() {
+        val intent = android.content.Intent(android.content.Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(android.content.Intent.CATEGORY_OPENABLE)
+            type = "application/json"
+            putExtra(android.content.Intent.EXTRA_TITLE, "Equalizer314-backup.json")
+        }
+        backupExportLauncher.launch(intent)
+    }
+
+    private fun showBackupRestoreDialog() {
+        val density = resources.displayMetrics.density
+        val dialogView = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding((24 * density).toInt(), (20 * density).toInt(), (24 * density).toInt(), (16 * density).toInt())
+        }
+        val title = android.widget.TextView(this).apply {
+            text = "Backup & Restore"
+            setTextColor(0xFFE2E2E2.toInt()); textSize = 20f
+            setPadding(0, 0, 0, (8 * density).toInt())
+        }
+        val msg = android.widget.TextView(this).apply {
+            text = "Export or import settings, presets & bindings to a .json ; importing will override all current settings in the app"
+            setTextColor(0xFFAAAAAA.toInt()); textSize = 13f
+            setPadding(0, 0, 0, (16 * density).toInt())
+        }
+        val divider = android.view.View(this).apply {
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, (1 * density).toInt()
+            ).apply { bottomMargin = (12 * density).toInt() }
+            setBackgroundColor(0xFF444444.toInt())
+        }
+        val btnRow = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+        fun outlinedBtn(label: String, textColor: Int) =
+            com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                text = label
+                layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    marginEnd = (3 * density).toInt(); marginStart = (3 * density).toInt()
+                }
+                cornerRadius = (12 * density).toInt()
+                setTextColor(textColor)
+                strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                strokeWidth = (1 * density).toInt()
+                setBackgroundColor(0x00000000)
+                insetTop = 0; insetBottom = 0
+            }
+        val importBtn = outlinedBtn("Import", 0xFFDDDDDD.toInt())
+        val exportBtn = outlinedBtn("Export", 0xFFDDDDDD.toInt())
+        btnRow.addView(importBtn)
+        btnRow.addView(exportBtn)
+        dialogView.addView(title)
+        dialogView.addView(msg)
+        dialogView.addView(divider)
+        dialogView.addView(btnRow)
+
+        val dialog = android.app.AlertDialog.Builder(this, R.style.Theme_Equalizer314_Dialog)
+            .setView(dialogView).create()
+        exportBtn.setOnClickListener { dialog.dismiss(); launchBackupExport() }
+        importBtn.setOnClickListener { dialog.dismiss(); backupImportLauncher.launch("application/json") }
+        dialog.show()
+    }
+
     // UI controllers
     private lateinit var graphicController: GraphicEqController
     private lateinit var tableController: TableEqController
@@ -109,6 +215,13 @@ class  MainActivity : AppCompatActivity() {
     }
 
     private val targetCurveLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) handlePresetReturn()
+    }
+
+    // The AutoEQ / Generate Custom EQ / Convert cards now live in
+    // PresetsConversionsActivity. It returns RESULT_OK when a preset was
+    // applied there, so we reload the EQ from prefs on return.
+    private val presetsConversionsLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) handlePresetReturn()
     }
 
@@ -261,7 +374,7 @@ class  MainActivity : AppCompatActivity() {
     private val graphBtnLitStroke: Int get() = if (isLightUi) 0xFF7A7A7A.toInt() else 0xFF888888.toInt()
     private val graphBtnLitContent: Int get() = if (isLightUi) 0xFF252525.toInt() else 0xFFDDDDDD.toInt()
     private val graphBtnDimStroke: Int get() = if (isLightUi) 0xFFBEBEBE.toInt() else 0xFF444444.toInt()
-    private val graphBtnDimContent: Int get() = if (isLightUi) 0xFF7A7A7A.toInt() else 0xFF888888.toInt()
+    private val graphBtnDimContent: Int get() = if (isLightUi) 0xFF555555.toInt() else 0xFF888888.toInt()
     private lateinit var navSettingsButton: ImageButton
     private lateinit var navPresetsButton: ImageButton
     private lateinit var powerFab: android.widget.ImageButton
@@ -766,6 +879,9 @@ class  MainActivity : AppCompatActivity() {
         val vizToggle = findViewById<com.google.android.material.button.MaterialButton>(R.id.visualizerToggle)
         val editBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.editButton)
         val resetBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.resetButton)
+        // Reset is a destructive action — make its icon red in light mode
+        // (dark mode keeps the XML colorOnSurface tint).
+        if (isLightUi) resetBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFFD32F2F.toInt())
         val undoBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.undoButton)
         val redoBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.redoButton)
         val bandPtsBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.bandPointsToggle)
@@ -1358,7 +1474,10 @@ class  MainActivity : AppCompatActivity() {
                 // save. Hidden entirely if the JSON couldn't be parsed.
                 val nameText = android.widget.TextView(this).apply {
                     text = name
-                    setTextColor(0xFFE2E2E2.toInt())
+                    // Preset rows sit on the light page surface, so the
+                    // name must be dark in light mode (the old #E2E2E2 was
+                    // near-invisible there). Dark stays light in dark mode.
+                    setTextColor(if (isLightUi) 0xFF202020.toInt() else 0xFFE2E2E2.toInt())
                     textSize = 14f
                     isSingleLine = true
                     layoutParams = android.widget.LinearLayout.LayoutParams(
@@ -1679,10 +1798,33 @@ class  MainActivity : AppCompatActivity() {
             }
         }
 
+        // Bound the preset picker to the viewport space below the graph so
+        // it scrolls internally instead of growing the page (which made
+        // the whole screen scroll past the graph). Measured after layout
+        // via post{}; the page is reset to the top first so the picker's
+        // computed top is accurate.
+        fun boundPresetPickerHeight() {
+            pageEq.scrollTo(0, 0)
+            presetPickerScroll.post {
+                var t = 0
+                var v: android.view.View? = presetPickerScroll
+                while (v != null && v !== pageEq) {
+                    t += v.top
+                    v = v.parent as? android.view.View
+                }
+                val avail = pageEq.height - t
+                val lp = presetPickerScroll.layoutParams
+                lp.height = if (avail > 0) avail
+                            else android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                presetPickerScroll.layoutParams = lp
+            }
+        }
+
         saveBtn.setOnClickListener {
             presetPickerOpen = !presetPickerOpen
             if (presetPickerOpen) {
                 populatePresetPicker()
+                boundPresetPickerHeight()
                 presetPickerScroll.visibility = android.view.View.VISIBLE
                 presetPickerScroll.alpha = 0f
                 presetPickerScroll.animate().alpha(1f).setDuration(200).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
@@ -2126,8 +2268,10 @@ class  MainActivity : AppCompatActivity() {
     // ---- Settings ----
 
     private fun updateAutoEqStatus() {
+        // The AutoEQ status card moved to PresetsConversionsActivity, so on
+        // the main Settings page this view no longer exists — bail safely.
+        val statusText = findViewById<TextView>(R.id.autoEqStatusText) ?: return
         val name = eqPrefs.getAutoEqName()
-        val statusText = findViewById<TextView>(R.id.autoEqStatusText)
         if (!name.isNullOrBlank()) {
             val source = eqPrefs.getAutoEqSource() ?: ""
             statusText.text = "$name by $source"
@@ -2141,8 +2285,8 @@ class  MainActivity : AppCompatActivity() {
     }
 
     private fun updateTargetStatus() {
+        val statusText = findViewById<TextView>(R.id.targetStatusText) ?: return
         val name = eqPrefs.getSelectedTargetName()
-        val statusText = findViewById<TextView>(R.id.targetStatusText)
         if (!name.isNullOrBlank()) {
             val type = eqPrefs.getSelectedTargetType() ?: ""
             statusText.text = if (type.isNotBlank()) "$name \u00B7 $type" else name
@@ -2196,10 +2340,18 @@ class  MainActivity : AppCompatActivity() {
             overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
         }
 
-        // Convert-to-APO card — opens the Wavelet/Poweramp converter
-        findViewById<View>(R.id.convertToApoCard).setOnClickListener {
-            startActivity(Intent(this, ConvertToApoActivity::class.java))
+        // Presets & Conversions — opens the sub-screen grouping AutoEQ &
+        // Presets, Generate Custom EQ, and Convert to APO. RESULT_OK comes
+        // back when an AutoEQ/Target preset was applied there, so reload
+        // the EQ from prefs (same flow the loose cards used).
+        findViewById<View>(R.id.presetsConversionsCard).setOnClickListener {
+            presetsConversionsLauncher.launch(Intent(this, PresetsConversionsActivity::class.java))
             overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+        }
+
+        // Backup & Restore — whole-app export/import.
+        findViewById<View>(R.id.backupRestoreCard).setOnClickListener {
+            showBackupRestoreDialog()
         }
 
         // Audio Effects Pipeline — placeholder screen for chaining/reordering
@@ -2229,16 +2381,6 @@ class  MainActivity : AppCompatActivity() {
         experimentalCard.setOnClickListener {
             if (!eqPrefs.getExperimentalUnlocked()) return@setOnClickListener
             startActivity(Intent(this, ExperimentalActivity::class.java))
-            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
-        }
-        // AutoEQ card (settings page)
-        findViewById<View>(R.id.autoEqCard).setOnClickListener {
-            autoEqLauncher.launch(Intent(this, AutoEqActivity::class.java))
-            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
-        }
-        // Target card (settings page) — opens Target Curve screen
-        findViewById<View>(R.id.targetCard).setOnClickListener {
-            targetCurveLauncher.launch(Intent(this, TargetCurveActivity::class.java))
             overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
         }
 
@@ -2874,7 +3016,7 @@ class  MainActivity : AppCompatActivity() {
     private fun applyBandDbFromInput() {
         if (isUpdatingInputs) return
         val db = bandDbInput.text.toString().toFloatOrNull() ?: return
-        val clamped = db.coerceIn(-12f, 12f)
+        val clamped = db.coerceIn(-20f, 20f)
         isUpdatingInputs = true
         bandDbSlider.value = clamped
         isUpdatingInputs = false
@@ -2960,7 +3102,7 @@ class  MainActivity : AppCompatActivity() {
             bandDbInput.setText(String.format("%.1f", band.gain))
             bandQInput.setText(String.format("%.2f", band.q))
             bandHzSlider.value = hzToSlider(band.frequency)
-            bandDbSlider.value = band.gain.coerceIn(-12f, 12f)
+            bandDbSlider.value = band.gain.coerceIn(-20f, 20f)
             qSlider.value = band.q.toFloat().coerceIn(0.1f, 12f)
 
             // dB slider / input are disabled for every gainless filter type:
@@ -3028,7 +3170,7 @@ class  MainActivity : AppCompatActivity() {
                         gravity = android.view.Gravity.CENTER
                     }
                     background = android.graphics.drawable.GradientDrawable().apply {
-                        setColor(0xFF333333.toInt())
+                        setColor(0xFF404040.toInt())
                         cornerRadius = 6 * density
                         setStroke((1 * density).toInt(), 0xFF666666.toInt())
                     }
@@ -3710,17 +3852,20 @@ class  MainActivity : AppCompatActivity() {
         val lBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.channelLButton) ?: return
         val rBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.channelRButton) ?: return
         val density = resources.displayMetrics.density
+        // The "L"/"R" glyphs read lighter than the icon buttons, so give
+        // them a darker dim color in light mode than the shared header dim.
+        val lrDim = if (isLightUi) 0xFF2E2E2E.toInt() else 0xFF888888.toInt()
         fun paint(btn: com.google.android.material.button.MaterialButton, pressed: Boolean) {
             if (pressed) {
-                btn.setBackgroundColor(0xFF555555.toInt())
-                btn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+                btn.setBackgroundColor(graphBtnLitBg)
+                btn.strokeColor = android.content.res.ColorStateList.valueOf(graphBtnLitStroke)
                 btn.strokeWidth = (2 * density).toInt()
-                btn.setTextColor(0xFFE3E3E3.toInt())
+                btn.setTextColor(graphBtnLitContent)
             } else {
                 btn.setBackgroundColor(0x00000000)
-                btn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                btn.strokeColor = android.content.res.ColorStateList.valueOf(graphBtnDimStroke)
                 btn.strokeWidth = (1 * density).toInt()
-                btn.setTextColor(0xFFBBBBBB.toInt())
+                btn.setTextColor(lrDim)
             }
         }
         val badge = findViewById<android.widget.TextView>(R.id.altRouteChannelBadge)

@@ -101,7 +101,7 @@ class TableEqController(
             gravity = android.view.Gravity.CENTER
             setPadding((4 * density).toInt(), (4 * density).toInt(), (4 * density).toInt(), (4 * density).toInt())
             background = android.graphics.drawable.GradientDrawable().apply {
-                setColor(0xFF333333.toInt())  // original solid cell fill
+                setColor(0xFF404040.toInt())  // original solid cell fill
                 if (hasColor) {
                     setStroke((1.5f * density).toInt(), savedColor)
                 }
@@ -145,7 +145,7 @@ class TableEqController(
             gravity = android.view.Gravity.CENTER
             setPadding((4 * density).toInt(), (4 * density).toInt(), (4 * density).toInt(), (4 * density).toInt())
             background = android.graphics.drawable.GradientDrawable().apply {
-                setColor(0xFF333333.toInt())
+                setColor(0xFF404040.toInt())
                 cornerRadius = 8 * density
             }
             setTextColor(0xFFCCCCCC.toInt())
@@ -223,7 +223,7 @@ class TableEqController(
                 gravity = android.view.Gravity.CENTER
                 setPadding((4 * density).toInt(), (4 * density).toInt(), (4 * density).toInt(), (4 * density).toInt())
                 background = android.graphics.drawable.GradientDrawable().apply {
-                    setColor(0xFF333333.toInt())
+                    setColor(0xFF404040.toInt())
                     cornerRadius = 8 * density
                 }
                 imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE
@@ -317,7 +317,7 @@ class TableEqController(
                         setMargins((3 * density).toInt(), 0, (3 * density).toInt(), 0)
                     }
                     background = android.graphics.drawable.GradientDrawable().apply {
-                        setColor(0xFF333333.toInt())
+                        setColor(0xFF404040.toInt())
                         cornerRadius = 8 * density
                         setStroke((1 * density).toInt(), 0xFF666666.toInt())
                     }
@@ -341,7 +341,7 @@ class TableEqController(
                     state.bandColors[slotIndex] = color
                 }
                 numBox.background = android.graphics.drawable.GradientDrawable().apply {
-                    setColor(0xFF333333.toInt())  // original solid cell fill
+                    setColor(0xFF404040.toInt())  // original solid cell fill
                     if (!isNone) {
                         setStroke((1.5f * density).toInt(), color)
                     }

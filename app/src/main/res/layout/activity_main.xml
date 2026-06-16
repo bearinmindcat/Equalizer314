@@ -672,8 +672,8 @@
                                     android:layout_width="0dp"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="1"
-                                    android:valueFrom="-12"
-                                    android:valueTo="12"
+                                    android:valueFrom="-20"
+                                    android:valueTo="20"
                                     android:value="0"
                                     app:labelBehavior="gone" />
 
@@ -1002,12 +1002,15 @@
                     android:paddingEnd="16dp"
                     android:paddingBottom="16dp">
 
-                <!-- AutoEQ Card -->
+                <!-- Presets & Conversions — opens a sub-screen grouping
+                     AutoEQ & Presets, Generate Custom EQ, and Convert to APO. -->
                 <com.google.android.material.card.MaterialCardView
-                    android:id="@+id/autoEqCard"
+                    android:id="@+id/presetsConversionsCard"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
+                    android:clickable="true"
+                    android:focusable="true"
                     app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
                     app:cardCornerRadius="16dp"
                     app:cardElevation="0dp"
@@ -1022,50 +1025,14 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="AutoEQ &amp; Presets"
+                            android:text="Presets &amp; Conversions"
                             android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                             android:textColor="?attr/colorOnSurface" />
 
                         <TextView
-                            android:id="@+id/autoEqStatusText"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Select or import a preset"
-                            android:textAppearance="@style/TextAppearance.Material3.BodySmall"
-                            android:textColor="?attr/colorOnSurfaceVariant"
-                            android:paddingTop="4dp" />
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-
-                <!-- Target Card -->
-                <com.google.android.material.card.MaterialCardView
-                    android:id="@+id/targetCard"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="12dp"
-                    app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
-                    app:cardCornerRadius="16dp"
-                    app:cardElevation="0dp"
-                    app:strokeWidth="0dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="16dp">
-
-                        <TextView
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="Generate Custom EQ"
-                            android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
-                            android:textColor="?attr/colorOnSurface" />
-
-                        <TextView
-                            android:id="@+id/targetStatusText"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="Import a measurement and match to a specific target"
+                            android:text="Settings for generating, importing &amp; converting presets"
                             android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                             android:textColor="?attr/colorOnSurfaceVariant"
                             android:paddingTop="4dp" />
@@ -1199,10 +1166,10 @@
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
-                <!-- Convert to APO format — opens a screen that converts
-                     Wavelet / Poweramp EQ exports to APO config text. -->
+                <!-- Backup & Restore — export/import all settings, presets,
+                     and bindings so they survive a reinstall / source switch. -->
                 <com.google.android.material.card.MaterialCardView
-                    android:id="@+id/convertToApoCard"
+                    android:id="@+id/backupRestoreCard"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
@@ -1229,14 +1196,14 @@
                             <TextView
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:text="Convert to APO format"
+                                android:text="Backup &amp; Restore"
                                 android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                                 android:textColor="?attr/colorOnSurface" />
 
                             <TextView
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:text="Convert wavelet &amp; poweramp eq exports to APO format"
+                                android:text="Backup and restore settings, presets &amp; bindings"
                                 android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                                 android:textColor="?attr/colorOnSurfaceVariant"
                                 android:paddingTop="4dp" />
@@ -1275,14 +1242,14 @@
                             <TextView
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:text="Audio Effects Pipeline - NOT READY"
+                                android:text="Audio Effects Pipeline"
                                 android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                                 android:textColor="?attr/colorOnSurface" />
 
                             <TextView
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:text="Configure session based audio effects pipeline"
+                                android:text="Configure audio pipeline and presets"
                                 android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                                 android:textColor="?attr/colorOnSurfaceVariant"
                                 android:paddingTop="4dp" />
