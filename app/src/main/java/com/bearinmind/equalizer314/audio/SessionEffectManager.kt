@@ -9,6 +9,7 @@ import com.bearinmind.equalizer314.dsp.BiquadFilter
 import com.bearinmind.equalizer314.dsp.ParametricEqualizer
 import com.bearinmind.equalizer314.dsp.ParametricToDpConverter
 import com.bearinmind.equalizer314.state.EqPreferencesManager
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -206,7 +207,7 @@ class SessionEffectManager(private val context: Context) {
         }
 
         try {
-            val dp = createSessionDp(sessionId, loaded.eq, loaded.preampDb)
+            val dp = createSessionDp(sessionId, loaded.leftEq, loaded.rightEq, loaded.preampDb)
             sessions[sessionId] = dp
             Log.d(TAG, "Attached DP session=$sessionId pkg=$packageName preset=${binding.presetName} preamp=${"%.1f".format(loaded.preampDb)}dB source=$source")
         } catch (t: Throwable) {
@@ -453,7 +454,8 @@ class SessionEffectManager(private val context: Context) {
      *  handles them. */
     private fun createSessionDp(
         sessionId: Int,
-        eq: ParametricEqualizer,
+        leftEq: ParametricEqualizer,
+        rightEq: ParametricEqualizer,
         preampDb: Float = 0f,
     ): DynamicsProcessing {
         // Keep the same band count as the global DP so a preset
@@ -477,15 +479,21 @@ class SessionEffectManager(private val context: Context) {
         ).setPreferredFrameDuration(10f).build()
 
         val dp = DynamicsProcessing(Integer.MAX_VALUE, sessionId, config)
-        val response = ParametricToDpConverter.convertFeatureAware(eq)
-        val cutoffs = response.cutoffs
-        val gains = response.gains
-        val n = cutoffs.size
+        // Convert each channel independently so Channel-Side-EQ presets get
+        // their separate L/R filters. For non-CSE presets leftEq === rightEq
+        // so both channels resolve to identical gains (cutoffs are the same
+        // log-spaced set either way).
+        val leftResp = ParametricToDpConverter.convertFeatureAware(leftEq)
+        val rightResp = ParametricToDpConverter.convertFeatureAware(rightEq)
+        val leftCutoffs = leftResp.cutoffs
+        val leftGains = leftResp.gains
+        val rightGains = rightResp.gains
+        val n = leftCutoffs.size
         val leftEqObj = DynamicsProcessing.Eq(true, true, n)
         val rightEqObj = DynamicsProcessing.Eq(true, true, n)
         for (i in 0 until n) {
-            leftEqObj.setBand(i, DynamicsProcessing.EqBand(true, cutoffs[i], gains[i]))
-            rightEqObj.setBand(i, DynamicsProcessing.EqBand(true, cutoffs[i], gains[i]))
+            leftEqObj.setBand(i, DynamicsProcessing.EqBand(true, leftCutoffs[i], leftGains[i]))
+            rightEqObj.setBand(i, DynamicsProcessing.EqBand(true, leftCutoffs[i], rightGains[i]))
         }
         dp.setPreEqByChannelIndex(0, leftEqObj)
         dp.setPreEqByChannelIndex(1, rightEqObj)
@@ -505,9 +513,13 @@ class SessionEffectManager(private val context: Context) {
         return dp
     }
 
-    /** Bands + preamp as parsed out of a saved preset JSON. */
+    /** Left + right EQ + preamp as parsed out of a saved preset JSON.
+     *  For non-CSE presets [leftEq] and [rightEq] reference the same bands
+     *  (identical channels); for Channel-Side-EQ presets they hold the
+     *  independent per-channel filters. */
     private data class LoadedPreset(
-        val eq: ParametricEqualizer,
+        val leftEq: ParametricEqualizer,
+        val rightEq: ParametricEqualizer,
         val preampDb: Float,
     )
 
@@ -516,30 +528,46 @@ class SessionEffectManager(private val context: Context) {
      *  preset JSON is missing the field (older presets, or imports
      *  that never went through Save Preset). Mirrors the same JSON
      *  shape MainActivity / AudioOutputActivity / RouteSwitchCoordinator
-     *  use. */
+     *  use — including Channel-Side-EQ's leftBands / rightBands so a
+     *  per-app binding applies independent L/R filters just like the
+     *  global/device path. */
     private fun loadPreset(name: String): LoadedPreset? {
         val prefs = context.getSharedPreferences("custom_presets", Context.MODE_PRIVATE)
         val str = runCatching { prefs.getString("preset_$name", null) }
             .getOrNull() ?: return null
         return runCatching {
             val obj = JSONObject(str)
-            val bandsArr = obj.optJSONArray("bands") ?: return@runCatching null
-            val eq = ParametricEqualizer()
-            for (i in 0 until bandsArr.length()) {
-                val b = bandsArr.getJSONObject(i)
-                val ft = runCatching {
-                    BiquadFilter.FilterType.valueOf(b.getString("filterType"))
-                }.getOrDefault(BiquadFilter.FilterType.BELL)
-                eq.addBand(
-                    b.getDouble("frequency").toFloat(),
-                    b.getDouble("gain").toFloat(),
-                    ft,
-                    b.getDouble("q"),
-                )
+            fun buildEq(arr: JSONArray): ParametricEqualizer {
+                val eq = ParametricEqualizer()
+                for (i in 0 until arr.length()) {
+                    val b = arr.getJSONObject(i)
+                    val ft = runCatching {
+                        BiquadFilter.FilterType.valueOf(b.getString("filterType"))
+                    }.getOrDefault(BiquadFilter.FilterType.BELL)
+                    eq.addBand(
+                        b.getDouble("frequency").toFloat(),
+                        b.getDouble("gain").toFloat(),
+                        ft,
+                        b.getDouble("q"),
+                    )
+                    if (b.has("enabled")) eq.setBandEnabled(i, b.getBoolean("enabled"))
+                }
+                eq.isEnabled = true
+                return eq
             }
-            eq.isEnabled = true
             val preamp = if (obj.has("preamp")) obj.getDouble("preamp").toFloat() else 0f
-            LoadedPreset(eq, preamp)
+            val cseOn = obj.optBoolean("channelSideEqEnabled", false)
+            if (cseOn && obj.has("leftBands") && obj.has("rightBands")) {
+                LoadedPreset(
+                    buildEq(obj.getJSONArray("leftBands")),
+                    buildEq(obj.getJSONArray("rightBands")),
+                    preamp,
+                )
+            } else {
+                val bandsArr = obj.optJSONArray("bands") ?: return@runCatching null
+                val eq = buildEq(bandsArr)
+                LoadedPreset(eq, eq, preamp)
+            }
         }.getOrNull()
     }
 

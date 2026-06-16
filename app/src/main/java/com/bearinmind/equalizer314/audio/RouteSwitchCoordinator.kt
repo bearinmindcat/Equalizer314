@@ -73,9 +73,38 @@ class RouteSwitchCoordinator(
         // Snapshot the current live state so MainActivity's Undo can revert.
         eqPrefs.saveLastManualState(livePrefs.getString("bands", null))
 
-        // Mirror the preset's `bands` array into the live `bands` key.
-        val bandsJson = preset.optJSONArray("bands") ?: return
-        livePrefs.edit().putString("bands", bandsJson.toString()).apply()
+        // Channel-Side-EQ presets carry independent leftBands / rightBands.
+        // The manual load path applies both channels; the auto-switch path
+        // used to apply only the composite `bands` array via the
+        // single-channel updateFromEqualizer(), so a TWS preset's per-channel
+        // filters silently dropped until the user re-loaded it by hand.
+        // Branch on the saved CSE flag and apply per-channel when present.
+        val cseOn = preset.optBoolean("channelSideEqEnabled", false)
+        val hasLeftRight = cseOn && preset.has("leftBands") && preset.has("rightBands")
+
+        if (hasLeftRight) {
+            val leftArr = preset.getJSONArray("leftBands")
+            val rightArr = preset.getJSONArray("rightBands")
+            val leftEq = buildEqualizerFromBands(leftArr)
+            val rightEq = buildEqualizerFromBands(rightArr)
+            // Persist to the same prefs keys EqStateManager reads on launch
+            // so opening the app shows the per-channel divergence too. The
+            // live `bands` key mirrors the (active) left channel for the
+            // back-compat / non-CSE views.
+            eqPrefs.saveChannelSideEqEnabled(true)
+            eqPrefs.saveLeftBands(leftEq)
+            eqPrefs.saveRightBands(rightEq)
+            livePrefs.edit().putString("bands", leftArr.toString()).apply()
+        } else {
+            // Single / shared preset — mirror its `bands` and clear any
+            // stale per-channel divergence + flag so a later CSE-enable
+            // forks cleanly from this preset.
+            val bandsJson = preset.optJSONArray("bands") ?: return
+            livePrefs.edit().putString("bands", bandsJson.toString()).apply()
+            eqPrefs.saveChannelSideEqEnabled(false)
+            eqPrefs.clearLeftRightBands()
+        }
+
         // Push the saved preamp to the live DP, not just to prefs. Without
         // setting dynamicsManager.preampGainDb the audio path stays at the
         // previous device's preamp value, so an AutoEQ preset's -6 dB
@@ -89,8 +118,14 @@ class RouteSwitchCoordinator(
         }
 
         if (dynamicsManager.isActive) {
-            val eq = buildEqualizerFromBands(bandsJson)
-            dynamicsManager.updateFromEqualizer(eq)
+            if (hasLeftRight) {
+                val leftEq = buildEqualizerFromBands(preset.getJSONArray("leftBands"))
+                val rightEq = buildEqualizerFromBands(preset.getJSONArray("rightBands"))
+                dynamicsManager.updateFromEqualizers(leftEq, rightEq)
+            } else {
+                val eq = buildEqualizerFromBands(preset.getJSONArray("bands"))
+                dynamicsManager.updateFromEqualizer(eq)
+            }
         }
 
         // Persist the active preset name so getPresetName() reflects
