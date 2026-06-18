@@ -4,7 +4,7 @@
 <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/{%22id%22:%22com.bearinmind.equalizer314%22,%22url%22:%22https://github.com/bearinmindcat/Equalizer314%22,%22author%22:%22bearinmindcat%22,%22name%22:%22Equalizer314%22}"><img src="https://raw.githubusercontent.com/ImranR98/Obtainium/b1c8ac6f2ab08497189721a788a5763e28ff64cd/assets/graphics/badge_obtainium.png" alt="Get it on Obtainium" height="70"></a>
 <a href="https://f-droid.org/packages/com.bearinmind.equalizer314/"><img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" alt="Get it on F-Droid" height="80"></a>
 
-⚠️ PSA; shit will go wrong while using this app, there will be features missing that you wish I added; but this app is in **BETA** and in the very early stages of testing and development, so I'll try to make note of your issues, run through them myself and fix them as quick as possible. My goal is to get this app to a clean smooth state, but in order to do that, people like you can help test and present issues & features that come up. I will do my best to fix everything in a timely manner while incorperating **YOUR** feature wishlist in a way that I think will work for everyone :)
+⚠️ PSA; shit will go wrong while using this app, there will be features missing that you wish I added; but this app is in **BETA** and in the very early stages of testing and development, so I'll try to make note of your issues, run through them myself and fix them as quick as possible. My goal is to get this app to a clean smooth state, but in order to do that, people like you can help test and present issues & features that come up. I will do my best to fix everything in a timely manner while incorporating **YOUR** feature wishlist in a way that I think will work for everyone :)
 
 ⚠️ Another PSA; these stores below are in the pipeline. As my apps get approved on each of them I'll move them up to the section right underneath the title section of the readme. As of now these links take you nowhere. With that being said, you may wait for the app to be uploaded to a trusted store, and I'll continue developing and making changes for those of you who download it the "raw" way. Thanks again.
 
@@ -13,22 +13,22 @@
 
 ## About
 
-To start off there is really no "free" and/or "open source" alternatives to Wavelet and Poweramp EQ out there, and I felt like after using both of those apps ammong other various EQ apps that there were huge shortcomings in terms of the features & accessibilities they offered. When I started developing this app I wanted to have both a powerful parametric eq function with minimal permissions; this is why I choose to use both the DynamicsProcessing & Visualizer APIs as the framework for ths app as you only need minimal permissions for both of them to work in tandem. There are shortcomings from both these APIs, but I'll discuss more of that later.
+To start off there is really no "free" and/or "open source" alternatives to Wavelet and Poweramp EQ out there, and I felt like after using both of those apps among other various EQ apps that there were huge shortcomings in terms of the features & accessibilities they offered. When I started developing this app I wanted to have both a powerful parametric EQ function with minimal permissions; this is why I choose to use both the DynamicsProcessing & Visualizer APIs as the framework for this app as you only need minimal permissions for both of them to work in tandem. There are shortcomings from both these APIs, but I'll discuss more of that later.
 
-To start off this app is built off of DynamicsProcessing API you can read more about the documentation and features it offers here (https://developer.android.com/reference/android/media/audiofx/DynamicsProcessing); this is the same API that Poweramp EQ & Wavelet both use but I felt in some aspects they wern't really being able really squeeze out the max potential that this API can offer.
+To start off this app is built off of DynamicsProcessing API you can read more about the documentation and features it offers here (https://developer.android.com/reference/android/media/audiofx/DynamicsProcessing); this is the same API that Poweramp EQ & Wavelet both use but I felt in some aspects they weren't really being able really squeeze out the max potential that this API can offer.
 
-As someone who comes from the audio production & IEM world I have a lot of experience understaning what both sides of those worlds want and wanted to be able to take advantage of both to create something that met my creative endeavors.
+As someone who comes from the audio production & IEM world I have a lot of experience understanding what both sides of those worlds want and wanted to be able to take advantage of both to create something that met my creative endeavors.
 
 Using the Visualizer API I wanted to give users a way they can reliably cross reference visual data with audio data; this is both useful for the main EQ portion as you can visually reference audio changes you make, but this comes more into play with the Limiting & Multiband Compression sides of the app. While these features are for use in the DynamicsProcessing API; and many apps like Poweramp EQ & Wavelet (who premium locks these features); they just add knobs/sliders in and expect the user to understand exactly how these features work and without real audio-visual feedback, users aren't really able to take advantage of these features in their full potential. This is the reason why many DAWs and VST Plugins use audio-visual feedback with these functions specifically.
 
-Using Visualizer API with these DynamicsProcessing features; you're really able to get an intimiate audio-visual feedback loop that gives you complete control over your audio framework. Shown below are some screenshots of the Multiband Compression & Limiter and how the Visualizer API functions with the input curves, gr trace curves, & the limiter waveform metering. 
+Using Visualizer API with these DynamicsProcessing features; you're really able to get an intimate audio-visual feedback loop that gives you complete control over your audio framework. Shown below are some screenshots of the Multiband Compression & Limiter and how the Visualizer API functions with the input curves, gr trace curves, & the limiter waveform metering. 
 
 <p align="center">
   <img width="48%" alt="Screenshot (1534)" src="https://github.com/user-attachments/assets/2449b96f-8306-4319-9eb0-ddead8ea84e5" />
   <img width="48%" alt="Screenshot (1535)" src="https://github.com/user-attachments/assets/720725c4-6205-456c-ad83-c2667757927d" />
 </p>
 
-A lot of other funtions that don't use the Visualizer API I also wanted to still give correct visual feedback (same style implementation that many DAWs use) such other various functions like the compressor & attack/release visuals. You can independently change these values with the slider and by moving you finger along the line/graph itself. This occurs in other places in the app as well, but these are two good examples of this.
+A lot of other functions that don't use the Visualizer API I also wanted to still give correct visual feedback (same style implementation that many DAWs use) such other various functions like the compressor & attack/release visuals. You can independently change these values with the slider and by moving you finger along the line/graph itself. This occurs in other places in the app as well, but these are two good examples of this.
 
 <p align="center">
   <img width="48%" alt="Screenshot (1545)" src="https://github.com/user-attachments/assets/7c38d5b5-ca3e-4585-aad0-b35c8f57c610" />
@@ -38,12 +38,12 @@ A lot of other funtions that don't use the Visualizer API I also wanted to still
 
 ## Why DynamicsProcessing & Visualizer APIs?
 
-There exists other apps and methods for device eq & visualization; but I wanted to talk about why I choose DynamicsProcessing & Visualizer as the framework for this app vs the other available and why I choose not to use those. To touch on this point again I choose to use the DynamicsProcessing API, the same API that both popular apps such as Poweramp EQ and Wavelet use as I decided DynamicsProcessing had enough tangibility in coparison to what I had to sacrifice using other more powerful methods.
+There exists other apps and methods for device EQ & visualization; but I wanted to talk about why I choose DynamicsProcessing & Visualizer as the framework for this app vs the other available and why I choose not to use those. To touch on this point again I choose to use the DynamicsProcessing API, the same API that both popular apps such as Poweramp EQ and Wavelet use as I decided DynamicsProcessing had enough tangibility in comparison to what I had to sacrifice using other more powerful methods.
 
 Other methods of EQ available (ranked from);
 
 Androids built-in Equalizer class (android.media.audiofx.Equalizer)
-- Fixed amount of EQ bands, this is what many "lazy" eq apps use and other apps who want to use EQ but don't want to focus on building an EQ engine (audiobook apps, music players, media players, video players, etc)
+- Fixed amount of EQ bands, this is what many "lazy" EQ apps use and other apps who want to use EQ but don't want to focus on building an EQ engine (audiobook apps, music players, media players, video players, etc)
 - Attaches to an audio session
 
 AudioEffect API subclasses (https://developer.android.com/reference/android/media/audiofx/AudioEffect)
@@ -52,8 +52,8 @@ AudioEffect API subclasses (https://developer.android.com/reference/android/medi
 - Attaches to an audio session
 
 AudioPlaybackCapture (RootlessJamesDSP)
-- Has much more access to the audio framework than what any of the avaialble APIs above can do, but in order to do so you need to grant ADB perms using something like Shizuku, going this way would also provide a much more accurate Visualizer/Spectrum; but going this route would force you to use the RECORD_AUDIO permission while also increasing latency with audio, and I wanted to keep the permissions in my app as low as possible and there was already a well developed app using this method so I wanted to stay clear of doing something that was already done
-- Another limitation is that some apps such as spotify block internal audio capture
+- Has much more access to the audio framework than what any of the available APIs above can do, but in order to do so you need to grant ADB perms using something like Shizuku, going this way would also provide a much more accurate Visualizer/Spectrum; but going this route would force you to use the RECORD_AUDIO permission while also increasing latency with audio, and I wanted to keep the permissions in my app as low as possible and there was already a well developed app using this method so I wanted to stay clear of doing something that was already done
+- Another limitation is that some apps such as Spotify block internal audio capture
 
 AudioFlinger (JamesDSP & ViPER4Android)
 - This is the "best" method if you really want control over your audio without latency issues. There is no "down-side" to using this method other than you need a rooted device which steers a lot of people away. This along with RootlessJamesDSP are best used if you want to apply custom audio effects directly without relying on android's built-in effects.
@@ -62,9 +62,9 @@ AudioFlinger (JamesDSP & ViPER4Android)
 
 ## Presets & EQ Generation & AutoEQ
 
-To reference, lots of apps run AutoEQ (https://github.com/jaakkopasanen/AutoEq/wiki/Choosing-an-Equalizer-App); including Wavelet & Poweramp EQ. What both those apps don't offer are either "free access to auto eq" (comon wavelet....) & using the built in AutoEQ algorithm from the AutoEQ Github which you can take a look at here (https://github.com/jaakkopasanen/AutoEq/wiki/How-Does-AutoEq-Work%3F). This algorithm is done on the "Generate Custom EQ" section of the app; you need a "measurement" & "target" which both can be taken from squig.link along various resources online.
+To reference, lots of apps run AutoEQ (https://github.com/jaakkopasanen/AutoEq/wiki/Choosing-an-Equalizer-App); including Wavelet & Poweramp EQ. What both those apps don't offer are either "free access to auto eq" (common wavelet....) & using the built in AutoEQ algorithm from the AutoEQ Github which you can take a look at here (https://github.com/jaakkopasanen/AutoEq/wiki/How-Does-AutoEq-Work%3F). This algorithm is done on the "Generate Custom EQ" section of the app; you need a "measurement" & "target" which both can be taken from squig.link along various resources online.
 
-On top of this I would also like to mention maintaining homogenity between preset sharing among popular equalization "applications"; this why I want with APO as the main export method than having an independent export method such as what Poweramp EQ & Wavelet use (Also as shown below in the "Generated EQ" portion). This would allow you to transfer the exported APO file to your desktop equalization software (EqualizerAPO) without having running into conversion issues. I was thinking about creating a conversion software in the app or on this github so incase people want to trasnfer over from Wavelet & Poweramp EQ, they can with ease. It might be something I will implement later if a lot of people request.
+On top of this I would also like to mention maintaining homogeneity between preset sharing among popular equalization "applications"; this why I want with APO as the main export method than having an independent export method such as what Poweramp EQ & Wavelet use (Also as shown below in the "Generated EQ" portion). This would allow you to transfer the exported APO file to your desktop equalization software (EqualizerAPO) without having running into conversion issues. I was thinking about creating a conversion software in the app or on this Github so in case people want to transfer over from Wavelet & Poweramp EQ, they can with ease. It might be something I will implement later if a lot of people request.
 
 <p align="center">
   <img width="48%" alt="Screenshot (1542)" src="https://github.com/user-attachments/assets/8150ad20-6170-42ae-aa02-4c6298f536ea" />
@@ -75,7 +75,7 @@ On top of this I would also like to mention maintaining homogenity between prese
 
 On this app I specifically use session 0 for all applications unlike what Wavelet and Poweramp EQ do by attaching itself to an audio session. In the future I can give the option to attach to individual audio sessions like the ladder apps, but for now as of the v0.0.1-beta release there is no ability to do so.
 
-As for conflicts, as long as another app is using session 0, the eq from this app will not work, only one app can control session 0 at a time. In the code I added an auto-reclaim feature that will attempt to take over session 0 if another app takes it over, but sometimes this will not always work, and you'll experience brief audio glithes of dropouts while this is happening.
+As for conflicts, as long as another app is using session 0, the EQ from this app will not work, only one app can control session 0 at a time. In the code I added an auto-reclaim feature that will attempt to take over session 0 if another app takes it over, but sometimes this will not always work, and you'll experience brief audio glitches of dropouts while this is happening.
 
 These same issues occur with Wavelet, RootlessJamesDSP, Poweramp EQ; and most other EQ apps as they all target session 0.
 
@@ -100,9 +100,9 @@ These same issues occur with Wavelet, RootlessJamesDSP, Poweramp EQ; and most ot
 
 All of these acknowledgements are mentioned in code comments, but I wanted too also include them here as well, because I think these are all good resources to read up on.
 
-- [Audio EQ Cookbook](https://www.w3.org/TR/audio-eq-cookbook/) - biquad math for the parametric eq.
-- [Matched Second Order Digital Filters](https://www.vicanek.de/articles/BiquadFits.pdf) — bell filter math for parametric eq.
-- [AutoEq](https://github.com/jaakkopasanen/AutoEq) - used for target curve/measurement fitting + autoeq presets.
+- [Audio EQ Cookbook](https://www.w3.org/TR/audio-eq-cookbook/) - biquad math for the parametric EQ.
+- [Matched Second Order Digital Filters](https://www.vicanek.de/articles/BiquadFits.pdf) — bell filter math for parametric EQ.
+- [AutoEq](https://github.com/jaakkopasanen/AutoEq) - used for target curve/measurement fitting + AutoEq presets.
 - [*Digital Dynamic Range Compressor
   Design*](https://www.eecs.qmul.ac.uk/~josh/documents/2012/GiannoulisMassbergReiss-dynamicrangecompression-JAES2012.pdf) - used for hard/soft knee transfer function for the multiband compression
 - [ITU-R BS.1770](https://www.itu.int/rec/R-REC-BS.1770) - used LUFS measurements
