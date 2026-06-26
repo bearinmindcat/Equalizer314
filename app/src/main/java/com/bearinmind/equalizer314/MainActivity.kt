@@ -4057,6 +4057,10 @@ class  MainActivity : AppCompatActivity() {
     private fun rebindActiveEq() {
         val eq = stateManager.parametricEq
         eqGraphView.setParametricEqualizer(eq)
+        // Point the graph at the now-active channel's slot list — each channel
+        // keeps its own, so a switch must refresh the labels (and the band
+        // count they're sized against) or they'd lag a channel behind.
+        eqGraphView.setBandSlotLabels(stateManager.bandSlots)
         eqGraphView.updateBandLevels()
         stateManager.pushEqUpdate()
 

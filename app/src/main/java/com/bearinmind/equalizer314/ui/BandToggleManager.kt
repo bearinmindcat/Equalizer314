@@ -112,7 +112,12 @@ class BandToggleManager(
         val usedSlots = state.bandSlots.toSet()
         val newSlot = (0 until EqStateManager.MAX_BANDS).firstOrNull { it !in usedSlots } ?: return
         val newFreq = state.allDefaultFrequencies[newSlot]
-        val insertPos = state.bandSlots.indexOfFirst { it > newSlot }.let { if (it < 0) state.bandSlots.size else it }
+        // Clamp to the band list bounds — slots and bands are kept per-channel
+        // and in sync, but guard anyway so a stray desync can never throw out
+        // of MutableList.add(index) (issue #50).
+        val insertPos = state.bandSlots.indexOfFirst { it > newSlot }
+            .let { if (it < 0) state.bandSlots.size else it }
+            .coerceIn(0, eq.getBandCount())
 
         eq.insertBand(insertPos, newFreq, 0f, BiquadFilter.FilterType.BELL)
         state.bandSlots.add(insertPos, newSlot)

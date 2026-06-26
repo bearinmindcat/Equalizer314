@@ -56,7 +56,21 @@ class EqStateManager(
     var activeChannel: ActiveChannel = ActiveChannel.BOTH
         private set
 
-    val bandSlots = mutableListOf<Int>()
+    // Per-channel slot layouts. In Channel-Side-EQ mode left and right are
+    // independent EQs that can hold different band counts, so each side needs
+    // its own slot list — a single shared list let a band add on the shorter
+    // channel compute an insert position past its end and crash (issue #50).
+    // `bandSlots` follows `activeChannel` so all existing call sites keep
+    // working unchanged; switching channels swaps which backing list they see.
+    private val bothBandSlots = mutableListOf<Int>()
+    private val leftBandSlots = mutableListOf<Int>()
+    private val rightBandSlots = mutableListOf<Int>()
+    val bandSlots: MutableList<Int>
+        get() = when (activeChannel) {
+            ActiveChannel.LEFT -> leftBandSlots
+            ActiveChannel.RIGHT -> rightBandSlots
+            ActiveChannel.BOTH -> bothBandSlots
+        }
     val bandColors = mutableMapOf<Int, Int>() // slot index → color int
     var selectedBandIndex: Int? = null
     var isProcessing = false
@@ -164,16 +178,23 @@ class EqStateManager(
     }
 
     fun initBandSlots() {
-        bandSlots.clear()
-        val eq = parametricEq
-        val savedSlots = eqPrefs.getSavedSlots()
-        if (savedSlots != null && savedSlots.size == eq.getBandCount()) {
-            bandSlots.addAll(savedSlots)
-            return
-        }
-        // Default: sequential slots 0, 1, 2, ...
-        for (i in 0 until eq.getBandCount()) {
-            bandSlots.add(i)
+        // Rebuild every channel's slot list, not just the active one — the
+        // non-active channel's list must always match its own band count or a
+        // later channel switch + band add would desync and crash.
+        rebuildSlots(bothBandSlots, bothEq, eqPrefs.getSavedSlots())
+        rebuildSlots(leftBandSlots, leftEq, eqPrefs.getSavedLeftSlots())
+        rebuildSlots(rightBandSlots, rightEq, eqPrefs.getSavedRightSlots())
+    }
+
+    /** Populate [target] so it has exactly one slot per band in [eq]. Uses
+     *  [saved] when it matches the band count, otherwise falls back to a
+     *  sequential 0,1,2,… layout (always valid, never out of range). */
+    private fun rebuildSlots(target: MutableList<Int>, eq: ParametricEqualizer, saved: List<Int>?) {
+        target.clear()
+        if (saved != null && saved.size == eq.getBandCount()) {
+            target.addAll(saved)
+        } else {
+            for (i in 0 until eq.getBandCount()) target.add(i)
         }
     }
 
@@ -252,9 +273,15 @@ class EqStateManager(
             }
             activeChannel = ActiveChannel.LEFT
             parametricEq = leftEq
-            // Persist the now-authoritative L/R state so it survives restart.
-            eqPrefs.saveLeftBands(leftEq)
-            eqPrefs.saveRightBands(rightEq)
+            // Build each side's slot layout: a channel restored from prefs uses
+            // its own saved slots; a freshly-forked channel inherits the shared
+            // (bothEq) layout so the arrangement carries across the fork.
+            rebuildSlots(leftBandSlots, leftEq, if (lOk) eqPrefs.getSavedLeftSlots() else bothBandSlots)
+            rebuildSlots(rightBandSlots, rightEq, if (rOk) eqPrefs.getSavedRightSlots() else bothBandSlots)
+            // Persist the now-authoritative L/R state (bands + slots) so it
+            // survives restart.
+            eqPrefs.saveLeftBands(leftEq, leftBandSlots)
+            eqPrefs.saveRightBands(rightEq, rightBandSlots)
         } else {
             activeChannel = ActiveChannel.BOTH
             parametricEq = bothEq
@@ -497,8 +524,8 @@ class EqStateManager(
      *  should also invoke this so the non-active channel's state isn't lost. */
     fun persistLeftRightIfCse() {
         if (eqPrefs.getChannelSideEqEnabled()) {
-            eqPrefs.saveLeftBands(leftEq)
-            eqPrefs.saveRightBands(rightEq)
+            eqPrefs.saveLeftBands(leftEq, leftBandSlots)
+            eqPrefs.saveRightBands(rightEq, rightBandSlots)
         }
     }
 }

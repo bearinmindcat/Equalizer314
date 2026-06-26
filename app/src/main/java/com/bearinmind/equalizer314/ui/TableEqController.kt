@@ -52,7 +52,9 @@ class TableEqController(
             val usedSlots = state.bandSlots.toSet()
             val newSlot = (0 until EqStateManager.MAX_BANDS).firstOrNull { it !in usedSlots } ?: break
             val newFreq = state.allDefaultFrequencies[newSlot]
-            val insertPos = state.bandSlots.indexOfFirst { it > newSlot }.let { if (it < 0) state.bandSlots.size else it }
+            val insertPos = state.bandSlots.indexOfFirst { it > newSlot }
+                .let { if (it < 0) state.bandSlots.size else it }
+                .coerceIn(0, eq.getBandCount())
             eq.insertBand(insertPos, newFreq, 0f, BiquadFilter.FilterType.BELL)
             eq.setBandEnabled(insertPos, false)
             state.bandSlots.add(insertPos, newSlot)

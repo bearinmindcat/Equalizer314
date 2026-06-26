@@ -114,7 +114,7 @@ class EqPreferencesManager(context: Context) {
     /** Serialize a ParametricEqualizer's bands to the compact JSON-array
      *  form the saveState / restoreState path uses. Private helper; the
      *  public entry points are saveLeftBands / saveRightBands. */
-    private fun serializeBands(eq: ParametricEqualizer): String {
+    private fun serializeBands(eq: ParametricEqualizer, slots: List<Int>? = null): String {
         val bands = JSONArray()
         for (i in 0 until eq.getBandCount()) {
             val band = eq.getBand(i) ?: continue
@@ -124,6 +124,7 @@ class EqPreferencesManager(context: Context) {
                 put("filterType", band.filterType.name)
                 put("q", band.q)
                 put("enabled", band.enabled)
+                if (slots != null && i < slots.size) put("slot", slots[i])
             })
         }
         return bands.toString()
@@ -158,12 +159,12 @@ class EqPreferencesManager(context: Context) {
         }
     }
 
-    fun saveLeftBands(eq: ParametricEqualizer) {
-        prefs.edit().putString("leftBands", serializeBands(eq)).apply()
+    fun saveLeftBands(eq: ParametricEqualizer, slots: List<Int>? = null) {
+        prefs.edit().putString("leftBands", serializeBands(eq, slots)).apply()
     }
 
-    fun saveRightBands(eq: ParametricEqualizer) {
-        prefs.edit().putString("rightBands", serializeBands(eq)).apply()
+    fun saveRightBands(eq: ParametricEqualizer, slots: List<Int>? = null) {
+        prefs.edit().putString("rightBands", serializeBands(eq, slots)).apply()
     }
 
     /** Populate [eq] from the `leftBands` pref. Returns true when the pref
@@ -187,19 +188,30 @@ class EqPreferencesManager(context: Context) {
         prefs.edit().remove("leftBands").remove("rightBands").apply()
     }
 
-    fun getSavedSlots(): List<Int>? {
-        val bandsStr = prefs.getString("bands", null) ?: return null
-        val bandsJson = JSONArray(bandsStr)
-        val slots = mutableListOf<Int>()
-        for (i in 0 until bandsJson.length()) {
-            val obj = bandsJson.getJSONObject(i)
-            if (obj.has("slot")) {
-                slots.add(obj.getInt("slot"))
-            } else {
-                return null // no slot data saved
+    fun getSavedSlots(): List<Int>? = parseSavedSlots(prefs.getString("bands", null))
+
+    /** Per-channel slot layouts, parsed from the same `slot` field embedded in
+     *  the leftBands / rightBands prefs. Null when absent (legacy data or
+     *  never saved) so callers fall back to a sequential layout. */
+    fun getSavedLeftSlots(): List<Int>? = parseSavedSlots(prefs.getString("leftBands", null))
+
+    fun getSavedRightSlots(): List<Int>? = parseSavedSlots(prefs.getString("rightBands", null))
+
+    /** Extract the `slot` field from a serialized band array. Returns null if
+     *  the string is missing, malformed, or any band lacks slot data. */
+    private fun parseSavedSlots(bandsStr: String?): List<Int>? {
+        val s = bandsStr ?: return null
+        return try {
+            val bandsJson = JSONArray(s)
+            val slots = mutableListOf<Int>()
+            for (i in 0 until bandsJson.length()) {
+                val obj = bandsJson.getJSONObject(i)
+                if (obj.has("slot")) slots.add(obj.getInt("slot")) else return null
             }
+            slots
+        } catch (_: Exception) {
+            null
         }
-        return slots
     }
 
     fun savePresetName(name: String) {
