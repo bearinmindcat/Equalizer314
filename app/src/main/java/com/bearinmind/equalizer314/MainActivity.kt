@@ -1832,10 +1832,18 @@ class  MainActivity : AppCompatActivity() {
                     stateManager.persistLeftRightIfCse()
                     stateManager.initBandSlots()
                     bandToggleManager.setupToggles()
-                    if (obj.has("preamp")) {
-                        stateManager.preampGainDb = obj.getDouble("preamp").toFloat()
-                        stateManager.eqPrefs.savePreampGain(stateManager.preampGainDb)
-                    }
+                    // Apply the loaded preset's preamp. Legacy presets that
+                    // pre-date the preamp field load as 0.0 — matching the
+                    // "Preamp: 0.0" the picker row shows for them.
+                    stateManager.preampGainDb =
+                        if (obj.has("preamp")) obj.getDouble("preamp").toFloat() else 0f
+                    stateManager.eqPrefs.savePreampGain(stateManager.preampGainDb)
+                    // Sync the preamp slider + text to the loaded value. The
+                    // load path previously set only the in-memory/pref value,
+                    // so the slider kept showing the old preamp (and the DP
+                    // kept applying it — see the pushEqUpdate() change below).
+                    preampSlider.value = stateManager.preampGainDb.coerceIn(-12f, 12f)
+                    preampText.setText(String.format("%.1f", stateManager.preampGainDb))
                     // Persist the loaded preset's name so the foreground
                     // notification, anything else that reads
                     // getPresetName(), and the next save-preset prompt
@@ -1863,12 +1871,16 @@ class  MainActivity : AppCompatActivity() {
                             .setPackage(packageName)
                     )
                     if (stateManager.isProcessing) {
-                        val (lEq, rEq) = stateManager.getChannelEqs()
                         stateManager.eqService?.let { svc ->
                             svc.dynamicsManager.stop()
                             svc.dynamicsManager.start(stateManager.parametricEq)
-                            svc.updateEqPerChannel(lEq, rEq)
                         }
+                        // Propagate the loaded preset's preamp (+ current
+                        // balance / channel gains) into DP's input-gain stage.
+                        // The old manual updateEqPerChannel path never copied
+                        // preampGainDb into the DynamicsProcessingManager, so
+                        // the preamp shown on the preset never actually applied.
+                        stateManager.pushEqUpdate()
                     }
                     refreshChannelPopoutDim()
                     // Close picker with animation
