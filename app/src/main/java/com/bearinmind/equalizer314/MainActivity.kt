@@ -582,11 +582,10 @@ class  MainActivity : AppCompatActivity() {
             stateManager.pendingStartEq = false
             // Also re-lock the Experimental settings on every fresh launch
             eqPrefs.saveExperimentalUnlocked(false)
-            // Force Experimental DSP options to safe defaults (currently disabled
-            // in the UI; see ExperimentalActivity). Overwrite anything a user may
-            // have saved in a previous build.
+            // Force the experimental DP band count to its safe default on a
+            // fresh launch. (Auto-gain is no longer forced off here — it's a
+            // real, on-by-default feature now; see the Auto-Gain settings card.)
             eqPrefs.saveDpBandCount(128)
-            eqPrefs.saveAutoGainEnabled(false)
         }
 
         initViews()
