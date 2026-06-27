@@ -1,10 +1,12 @@
 package com.bearinmind.equalizer314.audio
 
 import android.content.Context
+import android.media.audiofx.AudioEffect
 import android.media.audiofx.DynamicsProcessing
 import android.media.audiofx.EnvironmentalReverb
 import android.os.Build
 import android.util.Log
+import java.util.UUID
 import com.bearinmind.equalizer314.dsp.BiquadFilter
 import com.bearinmind.equalizer314.dsp.ParametricEqualizer
 import com.bearinmind.equalizer314.dsp.ParametricToDpConverter
@@ -53,7 +55,54 @@ class SessionEffectManager(private val context: Context) {
     )
 
     private val sessions = mutableMapOf<Int, DynamicsProcessing>()
-    private val reverbs = mutableMapOf<Int, EnvironmentalReverb>()
+    // Reverb is the *insert* EnvironmentalReverb implementation, created via the
+    // low-level AudioEffect ctor so it attaches inline like DynamicsProcessing
+    // (the convenience EnvironmentalReverb(...) ctor gives the silent auxiliary
+    // variant). Hence AudioEffect, not EnvironmentalReverb, as the value type.
+    private val reverbs = mutableMapOf<Int, AudioEffect>()
+
+    // The (type, uuid, priority, session) AudioEffect ctor and the
+    // setParameter(byte[], byte[]) method aren't in the public SDK, so we
+    // reach them by reflection (this is exactly what the framework's own
+    // EnvironmentalReverb does internally). Resolved once, lazily; null if the
+    // platform blocks the access, in which case reverb just doesn't attach.
+    private val insertReverbCtor: java.lang.reflect.Constructor<*>? by lazy {
+        try {
+            AudioEffect::class.java.getDeclaredConstructor(
+                UUID::class.java, UUID::class.java,
+                Int::class.javaPrimitiveType, Int::class.javaPrimitiveType,
+            ).apply { isAccessible = true }
+        } catch (t: Throwable) {
+            Log.w(TAG, "Insert-reverb ctor reflection unavailable: ${t.message}")
+            null
+        }
+    }
+    // The typed setParameter(int, short) / (int, int) overloads are what the
+    // framework's own EnvironmentalReverb uses internally; they tend to be
+    // greylist-accessible (reachable via reflection under normal hidden-API
+    // enforcement) whereas setParameter(byte[], byte[]) is blocked. We prefer
+    // the typed ones and fall back to the byte[] form.
+    private val setParamShort: java.lang.reflect.Method? by lazy {
+        reflectSetParameter(Short::class.javaPrimitiveType!!)
+    }
+    private val setParamInt: java.lang.reflect.Method? by lazy {
+        reflectSetParameter(Int::class.javaPrimitiveType!!)
+    }
+    private val setParamBytes: java.lang.reflect.Method? by lazy {
+        try {
+            AudioEffect::class.java.getDeclaredMethod(
+                "setParameter", ByteArray::class.java, ByteArray::class.java,
+            ).apply { isAccessible = true }
+        } catch (t: Throwable) { null }
+    }
+    private fun reflectSetParameter(valueType: Class<*>): java.lang.reflect.Method? = try {
+        AudioEffect::class.java.getDeclaredMethod(
+            "setParameter", Int::class.javaPrimitiveType, valueType,
+        ).apply { isAccessible = true }
+    } catch (t: Throwable) {
+        Log.w(TAG, "setParameter(int, ${valueType.simpleName}) unavailable: ${t.message}")
+        null
+    }
     private val sessionInfo = mutableMapOf<Int, ActiveSession>()
     /** (package, sessionId) pairs currently observed via the detection
      *  path. Used to compute the next [observeDetectedPlayback] diff so
@@ -315,19 +364,33 @@ class SessionEffectManager(private val context: Context) {
     @Synchronized
     fun applyReverbParamsToAll() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
-        val enabled = eqPrefs.isAudioEffectEnabled(EFFECT_REVERB_NAME) &&
-            eqPrefs.getAudioRoutingMode() == 1
-        if (!enabled) {
+        // Reverb follows the EQ's routing so it always passes through when on:
+        //   • Session-based mode → one reverb per tracked app session
+        //   • Global (System-wide) mode → a single reverb on session 0 (the
+        //     output mix), the same place the global EQ attaches.
+        // The toggle alone gates whether reverb runs; the routing mode only
+        // decides where it attaches.
+        val reverbOn = eqPrefs.isAudioEffectEnabled(EFFECT_REVERB_NAME)
+        if (!reverbOn) {
             for ((_, r) in reverbs) {
                 try { r.release() } catch (_: Throwable) {}
             }
             reverbs.clear()
             return
         }
-        // Cover any session we're tracking but haven't reverbed yet
-        // (e.g. user just turned the toggle on while sessions were
-        // already open).
-        for (sid in sessionInfo.keys) {
+        val sessionMode = eqPrefs.getAudioRoutingMode() == 1
+        val wanted: Set<Int> = if (sessionMode) {
+            sessionInfo.keys.filter { it > 0 }.toSet()
+        } else {
+            setOf(GLOBAL_REVERB_SESSION)
+        }
+        // Release any reverb that no longer belongs (wrong mode, or a session
+        // that closed) so the global and per-session paths never run at once.
+        for (sid in reverbs.keys.filter { it !in wanted }) {
+            reverbs.remove(sid)?.let { try { it.release() } catch (_: Throwable) {} }
+        }
+        // Attach any that are missing.
+        for (sid in wanted) {
             if (sid !in reverbs) attachReverbLocked(sid)
         }
         // Push current params into every attached reverb.
@@ -340,16 +403,33 @@ class SessionEffectManager(private val context: Context) {
 
     private fun attachReverbLocked(sessionId: Int) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
-        if (sessionId <= 0) return
+        // Allow session 0 (global output mix); only reject negative/synthetic ids.
+        if (sessionId < 0) return
         reverbs.remove(sessionId)?.let {
             try { it.release() } catch (_: Throwable) {}
         }
         try {
-            val r = EnvironmentalReverb(Integer.MAX_VALUE, sessionId)
-            configureReverb(r)
-            r.enabled = true
-            reverbs[sessionId] = r
-            Log.d(TAG, "Attached reverb session=$sessionId")
+            // Instantiate the INSERT EnvironmentalReverb implementation, not the
+            // high-level EnvironmentalReverb(priority, session) ctor — that one
+            // resolves to the *auxiliary* reverb, which only processes audio
+            // explicitly routed to it via AudioTrack.attachAuxEffect(). A
+            // system-wide effect can't open that send on other apps' tracks, so
+            // the aux reverb sits in the chain fed silence and does nothing
+            // (confirmed in the AudioFlinger dump: "Auxiliary Environmental
+            // Reverb"). The INSERT variant processes the signal inline, exactly
+            // like DynamicsProcessing — so it actually affects the audio,
+            // including over Bluetooth.
+            val ctor = insertReverbCtor ?: run {
+                Log.w(TAG, "Insert reverb unavailable (reflection blocked) — session=$sessionId")
+                return
+            }
+            val fx = ctor.newInstance(
+                EFFECT_TYPE_NULL_UUID, INSERT_ENV_REVERB_UUID, Integer.MAX_VALUE, sessionId,
+            ) as AudioEffect
+            configureReverb(fx)
+            fx.enabled = true
+            reverbs[sessionId] = fx
+            Log.d(TAG, "Attached INSERT reverb session=$sessionId")
         } catch (t: Throwable) {
             Log.w(TAG, "Could not attach reverb to session $sessionId", t)
         }
@@ -358,30 +438,73 @@ class SessionEffectManager(private val context: Context) {
     /** Pushes the persisted reverb prefs into [r]. All API setters
      *  take signed shorts/ints — we clamp every value to the doc'd
      *  range before casting so a stale pref can't crash the effect. */
-    private fun configureReverb(r: EnvironmentalReverb) {
-        // dB × 100 = millibel. Android caps at -9000..0 / -9000..1000 /
-        // -9000..2000 depending on the setter. Clamp defensively.
-        r.roomLevel = (eqPrefs.getReverbRoomLevelDb() * 100f)
-            .coerceIn(-9000f, 0f).toInt().toShort()
-        r.roomHFLevel = (eqPrefs.getReverbRoomHFLevelDb() * 100f)
-            .coerceIn(-9000f, 0f).toInt().toShort()
-        r.decayTime = eqPrefs.getReverbDecayTimeMs()
-            .coerceIn(100f, 20000f).toInt()
-        r.decayHFRatio = (eqPrefs.getReverbDecayHfRatio() * 1000f)
-            .coerceIn(100f, 2000f).toInt().toShort()
-        r.reflectionsLevel = (eqPrefs.getReverbReflectionsLevelDb() * 100f)
-            .coerceIn(-9000f, 1000f).toInt().toShort()
-        r.reflectionsDelay = eqPrefs.getReverbReflectionsDelayMs()
-            .coerceIn(0f, 300f).toInt()
-        r.reverbLevel = (eqPrefs.getReverbReverbLevelDb() * 100f)
-            .coerceIn(-9000f, 2000f).toInt().toShort()
-        r.reverbDelay = eqPrefs.getReverbDelayMs()
-            .coerceIn(0f, 100f).toInt()
-        // Percent → permille (×10).
-        r.diffusion = (eqPrefs.getReverbDiffusionPct() * 10f)
-            .coerceIn(0f, 1000f).toInt().toShort()
-        r.density = (eqPrefs.getReverbDensityPct() * 10f)
-            .coerceIn(0f, 1000f).toInt().toShort()
+    private fun configureReverb(fx: AudioEffect) {
+        // Params go through the low-level AudioEffect.setParameter(byte[],byte[])
+        // (the high-level EnvironmentalReverb setters aren't available on a raw
+        // AudioEffect). Param ids are the public EnvironmentalReverb.PARAM_*
+        // constants; values are little-endian shorts (mB / permille) or ints
+        // (ms), matching what the EnvironmentalReverb wrapper would send.
+        // Each is applied independently so one rejected value can't abort the
+        // whole config (which would leave reverb attached but silent).
+        // Short-valued param: prefer setParameter(int, short); fall back to the
+        // byte[] form if the typed overload is blocked.
+        fun setS(name: String, paramId: Int, value: Short) {
+            try {
+                val status = when {
+                    setParamShort != null -> setParamShort!!.invoke(fx, paramId, value) as? Int
+                    setParamBytes != null -> setParamBytes!!.invoke(fx, leBytes(paramId), leBytes(value)) as? Int
+                    else -> { Log.w(TAG, "Reverb '$name': no setParameter accessible"); return }
+                } ?: AudioEffect.SUCCESS
+                if (status != AudioEffect.SUCCESS) Log.w(TAG, "Reverb '$name' set returned $status")
+            } catch (t: Throwable) {
+                Log.w(TAG, "Reverb '$name' rejected, skipping: ${(t.cause ?: t).message}")
+            }
+        }
+        // Int-valued param (ms): prefer setParameter(int, int).
+        fun setI(name: String, paramId: Int, value: Int) {
+            try {
+                val status = when {
+                    setParamInt != null -> setParamInt!!.invoke(fx, paramId, value) as? Int
+                    setParamBytes != null -> setParamBytes!!.invoke(fx, leBytes(paramId), leBytes(value)) as? Int
+                    else -> { Log.w(TAG, "Reverb '$name': no setParameter accessible"); return }
+                } ?: AudioEffect.SUCCESS
+                if (status != AudioEffect.SUCCESS) Log.w(TAG, "Reverb '$name' set returned $status")
+            } catch (t: Throwable) {
+                Log.w(TAG, "Reverb '$name' rejected, skipping: ${(t.cause ?: t).message}")
+            }
+        }
+        // dB × 100 = millibel; % × 10 = permille; ms as-is. Ranges clamped to
+        // what real engines accept (decay ≤7 s, reverbLevel ≤0) — wider doc
+        // maxima get ERROR_BAD_VALUE and silently leave the wet level muted.
+        setS("roomLevel", EnvironmentalReverb.PARAM_ROOM_LEVEL,
+            (eqPrefs.getReverbRoomLevelDb() * 100f).coerceIn(-9000f, 0f).toInt().toShort())
+        setS("roomHFLevel", EnvironmentalReverb.PARAM_ROOM_HF_LEVEL,
+            (eqPrefs.getReverbRoomHFLevelDb() * 100f).coerceIn(-9000f, 0f).toInt().toShort())
+        setI("decayTime", EnvironmentalReverb.PARAM_DECAY_TIME,
+            eqPrefs.getReverbDecayTimeMs().coerceIn(100f, 7000f).toInt())
+        setS("decayHFRatio", EnvironmentalReverb.PARAM_DECAY_HF_RATIO,
+            (eqPrefs.getReverbDecayHfRatio() * 1000f).coerceIn(100f, 2000f).toInt().toShort())
+        setS("reflectionsLevel", EnvironmentalReverb.PARAM_REFLECTIONS_LEVEL,
+            (eqPrefs.getReverbReflectionsLevelDb() * 100f).coerceIn(-9000f, 1000f).toInt().toShort())
+        setI("reflectionsDelay", EnvironmentalReverb.PARAM_REFLECTIONS_DELAY,
+            eqPrefs.getReverbReflectionsDelayMs().coerceIn(0f, 300f).toInt())
+        setS("reverbLevel", EnvironmentalReverb.PARAM_REVERB_LEVEL,
+            (eqPrefs.getReverbReverbLevelDb() * 100f).coerceIn(-9000f, 0f).toInt().toShort())
+        setI("reverbDelay", EnvironmentalReverb.PARAM_REVERB_DELAY,
+            eqPrefs.getReverbDelayMs().coerceIn(0f, 100f).toInt())
+        setS("diffusion", EnvironmentalReverb.PARAM_DIFFUSION,
+            (eqPrefs.getReverbDiffusionPct() * 10f).coerceIn(0f, 1000f).toInt().toShort())
+        setS("density", EnvironmentalReverb.PARAM_DENSITY,
+            (eqPrefs.getReverbDensityPct() * 10f).coerceIn(0f, 1000f).toInt().toShort())
+    }
+
+    /** Little-endian (native order on Android) encodings for
+     *  AudioEffect.setParameter(byte[], byte[]). */
+    private fun leBytes(v: Int): ByteArray =
+        byteArrayOf(v.toByte(), (v shr 8).toByte(), (v shr 16).toByte(), (v shr 24).toByte())
+    private fun leBytes(v: Short): ByteArray {
+        val i = v.toInt()
+        return byteArrayOf(i.toByte(), (i shr 8).toByte())
     }
 
     @Synchronized
@@ -581,5 +704,20 @@ class SessionEffectManager(private val context: Context) {
         /** Pipeline EffectId.name for the reverb card — must stay in
          *  sync with [com.bearinmind.equalizer314.AudioEffectsPipelineActivity.EffectId.ENVIRONMENTAL_REVERB]. */
         const val EFFECT_REVERB_NAME = "ENVIRONMENTAL_REVERB"
+        /** Audio session 0 = the global output mix. Used to attach reverb in
+         *  System-wide (global) routing mode, the same place the global EQ
+         *  (DynamicsProcessing) lives. */
+        const val GLOBAL_REVERB_SESSION = 0
+        /** Implementation UUID of the *insert* Environmental Reverb (AOSP/NXP
+         *  reverb bundle, `reverb_env_ins`). The high-level EnvironmentalReverb
+         *  ctor resolves to the auxiliary variant (`4a387fc0-…`), which is
+         *  silent for system-wide use; the insert variant processes inline like
+         *  DynamicsProcessing. */
+        val INSERT_ENV_REVERB_UUID: UUID =
+            UUID.fromString("c7a511a0-a3bb-11df-860e-0002a5d5c51b")
+        /** AudioEffect.EFFECT_TYPE_NULL (hidden in the SDK). Passed as the
+         *  `type` arg so the specific impl `uuid` above is what gets loaded. */
+        val EFFECT_TYPE_NULL_UUID: UUID =
+            UUID.fromString("ec7178ec-e5e1-4432-a3f4-4657e6795210")
     }
 }

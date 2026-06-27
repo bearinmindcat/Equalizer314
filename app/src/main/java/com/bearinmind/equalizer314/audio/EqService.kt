@@ -569,6 +569,8 @@ class EqService : Service() {
                         showDpStateToast(started = true)
                         sendBroadcast(Intent(ACTION_EQ_STARTED).setPackage(packageName))
                         updateNotification()
+                        // Re-attach reverb for the active routing mode (global → session 0).
+                        sessionEffects?.applyReverbParamsToAll()
                     } else {
                         Log.w(TAG, "ACTION_START_FROM_TILE: dynamicsManager.start failed silently")
                     }
@@ -609,6 +611,8 @@ class EqService : Service() {
                         showDpStateToast(started = true)
                         sendBroadcast(Intent(ACTION_EQ_STARTED).setPackage(packageName))
                         updateNotification()
+                        // Re-attach reverb for the active routing mode (global → session 0).
+                        sessionEffects?.applyReverbParamsToAll()
                     } else {
                         Log.w(TAG, "ACTION_AUTO_START: dynamicsManager.start failed silently")
                     }
@@ -732,6 +736,9 @@ class EqService : Service() {
             // immediately rather than waiting for the next volume-change
             // tick to repost it.
             updateNotification()
+            // Attach reverb on the path matching the current routing mode
+            // (session 0 in global mode). No-op unless the reverb toggle is on.
+            sessionEffects?.applyReverbParamsToAll()
         }
         return active
     }
