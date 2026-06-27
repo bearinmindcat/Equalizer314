@@ -77,31 +77,23 @@ class SessionEffectManager(private val context: Context) {
             null
         }
     }
-    // The typed setParameter(int, short) / (int, int) overloads are what the
-    // framework's own EnvironmentalReverb uses internally; they tend to be
-    // greylist-accessible (reachable via reflection under normal hidden-API
-    // enforcement) whereas setParameter(byte[], byte[]) is blocked. We prefer
-    // the typed ones and fall back to the byte[] form.
-    private val setParamShort: java.lang.reflect.Method? by lazy {
-        reflectSetParameter(Short::class.javaPrimitiveType!!)
-    }
-    private val setParamInt: java.lang.reflect.Method? by lazy {
-        reflectSetParameter(Int::class.javaPrimitiveType!!)
-    }
-    private val setParamBytes: java.lang.reflect.Method? by lazy {
+    // Param-setting overload selection matters under hidden-API enforcement:
+    // setParameter(int,short) / (int,int) / (byte[],byte[]) are all @TestApi
+    // → BLOCKED for normal apps. But setParameter(int[] param, short[] value)
+    // carries @UnsupportedAppUsage with NO maxTargetSdk (the light greylist),
+    // so it stays reflection-accessible under normal enforcement — the same
+    // tier as the AudioEffect(UUID,UUID,int,int) ctor we already rely on. This
+    // is the one path that lets us configure the insert reverb in production.
+    // (Int-valued params are packed into two little-endian shorts = 4 bytes.)
+    private val setParamArr: java.lang.reflect.Method? by lazy {
         try {
             AudioEffect::class.java.getDeclaredMethod(
-                "setParameter", ByteArray::class.java, ByteArray::class.java,
+                "setParameter", IntArray::class.java, ShortArray::class.java,
             ).apply { isAccessible = true }
-        } catch (t: Throwable) { null }
-    }
-    private fun reflectSetParameter(valueType: Class<*>): java.lang.reflect.Method? = try {
-        AudioEffect::class.java.getDeclaredMethod(
-            "setParameter", Int::class.javaPrimitiveType, valueType,
-        ).apply { isAccessible = true }
-    } catch (t: Throwable) {
-        Log.w(TAG, "setParameter(int, ${valueType.simpleName}) unavailable: ${t.message}")
-        null
+        } catch (t: Throwable) {
+            Log.w(TAG, "setParameter(int[], short[]) unavailable: ${t.message}")
+            null
+        }
     }
     private val sessionInfo = mutableMapOf<Int, ActiveSession>()
     /** (package, sessionId) pairs currently observed via the detection
@@ -446,33 +438,22 @@ class SessionEffectManager(private val context: Context) {
         // (ms), matching what the EnvironmentalReverb wrapper would send.
         // Each is applied independently so one rejected value can't abort the
         // whole config (which would leave reverb attached but silent).
-        // Short-valued param: prefer setParameter(int, short); fall back to the
-        // byte[] form if the typed overload is blocked.
-        fun setS(name: String, paramId: Int, value: Short) {
+        val m = setParamArr
+        fun invoke(name: String, paramId: Int, value: ShortArray) {
+            if (m == null) { Log.w(TAG, "Reverb '$name': setParameter unavailable"); return }
             try {
-                val status = when {
-                    setParamShort != null -> setParamShort!!.invoke(fx, paramId, value) as? Int
-                    setParamBytes != null -> setParamBytes!!.invoke(fx, leBytes(paramId), leBytes(value)) as? Int
-                    else -> { Log.w(TAG, "Reverb '$name': no setParameter accessible"); return }
-                } ?: AudioEffect.SUCCESS
+                val status = m.invoke(fx, intArrayOf(paramId), value) as? Int ?: AudioEffect.SUCCESS
                 if (status != AudioEffect.SUCCESS) Log.w(TAG, "Reverb '$name' set returned $status")
             } catch (t: Throwable) {
                 Log.w(TAG, "Reverb '$name' rejected, skipping: ${(t.cause ?: t).message}")
             }
         }
-        // Int-valued param (ms): prefer setParameter(int, int).
-        fun setI(name: String, paramId: Int, value: Int) {
-            try {
-                val status = when {
-                    setParamInt != null -> setParamInt!!.invoke(fx, paramId, value) as? Int
-                    setParamBytes != null -> setParamBytes!!.invoke(fx, leBytes(paramId), leBytes(value)) as? Int
-                    else -> { Log.w(TAG, "Reverb '$name': no setParameter accessible"); return }
-                } ?: AudioEffect.SUCCESS
-                if (status != AudioEffect.SUCCESS) Log.w(TAG, "Reverb '$name' set returned $status")
-            } catch (t: Throwable) {
-                Log.w(TAG, "Reverb '$name' rejected, skipping: ${(t.cause ?: t).message}")
-            }
-        }
+        // Short-valued param → one short.
+        fun setS(name: String, paramId: Int, value: Short) =
+            invoke(name, paramId, shortArrayOf(value))
+        // Int-valued param (ms) → low + high 16 bits, little-endian (4 bytes).
+        fun setI(name: String, paramId: Int, value: Int) =
+            invoke(name, paramId, shortArrayOf((value and 0xFFFF).toShort(), (value ushr 16).toShort()))
         // dB × 100 = millibel; % × 10 = permille; ms as-is. Ranges clamped to
         // what real engines accept (decay ≤7 s, reverbLevel ≤0) — wider doc
         // maxima get ERROR_BAD_VALUE and silently leave the wet level muted.
@@ -498,14 +479,6 @@ class SessionEffectManager(private val context: Context) {
             (eqPrefs.getReverbDensityPct() * 10f).coerceIn(0f, 1000f).toInt().toShort())
     }
 
-    /** Little-endian (native order on Android) encodings for
-     *  AudioEffect.setParameter(byte[], byte[]). */
-    private fun leBytes(v: Int): ByteArray =
-        byteArrayOf(v.toByte(), (v shr 8).toByte(), (v shr 16).toByte(), (v shr 24).toByte())
-    private fun leBytes(v: Short): ByteArray {
-        val i = v.toInt()
-        return byteArrayOf(i.toByte(), (i shr 8).toByte())
-    }
 
     @Synchronized
     fun detach(sessionId: Int) {
