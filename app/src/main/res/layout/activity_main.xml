@@ -534,6 +534,34 @@
                     android:gravity="center"
                     android:visibility="gone" />
 
+                <!-- Extra toggle rows (band 17+) AND the inline "+", shown only
+                     when the experimental "Add more EQ bands" cap is raised
+                     (issue #31). Grows to content then caps + scrolls, so adding
+                     bands scrolls instead of pushing the graph/controls down. -->
+                <com.bearinmind.equalizer314.ui.MaxHeightScrollView
+                    android:id="@+id/bandToggleExtraScroll"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:visibility="gone"
+                    android:scrollbars="vertical">
+
+                    <LinearLayout
+                        android:id="@+id/bandToggleExtraRows"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical" />
+                </com.bearinmind.equalizer314.ui.MaxHeightScrollView>
+
+                <!-- (unused) kept so the BandToggleManager constructor signature
+                     stays stable; the "+" is now inline in the scroll above. -->
+                <LinearLayout
+                    android:id="@+id/bandAddButtonRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center"
+                    android:visibility="gone" />
+
                 <!-- Triangle indicator pointing up to selected band -->
                 <FrameLayout
                     android:id="@+id/triangleIndicatorContainer"

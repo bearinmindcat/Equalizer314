@@ -20,7 +20,15 @@ class EqStateManager(
     val eqPrefs: EqPreferencesManager
 ) {
     companion object {
-        const val MAX_BANDS = 16
+        /** Hard ceiling the band machinery is sized for (default-frequency
+         *  table, slot indices). Stays fixed; the *user-facing* cap below can
+         *  be raised up to this via the Experimental "Max EQ Bands" setting. */
+        const val ABSOLUTE_MAX_BANDS = 64
+        /** Current user-facing band cap. 16 by default; raised (up to
+         *  [ABSOLUTE_MAX_BANDS]) by the experimental setting (issue #31). A var,
+         *  not const, so it tracks the pref — set in [EqStateManager]'s init and
+         *  live-updated by ExperimentalActivity. */
+        var MAX_BANDS = 16
         const val MIN_BANDS = 1
         val COLOR_PALETTE = intArrayOf(
             0xFFE53935.toInt(), 0xFFFF9800.toInt(), 0xFFFFEB3B.toInt(), 0xFF4CAF50.toInt(),
@@ -29,6 +37,13 @@ class EqStateManager(
     }
 
     enum class ActiveChannel { BOTH, LEFT, RIGHT }
+
+    init {
+        // Pick up the experimental band cap (issue #31) before any band UI is
+        // built. Bounded to [16, ABSOLUTE_MAX_BANDS]; 16 for everyone who
+        // hasn't opted in.
+        MAX_BANDS = eqPrefs.getMaxEqBands().coerceIn(16, ABSOLUTE_MAX_BANDS)
+    }
 
     // Query the device's actual audio output sample rate so the biquad
     // coefficients we compute match the rate DynamicsProcessing actually
@@ -130,7 +145,7 @@ class EqStateManager(
     }
 
     val allDefaultFrequencies: FloatArray by lazy {
-        ParametricEqualizer.logSpacedFrequencies(MAX_BANDS)
+        ParametricEqualizer.logSpacedFrequencies(ABSOLUTE_MAX_BANDS)
     }
 
     fun initEq(graphView: EqGraphView) {
@@ -196,6 +211,28 @@ class EqStateManager(
         } else {
             for (i in 0 until eq.getBandCount()) target.add(i)
         }
+    }
+
+    /** Trim every channel's EQ down to the current [MAX_BANDS] cap (issue #31).
+     *  Called when the "Add more EQ bands" toggle is turned off — the bands
+     *  added beyond the original 16 are dropped (highest indices first).
+     *  Returns true if anything was removed. */
+    fun enforceBandCap(): Boolean {
+        var changed = false
+        for (eq in listOf(bothEq, leftEq, rightEq)) {
+            while (eq.getBandCount() > MAX_BANDS) {
+                eq.removeBand(eq.getBandCount() - 1)
+                changed = true
+            }
+        }
+        if (changed) {
+            val count = parametricEq.getBandCount()
+            selectedBandIndex = selectedBandIndex?.coerceIn(0, (count - 1).coerceAtLeast(0))
+            initBandSlots()
+            saveState()
+            if (isProcessing) pushEqUpdate()
+        }
+        return changed
     }
 
     fun pushEqUpdate() {

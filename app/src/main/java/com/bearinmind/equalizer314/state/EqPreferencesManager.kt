@@ -226,6 +226,12 @@ class EqPreferencesManager(context: Context) {
 
     fun getDpBandCount(): Int = prefs.getInt("dpBandCount", 128)
 
+    /** Experimental user-facing EQ band cap (issue #31). 16 by default;
+     *  raisable up to EqStateManager.ABSOLUTE_MAX_BANDS via the Experimental
+     *  screen. */
+    fun getMaxEqBands(): Int = prefs.getInt("maxEqBands", 16)
+    fun saveMaxEqBands(count: Int) { prefs.edit().putInt("maxEqBands", count).apply() }
+
     fun saveEqUiMode(mode: String) {
         prefs.edit().putString("eqUiMode", mode).apply()
     }

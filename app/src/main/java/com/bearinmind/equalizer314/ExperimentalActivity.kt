@@ -1,14 +1,13 @@
 package com.bearinmind.equalizer314
 
 import android.os.Bundle
-import android.widget.EditText
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
 import com.bearinmind.equalizer314.state.EqPreferencesManager
-import com.google.android.material.slider.Slider
+import com.bearinmind.equalizer314.state.EqStateManager
 
 class ExperimentalActivity : AppCompatActivity() {
 
@@ -31,6 +30,7 @@ class ExperimentalActivity : AppCompatActivity() {
         findViewById<android.widget.ImageButton>(R.id.backButton).setOnClickListener { finish() }
 
         setupDpBandCount()
+        setupMaxEqBands()
 
         // Hide the legacy "Experimental DP Engine" switch row — the
         // experimental path is now the only path. Keeping the view
@@ -44,33 +44,25 @@ class ExperimentalActivity : AppCompatActivity() {
 
     // Gain Compensation (auto-gain) graduated out of Experimental — it now
     // lives as a real, enabled "Auto-Gain" card on the main settings screen
-    // (on by default; see EqPreferencesManager.getAutoGainEnabled). DP Band
-    // Count remains here and is adjustable for A/B testing.
+    // (on by default; see EqPreferencesManager.getAutoGainEnabled).
+    // DP Band Count is now read-only: the converter always uses the full
+    // Wavelet band table (ParametricToDpConverter.numBands), so we just show
+    // that number rather than a slider that didn't actually change anything.
     private fun setupDpBandCount() {
-        val slider = findViewById<Slider>(R.id.expDpBandCountSlider)
-        val text = findViewById<EditText>(R.id.expDpBandCountText)
+        findViewById<android.widget.TextView>(R.id.expDpBandCountValue).text =
+            com.bearinmind.equalizer314.dsp.ParametricToDpConverter.numBands.toString()
+    }
 
-        // Hydrate from prefs and let the user adjust 32–128 bands.
-        // Re-enabled (was previously force-locked at 128) so testers can
-        // A/B band-count vs the experimental DP variant toggle.
-        val saved = eqPrefs.getDpBandCount().coerceIn(32, 128)
-        slider.value = saved.toFloat()
-        text.setText(saved.toString())
-
-        slider.addOnChangeListener { _, value, fromUser ->
-            if (!fromUser) return@addOnChangeListener
-            val v = value.toInt().coerceIn(32, 128)
-            text.setText(v.toString())
-            eqPrefs.saveDpBandCount(v)
-        }
-        text.setOnEditorActionListener { _, _, _ ->
-            val v = text.text.toString().toIntOrNull()?.coerceIn(32, 128)
-            if (v != null) {
-                slider.value = v.toFloat()
-                text.setText(v.toString())
-                eqPrefs.saveDpBandCount(v)
-            }
-            true
+    // Experimental "Add more EQ bands" toggle (issue #31). On → cap 64,
+    // off → default 16. Updates the live cap so it takes effect on the next
+    // band add / EQ-screen interaction.
+    private fun setupMaxEqBands() {
+        val switch = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.expMaxBandsSwitch)
+        switch.isChecked = eqPrefs.getMaxEqBands() > 16
+        switch.setOnCheckedChangeListener { _, isChecked ->
+            val cap = if (isChecked) EqStateManager.ABSOLUTE_MAX_BANDS else 16
+            eqPrefs.saveMaxEqBands(cap)
+            EqStateManager.MAX_BANDS = cap
         }
     }
 

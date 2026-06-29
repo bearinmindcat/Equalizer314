@@ -355,6 +355,12 @@ class  MainActivity : AppCompatActivity() {
     private lateinit var devicePresetStatusText: TextView
     private lateinit var bandToggleGroup: LinearLayout
     private lateinit var bandToggleGroup2: LinearLayout
+    private lateinit var bandToggleExtraRows: LinearLayout
+    private lateinit var bandToggleExtraScroll: View
+    private lateinit var bandAddButtonRow: LinearLayout
+    // Last MAX_BANDS we built the toggle layout for — lets onResume detect the
+    // "Add more EQ bands" toggle flipping and refresh the rows/scroll (#31).
+    private var lastAppliedMaxBands = 16
     private lateinit var triangleIndicator: View
     private lateinit var bandInputGroup: View
     private lateinit var pageEq: View
@@ -704,6 +710,9 @@ class  MainActivity : AppCompatActivity() {
         devicePresetStatusText = findViewById(R.id.devicePresetStatusText)
         bandToggleGroup = findViewById(R.id.bandToggleGroup)
         bandToggleGroup2 = findViewById(R.id.bandToggleGroup2)
+        bandToggleExtraRows = findViewById(R.id.bandToggleExtraRows)
+        bandToggleExtraScroll = findViewById(R.id.bandToggleExtraScroll)
+        bandAddButtonRow = findViewById(R.id.bandAddButtonRow)
         triangleIndicator = findViewById<View>(R.id.triangleIndicator).apply {
             background = ContextCompat.getDrawable(this@MainActivity, R.drawable.ic_triangle_up)
         }
@@ -807,7 +816,7 @@ class  MainActivity : AppCompatActivity() {
         )
 
         bandToggleManager = BandToggleManager(
-            this, bandToggleGroup, bandToggleGroup2, triangleIndicator, eqGraphView, stateManager,
+            this, bandToggleGroup, bandToggleGroup2, bandToggleExtraRows, bandToggleExtraScroll, bandAddButtonRow, triangleIndicator, eqGraphView, stateManager,
             onEqChanged, onBandCountChanged, onBandSelected
         )
 
@@ -2953,7 +2962,10 @@ class  MainActivity : AppCompatActivity() {
         // Determine which page the selected band is on
         val selectedBand = stateManager.selectedBandIndex ?: 0
         val displayPos = stateManager.displayToBandIndex.indexOf(selectedBand).let { if (it < 0) 0 else it }
-        val activePage = displayPos / 8
+        // In expanded mode (issue #31) there can be 3+ rows, so the
+        // active/inactive page swap doesn't apply — keep row 1 on top, row 2
+        // (and the scrollable extras + "+") below.
+        val activePage = if (EqStateManager.MAX_BANDS > 16) 0 else displayPos / 8
         val activeRow = if (activePage == 0) bandToggleGroup else bandToggleGroup2
         val inactiveRow = if (activePage == 0) bandToggleGroup2 else bandToggleGroup
 
@@ -2967,7 +2979,26 @@ class  MainActivity : AppCompatActivity() {
         }
         val expectedInactiveIdx = if (controlsView != null) parent.indexOfChild(controlsView) + 1 else graphIdx + 3
         val currentInactiveIdx = parent.indexOfChild(inactiveRow)
-        if (currentActiveIdx == graphIdx + 1 && currentInactiveIdx == expectedInactiveIdx) return
+
+        // Keep the experimental extra-rows scroll + the dedicated "+" directly
+        // below the inactive (bottom) toggle row, so the "+" sits under bands
+        // 9-16, not 1-8 (issue #31). No-op in the default 16-band layout.
+        fun positionExtraBandViews() {
+            if (EqStateManager.MAX_BANDS <= 16) return
+            val idx = parent.indexOfChild(inactiveRow)
+            if (idx < 0) return
+            // Already directly below the inactive row → leave it (avoids
+            // churn / resetting the scroll position on every selection).
+            if (parent.indexOfChild(bandToggleExtraScroll) == idx + 1) return
+            parent.removeView(bandToggleExtraScroll)
+            val idx2 = parent.indexOfChild(inactiveRow)
+            parent.addView(bandToggleExtraScroll, idx2 + 1)
+        }
+
+        if (currentActiveIdx == graphIdx + 1 && currentInactiveIdx == expectedInactiveIdx) {
+            positionExtraBandViews()
+            return
+        }
 
         // Animate the transition
         if (animate) {
@@ -2998,6 +3029,7 @@ class  MainActivity : AppCompatActivity() {
         } else {
             parent.addView(inactiveRow, 2)
         }
+        positionExtraBandViews()
     }
 
     private fun updateModeSelectorButtons() {
@@ -4078,6 +4110,19 @@ class  MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         updateDevicePresetStatus()
+        // If the "Add more EQ bands" cap was lowered (toggled off) while we were
+        // away, drop any bands added beyond it, then refresh the toggle UI +
+        // graph (issue #31).
+        if (stateManager.enforceBandCap()) {
+            rebindActiveEq()                 // rebuilds toggles + graph + DP
+            reorderToggleRows(animate = false)
+        } else if (lastAppliedMaxBands != EqStateManager.MAX_BANDS) {
+            // Cap toggled (raised or lowered) with no trim needed — rebuild so
+            // the extra-rows scroll appears/disappears correctly.
+            bandToggleManager.setupToggles()
+            reorderToggleRows(animate = false)
+        }
+        lastAppliedMaxBands = EqStateManager.MAX_BANDS
         // Pick up any limiter changes made in LimiterActivity while we were
         // paused. LimiterActivity writes prefs directly and never touches
         // EqStateManager's mirror fields, so without this sync the next

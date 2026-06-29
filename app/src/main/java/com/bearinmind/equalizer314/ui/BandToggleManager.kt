@@ -14,6 +14,9 @@ class BandToggleManager(
     private val activity: Activity,
     private val toggleGroup: LinearLayout,
     private val toggleGroup2: LinearLayout,
+    private val extraRows: LinearLayout,
+    private val extraScroll: View,
+    private val addButtonRow: LinearLayout,
     private val triangleIndicator: View,
     private val graphView: EqGraphView,
     private val state: EqStateManager,
@@ -21,28 +24,78 @@ class BandToggleManager(
     private val onBandCountChanged: () -> Unit,
     private val onBandSelected: (Int?) -> Unit
 ) {
+    // 8 buttons per row. The default 16-band cap uses the two fixed rows
+    // (toggleGroup, toggleGroup2). The experimental higher cap (issue #31)
+    // spills into extra rows created on demand inside [extraRows]; that path
+    // skips the row-slide animations (which only model the 2-row layout) and
+    // rebuilds plainly instead.
     private val ROW_SIZE = 8
     private var isAnimating = false
 
     private fun getRowForDisplay(displayPos: Int): LinearLayout {
-        return if (displayPos < ROW_SIZE) toggleGroup else toggleGroup2
+        val row = displayPos / ROW_SIZE
+        return when {
+            row == 0 -> toggleGroup
+            // Default 16-band layout keeps row 2 as the fixed bottom row.
+            !expandedMode && row == 1 -> toggleGroup2
+            // Expanded mode (issue #31): every band past row 1 (9+) lives in
+            // the scrollable extra rows so they all scroll together — row 1 of
+            // the scroll = first extra child.
+            else -> {
+                val extraIdx = if (expandedMode) row - 1 else row - 2
+                while (extraRows.childCount <= extraIdx) {
+                    val r = newToggleRow()
+                    if (extraRows.childCount > 0) {
+                        // Card-style gap above every row after the first. The
+                        // first row stays flush so the one-row scroll cap (which
+                        // measures row 0's height) isn't pushed down.
+                        (r.layoutParams as LinearLayout.LayoutParams).topMargin =
+                            (12 * activity.resources.displayMetrics.density).toInt()
+                    }
+                    extraRows.addView(r)
+                }
+                extraRows.getChildAt(extraIdx) as LinearLayout
+            }
+        }
     }
 
-    private fun getRowIndex(displayPos: Int): Int {
-        return if (displayPos < ROW_SIZE) displayPos else displayPos - ROW_SIZE
+    private fun getRowIndex(displayPos: Int): Int = displayPos % ROW_SIZE
+
+    private fun newToggleRow(): LinearLayout = LinearLayout(activity).apply {
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT,
+        )
+        orientation = LinearLayout.HORIZONTAL
+        gravity = android.view.Gravity.CENTER
     }
+
+    /** True when the experimental higher band cap is active (issue #31): the
+     *  "+" moves to its own row below the scrollable extra rows. */
+    private val expandedMode get() = EqStateManager.MAX_BANDS > 16
 
     private fun updateRowVisibility() {
         val eq = state.parametricEq
         val bandCount = eq.getBandCount()
-        // Show both rows when there are enough bands (all modes including graphic)
+        // Count the "+" add slot too so a row that holds only "+" still shows.
+        val totalSlots = bandCount + if (bandCount < EqStateManager.MAX_BANDS) 1 else 0
         toggleGroup.visibility = View.VISIBLE
-        toggleGroup2.visibility = if (bandCount > ROW_SIZE || (bandCount == ROW_SIZE && bandCount < EqStateManager.MAX_BANDS)) View.VISIBLE else View.GONE
+        addButtonRow.visibility = View.GONE
+        if (expandedMode) {
+            // Bands 9+ (and the inline "+") all live in the scroll, which owns
+            // its own vertical scrolling; the fixed row 2 is unused here.
+            toggleGroup2.visibility = View.GONE
+            extraScroll.visibility = if (totalSlots > ROW_SIZE) View.VISIBLE else View.GONE
+        } else {
+            toggleGroup2.visibility = if (totalSlots > ROW_SIZE) View.VISIBLE else View.GONE
+            extraScroll.visibility = View.GONE
+        }
     }
 
     fun setupToggles() {
         toggleGroup.removeAllViews()
         toggleGroup2.removeAllViews()
+        extraRows.removeAllViews()
+        addButtonRow.removeAllViews()
 
         val eq = state.parametricEq
         val bandCount = eq.getBandCount()
@@ -64,10 +117,14 @@ class BandToggleManager(
             row.addView(createToggleButton(bandIdx))
         }
         if (bandCount < EqStateManager.MAX_BANDS) {
-            val addRow = getRowForDisplay(bandCount)
-            addRow.addView(createAddButton())
+            // Inline "+": lands in rows 1-2 normally, or inside the scrollable
+            // extra-rows area once it's past band 16 (issue #31) — so it scrolls
+            // with the bands instead of adding a fixed row.
+            getRowForDisplay(bandCount).addView(createAddButton())
         }
         updateRowVisibility()
+        // (MaxHeightScrollView caps itself to one row in onMeasure, so no
+        // post-layout height fiddling is needed here.)
     }
 
     fun updateSelection(bandIndex: Int?) {
@@ -131,8 +188,10 @@ class BandToggleManager(
         graphView.setBandSlotLabels(state.bandSlots)
         graphView.setBandColors(state.bandColors)
 
-        // If another animation is in progress, skip animated transition
-        if (isAnimating) {
+        // Skip the row-slide animation while one is in flight, or whenever the
+        // band cap is raised past the default 16 (issue #31) — the animations
+        // only model the fixed 2-row layout, so >16 bands rebuild plainly.
+        if (isAnimating || EqStateManager.MAX_BANDS > 16) {
             setupToggles()
             updateSelection(state.selectedBandIndex)
             state.saveState()
@@ -469,8 +528,11 @@ class BandToggleManager(
         val eq = state.parametricEq
         if (eq.getBandCount() <= EqStateManager.MIN_BANDS) return
 
-        // If another animation is in progress, skip animated transition
-        if (isAnimating) {
+        // Skip animation mid-flight, or whenever the layout exceeds the two
+        // fixed rows — cap raised past 16, or >16 bands still present after the
+        // cap was toggled back off (issue #31). The row-slide animation only
+        // models the default 2-row layout.
+        if (isAnimating || EqStateManager.MAX_BANDS > 16 || eq.getBandCount() > ROW_SIZE * 2) {
             performRemoveBand(index)
             return
         }
