@@ -31,6 +31,9 @@ class EqGraphView @JvmOverloads constructor(
     }
 
     private var parametricEq: ParametricEqualizer? = null
+    // The inactive channel's EQ, drawn as a dotted "ghost" curve when Channel
+    // Side EQ is on (R while editing L, and vice-versa) — issue #53. Null = off.
+    private var ghostEq: ParametricEqualizer? = null
     private val bandPoints = mutableListOf<BandPoint>()
     private var activeBandIndex: Int? = null
 
@@ -326,6 +329,13 @@ class EqGraphView @JvmOverloads constructor(
             bandPoints.add(BandPoint(i, bands[i].frequency, bands[i].gain))
         }
 
+        invalidate()
+    }
+
+    /** Set the other-channel EQ to draw as a dotted ghost curve (issue #53),
+     *  or null to hide it (non-CSE). */
+    fun setGhostEqualizer(eq: ParametricEqualizer?) {
+        ghostEq = eq
         invalidate()
     }
 
@@ -695,9 +705,39 @@ class EqGraphView @JvmOverloads constructor(
         }
     }
 
+    /** Dotted, dimmed response curve of the inactive channel (issue #53). */
+    private fun drawGhostCurve(canvas: Canvas, vPad: Float, graphWidth: Float, graphHeight: Float) {
+        val ghost = ghostEq ?: return
+        val numSamples = 220
+        val logMin = log10(graphMinFreq)
+        val logMax = log10(graphMaxFreq)
+        val path = Path()
+        var started = false
+        for (i in 0 until numSamples) {
+            val x = graphWidth * i / (numSamples - 1)
+            val logFreq = logMin + (x / graphWidth) * (logMax - logMin)
+            val freq = 10f.pow(logFreq)
+            val db = ghost.getFrequencyResponse(freq)
+            if (db.isNaN() || db.isInfinite()) continue
+            val y = vPad + graphHeight * (1f - (db - minGain) / (maxGain - minGain))
+            if (!started) { path.moveTo(x, y); started = true } else path.lineTo(x, y)
+        }
+        if (!started) return
+        val paint = Paint(curvePaint).apply {
+            pathEffect = android.graphics.DashPathEffect(floatArrayOf(8f, 6f), 0f)
+            alpha = 110
+            strokeWidth = curvePaint.strokeWidth * 0.8f
+        }
+        canvas.drawPath(path, paint)
+    }
+
     private fun drawCurve(canvas: Canvas, vPad: Float, graphWidth: Float, graphHeight: Float) {
         val eq = parametricEq ?: return
         if (bandPoints.isEmpty()) return
+
+        // Dotted ghost curve of the other channel (CSE L/R) — drawn first so the
+        // active channel's curve sits on top (issue #53).
+        drawGhostCurve(canvas, vPad, graphWidth, graphHeight)
 
         val path = Path()
         val saturatedPath = Path()

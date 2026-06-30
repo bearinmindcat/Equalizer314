@@ -22,7 +22,10 @@ class BandToggleManager(
     private val state: EqStateManager,
     private val onEqChanged: () -> Unit,
     private val onBandCountChanged: () -> Unit,
-    private val onBandSelected: (Int?) -> Unit
+    private val onBandSelected: (Int?) -> Unit,
+    // Tapping an already-selected band while Channel Side EQ is on — used to
+    // pop up the per-band L / Both / R picker on the band card (issue #53).
+    private val onBandReselected: ((anchor: View, bandIdx: Int) -> Unit)? = null
 ) {
     // 8 buttons per row. The default 16-band cap uses the two fixed rows
     // (toggleGroup, toggleGroup2). The experimental higher cap (issue #31)
@@ -74,6 +77,15 @@ class BandToggleManager(
     private val expandedMode get() = EqStateManager.MAX_BANDS > 16
 
     private fun updateRowVisibility() {
+        // Table (and Simple) mode have their own UI and never show the band
+        // toggle rows — hide them no matter who triggered setupToggles().
+        if (state.currentEqUiMode == EqUiMode.TABLE || state.currentEqUiMode == EqUiMode.SIMPLE) {
+            toggleGroup.visibility = View.GONE
+            toggleGroup2.visibility = View.GONE
+            extraScroll.visibility = View.GONE
+            addButtonRow.visibility = View.GONE
+            return
+        }
         val eq = state.parametricEq
         val bandCount = eq.getBandCount()
         // Count the "+" add slot too so a row that holds only "+" still shows.
@@ -852,6 +864,20 @@ class BandToggleManager(
         onBandCountChanged()
     }
 
+    /** Band toggle tapped. Normally selects the band; but tapping the
+     *  already-selected band while Channel Side EQ is on opens the per-band
+     *  L / Both / R picker anchored to the card (issue #53). */
+    private fun onToggleClicked(anchor: View, bandIdx: Int) {
+        val cseOn = state.activeChannel != EqStateManager.ActiveChannel.BOTH
+        if (cseOn && state.selectedBandIndex == bandIdx && onBandReselected != null) {
+            onBandReselected.invoke(anchor, bandIdx)
+            return
+        }
+        graphView.setActiveBand(bandIdx)
+        updateSelection(bandIdx)
+        onBandSelected(bandIdx)
+    }
+
     private fun updateClickListeners() {
         val eq = state.parametricEq
         for (displayPos in state.displayToBandIndex.indices) {
@@ -860,11 +886,7 @@ class BandToggleManager(
             val btn = row.getChildAt(rowIdx) as? MaterialButton ?: continue
             if (btn.text == "+") continue
             val bandIdx = state.displayToBandIndex[displayPos]
-            btn.setOnClickListener {
-                graphView.setActiveBand(bandIdx)
-                updateSelection(bandIdx)
-                onBandSelected(bandIdx)
-            }
+            btn.setOnClickListener { onToggleClicked(btn, bandIdx) }
             btn.setOnLongClickListener {
                 if (eq.getBandCount() > EqStateManager.MIN_BANDS) {
                     removeBandAt(bandIdx)
@@ -924,11 +946,7 @@ class BandToggleManager(
             val enabled = eq.getBand(bandIdx)?.enabled != false
             updateToggleStyle(this, enabled, bandIdx = bandIdx)
 
-            setOnClickListener {
-                graphView.setActiveBand(bandIdx)
-                updateSelection(bandIdx)
-                onBandSelected(bandIdx)
-            }
+            setOnClickListener { onToggleClicked(this, bandIdx) }
 
             setOnLongClickListener {
                 if (eq.getBandCount() > EqStateManager.MIN_BANDS) {

@@ -124,6 +124,7 @@ class EqPreferencesManager(context: Context) {
                 put("filterType", band.filterType.name)
                 put("q", band.q)
                 put("enabled", band.enabled)
+                put("channel", band.channel.name)
                 if (slots != null && i < slots.size) put("slot", slots[i])
             })
         }
@@ -133,7 +134,11 @@ class EqPreferencesManager(context: Context) {
     /** Load a JSON-string band array into the given EQ. Returns true when
      *  parsing succeeded (even if the array was empty), false on malformed
      *  JSON. */
-    private fun loadBands(eq: ParametricEqualizer, jsonStr: String): Boolean {
+    private fun loadBands(
+        eq: ParametricEqualizer,
+        jsonStr: String,
+        defaultChannel: ParametricEqualizer.Channel = ParametricEqualizer.Channel.BOTH,
+    ): Boolean {
         return try {
             val arr = JSONArray(jsonStr)
             eq.clearBands()
@@ -151,6 +156,16 @@ class EqPreferencesManager(context: Context) {
                     obj.getDouble("q")
                 )
                 if (obj.has("enabled")) eq.setBandEnabled(i, obj.getBoolean("enabled"))
+                // Pre-#53 saves have no "channel" → fall back to the list's
+                // default (LEFT/RIGHT for CSE channels) so independent curves
+                // aren't accidentally merged as "Both".
+                eq.getBand(i)?.channel = if (obj.has("channel")) {
+                    try {
+                        ParametricEqualizer.Channel.valueOf(obj.getString("channel"))
+                    } catch (_: Exception) {
+                        defaultChannel
+                    }
+                } else defaultChannel
             }
             eq.isEnabled = true
             true
@@ -172,12 +187,12 @@ class EqPreferencesManager(context: Context) {
      *  forking from `bothEq`). */
     fun restoreLeftBands(eq: ParametricEqualizer): Boolean {
         val s = prefs.getString("leftBands", null) ?: return false
-        return loadBands(eq, s)
+        return loadBands(eq, s, ParametricEqualizer.Channel.LEFT)
     }
 
     fun restoreRightBands(eq: ParametricEqualizer): Boolean {
         val s = prefs.getString("rightBands", null) ?: return false
-        return loadBands(eq, s)
+        return loadBands(eq, s, ParametricEqualizer.Channel.RIGHT)
     }
 
     /** Wipe the saved `leftBands` / `rightBands` prefs. Called when the

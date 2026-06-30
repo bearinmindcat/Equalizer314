@@ -236,6 +236,10 @@ class EqStateManager(
     }
 
     fun pushEqUpdate() {
+        // Mirror any "Both" band edits to the other channel before pushing, so
+        // both channels stay in lockstep (issue #53). Runs even when not
+        // processing so the in-memory twins are correct for the next save.
+        syncBothBands()
         if (!isProcessing) return
         val dm = eqService?.dynamicsManager ?: return
         dm.preampGainDb = preampGainDb
@@ -331,6 +335,9 @@ class EqStateManager(
         if (!eqPrefs.getChannelSideEqEnabled()) return
         if (channel == ActiveChannel.BOTH) return   // BOTH is only reachable via CSE off
         if (channel == activeChannel) return
+        // Flush "Both" edits from the channel we're leaving to its twins first,
+        // so the switch can't sync the wrong direction (issue #53).
+        syncBothBands()
         activeChannel = channel
         parametricEq = if (channel == ActiveChannel.LEFT) leftEq else rightEq
     }
@@ -340,6 +347,122 @@ class EqStateManager(
     fun getChannelEqs(): Pair<ParametricEqualizer, ParametricEqualizer> =
         if (eqPrefs.getChannelSideEqEnabled()) Pair(leftEq, rightEq)
         else Pair(bothEq, bothEq)
+
+    /** The EQ of the channel NOT currently being edited, for the dotted ghost
+     *  curve (issue #53). Null when Channel Side EQ is off. */
+    fun getInactiveChannelEq(): ParametricEqualizer? {
+        if (!eqPrefs.getChannelSideEqEnabled()) return null
+        return when (activeChannel) {
+            ActiveChannel.LEFT -> rightEq
+            ActiveChannel.RIGHT -> leftEq
+            else -> null
+        }
+    }
+
+    // ---- Per-band channel (L / R / Both) — issue #53 --------------------
+
+    /** Channel tag of the active selected band (BOTH when out of range). */
+    fun getBandChannel(index: Int): ParametricEqualizer.Channel =
+        parametricEq.getBand(index)?.channel ?: ParametricEqualizer.Channel.BOTH
+
+    /** Set the active band's channel. In CSE mode a BOTH band is mirrored as a
+     *  synced twin in the other channel (same slot); L/R keep it on one channel
+     *  only (moving it across if needed). Returns true if the band left the
+     *  active channel (caller should refresh selection/UI). */
+    fun setBandChannel(index: Int, channel: ParametricEqualizer.Channel): Boolean {
+        if (!eqPrefs.getChannelSideEqEnabled()) return false
+        if (activeChannel == ActiveChannel.BOTH) return false
+        val band = parametricEq.getBand(index) ?: return false
+        val slot = bandSlots.getOrNull(index) ?: return false
+        val activeIsLeft = activeChannel == ActiveChannel.LEFT
+        val otherEq = if (activeIsLeft) rightEq else leftEq
+        val otherSlots = if (activeIsLeft) rightBandSlots else leftBandSlots
+        var leftActive = false
+        when (channel) {
+            ParametricEqualizer.Channel.BOTH -> {
+                band.channel = ParametricEqualizer.Channel.BOTH
+                mirrorBandTo(otherEq, otherSlots, slot, band)
+            }
+            else -> {
+                val belongsToActive =
+                    (channel == ParametricEqualizer.Channel.LEFT && activeIsLeft) ||
+                    (channel == ParametricEqualizer.Channel.RIGHT && !activeIsLeft)
+                if (belongsToActive) {
+                    band.channel = channel
+                    removeBandAtSlot(otherEq, otherSlots, slot)   // drop the twin
+                } else {
+                    // Band belongs to the other channel only → move it there.
+                    mirrorBandTo(otherEq, otherSlots, slot, band)
+                    val j = otherSlots.indexOf(slot)
+                    if (j >= 0) otherEq.getBand(j)?.channel = channel
+                    parametricEq.removeBand(index)
+                    if (index < bandSlots.size) bandSlots.removeAt(index)
+                    leftActive = true
+                }
+            }
+        }
+        persistLeftRightIfCse()
+        if (isProcessing) pushEqUpdate()
+        return leftActive
+    }
+
+    /** Copy [src]'s params into [targetEq] at [slot] (creating the band there if
+     *  absent), tagged BOTH — the synced twin of a "Both" band. */
+    private fun mirrorBandTo(
+        targetEq: ParametricEqualizer,
+        targetSlots: MutableList<Int>,
+        slot: Int,
+        src: ParametricEqualizer.EqualizerBand,
+    ) {
+        val existing = targetSlots.indexOf(slot)
+        if (existing >= 0) {
+            targetEq.updateBand(existing, src.frequency, src.gain, src.filterType, src.q)
+            targetEq.getBand(existing)?.let {
+                it.enabled = src.enabled
+                it.channel = ParametricEqualizer.Channel.BOTH
+            }
+        } else {
+            val pos = targetSlots.indexOfFirst { it > slot }
+                .let { if (it < 0) targetSlots.size else it }
+                .coerceIn(0, targetEq.getBandCount())
+            targetEq.insertBand(pos, src.frequency, src.gain, src.filterType, src.q)
+            targetEq.getBand(pos)?.let {
+                it.enabled = src.enabled
+                it.channel = ParametricEqualizer.Channel.BOTH
+            }
+            targetSlots.add(pos, slot)
+        }
+    }
+
+    private fun removeBandAtSlot(
+        targetEq: ParametricEqualizer,
+        targetSlots: MutableList<Int>,
+        slot: Int,
+    ) {
+        val pos = targetSlots.indexOf(slot)
+        if (pos >= 0) {
+            targetEq.removeBand(pos)
+            targetSlots.removeAt(pos)
+        }
+    }
+
+    /** Keep every "Both" band in the active channel synced to its twin in the
+     *  other channel (matched by slot), creating the twin if missing. Called
+     *  before each persist/DP push so edits to a Both band mirror over. No-op
+     *  outside CSE. */
+    fun syncBothBands() {
+        if (!eqPrefs.getChannelSideEqEnabled() || activeChannel == ActiveChannel.BOTH) return
+        val activeIsLeft = activeChannel == ActiveChannel.LEFT
+        val otherEq = if (activeIsLeft) rightEq else leftEq
+        val otherSlots = if (activeIsLeft) rightBandSlots else leftBandSlots
+        val activeSlots = bandSlots
+        for (i in 0 until parametricEq.getBandCount()) {
+            val b = parametricEq.getBand(i) ?: continue
+            if (b.channel != ParametricEqualizer.Channel.BOTH) continue
+            val slot = activeSlots.getOrNull(i) ?: continue
+            mirrorBandTo(otherEq, otherSlots, slot, b)
+        }
+    }
 
     /** Minimal structure for a preset's band list, shared between the
      *  preset-save / preset-load / APO-round-trip paths. */
@@ -532,6 +655,8 @@ class EqStateManager(
     }
 
     fun saveState() {
+        // Keep "Both" band twins in sync before persisting (issue #53).
+        syncBothBands()
         // Don't pollute the "bands" pref with Simple-mode band data. In
         // Simple mode `parametricEq` holds the 10 fixed BELL bands —
         // writing them to "bands" would overwrite the user's advanced

@@ -20,6 +20,7 @@ import androidx.core.view.doOnLayout
 import androidx.core.view.updatePadding
 import com.bearinmind.equalizer314.audio.EqService
 import com.bearinmind.equalizer314.dsp.BiquadFilter
+import com.bearinmind.equalizer314.dsp.ParametricEqualizer
 import com.bearinmind.equalizer314.dsp.ParametricToDpConverter
 import com.bearinmind.equalizer314.state.EqPreferencesManager
 import com.bearinmind.equalizer314.state.EqStateManager
@@ -817,7 +818,8 @@ class  MainActivity : AppCompatActivity() {
 
         bandToggleManager = BandToggleManager(
             this, bandToggleGroup, bandToggleGroup2, bandToggleExtraRows, bandToggleExtraScroll, bandAddButtonRow, triangleIndicator, eqGraphView, stateManager,
-            onEqChanged, onBandCountChanged, onBandSelected
+            onEqChanged, onBandCountChanged, onBandSelected,
+            onBandReselected = { anchor, bandIdx -> showBandChannelPopup(anchor, bandIdx) }
         )
 
         // Wire state manager callbacks
@@ -2321,6 +2323,13 @@ class  MainActivity : AppCompatActivity() {
             // trigger a full Pre-EQ rewrite on the audio thread. The drag-end
             // listener flushes the final value.
             stateManager.pushEqUpdateThrottled()
+            // Mirror "Both" band edits to the other channel and redraw its
+            // dotted ghost curve LIVE during the drag, not just on release
+            // (issue #53). Just a param copy — cheap enough per move.
+            if (stateManager.activeChannel != EqStateManager.ActiveChannel.BOTH) {
+                stateManager.syncBothBands()
+                eqGraphView.invalidate()
+            }
             updateBandInputs(bandIndex)
             if (stateManager.currentEqUiMode == EqUiMode.TABLE) tableController.buildTable()
             if (stateManager.currentEqUiMode == EqUiMode.GRAPHIC) graphicController.updateSliderValues()
@@ -3599,6 +3608,45 @@ class  MainActivity : AppCompatActivity() {
         filterTypeGroup.addView(bypassBtn)
     }
 
+    /** Per-band L / Both / R picker (issue #53). Opened by tapping an
+     *  already-selected band card while Channel Side EQ is on; anchored to that
+     *  card. The current channel is shown checked. */
+    private fun showBandChannelPopup(anchor: View, bandIdx: Int) {
+        if (!eqPrefs.getChannelSideEqEnabled()) return
+        val current = stateManager.getBandChannel(bandIdx)
+        val items = listOf(
+            ParametricEqualizer.Channel.LEFT to "Left",
+            ParametricEqualizer.Channel.BOTH to "Both",
+            ParametricEqualizer.Channel.RIGHT to "Right",
+        )
+        val popup = android.widget.PopupMenu(this, anchor)
+        items.forEachIndexed { i, (ch, label) ->
+            popup.menu.add(0, i, i, label).apply {
+                isCheckable = true
+                isChecked = ch == current
+            }
+        }
+        popup.setOnMenuItemClickListener { mi ->
+            onBandChannelPicked(items[mi.itemId].first)
+            true
+        }
+        popup.show()
+    }
+
+    private fun onBandChannelPicked(channel: ParametricEqualizer.Channel) {
+        val idx = stateManager.selectedBandIndex ?: return
+        val movedAway = stateManager.setBandChannel(idx, channel)
+        if (movedAway) {
+            // Band left the active channel — refresh everything for the
+            // (now smaller) active channel and re-highlight.
+            rebindActiveEq()
+            reorderToggleRows(animate = false)
+        } else {
+            eqGraphView.updateBandLevels()
+            updateFilterTypeButtons(stateManager.selectedBandIndex)
+        }
+    }
+
     private fun updateFilterTypeButtons(bandIndex: Int?) {
         if (bandIndex == null) return
         val band = stateManager.parametricEq.getBand(bandIndex) ?: return
@@ -4088,6 +4136,8 @@ class  MainActivity : AppCompatActivity() {
     private fun rebindActiveEq() {
         val eq = stateManager.parametricEq
         eqGraphView.setParametricEqualizer(eq)
+        // Dotted ghost curve of the other channel in CSE mode (issue #53).
+        eqGraphView.setGhostEqualizer(stateManager.getInactiveChannelEq())
         // Point the graph at the now-active channel's slot list — each channel
         // keeps its own, so a switch must refresh the labels (and the band
         // count they're sized against) or they'd lag a channel behind.
@@ -4147,6 +4197,9 @@ class  MainActivity : AppCompatActivity() {
         } else {
             refreshChannelPopoutDim()
         }
+        // Keep the dotted other-channel ghost curve in sync on every resume,
+        // incl. cold start with CSE already on (issue #53).
+        eqGraphView.setGhostEqualizer(stateManager.getInactiveChannelEq())
         // Set FAB from saved power state — instant, no animation
         val savedPower = eqPrefs.getPowerState()
         com.bearinmind.equalizer314.ui.BottomNavHelper.setPowerFabInstant(this, savedPower)

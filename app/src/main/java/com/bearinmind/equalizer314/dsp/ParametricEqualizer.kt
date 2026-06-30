@@ -15,12 +15,17 @@ import kotlin.math.tanh
 // curve computation only.
 class ParametricEqualizer(private val sampleRate: Int = 48000) {
 
+    /** Which output channel(s) a band applies to (issue #53). BOTH is the
+     *  default and the only value used outside Channel-Side-EQ mode. */
+    enum class Channel { BOTH, LEFT, RIGHT }
+
     data class EqualizerBand(
         var frequency: Float,      // Hz (20-20000)
         var gain: Float,            // dB (-20 to +20)
         var filterType: BiquadFilter.FilterType,
         var q: Double = 0.707,      // Q factor (0.1 to 10.0)
-        var enabled: Boolean = true
+        var enabled: Boolean = true,
+        var channel: Channel = Channel.BOTH
     )
 
     private val bands = mutableListOf<EqualizerBand>()

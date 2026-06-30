@@ -95,21 +95,27 @@ class TableEqController(
                 marginEnd = (4 * density).toInt()
             }
             textSize = 12f
-            setTextColor(when {
-                !band.enabled -> 0xFF666666.toInt()
-                hasColor -> savedColor
-                else -> 0xFFCCCCCC.toInt()
-            })
             gravity = android.view.Gravity.CENTER
             setPadding((4 * density).toInt(), (4 * density).toInt(), (4 * density).toInt(), (4 * density).toInt())
-            background = android.graphics.drawable.GradientDrawable().apply {
-                setColor(0xFF404040.toInt())  // original solid cell fill
-                if (hasColor) {
-                    setStroke((1.5f * density).toInt(), savedColor)
-                }
-                cornerRadius = 8 * density
-            }
         }
+        // Keep the original enabled look (grey cell + colored stroke/number);
+        // only the INSIDE fill dims when the band is turned off, so toggling
+        // visibly turns the cell on/off rather than just the outline.
+        fun applyNumBoxStyle(enabled: Boolean) {
+            val colored = state.bandColors.containsKey(slotIndex)
+            val color = state.bandColors[slotIndex] ?: 0xFF666666.toInt()
+            numBox.background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 8 * density
+                setColor(if (enabled) 0xFF404040.toInt() else 0xFF262626.toInt())
+                if (colored) setStroke((1.5f * density).toInt(), color)
+            }
+            numBox.setTextColor(when {
+                !enabled -> 0xFF666666.toInt()
+                colored -> color
+                else -> 0xFFCCCCCC.toInt()
+            })
+        }
+        applyNumBoxStyle(band.enabled)
         if (!band.enabled) row.alpha = 0.5f
         row.addView(numBox)
 
@@ -174,10 +180,7 @@ class TableEqController(
                             if (!b.enabled) eq.setBandEnabled(bandIndex, true)
                             eq.updateBand(bandIndex, b.frequency, b.gain, filterTypeValues[idx], b.q)
                             row.alpha = 1f
-                            numBox.setTextColor(
-                                if (isColorLight(state.bandColors[slotIndex] ?: 0xFF333333.toInt()))
-                                    0xFF222222.toInt() else 0xFFCCCCCC.toInt()
-                            )
+                            applyNumBoxStyle(true)
                             filterBtn.text = filterTypeNames[idx]
                             graphView.setParametricEqualizer(eq)
                             onEqChanged()
@@ -197,9 +200,7 @@ class TableEqController(
             val nowEnabled = !b.enabled
             eq.setBandEnabled(bandIndex, nowEnabled)
             row.alpha = if (nowEnabled) 1f else 0.5f
-            val curColor = state.bandColors[slotIndex] ?: 0xFF333333.toInt()
-            val light = isColorLight(curColor)
-            numBox.setTextColor(if (!nowEnabled) 0xFF666666.toInt() else if (light) 0xFF222222.toInt() else 0xFFCCCCCC.toInt())
+            applyNumBoxStyle(nowEnabled)
             filterBtn.text = when {
                 !nowEnabled -> "BYPASS"
                 else -> filterTypeNames[filterTypeValues.indexOf(b.filterType).coerceAtLeast(0)]
@@ -342,12 +343,12 @@ class TableEqController(
                 } else {
                     state.bandColors[slotIndex] = color
                 }
+                // Original look: grey fill (dimmed when off) + colored stroke
+                // and number — not a full-color fill.
                 numBox.background = android.graphics.drawable.GradientDrawable().apply {
-                    setColor(0xFF404040.toInt())  // original solid cell fill
-                    if (!isNone) {
-                        setStroke((1.5f * density).toInt(), color)
-                    }
                     cornerRadius = 8 * density
+                    setColor(if (enabled) 0xFF404040.toInt() else 0xFF262626.toInt())
+                    if (!isNone) setStroke((1.5f * density).toInt(), color)
                 }
                 numBox.setTextColor(when {
                     !enabled -> 0xFF666666.toInt()
