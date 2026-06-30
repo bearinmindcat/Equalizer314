@@ -798,6 +798,8 @@ class  MainActivity : AppCompatActivity() {
                 graphicController.buildSliders(graphicController.targetCardHeight)
             }
             reorderToggleRows()
+            // Refresh the "Both" button's lit state for the newly selected band.
+            paintChannelButtonStyles()
         }
 
         graphicController = GraphicEqController(
@@ -900,6 +902,7 @@ class  MainActivity : AppCompatActivity() {
         val settingsGearBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.settingsGearButton)
         val channelLBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.channelLButton)
         val channelRBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.channelRButton)
+        val channelBothBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.channelBothButton)
         val vizDensity = resources.displayMetrics.density
         val gapPx = (2 * vizDensity).toInt()
         // post{}, NOT doOnLayout{}: these button offsets are computed from
@@ -1108,6 +1111,20 @@ class  MainActivity : AppCompatActivity() {
             channelRBtn.minimumWidth = 0; channelRBtn.minimumHeight = 0
             channelRBtn.setPadding(0, 0, 0, 0)
 
+            // "Both" sits on row 2 just left of L, same size as the other
+            // buttons; the label auto-shrinks to fit the narrow cell (#53).
+            val bothLp = channelBothBtn.layoutParams as android.widget.FrameLayout.LayoutParams
+            bothLp.width = specWidth; bothLp.height = btnHeight
+            bothLp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+            bothLp.leftMargin = (lLeft - specWidth - gapPx).coerceAtLeast(0)
+            bothLp.topMargin = row2Top
+            channelBothBtn.layoutParams = bothLp
+            channelBothBtn.minimumWidth = 0; channelBothBtn.minimumHeight = 0
+            channelBothBtn.setPadding(0, 0, 0, 0)
+            androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
+                channelBothBtn, 6, 12, 1, android.util.TypedValue.COMPLEX_UNIT_SP
+            )
+
             refreshChannelPopoutDim()
         }
 
@@ -1125,16 +1142,18 @@ class  MainActivity : AppCompatActivity() {
                 // Paint pressed/outlined styles first so the buttons fade in
                 // already reflecting the active channel.
                 paintChannelButtonStyles()
-                listOf(channelLBtn, channelRBtn, settingsGearBtn).forEach { v ->
+                listOf(channelBothBtn, channelLBtn, channelRBtn, settingsGearBtn).forEach { v ->
                     v.visibility = View.VISIBLE
                     v.alpha = 0f; v.scaleX = 0.3f; v.scaleY = 0.3f; v.translationY = offsetY
                 }
-                channelLBtn.animate().alpha(lrAlpha).scaleX(1f).scaleY(1f).translationY(0f)
+                channelBothBtn.animate().alpha(lrAlpha).scaleX(1f).scaleY(1f).translationY(0f)
                     .setDuration(250).setInterpolator(android.view.animation.OvershootInterpolator(1.0f)).start()
-                channelRBtn.animate().alpha(lrAlpha).scaleX(1f).scaleY(1f).translationY(0f)
+                channelLBtn.animate().alpha(lrAlpha).scaleX(1f).scaleY(1f).translationY(0f)
                     .setDuration(250).setStartDelay(40).setInterpolator(android.view.animation.OvershootInterpolator(1.0f)).start()
-                settingsGearBtn.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f)
+                channelRBtn.animate().alpha(lrAlpha).scaleX(1f).scaleY(1f).translationY(0f)
                     .setDuration(250).setStartDelay(80).setInterpolator(android.view.animation.OvershootInterpolator(1.0f)).start()
+                settingsGearBtn.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f)
+                    .setDuration(250).setStartDelay(120).setInterpolator(android.view.animation.OvershootInterpolator(1.0f)).start()
                 altRouteBtn.setBackgroundColor(0xFF555555.toInt())
                 altRouteBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
                 altRouteBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
@@ -1149,6 +1168,9 @@ class  MainActivity : AppCompatActivity() {
                 channelLBtn.animate().alpha(0f).scaleX(0.3f).scaleY(0.3f).translationY(offsetY)
                     .setDuration(200).setStartDelay(80).setInterpolator(android.view.animation.AccelerateInterpolator())
                     .withEndAction { channelLBtn.visibility = View.GONE; channelLBtn.translationY = 0f }.start()
+                channelBothBtn.animate().alpha(0f).scaleX(0.3f).scaleY(0.3f).translationY(offsetY)
+                    .setDuration(200).setStartDelay(120).setInterpolator(android.view.animation.AccelerateInterpolator())
+                    .withEndAction { channelBothBtn.visibility = View.GONE; channelBothBtn.translationY = 0f }.start()
                 altRouteBtn.setBackgroundColor(0x00000000)
                 altRouteBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
                 altRouteBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
@@ -1169,6 +1191,23 @@ class  MainActivity : AppCompatActivity() {
             if (stateManager.activeChannel == EqStateManager.ActiveChannel.RIGHT) return@setOnClickListener
             stateManager.setActiveChannel(EqStateManager.ActiveChannel.RIGHT)
             rebindActiveEq()
+        }
+        // "Both" — tether the currently-selected band to both channels (#53),
+        // a one-tap alternative to the band-card popup.
+        channelBothBtn.setOnClickListener {
+            if (!eqPrefs.getChannelSideEqEnabled()) return@setOnClickListener
+            val idx = stateManager.selectedBandIndex ?: return@setOnClickListener
+            if (stateManager.getBandChannel(idx) == ParametricEqualizer.Channel.BOTH) {
+                // Already tethered → untether: keep the band on both channels
+                // but make them independent (don't reset/remove the other side).
+                stateManager.untetherBand(idx)
+                eqGraphView.updateBandLevels()
+                eqGraphView.setGhostEqualizer(stateManager.getInactiveChannelEq())
+                updateFilterTypeButtons(idx)
+                paintChannelButtonStyles()
+            } else {
+                onBandChannelPicked(ParametricEqualizer.Channel.BOTH)
+            }
         }
 
         // Settings gear: navigate to the Settings page.
@@ -2331,11 +2370,17 @@ class  MainActivity : AppCompatActivity() {
                 eqGraphView.invalidate()
             }
             updateBandInputs(bandIndex)
-            if (stateManager.currentEqUiMode == EqUiMode.TABLE) tableController.buildTable()
+            // NOTE: don't rebuild the whole table on every drag move — it
+            // recreates all rows/inputs and makes the graph drag stutter. The
+            // table is refreshed once on drag-end instead.
             if (stateManager.currentEqUiMode == EqUiMode.GRAPHIC) graphicController.updateSliderValues()
         }
 
-        eqGraphView.onBandDragEndListener = { stateManager.flushEqUpdate() }
+        eqGraphView.onBandDragEndListener = {
+            stateManager.flushEqUpdate()
+            // Sync the table to the dragged values now that the drag is done.
+            if (stateManager.currentEqUiMode == EqUiMode.TABLE) tableController.buildTable()
+        }
 
         eqGraphView.onLongPressListener = { showPresetsBottomSheet() }
 
@@ -3645,6 +3690,10 @@ class  MainActivity : AppCompatActivity() {
             eqGraphView.updateBandLevels()
             updateFilterTypeButtons(stateManager.selectedBandIndex)
         }
+        // Update the dotted ghost (channels may now diverge) and the Both
+        // button's lit state.
+        eqGraphView.setGhostEqualizer(stateManager.getInactiveChannelEq())
+        paintChannelButtonStyles()
     }
 
     private fun updateFilterTypeButtons(bandIndex: Int?) {
@@ -4069,6 +4118,7 @@ class  MainActivity : AppCompatActivity() {
         val enabled = eqPrefs.getChannelSideEqEnabled()
         val lBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.channelLButton) ?: return
         val rBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.channelRButton) ?: return
+        val bothBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.channelBothButton)
         val density = resources.displayMetrics.density
         // The "L"/"R" glyphs read lighter than the icon buttons, so give
         // them a darker dim color in light mode than the shared header dim.
@@ -4090,6 +4140,7 @@ class  MainActivity : AppCompatActivity() {
         val altRouteBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.altRouteButton)
         if (!enabled) {
             paint(lBtn, false); paint(rBtn, false)
+            bothBtn?.let { paint(it, false) }
             badge?.visibility = View.GONE
             altRouteBtn?.setIconResource(R.drawable.ic_alt_route_right)
             return
@@ -4097,6 +4148,14 @@ class  MainActivity : AppCompatActivity() {
         val active = stateManager.activeChannel
         paint(lBtn, active == EqStateManager.ActiveChannel.LEFT)
         paint(rBtn, active == EqStateManager.ActiveChannel.RIGHT)
+        // "Both" lights up when the selected band is tethered to both channels,
+        // and goes dark once it's detached to L/R (issue #53).
+        bothBtn?.let {
+            val selBoth = stateManager.selectedBandIndex?.let { idx ->
+                stateManager.getBandChannel(idx) == ParametricEqualizer.Channel.BOTH
+            } == true
+            paint(it, selBoth)
+        }
         badge?.let {
             when (active) {
                 EqStateManager.ActiveChannel.LEFT -> { it.text = "L"; it.visibility = View.VISIBLE }
@@ -4129,6 +4188,7 @@ class  MainActivity : AppCompatActivity() {
         val rBtn = findViewById<View>(R.id.channelRButton) ?: return
         val a = if (enabled) 1.0f else 0.4f
         lBtn.alpha = a; rBtn.alpha = a
+        findViewById<View>(R.id.channelBothButton)?.alpha = a
     }
 
     /** Rebind the graph + band toggles + input widgets after the active EQ

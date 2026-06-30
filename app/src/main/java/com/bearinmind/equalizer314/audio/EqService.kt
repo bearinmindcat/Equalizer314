@@ -26,6 +26,9 @@ class EqService : Service() {
         private const val CHANNEL_ID = "eq_service_channel"
         private const val NOTIFICATION_ID = 1
         const val ACTION_STOP = "com.bearinmind.equalizer314.STOP_EQ"
+        /** Re-evaluate the notification (e.g. after the "Hide notification"
+         *  setting changes while the EQ is off) — issue #58. */
+        const val ACTION_REFRESH_NOTIFICATION = "com.bearinmind.equalizer314.REFRESH_NOTIFICATION"
         /** Tile-side counterpart to [ACTION_STOP]. Loads the persisted
          *  EQ state and starts DynamicsProcessing without needing
          *  MainActivity to be running. */
@@ -501,6 +504,13 @@ class EqService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
+            ACTION_REFRESH_NOTIFICATION -> {
+                // Apply a changed "Hide notification" setting right away. Only
+                // meaningful if the service is already running; never forces
+                // foreground (started via startService, no FGS contract).
+                updateNotification()
+                return START_NOT_STICKY
+            }
             ACTION_STOP -> {
                 dynamicsManager.stop()
                 sessionEffects?.releaseAll()
@@ -919,6 +929,18 @@ class EqService : Service() {
      *  for the next volume tick or route change. */
     fun updateNotification() {
         val nm = getSystemService(NotificationManager::class.java)
+        // Issue #58: optionally hide the notification entirely while the EQ is
+        // off (drop foreground + cancel). It comes back when DP starts again
+        // (startEq re-enters foreground).
+        if (!dynamicsManager.isActive && EqPreferencesManager(this).getHideNotificationWhenOff()) {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                else @Suppress("DEPRECATION") stopForeground(true)
+            } catch (_: Exception) {}
+            nm.cancel(NOTIFICATION_ID)
+            return
+        }
         nm.notify(NOTIFICATION_ID, buildNotification())
     }
 

@@ -286,6 +286,12 @@ class EqPreferencesManager(context: Context) {
     // choice once they toggle it, so turning it off stays off.
     fun getAutoGainEnabled(): Boolean = prefs.getBoolean("autoGainEnabled", true)
 
+    // Issue #58: when on, the foreground-service notification is removed while
+    // the EQ is powered off, and reappears when it's turned back on. Default
+    // off keeps the always-present notification (with its Turn On affordance).
+    fun setHideNotificationWhenOff(enabled: Boolean) { prefs.edit().putBoolean("hideNotifWhenOff", enabled).apply() }
+    fun getHideNotificationWhenOff(): Boolean = prefs.getBoolean("hideNotifWhenOff", false)
+
     // Limiter
     fun saveLimiterEnabled(enabled: Boolean) { prefs.edit().putBoolean("limiterEnabled", enabled).apply() }
     fun getLimiterEnabled(): Boolean = prefs.getBoolean("limiterEnabled", false)

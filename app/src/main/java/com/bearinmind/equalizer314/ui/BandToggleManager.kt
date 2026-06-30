@@ -191,6 +191,9 @@ class BandToggleManager(
         eq.insertBand(insertPos, newFreq, 0f, BiquadFilter.FilterType.BELL)
         state.bandSlots.add(insertPos, newSlot)
         state.displayToBandIndex = (0 until eq.getBandCount()).toList()
+        // New bands default to BOTH (tethered): create the synced twin in the
+        // other channel so it really applies to both right away (issue #53).
+        state.ensureBothTwin(insertPos)
 
         state.selectedBandIndex?.let { sel ->
             if (insertPos <= sel) state.selectedBandIndex = sel + 1

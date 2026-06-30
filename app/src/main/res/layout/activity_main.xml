@@ -376,6 +376,31 @@
                             app:strokeWidth="1dp"
                             android:contentDescription="Right channel" />
 
+                        <!-- "Both" — tethers the currently-selected band to both
+                             channels (issue #53). Pops out left of L with the
+                             L/R buttons; positioned in code. -->
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/channelBothButton"
+                            style="?attr/materialButtonOutlinedStyle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="top|start"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:insetLeft="0dp"
+                            android:insetRight="0dp"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            android:padding="3dp"
+                            android:text="Both"
+                            android:textColor="?attr/colorOnSurfaceVariant"
+                            android:textSize="12sp"
+                            android:visibility="gone"
+                            app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
+                            app:strokeColor="?attr/colorOutline"
+                            app:strokeWidth="1dp"
+                            android:contentDescription="Tether selected band to both channels" />
+
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/resetButton"
                             style="?attr/materialButtonOutlinedStyle"

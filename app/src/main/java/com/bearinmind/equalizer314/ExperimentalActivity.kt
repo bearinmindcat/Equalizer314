@@ -31,6 +31,7 @@ class ExperimentalActivity : AppCompatActivity() {
 
         setupDpBandCount()
         setupMaxEqBands()
+        setupHideNotification()
 
         // Hide the legacy "Experimental DP Engine" switch row — the
         // experimental path is now the only path. Keeping the view
@@ -63,6 +64,22 @@ class ExperimentalActivity : AppCompatActivity() {
             val cap = if (isChecked) EqStateManager.ABSOLUTE_MAX_BANDS else 16
             eqPrefs.saveMaxEqBands(cap)
             EqStateManager.MAX_BANDS = cap
+        }
+    }
+
+    // Issue #58: hide the foreground-service notification while the EQ is off.
+    private fun setupHideNotification() {
+        val switch = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.expHideNotifSwitch)
+        switch.isChecked = eqPrefs.getHideNotificationWhenOff()
+        switch.setOnCheckedChangeListener { _, isChecked ->
+            eqPrefs.setHideNotificationWhenOff(isChecked)
+            // Apply immediately to the running service.
+            try {
+                startService(
+                    android.content.Intent(this, com.bearinmind.equalizer314.audio.EqService::class.java)
+                        .setAction(com.bearinmind.equalizer314.audio.EqService.ACTION_REFRESH_NOTIFICATION)
+                )
+            } catch (_: Exception) {}
         }
     }
 

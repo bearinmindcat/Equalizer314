@@ -450,6 +450,45 @@ class EqStateManager(
      *  other channel (matched by slot), creating the twin if missing. Called
      *  before each persist/DP push so edits to a Both band mirror over. No-op
      *  outside CSE. */
+    /** "Untether" a BOTH band: keep it on BOTH channels but make the two sides
+     *  independent — each retains its current position — instead of dropping
+     *  the band from the other channel (issue #53). */
+    fun untetherBand(displayIndex: Int) {
+        if (!eqPrefs.getChannelSideEqEnabled() || activeChannel == ActiveChannel.BOTH) return
+        val band = parametricEq.getBand(displayIndex) ?: return
+        if (band.channel != ParametricEqualizer.Channel.BOTH) return
+        val slot = bandSlots.getOrNull(displayIndex) ?: return
+        val activeIsLeft = activeChannel == ActiveChannel.LEFT
+        val otherEq = if (activeIsLeft) rightEq else leftEq
+        val otherSlots = if (activeIsLeft) rightBandSlots else leftBandSlots
+        // Make sure the other channel keeps a copy at the current position.
+        if (otherSlots.indexOf(slot) < 0) mirrorBandTo(otherEq, otherSlots, slot, band)
+        // Retag both sides as single-channel so they're now independent.
+        band.channel = if (activeIsLeft) ParametricEqualizer.Channel.LEFT
+            else ParametricEqualizer.Channel.RIGHT
+        otherSlots.indexOf(slot).takeIf { it >= 0 }?.let { k ->
+            otherEq.getBand(k)?.channel = if (activeIsLeft) ParametricEqualizer.Channel.RIGHT
+                else ParametricEqualizer.Channel.LEFT
+        }
+        persistLeftRightIfCse()
+        if (isProcessing) pushEqUpdate()
+    }
+
+    /** Create the synced twin in the other channel for a freshly-added BOTH
+     *  band (issue #53). Explicit one-time insert (vs. the update-only
+     *  [syncBothBands]) so new bands default to "tethered to both". No-op
+     *  outside CSE or if the band isn't BOTH. */
+    fun ensureBothTwin(displayIndex: Int) {
+        if (!eqPrefs.getChannelSideEqEnabled() || activeChannel == ActiveChannel.BOTH) return
+        val band = parametricEq.getBand(displayIndex) ?: return
+        if (band.channel != ParametricEqualizer.Channel.BOTH) return
+        val slot = bandSlots.getOrNull(displayIndex) ?: return
+        val activeIsLeft = activeChannel == ActiveChannel.LEFT
+        val otherEq = if (activeIsLeft) rightEq else leftEq
+        val otherSlots = if (activeIsLeft) rightBandSlots else leftBandSlots
+        mirrorBandTo(otherEq, otherSlots, slot, band)
+    }
+
     fun syncBothBands() {
         if (!eqPrefs.getChannelSideEqEnabled() || activeChannel == ActiveChannel.BOTH) return
         val activeIsLeft = activeChannel == ActiveChannel.LEFT
@@ -460,7 +499,18 @@ class EqStateManager(
             val b = parametricEq.getBand(i) ?: continue
             if (b.channel != ParametricEqualizer.Channel.BOTH) continue
             val slot = activeSlots.getOrNull(i) ?: continue
-            mirrorBandTo(otherEq, otherSlots, slot, b)
+            // UPDATE the existing twin only — never insert here. Twin creation
+            // happens explicitly in setBandChannel(BOTH); inserting during this
+            // frequently-called sync caused runaway band duplication when slot
+            // sets differed between channels (issue #53).
+            val j = otherSlots.indexOf(slot)
+            if (j >= 0) {
+                otherEq.updateBand(j, b.frequency, b.gain, b.filterType, b.q)
+                otherEq.getBand(j)?.let {
+                    it.enabled = b.enabled
+                    it.channel = ParametricEqualizer.Channel.BOTH
+                }
+            }
         }
     }
 
