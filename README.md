@@ -20,18 +20,18 @@ To start off there is really no "free" and/or "open source" alternatives to Wave
 
 To start off, this app is built off of DynamicsProcessing API you can read more about the documentation and features it offers here (https://developer.android.com/reference/android/media/audiofx/DynamicsProcessing); this is the same API that Poweramp EQ & Wavelet both use but I felt in some aspects they weren't really able to squeeze out the max potential that the API can offer.
 
-As someone who comes from the audio production & IEM world I have a lot of experience understaning what both sides of those worlds want and wanted to be able to take advantage of both to create something that met my creative goals.
+As someone who comes from the audio production & IEM world I have a lot of experience understanding what both sides of those worlds want and wanted to be able to take advantage of both to create something that met my creative goals.
 
 Using the Visualizer API I wanted to give users a way to reliably cross reference *visual* data with *audio* data. This is both useful for the main EQ portion as you can visually reference audio changes you make, but it comes more into play with the 'Limiting' & 'Multiband Compression' sides of the app. While these features are for use in the DynamicsProcessing API; and many apps like Poweramp EQ & Wavelet (who premium locks these features); they just add knobs/sliders in and expect the user to understand exactly how these features work. Without real audio-visual feedback, users aren't really able to take advantage of these features in their full potential. This is the reason why many DAWs and VST Plugins use audio-visual feedback with these functions specifically.
 
-Using Visualizer API with these DynamicsProcessing features; you're really able to get an intimiate audio-visual feedback loop that gives you complete control over your audio framework. Shown below are some screenshots of the Multiband Compression & Limiter and how the Visualizer API functions with the input curves, gr trace curves, & the limiter waveform metering. 
+Using Visualizer API with these DynamicsProcessing features; you're really able to get an intimate audio-visual feedback loop that gives you complete control over your audio framework. Shown below are some screenshots of the Multiband Compression & Limiter and how the Visualizer API functions with the input curves, gr trace curves, & the limiter waveform metering. 
 
 <p align="center">
   <img width="48%" alt="Screenshot (1534)" src="https://github.com/user-attachments/assets/2449b96f-8306-4319-9eb0-ddead8ea84e5" />
   <img width="48%" alt="Screenshot (1535)" src="https://github.com/user-attachments/assets/720725c4-6205-456c-ad83-c2667757927d" />
 </p>
 
-For a lot of other funtions that don't use the Visualizer API, I also wanted to still give correct visual feedback (same style implementation that many DAWs use) for such other various functions like the compressor & attack/release visuals. You can independently change these values with the slider and by moving you finger along the line/graph itself. This occurs in other places in the app as well, but these are two good examples of this.
+For a lot of other functions that don't use the Visualizer API, I also wanted to still give correct visual feedback (same style implementation that many DAWs use) for such other various functions like the compressor & attack/release visuals. You can independently change these values with the slider and by moving you finger along the line/graph itself. This occurs in other places in the app as well, but these are two good examples of this.
 
 <p align="center">
   <img width="48%" alt="Screenshot (1545)" src="https://github.com/user-attachments/assets/7c38d5b5-ca3e-4585-aad0-b35c8f57c610" />
@@ -67,7 +67,7 @@ AudioFlinger (JamesDSP & ViPER4Android)
 
 To reference, lots of apps run AutoEQ (https://github.com/jaakkopasanen/AutoEq/wiki/Choosing-an-Equalizer-App); including Wavelet & Poweramp EQ. What both those apps don't offer are either "free access to auto eq" (come on wavelet....) & using the built in AutoEQ algorithm from the AutoEQ Github which you can take a look at here (https://github.com/jaakkopasanen/AutoEq/wiki/How-Does-AutoEq-Work%3F). This algorithm is done on the "Generate Custom EQ" section of the app; you need a "measurement" & "target" which both can be taken from squig.link along various resources online.
 
-On top of this I would also like to mention maintaining homogenity between preset sharing among popular equalization "applications"; this why I went with APO as the main export method, rather than having an independent export method such as what Poweramp EQ & Wavelet use (Also as shown below in the "Generated EQ" portion). This would allow you to transfer the exported APO file to your desktop equalization software (EqualizerAPO) without running into conversion issues. I was thinking about creating a conversion software in the app or on this github in case people want to trasnfer over from Wavelet & Poweramp EQ, they can with ease. It might be something I will implement later if a lot of people request.
+On top of this I would also like to mention maintaining homogeneity between preset sharing among popular equalization "applications"; this why I went with APO as the main export method, rather than having an independent export method such as what Poweramp EQ & Wavelet use (Also as shown below in the "Generated EQ" portion). This would allow you to transfer the exported APO file to your desktop equalization software (EqualizerAPO) without running into conversion issues. I was thinking about creating a conversion software in the app or on this Github in case people want to transfer over from Wavelet & Poweramp EQ, they can with ease. It might be something I will implement later if a lot of people request.
 
 <p align="center">
   <img width="48%" alt="Screenshot (1542)" src="https://github.com/user-attachments/assets/8150ad20-6170-42ae-aa02-4c6298f536ea" />
@@ -103,9 +103,9 @@ These same issues occur with Wavelet, RootlessJamesDSP, Poweramp EQ; and most ot
 
 All of these acknowledgements are mentioned in code comments, but I wanted to also include them here as well, because I think these are all good resources to read up on.
 
-- [Audio EQ Cookbook](https://www.w3.org/TR/audio-eq-cookbook/) - biquad math for the parametric eq.
-- [Matched Second Order Digital Filters](https://www.vicanek.de/articles/BiquadFits.pdf) — bell filter math for parametric eq.
-- [AutoEq](https://github.com/jaakkopasanen/AutoEq) - used for target curve/measurement fitting + autoeq presets.
+- [Audio EQ Cookbook](https://www.w3.org/TR/audio-eq-cookbook/) - biquad math for the parametric EQ.
+- [Matched Second Order Digital Filters](https://www.vicanek.de/articles/BiquadFits.pdf) — bell filter math for parametric EQ.
+- [AutoEq](https://github.com/jaakkopasanen/AutoEq) - used for target curve/measurement fitting + AutoEq presets.
 - [*Digital Dynamic Range Compressor
   Design*](https://www.eecs.qmul.ac.uk/~josh/documents/2012/GiannoulisMassbergReiss-dynamicrangecompression-JAES2012.pdf) - used for hard/soft knee transfer function for the multiband compression
 - [ITU-R BS.1770](https://www.itu.int/rec/R-REC-BS.1770) - used LUFS measurements
