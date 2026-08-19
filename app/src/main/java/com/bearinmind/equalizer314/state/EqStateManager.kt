@@ -805,7 +805,7 @@ class EqStateManager(
 
     fun stopProcessing(animatePower: (Boolean) -> Unit) {
         animatePower(false)
-        EqService.stop(context)
+        EqService.stop(context, silentToast = true)
         if (serviceBound) {
             try { context.unbindService(serviceConnection) } catch (_: Exception) {}
             serviceBound = false

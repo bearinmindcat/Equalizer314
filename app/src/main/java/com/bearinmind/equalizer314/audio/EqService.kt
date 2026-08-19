@@ -57,6 +57,7 @@ class EqService : Service() {
         const val ACTION_REAPPLY_APP_BINDING = "com.bearinmind.equalizer314.REAPPLY_APP_BINDING"
         const val EXTRA_APP_PACKAGE = "app_package"
         const val ACTION_EQ_STOPPED = "com.bearinmind.equalizer314.EQ_STOPPED"
+        const val EXTRA_SILENT_TOAST = "silentToast"
         /** Broadcast on any successful headless start (QS tile etc.) so a
          *  foregrounded MainActivity can re-sync its UI. */
         const val ACTION_EQ_STARTED = "com.bearinmind.equalizer314.EQ_STARTED"
@@ -148,11 +149,12 @@ class EqService : Service() {
             }
         }
 
-        fun stop(context: Context) {
+        fun stop(context: Context, silentToast: Boolean = false) {
             // ACTION_STOP (not stopService) keeps the service alive so the
             // notification flips to "Offline + Turn On" instead of vanishing.
             val intent = Intent(context, EqService::class.java)
                 .setAction(ACTION_STOP)
+                .putExtra(EXTRA_SILENT_TOAST, silentToast)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
             } else {
@@ -547,7 +549,8 @@ class EqService : Service() {
                 // when MainActivity isn't around to run eqStoppedReceiver.
                 EqPreferencesManager(this).savePowerState(false)
                 setDpRunning(false)
-                showDpStateToast(started = false)
+                if (intent?.getBooleanExtra(EXTRA_SILENT_TOAST, false) != true)
+                    showDpStateToast(started = false)
                 sendBroadcast(Intent(ACTION_EQ_STOPPED).setPackage(packageName))
                 // Service stays alive + foreground as "Offline + Turn On";
                 // Turn On loops through ACTION_AUTO_START.
