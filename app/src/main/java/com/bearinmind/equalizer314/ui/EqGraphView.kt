@@ -61,6 +61,8 @@ class EqGraphView @JvmOverloads constructor(
     var showCurveFill = false
     // Per-band curve overlay (issue #40): each enabled band's response as a thin
     // line + translucent fill in the band's color (grey fallback), under the summed curve.
+    var showGainHeat = false
+        set(value) { field = value; invalidate() }
     var showBandCurves = false
         set(value) {
             field = value
@@ -745,6 +747,28 @@ class EqGraphView @JvmOverloads constructor(
         canvas.drawPath(path, paint)
     }
 
+    private var heatShader: android.graphics.LinearGradient? = null
+    private var heatShaderKey = 0f
+    private fun heatPaint(base: Paint, vPad: Float, graphHeight: Float): Paint {
+        val key = vPad + graphHeight * 31f + maxGain * 7f
+        if (heatShader == null || heatShaderKey != key) {
+            val pos = { g: Float -> ((maxGain - g) / (maxGain - minGain)).coerceIn(0f, 1f) }
+            heatShader = android.graphics.LinearGradient(
+                0f, vPad, 0f, vPad + graphHeight,
+                intArrayOf(
+                    0xFFE53935.toInt(), 0xFFE53935.toInt(),
+                    0xFFFFEB3B.toInt(), 0xFF66BB6A.toInt(),
+                    0xFF66BB6A.toInt(), 0xFF26C6DA.toInt(),
+                    0xFF29B6F6.toInt(), 0xFF1565C0.toInt()
+                ),
+                floatArrayOf(0f, pos(12f), pos(6f), pos(1f), pos(-1f), pos(-5f), pos(-9f), 1f),
+                android.graphics.Shader.TileMode.CLAMP
+            )
+            heatShaderKey = key
+        }
+        return Paint(base).apply { shader = heatShader }
+    }
+
     private fun drawCurve(canvas: Canvas, vPad: Float, graphWidth: Float, graphHeight: Float) {
         val eq = parametricEq ?: return
         if (bandPoints.isEmpty()) return
@@ -854,7 +878,9 @@ class EqGraphView @JvmOverloads constructor(
             fillPath.lineTo(graphWidth, zeroY)
             fillPath.lineTo(0f, zeroY)
             fillPath.close()
-            val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            val fillPaint = if (showGainHeat) heatPaint(curvePaint, vPad, graphHeight).apply {
+                style = Paint.Style.FILL; alpha = 64
+            } else Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = 0x30AAAAAA.toInt()  // translucent grey fill
                 style = Paint.Style.FILL
             }
@@ -869,7 +895,7 @@ class EqGraphView @JvmOverloads constructor(
             }
             canvas.drawPath(path, dottedPaint)
         } else {
-            canvas.drawPath(path, curvePaint)
+            canvas.drawPath(path, if (showGainHeat) heatPaint(curvePaint, vPad, graphHeight) else curvePaint)
         }
         if (showSaturated && showSaturationCurve) {
             canvas.drawPath(saturatedPath, saturatedCurvePaint)

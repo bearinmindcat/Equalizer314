@@ -1031,6 +1031,17 @@ class  MainActivity : AppCompatActivity() {
             fillBtn0.minimumWidth = 0; fillBtn0.minimumHeight = 0
             fillBtn0.setPadding(0, 0, 0, 0)
 
+            val heatBtn0 = findViewById<com.google.android.material.button.MaterialButton>(R.id.gainHeatToggle)
+            val heatLp = heatBtn0.layoutParams as android.widget.FrameLayout.LayoutParams
+            heatLp.width = specWidth
+            heatLp.height = btnHeight
+            heatLp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+            heatLp.leftMargin = gapPx + (specWidth + gapPx) * 2
+            heatLp.topMargin = btnTop + btnHeight + gapPx
+            heatBtn0.layoutParams = heatLp
+            heatBtn0.minimumWidth = 0; heatBtn0.minimumHeight = 0
+            heatBtn0.setPadding(0, 0, 0, 0)
+
             // Save preset button: right next to eye button
             val saveLeft = gapPx + specWidth + gapPx
             val saveLp = saveBtn.layoutParams as android.widget.FrameLayout.LayoutParams
@@ -1968,6 +1979,7 @@ class  MainActivity : AppCompatActivity() {
         var viewOptionsOpen = false
         val onOffBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.bandPointsOnOffBtn)
         val fillBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.bandFillToggle)
+        val heatBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.gainHeatToggle)
 
         fun paintLit(btn: com.google.android.material.button.MaterialButton, lit: Boolean) {
             if (lit) {
@@ -1990,6 +2002,8 @@ class  MainActivity : AppCompatActivity() {
         onOffBtn.text = "ON"
         paintLit(onOffBtn, true)
         paintLit(fillBtn, false)
+        eqGraphView.showGainHeat = eqPrefs.getGraphHeat()
+        paintLit(heatBtn, eqGraphView.showGainHeat)
 
         bandPtsBtn.setOnClickListener {
             viewOptionsOpen = !viewOptionsOpen
@@ -1997,20 +2011,27 @@ class  MainActivity : AppCompatActivity() {
             if (viewOptionsOpen) {
                 onOffBtn.visibility = android.view.View.VISIBLE
                 fillBtn.visibility = android.view.View.VISIBLE
-                onOffBtn.bringToFront(); fillBtn.bringToFront()
+                heatBtn.visibility = android.view.View.VISIBLE
+                onOffBtn.bringToFront(); fillBtn.bringToFront(); heatBtn.bringToFront()
                 onOffBtn.alpha = 0f; onOffBtn.scaleX = 0.3f; onOffBtn.scaleY = 0.3f; onOffBtn.translationY = offsetY
                 fillBtn.alpha = 0f; fillBtn.scaleX = 0.3f; fillBtn.scaleY = 0.3f; fillBtn.translationY = offsetY
+                heatBtn.alpha = 0f; heatBtn.scaleX = 0.3f; heatBtn.scaleY = 0.3f; heatBtn.translationY = offsetY
                 onOffBtn.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f)
                     .setDuration(250).setInterpolator(android.view.animation.OvershootInterpolator(1.0f)).start()
                 fillBtn.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f)
                     .setDuration(250).setStartDelay(40).setInterpolator(android.view.animation.OvershootInterpolator(1.0f)).start()
+                heatBtn.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f)
+                    .setDuration(250).setStartDelay(80).setInterpolator(android.view.animation.OvershootInterpolator(1.0f)).start()
                 paintLit(bandPtsBtn, true)
             } else {
-                fillBtn.animate().alpha(0f).scaleX(0.3f).scaleY(0.3f).translationY(offsetY)
+                heatBtn.animate().alpha(0f).scaleX(0.3f).scaleY(0.3f).translationY(offsetY)
                     .setDuration(200).setInterpolator(android.view.animation.AccelerateInterpolator())
+                    .withEndAction { heatBtn.visibility = android.view.View.GONE; heatBtn.translationY = 0f }.start()
+                fillBtn.animate().alpha(0f).scaleX(0.3f).scaleY(0.3f).translationY(offsetY)
+                    .setDuration(200).setStartDelay(40).setInterpolator(android.view.animation.AccelerateInterpolator())
                     .withEndAction { fillBtn.visibility = android.view.View.GONE; fillBtn.translationY = 0f }.start()
                 onOffBtn.animate().alpha(0f).scaleX(0.3f).scaleY(0.3f).translationY(offsetY)
-                    .setDuration(200).setStartDelay(40).setInterpolator(android.view.animation.AccelerateInterpolator())
+                    .setDuration(200).setStartDelay(80).setInterpolator(android.view.animation.AccelerateInterpolator())
                     .withEndAction { onOffBtn.visibility = android.view.View.GONE; onOffBtn.translationY = 0f }.start()
                 paintLit(bandPtsBtn, false)
                 bandPtsBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
@@ -2031,6 +2052,13 @@ class  MainActivity : AppCompatActivity() {
             bandCurvesVisible = !bandCurvesVisible
             eqGraphView.showBandCurves = bandCurvesVisible
             paintLit(fillBtn, bandCurvesVisible)
+        }
+
+        heatBtn.setOnClickListener {
+            val on = !eqGraphView.showGainHeat
+            eqGraphView.showGainHeat = on
+            eqPrefs.saveGraphHeat(on)
+            paintLit(heatBtn, on)
         }
         // Reset button: reset EQ to flat
         resetBtn.setOnClickListener {

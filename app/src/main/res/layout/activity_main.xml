@@ -241,6 +241,27 @@
                             app:strokeWidth="1dp"
                             android:contentDescription="Toggle per-band curves" />
 
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/gainHeatToggle"
+                            style="?attr/materialButtonOutlinedStyle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="top|start"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            android:padding="3dp"
+                            android:visibility="gone"
+                            app:icon="@drawable/ic_ear_sound"
+                            app:iconGravity="textStart"
+                            app:iconPadding="0dp"
+                            app:iconTint="?attr/colorOnSurface"
+                            app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
+                            app:strokeColor="?attr/colorOutline"
+                            app:strokeWidth="1dp"
+                            android:contentDescription="Toggle gain heat colors" />
+
 <com.google.android.material.button.MaterialButton
                             android:id="@+id/savePresetButton"
                             style="?attr/materialButtonOutlinedStyle"

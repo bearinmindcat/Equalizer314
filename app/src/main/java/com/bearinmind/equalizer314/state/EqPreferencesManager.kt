@@ -306,6 +306,9 @@ class EqPreferencesManager(context: Context) {
     fun saveMbcVolumeCompEnabled(enabled: Boolean) { prefs.edit().putBoolean("mbcVolumeComp", enabled).apply() }
     fun getMbcVolumeCompEnabled(): Boolean = prefs.getBoolean("mbcVolumeComp", false)
 
+    fun saveGraphHeat(enabled: Boolean) { prefs.edit().putBoolean("graphHeat", enabled).apply() }
+    fun getGraphHeat(): Boolean = prefs.getBoolean("graphHeat", false)
+
     fun saveDpCompatMode(enabled: Boolean) { prefs.edit().putBoolean("dpCompatMode", enabled).apply() }
     fun getDpCompatMode(): Boolean =
         prefs.getBoolean("dpCompatMode", defaultCompatMode())
