@@ -55,16 +55,17 @@ class DynamicsProcessingManager {
         // prefs-driven setup before start().
         @Volatile
         var interleaveEnabled = false
-        // Compatibility Mode: some HALs (Pixel, some MediaTek/Samsung) render
-        // only ~32 effective DP bands regardless of the count requested — a
-        // 128-band curve gets mangled. Requesting 32 directly makes our
-        // cutoffs land 1:1 on what the HAL actually renders (Wavelet's
-        // "legacy mode" does the same). Note: Config.getPreEqBandCount()
-        // reports the REQUESTED count, not the HAL's real limit, so this
-        // can't be auto-detected on the classic AudioEffect path.
+        // Compatibility Mode: mirrors Wavelet's "aidl_mode" profile for the
+        // AIDL-HAL generation (Pixel / Android 15+): 32 Pre-EQ bands AND a
+        // 10 ms frame, Post-EQ never allocated. The latency window and
+        // interleave settings stay saved but are inert while it's on.
         const val COMPAT_BAND_COUNT = 32
+        const val COMPAT_FRAME_MS = 10f
         @Volatile
         var compatMode = false
+        // Creation-time effective values — compat overrides the user settings.
+        val effectiveFrameMs: Float get() = if (compatMode) COMPAT_FRAME_MS else frameDurationMs
+        val effectiveInterleave: Boolean get() = !compatMode && interleaveEnabled
     }
 
     private var dynamicsProcessing: DynamicsProcessing? = null
@@ -158,7 +159,7 @@ class DynamicsProcessingManager {
         gainHold = false
         // Keep the converter's model of DP's FFT geometry in sync so its
         // deconvolution matches the engine (issue #26).
-        ParametricToDpConverter.frameDurationMs = frameDurationMs
+        ParametricToDpConverter.frameDurationMs = effectiveFrameMs
         // Compat Mode → 32 bands to match band-limited HALs; else 128 (the
         // AIDL ceiling; requesting more throws) with 127 paranoid fallback.
         val bandLadder = if (compatMode) intArrayOf(COMPAT_BAND_COUNT) else intArrayOf(128, 127)
@@ -169,7 +170,7 @@ class DynamicsProcessingManager {
         }
         // Paranoid fallback: some OEM could reject a config with the Post-EQ
         // stage allocated. Retry the whole ladder single-stage.
-        if (interleaveEnabled) {
+        if (effectiveInterleave) {
             Log.w(TAG, "Retrying without Pre+Post interleave")
             interleaveEnabled = false
             for (tryBands in bandLadder) {
@@ -183,8 +184,8 @@ class DynamicsProcessingManager {
 
     private fun startWithBandCount(eq: ParametricEqualizer, bandCount: Int): Boolean {
         val variant = DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION
-        val useInterleave = interleaveEnabled
-        Log.d(TAG, "DP variant=FREQUENCY bands=$bandCount frame=${frameDurationMs}ms interleave=$useInterleave")
+        val useInterleave = effectiveInterleave
+        Log.d(TAG, "DP variant=FREQUENCY bands=$bandCount frame=${effectiveFrameMs}ms interleave=$useInterleave compat=$compatMode")
 
         // MBC stage: always allocate ≥1 band (dummy disabled passthrough when
         // MBC off). Wavelet does this regardless of MBC state — the stage
@@ -206,7 +207,7 @@ class DynamicsProcessingManager {
         // (~94 Hz bins) crushed any feature narrower than ~2 bins — a Q=3
         // bell at 300 Hz rendered +1.4 dB instead of +4 (REW-verified,
         // issue #26). See the companion constants for the 80/40 ms choice.
-        configBuilder.setPreferredFrameDuration(frameDurationMs)
+        configBuilder.setPreferredFrameDuration(effectiveFrameMs)
         val config = configBuilder.build()
 
         try {
@@ -274,7 +275,7 @@ class DynamicsProcessingManager {
                 val actual = dynamicsProcessing?.config
                 Log.i(TAG, "DP config readback: variant=${actual?.variant} " +
                     "frameDuration=${actual?.preferredFrameDuration}ms " +
-                    "(requested ${frameDurationMs}ms) " +
+                    "(requested ${effectiveFrameMs}ms) " +
                     "preEqBands=${actual?.preEqBandCount} (requested $bandCount) " +
                     "postEqBands=${actual?.postEqBandCount} (interleave=$useInterleave) " +
                     "converter: fs=${ParametricToDpConverter.deviceSampleRateHz}Hz")

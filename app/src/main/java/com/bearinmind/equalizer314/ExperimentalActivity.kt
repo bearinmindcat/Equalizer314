@@ -151,12 +151,24 @@ class ExperimentalActivity : AppCompatActivity() {
     private fun setupCompatMode() {
         val switch = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.expCompatModeSwitch)
         switch.isChecked = eqPrefs.getDpCompatMode()
+        syncCompatDependents()
         switch.setOnCheckedChangeListener { _, isChecked ->
             eqPrefs.saveDpCompatMode(isChecked)
             com.bearinmind.equalizer314.audio.DynamicsProcessingManager.compatMode = isChecked
             requestDpRecycle()
             setupDpBandCount()
+            syncCompatDependents()
         }
+    }
+
+    // Compat mode overrides the latency window + interleave — grey those cards out while it's on.
+    private fun syncCompatDependents() {
+        val on = eqPrefs.getDpCompatMode()
+        val alpha = if (on) 0.4f else 1f
+        findViewById<android.view.View>(R.id.expFrameCard).alpha = alpha
+        findViewById<android.view.View>(R.id.expInterleaveCard).alpha = alpha
+        findViewById<com.google.android.material.slider.Slider>(R.id.expFrameSlider).isEnabled = !on
+        findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.expInterleaveSwitch).isEnabled = !on
     }
 
     // MBC thresholds follow the media volume (applies live via EqService).
