@@ -28,8 +28,10 @@ class GrTraceView @JvmOverloads constructor(
         setLayerType(LAYER_TYPE_SOFTWARE, null)
     }
 
-    private val maxBands = 6
+    private val maxBands = 8
+    // Clamped so a direct set can never index past the fixed-size arrays.
     var numBands = 3
+        set(value) { field = value.coerceIn(1, maxBands) }
     var selectedBand = 0
 
     // Per-band thresholds (draggable)
@@ -451,7 +453,16 @@ class GrTraceView @JvmOverloads constructor(
         return super.onTouchEvent(event)
     }
 
-    fun updateNumBands(n: Int) { numBands = n.coerceIn(1, maxBands) }
+    fun updateNumBands(n: Int) {
+        val newN = n.coerceIn(1, maxBands)
+        // Clear history rows newly exposed by a count increase (stale ghost traces).
+        if (newN > numBands) {
+            for (b in numBands until newN) {
+                grHistory[b].fill(0f); levelHistory[b].fill(-80f); gateGrHistory[b].fill(0f)
+            }
+        }
+        numBands = newN
+    }
     fun release() {
         for (buf in grHistory) buf.fill(0f)
         for (buf in levelHistory) buf.fill(-60f)

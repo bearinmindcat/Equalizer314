@@ -144,7 +144,8 @@ class MbcGainComputer(private val numBands: Int) {
         if (crossoverFreqs.size != numBands - 1) {
             crossoverFreqs = FloatArray(numBands - 1)
         }
-        for (i in 0 until numBands - 1) {
+        // Bound by bandSettings.size — the live band count can shrink under this computer's numBands.
+        for (i in 0 until (numBands - 1).coerceAtMost(bandSettings.size)) {
             crossoverFreqs[i] = bandSettings[i].highCutoff
         }
 

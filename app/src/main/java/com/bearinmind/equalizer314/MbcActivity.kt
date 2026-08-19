@@ -291,17 +291,24 @@ class MbcActivity : AppCompatActivity() {
                 graphView.visibility = android.view.View.GONE
                 grTraceView.visibility = android.view.View.VISIBLE
                 updateGraphToggleStyle(false)
-                // Set crossovers + thresholds so grid elements render even without spectrum
-                grTraceView.crossoverFreqs = crossoverFreqs.copyOf()
-                grTraceView.numBands = bandCount
-                grTraceView.selectedBand = selectedBand
-                for (i in 0 until bandCount) {
-                    grTraceView.setThreshold(i, bands[i].threshold)
-                }
-                grTraceView.invalidate()
-                startGrTraceUpdates()
+                refreshGrTraceState()
             }
         }
+    }
+
+    // Sync the GR trace view + rebuild the gain computer; called on mode entry and
+    // on band add/remove while the mode is active (stale counts crashed; issue #76).
+    private fun refreshGrTraceState() {
+        if (!isGrTraceMode) return
+        grTraceView.updateNumBands(bandCount)
+        grTraceView.crossoverFreqs = crossoverFreqs.copyOf()
+        grTraceView.selectedBand = selectedBand
+        grTraceView.customBandColors = IntArray(bandCount) { mbcBandColors[it] ?: 0 }
+        for (i in 0 until bandCount) {
+            grTraceView.setThreshold(i, bands[i].threshold)
+        }
+        grTraceView.invalidate()
+        startGrTraceUpdates()
     }
 
     // Feed GR values to the trace view from MbcGainComputer
@@ -1473,6 +1480,7 @@ class MbcActivity : AppCompatActivity() {
         // RANGE FEATURE COMMENTED OUT
         // graphView.mbcBandRanges = FloatArray(bandCount) { bands[it].range }
         graphView.invalidate()
+        refreshGrTraceState()
 
         if (isAnimating) {
             buildBandTabs()
@@ -1667,6 +1675,7 @@ class MbcActivity : AppCompatActivity() {
         if (selectedBand >= bandCount) selectedBand = bandCount - 1
         buildBandTabs()
         selectBand(selectedBand)
+        refreshGrTraceState()
     }
 
     private fun updateMbcColorBox() {
