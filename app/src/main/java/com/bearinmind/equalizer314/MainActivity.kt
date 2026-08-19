@@ -563,8 +563,8 @@ class  MainActivity : AppCompatActivity() {
                 else -> eqPrefs.savePowerState(false)
             }
             stateManager.pendingStartEq = false
-            // Also re-lock the Experimental settings on every fresh launch
-            eqPrefs.saveExperimentalUnlocked(false)
+            // Experimental lock retired (see LegacyFeatures.kt).
+            // eqPrefs.saveExperimentalUnlocked(false)
             // Force experimental DP band count to safe default 128 on fresh launch.
             // (Auto-gain is a real, on-by-default feature — not forced off here.)
             eqPrefs.saveDpBandCount(128)
@@ -2702,25 +2702,11 @@ class  MainActivity : AppCompatActivity() {
             overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
         }
 
-        // Experimental lock button — toggles locked/unlocked state
-        val experimentalLockButton = findViewById<ImageButton>(R.id.experimentalLockButton)
+        // Experimental lock retired (see LegacyFeatures.kt) — card is always tappable.
+        findViewById<ImageButton>(R.id.experimentalLockButton).visibility = View.GONE
         val experimentalCard = findViewById<View>(R.id.experimentalCard)
-        fun applyExperimentalLockState() {
-            val unlocked = eqPrefs.getExperimentalUnlocked()
-            experimentalLockButton.setImageResource(
-                if (unlocked) R.drawable.ic_lock_open else R.drawable.ic_lock
-            )
-            experimentalCard.isClickable = unlocked
-            experimentalCard.alpha = if (unlocked) 1f else 0.6f
-        }
-        applyExperimentalLockState()
-        experimentalLockButton.setOnClickListener {
-            val newState = !eqPrefs.getExperimentalUnlocked()
-            eqPrefs.saveExperimentalUnlocked(newState)
-            applyExperimentalLockState()
-        }
+        experimentalCard.alpha = 1f
         experimentalCard.setOnClickListener {
-            if (!eqPrefs.getExperimentalUnlocked()) return@setOnClickListener
             startActivity(Intent(this, ExperimentalActivity::class.java))
             overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
         }

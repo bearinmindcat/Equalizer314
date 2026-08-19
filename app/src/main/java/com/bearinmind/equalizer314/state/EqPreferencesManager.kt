@@ -306,6 +306,22 @@ class EqPreferencesManager(context: Context) {
     fun saveMbcVolumeCompEnabled(enabled: Boolean) { prefs.edit().putBoolean("mbcVolumeComp", enabled).apply() }
     fun getMbcVolumeCompEnabled(): Boolean = prefs.getBoolean("mbcVolumeComp", false)
 
+    // Which info lines show in the notification body (issue #65).
+    fun saveNotifShowVolume(b: Boolean) { prefs.edit().putBoolean("notifShowVolume", b).apply() }
+    fun getNotifShowVolume(): Boolean = prefs.getBoolean("notifShowVolume", true)
+    fun saveNotifShowMode(b: Boolean) { prefs.edit().putBoolean("notifShowMode", b).apply() }
+    fun getNotifShowMode(): Boolean = prefs.getBoolean("notifShowMode", true)
+    fun saveNotifShowPreset(b: Boolean) { prefs.edit().putBoolean("notifShowPreset", b).apply() }
+    fun getNotifShowPreset(): Boolean = prefs.getBoolean("notifShowPreset", true)
+    fun saveNotifShowDevice(b: Boolean) { prefs.edit().putBoolean("notifShowDevice", b).apply() }
+    fun getNotifShowDevice(): Boolean = prefs.getBoolean("notifShowDevice", true)
+    fun saveNotifLineOrder(order: List<String>) { prefs.edit().putString("notifLineOrder", order.joinToString(",")).apply() }
+    fun getNotifLineOrder(): List<String> {
+        val def = listOf("volume", "mode", "preset", "device")
+        val saved = prefs.getString("notifLineOrder", null)?.split(",")?.filter { it in def } ?: return def
+        return saved + def.filter { it !in saved }
+    }
+
     fun saveGraphHeat(enabled: Boolean) { prefs.edit().putBoolean("graphHeat", enabled).apply() }
     fun getGraphHeat(): Boolean = prefs.getBoolean("graphHeat", false)
 

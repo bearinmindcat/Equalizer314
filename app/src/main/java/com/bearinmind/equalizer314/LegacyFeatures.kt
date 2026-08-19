@@ -197,4 +197,44 @@ object LegacyFeatures {
     // un-hide the button, restore the listener and the two override blocks
     // to bring the mode back.
     // =====================================================================
+
+    // =====================================================================
+    // Experimental settings lock (settings drawer)
+    // Retired 2026-08-19 — extra tap for no real gain; card is now always
+    // tappable and the lock ImageButton is hidden (visibility = GONE).
+    //
+    // What it was: a padlock ImageButton (experimentalLockButton) next to
+    // the Experimental card; the card was unclickable + dimmed (alpha 0.6)
+    // until the lock was tapped open, and every fresh launch re-locked it.
+    //
+    // Original MainActivity wiring:
+    //
+    //    val experimentalLockButton = findViewById<ImageButton>(R.id.experimentalLockButton)
+    //    val experimentalCard = findViewById<View>(R.id.experimentalCard)
+    //    fun applyExperimentalLockState() {
+    //        val unlocked = eqPrefs.getExperimentalUnlocked()
+    //        experimentalLockButton.setImageResource(
+    //            if (unlocked) R.drawable.ic_lock_open else R.drawable.ic_lock
+    //        )
+    //        experimentalCard.isClickable = unlocked
+    //        experimentalCard.alpha = if (unlocked) 1f else 0.6f
+    //    }
+    //    applyExperimentalLockState()
+    //    experimentalLockButton.setOnClickListener {
+    //        val newState = !eqPrefs.getExperimentalUnlocked()
+    //        eqPrefs.saveExperimentalUnlocked(newState)
+    //        applyExperimentalLockState()
+    //    }
+    //    experimentalCard.setOnClickListener {
+    //        if (!eqPrefs.getExperimentalUnlocked()) return@setOnClickListener
+    //        ...startActivity...
+    //    }
+    //
+    // Plus the fresh-launch re-lock in onCreate:
+    //    eqPrefs.saveExperimentalUnlocked(false)
+    //
+    // Note: experimentalLockButton (layout), ic_lock / ic_lock_open, and the
+    // saveExperimentalUnlocked/getExperimentalUnlocked prefs all remain —
+    // un-hide the button and restore the wiring above to bring it back.
+    // =====================================================================
 }

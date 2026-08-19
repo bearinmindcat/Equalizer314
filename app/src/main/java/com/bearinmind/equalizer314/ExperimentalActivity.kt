@@ -31,7 +31,7 @@ class ExperimentalActivity : AppCompatActivity() {
 
         setupDpBandCount()
         setupMaxEqBands()
-        setupHideNotification()
+        setupNotifInfo()
         setupFrameSlider()
         setupInterleave()
         setupCompatMode()
@@ -187,20 +187,6 @@ class ExperimentalActivity : AppCompatActivity() {
     }
 
     // Issue #58: hide the foreground-service notification while the EQ is off.
-    private fun setupHideNotification() {
-        val switch = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.expHideNotifSwitch)
-        switch.isChecked = eqPrefs.getHideNotificationWhenOff()
-        switch.setOnCheckedChangeListener { _, isChecked ->
-            eqPrefs.setHideNotificationWhenOff(isChecked)
-            // Apply immediately to the running service.
-            try {
-                startService(
-                    android.content.Intent(this, com.bearinmind.equalizer314.audio.EqService::class.java)
-                        .setAction(com.bearinmind.equalizer314.audio.EqService.ACTION_REFRESH_NOTIFICATION)
-                )
-            } catch (_: Exception) {}
-        }
-    }
 
     // ---- TV Mode (issues #35 / #55) -------------------------------------
     // Off / TV (server: this device is remotely controlled) / Remote
@@ -330,6 +316,227 @@ class ExperimentalActivity : AppCompatActivity() {
     // House dialog style (matches MainActivity's save-preset dialog):
     // custom vertical layout, 20sp title, rounded outlined widgets, thin
     // divider, side-by-side outlined buttons with the red Cancel.
+    // Notification info picker (issue #65): choose which lines the notification shows.
+    private fun setupNotifInfo() {
+        findViewById<android.view.View>(R.id.expNotifInfoCard).setOnClickListener { showNotifInfoDialog() }
+    }
+
+    private fun showNotifInfoDialog() {
+        if (isFinishing) return
+        val density = resources.displayMetrics.density
+        val root = styledDialogRoot()
+        root.addView(styledDialogTitle("Notification Settings"))
+
+        // Live mock of the notification, updates as the toggles flip.
+        val previewTitle = android.widget.TextView(this).apply {
+            setTextColor(0xFFE2E2E2.toInt()); textSize = 13f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+        }
+        val previewBody = android.widget.TextView(this).apply {
+            setTextColor(0xFFAAAAAA.toInt()); textSize = 12f
+            setPadding(0, (2 * density).toInt(), 0, 0)
+        }
+        root.addView(android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF2A2A2A.toInt()); cornerRadius = 12 * density
+            }
+            setPadding((12 * density).toInt(), (10 * density).toInt(), (12 * density).toInt(), (10 * density).toInt())
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = (12 * density).toInt() }
+            addView(previewTitle); addView(previewBody)
+        }.also { (it.layoutParams as android.widget.LinearLayout.LayoutParams).bottomMargin = (6 * density).toInt() })
+
+        fun refreshPreview() {
+            val on = eqPrefs.getPowerState()
+            previewTitle.text = if (on) "Equalizer314: Online" else "Equalizer314: Offline"
+            val am = getSystemService(android.media.AudioManager::class.java)
+            val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+            val volPct = if (max > 0) am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) * 100 / max else 0
+            val name = eqPrefs.getPresetName()
+            val isRealPreset = name.isNotBlank() &&
+                getSharedPreferences("custom_presets", MODE_PRIVATE).contains("preset_$name")
+            val device = com.bearinmind.equalizer314.audio.EqService.staticLastDeviceLabel ?: "—"
+            val lines = mutableListOf<String>()
+            for (key in eqPrefs.getNotifLineOrder()) when (key) {
+                "volume" -> if (eqPrefs.getNotifShowVolume()) lines.add("Volume: $volPct%")
+                "mode" -> if (eqPrefs.getNotifShowMode()) lines.add(
+                    "Mode: " + if (eqPrefs.getAudioRoutingMode() == 1) "Session" else "System")
+                "preset" -> if (eqPrefs.getNotifShowPreset()) lines.add("Preset: ${if (isRealPreset) name else "none"}")
+                "device" -> if (eqPrefs.getNotifShowDevice()) lines.add("Device: $device")
+            }
+            previewBody.text = lines.joinToString("\n")
+            previewBody.visibility = if (lines.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
+        }
+        refreshPreview()
+
+        fun notifyServiceRefresh() {
+            sendBroadcast(android.content.Intent(
+                com.bearinmind.equalizer314.audio.EqService.ACTION_NOTIFICATION_REFRESH
+            ).setPackage(packageName))
+        }
+
+        // Drag-reorderable toggle rows (same handle-drag pattern as the pipeline screen).
+        data class NotifRow(val key: String, val label: String, val get: () -> Boolean, val set: (Boolean) -> Unit)
+        val allRows = mapOf(
+            "volume" to NotifRow("volume", "Volume", { eqPrefs.getNotifShowVolume() }, { eqPrefs.saveNotifShowVolume(it) }),
+            "mode" to NotifRow("mode", "Mode", { eqPrefs.getNotifShowMode() }, { eqPrefs.saveNotifShowMode(it) }),
+            "preset" to NotifRow("preset", "Preset", { eqPrefs.getNotifShowPreset() }, { eqPrefs.saveNotifShowPreset(it) }),
+            "device" to NotifRow("device", "Device", { eqPrefs.getNotifShowDevice() }, { eqPrefs.saveNotifShowDevice(it) }),
+        )
+        val ordered = eqPrefs.getNotifLineOrder().mapNotNull { allRows[it] }.toMutableList()
+
+        class LineVH(
+            row: android.view.View,
+            val handle: android.widget.ImageView,
+            val label: android.widget.TextView,
+            val switch: com.google.android.material.materialswitch.MaterialSwitch,
+        ) : androidx.recyclerview.widget.RecyclerView.ViewHolder(row)
+
+        lateinit var touchHelper: androidx.recyclerview.widget.ItemTouchHelper
+        val adapter = object : androidx.recyclerview.widget.RecyclerView.Adapter<LineVH>() {
+            override fun getItemCount() = ordered.size
+            override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): LineVH {
+                val row = android.widget.LinearLayout(this@ExperimentalActivity).apply {
+                    orientation = android.widget.LinearLayout.HORIZONTAL
+                    gravity = android.view.Gravity.CENTER_VERTICAL
+                    layoutParams = androidx.recyclerview.widget.RecyclerView.LayoutParams(
+                        androidx.recyclerview.widget.RecyclerView.LayoutParams.MATCH_PARENT,
+                        androidx.recyclerview.widget.RecyclerView.LayoutParams.WRAP_CONTENT)
+                    setPadding(0, (6 * density).toInt(), 0, (6 * density).toInt())
+                }
+                val rippleAttr = android.util.TypedValue()
+                theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, rippleAttr, true)
+                val handle = android.widget.ImageView(this@ExperimentalActivity).apply {
+                    setImageResource(R.drawable.ic_menu_handle)
+                    layoutParams = android.widget.LinearLayout.LayoutParams(
+                        (32 * density).toInt(), (32 * density).toInt()
+                    ).apply { marginEnd = (8 * density).toInt() }
+                    setBackgroundResource(rippleAttr.resourceId)
+                    scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                    val pad = (6 * density).toInt()
+                    setPadding(pad, pad, pad, pad)
+                    isClickable = true
+                    contentDescription = "Drag handle"
+                }
+                val label = android.widget.TextView(this@ExperimentalActivity).apply {
+                    setTextColor(0xFFDDDDDD.toInt())
+                    textSize = 15f
+                    layoutParams = android.widget.LinearLayout.LayoutParams(
+                        0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                }
+                val switch = com.google.android.material.materialswitch.MaterialSwitch(this@ExperimentalActivity)
+                row.addView(handle); row.addView(label); row.addView(switch)
+                return LineVH(row, handle, label, switch)
+            }
+            @android.annotation.SuppressLint("ClickableViewAccessibility")
+            override fun onBindViewHolder(h: LineVH, position: Int) {
+                val r = ordered[position]
+                h.label.text = r.label
+                h.switch.setOnCheckedChangeListener(null)
+                h.switch.isChecked = r.get()
+                h.switch.setOnCheckedChangeListener { _, checked ->
+                    r.set(checked)
+                    refreshPreview()
+                    notifyServiceRefresh()
+                }
+                h.handle.setOnTouchListener { _, ev ->
+                    if (ev.actionMasked == android.view.MotionEvent.ACTION_DOWN) touchHelper.startDrag(h)
+                    false
+                }
+            }
+        }
+        touchHelper = androidx.recyclerview.widget.ItemTouchHelper(
+            object : androidx.recyclerview.widget.ItemTouchHelper.SimpleCallback(
+                androidx.recyclerview.widget.ItemTouchHelper.UP or
+                    androidx.recyclerview.widget.ItemTouchHelper.DOWN, 0
+            ) {
+                override fun isLongPressDragEnabled() = false
+                override fun isItemViewSwipeEnabled() = false
+                override fun onMove(
+                    rv: androidx.recyclerview.widget.RecyclerView,
+                    from: androidx.recyclerview.widget.RecyclerView.ViewHolder,
+                    to: androidx.recyclerview.widget.RecyclerView.ViewHolder,
+                ): Boolean {
+                    val a = from.bindingAdapterPosition
+                    val b = to.bindingAdapterPosition
+                    if (a == androidx.recyclerview.widget.RecyclerView.NO_POSITION ||
+                        b == androidx.recyclerview.widget.RecyclerView.NO_POSITION) return false
+                    val moved = ordered.removeAt(a)
+                    ordered.add(b, moved)
+                    adapter.notifyItemMoved(a, b)
+                    return true
+                }
+                override fun onSwiped(vh: androidx.recyclerview.widget.RecyclerView.ViewHolder, dir: Int) {}
+                override fun clearView(
+                    rv: androidx.recyclerview.widget.RecyclerView,
+                    vh: androidx.recyclerview.widget.RecyclerView.ViewHolder,
+                ) {
+                    super.clearView(rv, vh)
+                    eqPrefs.saveNotifLineOrder(ordered.map { it.key })
+                    refreshPreview()
+                    notifyServiceRefresh()
+                }
+            })
+        val rowList = androidx.recyclerview.widget.RecyclerView(this).apply {
+            layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this@ExperimentalActivity)
+            this.adapter = adapter
+            overScrollMode = android.view.View.OVER_SCROLL_NEVER
+            isNestedScrollingEnabled = false
+        }
+        touchHelper.attachToRecyclerView(rowList)
+        root.addView(rowList, android.widget.LinearLayout.LayoutParams(
+            android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = (6 * density).toInt() })
+
+        root.addView(styledDialogDivider())
+
+        val hideRow = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = (12 * density).toInt() }
+        }
+        hideRow.addView(android.widget.TextView(this).apply {
+            text = "Hide notification"
+            setTextColor(0xFFDDDDDD.toInt())
+            textSize = 15f
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        })
+        hideRow.addView(com.google.android.material.materialswitch.MaterialSwitch(this).apply {
+            isChecked = eqPrefs.getHideNotificationWhenOff()
+            setOnCheckedChangeListener { _, checked ->
+                eqPrefs.setHideNotificationWhenOff(checked)
+                try {
+                    startService(
+                        android.content.Intent(this@ExperimentalActivity, com.bearinmind.equalizer314.audio.EqService::class.java)
+                            .setAction(com.bearinmind.equalizer314.audio.EqService.ACTION_REFRESH_NOTIFICATION)
+                    )
+                } catch (_: Exception) {}
+            }
+        })
+        root.addView(hideRow)
+
+        root.addView(styledDialogDivider())
+        val closeBtn = styledDialogButton("Close", isCancel = false).apply {
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+        root.addView(closeBtn)
+        val dialog = android.app.AlertDialog.Builder(this, R.style.Theme_Equalizer314_Dialog)
+            .setView(root)
+            .create()
+        closeBtn.setOnClickListener { dialog.dismiss() }
+        dialog.show()
+    }
+
     private fun styledDialogRoot(): android.widget.LinearLayout {
         val density = resources.displayMetrics.density
         return android.widget.LinearLayout(this).apply {

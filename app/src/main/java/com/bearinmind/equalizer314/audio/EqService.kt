@@ -1040,7 +1040,6 @@ class EqService : Service() {
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_nav_equalizer)
             .setContentTitle(title)
-            .setContentText(volumeLine)
             .setContentIntent(openPending)
             .setOngoing(true)
             .setSilent(true)
@@ -1086,8 +1085,18 @@ class EqService : Service() {
         val modeLine = "Mode: $mode"
         val presetLine = "Preset: $presetForDisplay"
         val deviceLine = lastDeviceLabel?.let { "Device: $it" } ?: "Device: —"
-        val bigText = "$volumeLine\n$modeLine\n$presetLine\n$deviceLine"
-        builder.setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
+        // User-selected info lines, in the user's order (issue #65).
+        val lines = mutableListOf<String>()
+        for (key in prefs.getNotifLineOrder()) when (key) {
+            "volume" -> if (prefs.getNotifShowVolume()) lines.add(volumeLine)
+            "mode" -> if (prefs.getNotifShowMode()) lines.add(modeLine)
+            "preset" -> if (prefs.getNotifShowPreset()) lines.add(presetLine)
+            "device" -> if (prefs.getNotifShowDevice()) lines.add(deviceLine)
+        }
+        builder.setContentText(lines.firstOrNull() ?: "")
+        if (lines.isNotEmpty()) {
+            builder.setStyle(NotificationCompat.BigTextStyle().bigText(lines.joinToString("\n")))
+        }
 
         return builder.build()
     }
