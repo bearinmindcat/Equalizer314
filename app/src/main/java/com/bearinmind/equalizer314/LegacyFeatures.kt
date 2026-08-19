@@ -87,7 +87,9 @@ object LegacyFeatures {
 
     // =====================================================================
     // Channel Side Options settings section (card + screen entry)
-    // Retired 2026-07-14.
+    // Retired 2026-07-14. RESTORED 2026-08-19 (issue #75) — the card and
+    // click handler are back in activity_main.xml / MainActivity; only the
+    // old settings-gear popout handler (item 3 below) remains retired.
     //
     // What it was: a "Channel Side Options" card on the Settings page
     // ("Balance, per-channel EQ, and channel swap") that opened
@@ -236,5 +238,39 @@ object LegacyFeatures {
     // Note: experimentalLockButton (layout), ic_lock / ic_lock_open, and the
     // saveExperimentalUnlocked/getExperimentalUnlocked prefs all remain —
     // un-hide the button and restore the wiring above to bring it back.
+    // =====================================================================
+
+    // =====================================================================
+    // Channel Side EQ toggle card (Channel Side Options screen)
+    // Retired 2026-08-19, when the Channel Side Options card returned to
+    // Settings (issue #75) — CSE on/off already lives on the power button
+    // in the graph's channel popout, so a second toggle here would fight it.
+    //
+    // What it was: a "Channel Side EQ" card with a MaterialSwitch
+    // (perChannelEqSwitch) at the bottom of activity_channel_side_eq.xml,
+    // reading/writing the channelSideEqEnabled pref directly.
+    //
+    // Original ChannelSideEqActivity wiring (called from onCreate):
+    //
+    //    private fun setupPerChannelEqToggle() {
+    //        val switchView = findViewById<MaterialSwitch>(R.id.perChannelEqSwitch)
+    //        switchView.isChecked = eqPrefs.getChannelSideEqEnabled()
+    //        switchView.setOnCheckedChangeListener { _, isChecked ->
+    //            eqPrefs.saveChannelSideEqEnabled(isChecked)
+    //        }
+    //    }
+    //
+    // Original layout card (was after the balance/gain card):
+    //
+    //    <com.google.android.material.card.MaterialCardView ...>
+    //        <LinearLayout horizontal, padding 16dp>
+    //            <TextView text="Channel Side EQ" weight=1 TitleMedium />
+    //            <MaterialSwitch android:id="@+id/perChannelEqSwitch" />
+    //        </LinearLayout>
+    //    </com.google.android.material.card.MaterialCardView>
+    //
+    // Note: the channelSideEqEnabled pref and the popout power-button toggle
+    // remain the single source of truth; restore the card + wiring above to
+    // bring the settings-screen toggle back.
     // =====================================================================
 }

@@ -48,10 +48,15 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Channel Side Options"
+            android:text="Channel Settings"
             android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
             android:textColor="?attr/colorOnSurface"
             android:paddingStart="8dp" />
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/channelSideMasterSwitch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
     </LinearLayout>
 
     <ScrollView
@@ -307,38 +312,9 @@
                  on Samsung Android 16). A real swap would need a
                  MediaProjection + AudioPlaybackCapture pipeline. -->
 
-            <!-- Per-channel EQ toggle card -->
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="8dp"
-                app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp"
-                app:strokeWidth="0dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="Channel Side EQ"
-                        android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
-                        android:textColor="?attr/colorOnSurface" />
-
-                    <com.google.android.material.materialswitch.MaterialSwitch
-                        android:id="@+id/perChannelEqSwitch"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="16dp" />
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
+            <!-- Channel Side EQ toggle card retired — CSE toggles via the
+                 power button in the graph's channel popout; the old card
+                 lives in LegacyFeatures.kt for reference. -->
         </LinearLayout>
     </ScrollView>
 </LinearLayout>

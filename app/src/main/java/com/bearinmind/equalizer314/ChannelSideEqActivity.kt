@@ -53,7 +53,12 @@ class ChannelSideEqActivity : AppCompatActivity() {
 
         setupBalance()
         setupChannelPreamp()
-        setupPerChannelEqToggle()
+        // Top-bar CSE master switch — saves the pref; MainActivity applies it on resume.
+        val masterSwitch = findViewById<MaterialSwitch>(R.id.channelSideMasterSwitch)
+        masterSwitch.isChecked = eqPrefs.getChannelSideEqEnabled()
+        masterSwitch.setOnCheckedChangeListener { _, isChecked ->
+            eqPrefs.saveChannelSideEqEnabled(isChecked)
+        }
 
         // Bind to EqService so we can push channel changes into the live
         // DynamicsProcessing instance as the user interacts.
@@ -230,16 +235,6 @@ class ChannelSideEqActivity : AppCompatActivity() {
             } else {
                 false  // let the slider process drags normally
             }
-        }
-    }
-
-    /** Per-channel EQ mode toggle. Stored only — the L/R EQ editor UI is future work.
-     *  Reuses the existing channelSideEqEnabled pref. */
-    private fun setupPerChannelEqToggle() {
-        val switchView = findViewById<MaterialSwitch>(R.id.perChannelEqSwitch)
-        switchView.isChecked = eqPrefs.getChannelSideEqEnabled()
-        switchView.setOnCheckedChangeListener { _, isChecked ->
-            eqPrefs.saveChannelSideEqEnabled(isChecked)
         }
     }
 

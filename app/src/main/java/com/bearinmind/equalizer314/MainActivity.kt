@@ -1218,6 +1218,8 @@ class  MainActivity : AppCompatActivity() {
             rebindActiveEq()
             paintChannelButtonStyles()
             refreshChannelPopoutDim()
+            // Keep the settings-page card switch in sync (its listener no-ops on match).
+            findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.channelSideEqSwitch).isChecked = on
             Toast.makeText(
                 this,
                 if (on) "Channel Side EQ on" else "Channel Side EQ off",
@@ -2700,6 +2702,26 @@ class  MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.audioEffectsPipelineCard).setOnClickListener {
             startActivity(Intent(this, AudioEffectsPipelineActivity::class.java))
             overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+        }
+
+        // Channel Side Settings card (issue #75) — body opens the editor, switch toggles CSE.
+        findViewById<View>(R.id.channelSideEqCard).setOnClickListener {
+            startActivity(Intent(this, ChannelSideEqActivity::class.java))
+            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+        }
+        val cseCardSwitch = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.channelSideEqSwitch)
+        cseCardSwitch.isChecked = eqPrefs.getChannelSideEqEnabled()
+        cseCardSwitch.setOnCheckedChangeListener { _, on ->
+            if (on == eqPrefs.getChannelSideEqEnabled()) return@setOnCheckedChangeListener
+            stateManager.setChannelSideEqEnabled(on)
+            rebindActiveEq()
+            paintChannelButtonStyles()
+            refreshChannelPopoutDim()
+            Toast.makeText(
+                this,
+                if (on) "Channel Side EQ on" else "Channel Side EQ off",
+                Toast.LENGTH_SHORT
+            ).show()
         }
 
         // Experimental lock retired (see LegacyFeatures.kt) — card is always tappable.
@@ -4293,9 +4315,12 @@ class  MainActivity : AppCompatActivity() {
         if (cseOnNow != cseOnInState) {
             stateManager.setChannelSideEqEnabled(cseOnNow)
             rebindActiveEq()
+            paintChannelButtonStyles()
         } else {
             refreshChannelPopoutDim()
         }
+        // Keep the settings-page card switch in sync (its listener no-ops on match).
+        findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.channelSideEqSwitch).isChecked = cseOnNow
         // Keep the dotted ghost curves in sync on every resume, incl. cold
         // start with CSE already on (issue #53).
         stateManager.getGhostEqs().let { eqGraphView.setGhostEqualizer(it.first, it.second) }

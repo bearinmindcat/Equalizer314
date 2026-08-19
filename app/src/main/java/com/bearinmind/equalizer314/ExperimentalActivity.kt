@@ -2,10 +2,6 @@ package com.bearinmind.equalizer314
 
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.updatePadding
 import com.bearinmind.equalizer314.state.EqPreferencesManager
 import com.bearinmind.equalizer314.state.EqStateManager
 
@@ -15,15 +11,7 @@ class ExperimentalActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_experimental)
-
-        val root = findViewById<android.view.View>(android.R.id.content)
-        ViewCompat.setOnApplyWindowInsetsListener(root) { view, windowInsets ->
-            val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
-            view.updatePadding(top = insets.top, bottom = insets.bottom)
-            WindowInsetsCompat.CONSUMED
-        }
 
         eqPrefs = EqPreferencesManager(this)
 
