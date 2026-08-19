@@ -88,6 +88,16 @@
             android:theme="@style/Theme.Equalizer314" />
 
         <activity
+            android:name="com.bearinmind.equalizer314.AudioMiscSettingsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Equalizer314" />
+
+        <activity
+            android:name="com.bearinmind.equalizer314.UiEqModesActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Equalizer314" />
+
+        <activity
             android:name="com.bearinmind.equalizer314.LimiterActivity"
             android:exported="false"
             android:theme="@style/Theme.Equalizer314" />

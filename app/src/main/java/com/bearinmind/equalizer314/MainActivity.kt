@@ -652,12 +652,14 @@ class  MainActivity : AppCompatActivity() {
             )
         }
 
+        // A saved mode whose tab is disabled lands on Parametric (issue #77);
+        // the simpleEqEnabled override applies only while the Simple tab is enabled.
         val savedMode = try { EqUiMode.valueOf(eqPrefs.getEqUiMode()) } catch (_: Exception) { EqUiMode.PARAMETRIC }
-            // Graphic + Simple tabs retired: a saved mode with no visible
-            // tab lands on Parametric (see LegacyFeatures.kt). The
-            // simpleEqEnabled pref override is retired with the tab.
-            .let { if (it == EqUiMode.GRAPHIC || it == EqUiMode.SIMPLE) EqUiMode.PARAMETRIC else it }
-        switchEqUiMode(savedMode)
+            .let { if (it == EqUiMode.GRAPHIC && !eqPrefs.getEqModeEnabled("graphic")) EqUiMode.PARAMETRIC else it }
+        val launchMode =
+            if (eqPrefs.getSimpleEqEnabled() && eqPrefs.getEqModeEnabled("simple")) EqUiMode.SIMPLE else savedMode
+        switchEqUiMode(launchMode)
+        applyEqModeTabs()
         // Ensure rows are properly ordered after views are laid out
         pageEq.post { reorderToggleRows(animate = false) }
 
@@ -1218,8 +1220,6 @@ class  MainActivity : AppCompatActivity() {
             rebindActiveEq()
             paintChannelButtonStyles()
             refreshChannelPopoutDim()
-            // Keep the settings-page card switch in sync (its listener no-ops on match).
-            findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.channelSideEqSwitch).isChecked = on
             Toast.makeText(
                 this,
                 if (on) "Channel Side EQ on" else "Channel Side EQ off",
@@ -2403,9 +2403,9 @@ class  MainActivity : AppCompatActivity() {
         // EQ mode selector: advanced modes clear the Simple flag, Simple sets it.
         // Persisted so the choice survives restart and matches the settings switch.
         modeParametricBtn.setOnClickListener { eqPrefs.saveSimpleEqEnabled(false); switchEqUiMode(EqUiMode.PARAMETRIC) }
-        // Graphic mode tab retired (hidden in XML) — see LegacyFeatures.kt.
+        modeGraphicBtn.setOnClickListener { eqPrefs.saveSimpleEqEnabled(false); switchEqUiMode(EqUiMode.GRAPHIC) }
         modeTableBtn.setOnClickListener { eqPrefs.saveSimpleEqEnabled(false); switchEqUiMode(EqUiMode.TABLE) }
-        // Simple mode tab retired (hidden in XML) — see LegacyFeatures.kt.
+        modeSimpleBtn.setOnClickListener { eqPrefs.saveSimpleEqEnabled(true); switchEqUiMode(EqUiMode.SIMPLE) }
 
         // Settings controls
         setupSettingsListeners()
@@ -2649,9 +2649,63 @@ class  MainActivity : AppCompatActivity() {
         }
     }
 
+    // EQ mode tabs (issue #77): visibility + order from prefs, wrapping to a second
+    // row past two enabled modes; falls back off a disabled active mode.
+    private fun applyEqModeTabs() {
+        val density = resources.displayMetrics.density
+        val btnFor = mapOf(
+            "parametric" to modeParametricBtn, "graphic" to modeGraphicBtn,
+            "table" to modeTableBtn, "simple" to modeSimpleBtn)
+        val group = findViewById<android.widget.LinearLayout>(R.id.modeSelectorGroup)
+        val row1 = group.getChildAt(0) as android.widget.LinearLayout
+        val row2 = if (group.childCount > 1) group.getChildAt(1) as android.widget.LinearLayout
+        else android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = (8 * density).toInt() }
+            group.addView(this)
+        }
+        val order = eqPrefs.getEqModeOrder()
+        for (btn in btnFor.values) (btn.parent as? android.view.ViewGroup)?.removeView(btn)
+        row1.removeAllViews(); row2.removeAllViews()
+
+        fun place(key: String, row: android.widget.LinearLayout, firstInRow: Boolean, visible: Boolean) {
+            val btn = btnFor[key] ?: return
+            btn.visibility = if (visible) View.VISIBLE else View.GONE
+            (btn.layoutParams as android.widget.LinearLayout.LayoutParams).apply {
+                marginStart = if (visible && !firstInRow) (4 * density).toInt() else 0
+                marginEnd = 0
+            }
+            row.addView(btn)
+        }
+        val enabledKeys = order.filter { eqPrefs.getEqModeEnabled(it) }
+        enabledKeys.forEachIndexed { i, key ->
+            if (i < 2) place(key, row1, i == 0, true) else place(key, row2, i == 2, true)
+        }
+        order.filter { !eqPrefs.getEqModeEnabled(it) }.forEach { place(it, row1, false, false) }
+        row2.visibility = if (enabledKeys.size > 2) View.VISIBLE else View.GONE
+        val currentKey = when (stateManager.currentEqUiMode) {
+            EqUiMode.PARAMETRIC -> "parametric"
+            EqUiMode.GRAPHIC -> "graphic"
+            EqUiMode.TABLE -> "table"
+            EqUiMode.SIMPLE -> "simple"
+        }
+        if (!eqPrefs.getEqModeEnabled(currentKey)) {
+            when (order.firstOrNull { eqPrefs.getEqModeEnabled(it) } ?: "parametric") {
+                "graphic" -> { eqPrefs.saveSimpleEqEnabled(false); switchEqUiMode(EqUiMode.GRAPHIC) }
+                "table" -> { eqPrefs.saveSimpleEqEnabled(false); switchEqUiMode(EqUiMode.TABLE) }
+                "simple" -> { eqPrefs.saveSimpleEqEnabled(true); switchEqUiMode(EqUiMode.SIMPLE) }
+                else -> { eqPrefs.saveSimpleEqEnabled(false); switchEqUiMode(EqUiMode.PARAMETRIC) }
+            }
+        }
+    }
+
     private fun setupSpectrumControl() {
-        findViewById<android.view.View>(R.id.spectrumControlCard).setOnClickListener {
-            startActivity(android.content.Intent(this, SpectrumControlActivity::class.java))
+        // Spectrum Control + Light Theme moved into the UI & EQ Modes sub-screen.
+        findViewById<android.view.View>(R.id.uiEqModesCard).setOnClickListener {
+            startActivity(android.content.Intent(this, UiEqModesActivity::class.java))
             overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
         }
     }
@@ -2670,17 +2724,7 @@ class  MainActivity : AppCompatActivity() {
     }
 
     private fun setupSettingsListeners() {
-        // Theme toggle: switch ON = light. setDefaultNightMode recreates all live
-        // activities; EqApp re-applies the saved choice on the next cold start.
-        val themeSwitch = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.themeSwitch)
-        themeSwitch.isChecked = eqPrefs.getLightTheme()
-        themeSwitch.setOnCheckedChangeListener { _, isChecked ->
-            eqPrefs.saveLightTheme(isChecked)
-            androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(
-                if (isChecked) androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO
-                else androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
-            )
-        }
+        // Light Theme toggle moved to UiEqModesActivity.
 
         // Channel Side Options settings card retired — CSE now toggles via the
         // power button in the graph's channel popout. See LegacyFeatures.kt.
@@ -2697,31 +2741,10 @@ class  MainActivity : AppCompatActivity() {
             showBackupRestoreDialog()
         }
 
-        // Audio Effects Pipeline — placeholder screen for chaining/reordering
-        // session-0 audio effects.
-        findViewById<View>(R.id.audioEffectsPipelineCard).setOnClickListener {
-            startActivity(Intent(this, AudioEffectsPipelineActivity::class.java))
+        // Audio Effects & Misc Settings — groups Channel Settings, Pipeline, Gain Reduction.
+        findViewById<View>(R.id.audioMiscCard).setOnClickListener {
+            startActivity(Intent(this, AudioMiscSettingsActivity::class.java))
             overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
-        }
-
-        // Channel Side Settings card (issue #75) — body opens the editor, switch toggles CSE.
-        findViewById<View>(R.id.channelSideEqCard).setOnClickListener {
-            startActivity(Intent(this, ChannelSideEqActivity::class.java))
-            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
-        }
-        val cseCardSwitch = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.channelSideEqSwitch)
-        cseCardSwitch.isChecked = eqPrefs.getChannelSideEqEnabled()
-        cseCardSwitch.setOnCheckedChangeListener { _, on ->
-            if (on == eqPrefs.getChannelSideEqEnabled()) return@setOnCheckedChangeListener
-            stateManager.setChannelSideEqEnabled(on)
-            rebindActiveEq()
-            paintChannelButtonStyles()
-            refreshChannelPopoutDim()
-            Toast.makeText(
-                this,
-                if (on) "Channel Side EQ on" else "Channel Side EQ off",
-                Toast.LENGTH_SHORT
-            ).show()
         }
 
         // Experimental lock retired (see LegacyFeatures.kt) — card is always tappable.
@@ -4319,8 +4342,11 @@ class  MainActivity : AppCompatActivity() {
         } else {
             refreshChannelPopoutDim()
         }
-        // Keep the settings-page card switch in sync (its listener no-ops on match).
-        findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.channelSideEqSwitch).isChecked = cseOnNow
+        // Gain Reduction switch moved to AudioMiscSettingsActivity (pref-only there) —
+        // apply on return; the hidden autoGainSwitch's listener does the live push.
+        autoGainSwitch.isChecked = eqPrefs.getAutoGainEnabled()
+        // EQ mode tabs may have changed in the Change EQ Modes dialog (issue #77).
+        applyEqModeTabs()
         // Keep the dotted ghost curves in sync on every resume, incl. cold
         // start with CSE already on (issue #53).
         stateManager.getGhostEqs().let { eqGraphView.setGhostEqualizer(it.first, it.second) }

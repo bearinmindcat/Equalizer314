@@ -322,6 +322,17 @@ class EqPreferencesManager(context: Context) {
         return saved + def.filter { it !in saved }
     }
 
+    // EQ mode tabs (issue #77): which modes show on the main screen and their order.
+    fun saveEqModeEnabled(key: String, b: Boolean) { prefs.edit().putBoolean("eqMode_$key", b).apply() }
+    fun getEqModeEnabled(key: String): Boolean =
+        prefs.getBoolean("eqMode_$key", key == "parametric" || key == "table")
+    fun saveEqModeOrder(order: List<String>) { prefs.edit().putString("eqModeOrder", order.joinToString(",")).apply() }
+    fun getEqModeOrder(): List<String> {
+        val def = listOf("parametric", "table", "graphic", "simple")
+        val saved = prefs.getString("eqModeOrder", null)?.split(",")?.filter { it in def } ?: return def
+        return saved + def.filter { it !in saved }
+    }
+
     fun saveGraphHeat(enabled: Boolean) { prefs.edit().putBoolean("graphHeat", enabled).apply() }
     fun getGraphHeat(): Boolean = prefs.getBoolean("graphHeat", false)
 
