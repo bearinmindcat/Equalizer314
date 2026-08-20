@@ -437,7 +437,7 @@
                             app:iconSize="16dp"
                             app:iconGravity="textStart"
                             app:iconPadding="0dp"
-                            app:iconTint="?attr/colorOnSurface"
+                            app:iconTint="@null"
                             app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
                             app:strokeColor="?attr/colorOutline"
                             app:strokeWidth="1dp"

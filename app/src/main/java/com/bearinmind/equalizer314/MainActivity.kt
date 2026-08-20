@@ -2737,7 +2737,13 @@ class  MainActivity : AppCompatActivity() {
             if (i < 2) place(key, row1, i == 0, true) else place(key, row2, i == 2, true)
         }
         order.filter { !eqPrefs.getEqModeEnabled(it) }.forEach { place(it, row1, false, false) }
-        row2.visibility = if (enabledKeys.size > 2) View.VISIBLE else View.GONE
+        val twoRows = enabledKeys.size > 2
+        row2.visibility = if (twoRows) View.VISIBLE else View.GONE
+        // Graph gives back the second row's height when it shows (246dp vs 288dp single-row).
+        val targetH = ((if (twoRows) 246 else 288) * density).toInt()
+        if (eqGraphView.layoutParams.height != targetH) {
+            eqGraphView.layoutParams = eqGraphView.layoutParams.apply { height = targetH }
+        }
         val currentKey = when (stateManager.currentEqUiMode) {
             EqUiMode.PARAMETRIC -> "parametric"
             EqUiMode.GRAPHIC -> "graphic"
@@ -2914,6 +2920,12 @@ class  MainActivity : AppCompatActivity() {
         // L / R popout on row 2 — L below alt-route, R below settings
         reposition(findViewById(R.id.channelLButton), altRouteLeftPx, row2Top)
         reposition(findViewById(R.id.channelRButton), settingsLeftPx, row2Top)
+        // "Both" one cell left of L, heat toggle in the eye popout's third cell —
+        // these were only positioned by the one-shot startup pass, so a relayout
+        // at the settled width left them at stale coordinates (the "broken GUI").
+        reposition(findViewById(R.id.channelBothButton),
+            (altRouteLeftPx - specWidth - gapPx).coerceAtLeast(0), row2Top)
+        reposition(findViewById(R.id.gainHeatToggle), gapPx + (specWidth + gapPx) * 2, row2Top)
 
         // Keep the mini L/R badge glued to the alt-route button.
         badgeAnchorAltRouteLeft = altRouteLeftPx
