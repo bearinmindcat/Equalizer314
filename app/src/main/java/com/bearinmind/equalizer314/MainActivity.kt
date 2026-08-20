@@ -1502,12 +1502,18 @@ class  MainActivity : AppCompatActivity() {
                         android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
                     )
                 }
-                val presetPreamp: Double? = try {
-                    org.json.JSONObject(presetJson ?: "{}").optDouble("preamp", 0.0)
+                val presetObj: org.json.JSONObject? = try {
+                    org.json.JSONObject(presetJson ?: "{}")
                 } catch (_: Exception) { null }
+                val presetPreamp: Double? = presetObj?.optDouble("preamp", 0.0)
+                // Chain tags: preset carries an enabled MBC / limiter (issue #78).
+                val chainTags = buildString {
+                    if (presetObj?.optJSONObject("mbc")?.optBoolean("enabled", false) == true) append(" · MBC")
+                    if (presetObj?.optJSONObject("limiter")?.optBoolean("enabled", false) == true) append(" · LIM")
+                }
                 val preampSubtitle = android.widget.TextView(this).apply {
                     text = presetPreamp?.let {
-                        com.bearinmind.equalizer314.ui.PresetDropdownAdapter.formatPreamp(it)
+                        com.bearinmind.equalizer314.ui.PresetDropdownAdapter.formatPreamp(it) + chainTags
                     } ?: ""
                     setTextColor(0xFF888888.toInt())
                     textSize = 11f
@@ -1708,6 +1714,52 @@ class  MainActivity : AppCompatActivity() {
                         // Single / shared EQ preset — no Channel: directive
                         // means APO applies all filters to every channel.
                         appendFilters(obj.getJSONArray("bands"))
+                    }
+                    // EQ314-specific chain section (issue #78), APO-style terse lines.
+                    val mbcObj = obj.optJSONObject("mbc")
+                    val limObj = obj.optJSONObject("limiter")
+                    if (mbcObj != null || limObj != null) {
+                        fun f1(v: Double) = String.format("%.1f", v)
+                        sb.append("\n# EQ314 Specific\n# Delete if importing into Equalizer APO\n")
+                        if (mbcObj != null) {
+                            val count = mbcObj.optInt("bandCount", 0)
+                            sb.append("MBC: ${if (mbcObj.optBoolean("enabled", false)) "ON" else "OFF"} Bands $count\n")
+                            val mbcBands = mbcObj.optJSONArray("bands")
+                            if (mbcBands != null) {
+                                for (i in 0 until minOf(mbcBands.length(), count)) {
+                                    val b = mbcBands.optJSONObject(i) ?: continue
+                                    sb.append(
+                                        "MBC ${i + 1}: ${if (b.optBoolean("enabled", true)) "ON" else "OFF"}" +
+                                            " Fc ${b.optDouble("cutoff", 0.0).toInt()} Hz" +
+                                            " Atk ${f1(b.optDouble("attack", 0.0))}" +
+                                            " Rel ${f1(b.optDouble("release", 0.0))}" +
+                                            " Ratio ${f1(b.optDouble("ratio", 1.0))}" +
+                                            " Thr ${f1(b.optDouble("threshold", 0.0))} dB" +
+                                            " Knee ${f1(b.optDouble("knee", 0.0))}" +
+                                            " Gate ${f1(b.optDouble("noiseGate", 0.0))}" +
+                                            " Exp ${f1(b.optDouble("expander", 1.0))}" +
+                                            " Pre ${f1(b.optDouble("preGain", 0.0))}" +
+                                            " Post ${f1(b.optDouble("postGain", 0.0))}\n"
+                                    )
+                                }
+                            }
+                            val crossovers = mbcObj.optJSONArray("crossovers")
+                            if (crossovers != null && crossovers.length() > 0) {
+                                val xs = (0 until crossovers.length())
+                                    .joinToString(", ") { crossovers.optDouble(it, 0.0).toInt().toString() }
+                                sb.append("MBC Crossovers: $xs Hz\n")
+                            }
+                        }
+                        if (limObj != null) {
+                            sb.append(
+                                "Limiter: ${if (limObj.optBoolean("enabled", false)) "ON" else "OFF"}" +
+                                    " Atk ${f1(limObj.optDouble("attack", 0.0))}" +
+                                    " Rel ${f1(limObj.optDouble("release", 0.0))}" +
+                                    " Ratio ${f1(limObj.optDouble("ratio", 1.0))}" +
+                                    " Thr ${f1(limObj.optDouble("threshold", 0.0))} dB" +
+                                    " Post ${f1(limObj.optDouble("postGain", 0.0))}\n"
+                            )
+                        }
                     }
                     pendingExportText = sb.toString()
                     val intent = android.content.Intent(android.content.Intent.ACTION_CREATE_DOCUMENT).apply {

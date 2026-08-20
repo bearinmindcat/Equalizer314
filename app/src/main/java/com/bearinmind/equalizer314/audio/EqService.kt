@@ -520,8 +520,38 @@ class EqService : Service() {
                 return START_NOT_STICKY
             }
             ACTION_REAPPLY_MBC -> {
-                // MBC volume-compensation toggle changed — re-apply thresholds.
-                applyPersistedMbcConfig()
+                // Prefs are the source of truth (preset loads write prefs only, issue #78):
+                // sync limiter + MBC live fields here, rebuild when the MBC structure changed.
+                val p = EqPreferencesManager(this)
+                val limChanged = dynamicsManager.limiterEnabled != p.getLimiterEnabled() ||
+                    dynamicsManager.limiterAttackMs != p.getLimiterAttack() ||
+                    dynamicsManager.limiterReleaseMs != p.getLimiterRelease() ||
+                    dynamicsManager.limiterRatio != p.getLimiterRatio() ||
+                    dynamicsManager.limiterThresholdDb != p.getLimiterThreshold() ||
+                    dynamicsManager.limiterPostGainDb != p.getLimiterPostGain()
+                if (limChanged) {
+                    dynamicsManager.limiterEnabled = p.getLimiterEnabled()
+                    dynamicsManager.limiterAttackMs = p.getLimiterAttack()
+                    dynamicsManager.limiterReleaseMs = p.getLimiterRelease()
+                    dynamicsManager.limiterRatio = p.getLimiterRatio()
+                    dynamicsManager.limiterThresholdDb = p.getLimiterThreshold()
+                    dynamicsManager.limiterPostGainDb = p.getLimiterPostGain()
+                    if (dynamicsManager.isActive) dynamicsManager.pushLimiterUpdate()
+                }
+                val newMbcEnabled = p.getMbcEnabled()
+                val newMbcCount = p.getMbcBandCount()
+                val mbcStructureChanged = newMbcEnabled != dynamicsManager.mbcEnabled ||
+                    newMbcCount != dynamicsManager.mbcBandCount
+                dynamicsManager.mbcEnabled = newMbcEnabled
+                dynamicsManager.mbcBandCount = newMbcCount
+                if (mbcStructureChanged && dynamicsManager.isActive) {
+                    if (dynamicsManager.reattachActive()) {
+                        applyPersistedMbcConfig()
+                        syncSystemSoundBypassFromCurrent()
+                    }
+                } else {
+                    applyPersistedMbcConfig()
+                }
                 return START_NOT_STICKY
             }
             ACTION_RECYCLE_DP -> {
@@ -529,6 +559,11 @@ class EqService : Service() {
                 // interleave, DP Latency Window) apply without a power cycle.
                 // Same post-reattach sequence as watchdog / route-change.
                 // No-op when EQ is off or session-based.
+                // Refresh MBC stage geometry from prefs — reattach reuses live fields (#78).
+                EqPreferencesManager(this).let { p ->
+                    dynamicsManager.mbcEnabled = p.getMbcEnabled()
+                    dynamicsManager.mbcBandCount = p.getMbcBandCount()
+                }
                 if (dynamicsManager.reattachActive()) {
                     applyPersistedMbcConfig()
                     syncSystemSoundBypassFromCurrent()

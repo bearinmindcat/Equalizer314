@@ -66,18 +66,8 @@ object PresetChainIo {
             p.saveLimiterRatio(limiter.optDouble("ratio", p.getLimiterRatio().toDouble()).toFloat())
             p.saveLimiterThreshold(limiter.optDouble("threshold", p.getLimiterThreshold().toDouble()).toFloat())
             p.saveLimiterPostGain(limiter.optDouble("postGain", p.getLimiterPostGain().toDouble()).toFloat())
-            if (dm != null && dm.isActive) {
-                dm.limiterEnabled = p.getLimiterEnabled()
-                dm.limiterAttackMs = p.getLimiterAttack()
-                dm.limiterReleaseMs = p.getLimiterRelease()
-                dm.limiterRatio = p.getLimiterRatio()
-                dm.limiterThresholdDb = p.getLimiterThreshold()
-                dm.limiterPostGainDb = p.getLimiterPostGain()
-                dm.pushLimiterUpdate()
-            }
         }
 
-        var needsRecycle = false
         if (mbc != null) {
             val newEnabled = mbc.optBoolean("enabled", p.getMbcEnabled())
             val newCount = mbc.optInt("bandCount", p.getMbcBandCount()).coerceIn(1, 8)
@@ -110,18 +100,15 @@ object PresetChainIo {
                     p.saveMbcCrossover(i, crossovers.optDouble(i, 1000.0).toFloat())
                 }
             }
-            needsRecycle = dm != null && dm.isActive &&
-                (newCount != dm.mbcBandCount || newEnabled != dm.mbcEnabled)
         }
 
-        if (dm != null && dm.isActive && mbc != null) {
-            try {
-                val action = if (needsRecycle) EqService.ACTION_RECYCLE_DP else EqService.ACTION_REAPPLY_MBC
-                context.startService(
-                    Intent(context, EqService::class.java).setAction(action)
-                )
-            } catch (_: Exception) {}
-        }
+        // EqService owns the live apply: it syncs limiter + MBC fields from prefs
+        // and recycles the DP itself when the MBC structure changed (issue #78).
+        try {
+            context.startService(
+                Intent(context, EqService::class.java).setAction(EqService.ACTION_REAPPLY_MBC)
+            )
+        } catch (_: Exception) {}
         return true
     }
 }
