@@ -653,16 +653,28 @@ class EqStateManager(
     /** Replace in-memory EQ state from a parsed preset. cseEnabled=false: [bothBands]→bothEq,
      *  activeChannel=BOTH. cseEnabled=true: [leftBands]→leftEq, [rightBands]→rightEq,
      *  activeChannel=LEFT. The CSE pref is persisted so getChannelSideEqEnabled() matches. */
+    fun getSharedEqForPreset(): ParametricEqualizer = sharedEq
+
     fun applyPresetEqs(
         cseEnabled: Boolean,
         bothBands: List<BandSpec>,
         leftBands: List<BandSpec>,
         rightBands: List<BandSpec>,
+        sharedBands: List<BandSpec>? = null,
     ) {
         eqPrefs.saveChannelSideEqEnabled(cseEnabled)
         if (cseEnabled) {
             loadBandsInto(leftEq, leftBands)
             loadBandsInto(rightEq, rightBands)
+            // Shared "Both" layer from the preset — flat when the preset predates it,
+            // so stale layers never leak into a loaded preset (adam's report).
+            if (sharedBands != null && sharedBands.isNotEmpty()) {
+                loadBandsInto(sharedEq, sharedBands)
+            } else {
+                resetSharedEq()
+            }
+            rebuildSlots(sharedBandSlots, sharedEq, null)
+            eqPrefs.saveSharedBands(sharedEq)
             // Presets don't store channel tags — loadBandsInto leaves default BOTH tags on both
             // channels, which the tether sync treats as bilateral and mirrors L over R on the first
             // channel switch (issue #53 regression). Preset-loaded channels are independent by definition.

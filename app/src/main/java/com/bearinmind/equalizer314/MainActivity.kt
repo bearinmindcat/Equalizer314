@@ -1917,7 +1917,8 @@ class  MainActivity : AppCompatActivity() {
                     val bothBands = if (obj.has("bands")) parseBands(obj.getJSONArray("bands")) else emptyList()
                     val leftBands = if (obj.has("leftBands")) parseBands(obj.getJSONArray("leftBands")) else bothBands
                     val rightBands = if (obj.has("rightBands")) parseBands(obj.getJSONArray("rightBands")) else bothBands
-                    stateManager.applyPresetEqs(cseOn, bothBands, leftBands, rightBands)
+                    val sharedBands = if (obj.has("sharedBands")) parseBands(obj.getJSONArray("sharedBands")) else null
+                    stateManager.applyPresetEqs(cseOn, bothBands, leftBands, rightBands, sharedBands)
                     // Full-chain presets: apply MBC + limiter when present.
                     com.bearinmind.equalizer314.state.PresetChainIo.applyChain(
                         this, obj, eqPrefs, stateManager.eqService?.dynamicsManager)
@@ -1932,6 +1933,11 @@ class  MainActivity : AppCompatActivity() {
                     stateManager.preampGainDb =
                         if (obj.has("preamp")) obj.getDouble("preamp").toFloat() else 0f
                     stateManager.eqPrefs.savePreampGain(stateManager.preampGainDb)
+                    // Per-channel preamps ride the preset too (adam's report).
+                    stateManager.preampLeftDb = obj.optDouble("preampLeft", 0.0).toFloat()
+                    stateManager.preampRightDb = obj.optDouble("preampRight", 0.0).toFloat()
+                    eqPrefs.savePreampLeft(stateManager.preampLeftDb)
+                    eqPrefs.savePreampRight(stateManager.preampRightDb)
                     // Sync preamp slider/text to the loaded value; pref alone leaves
                     // stale UI + stale DP preamp.
                     preampSlider.value = stateManager.preampGainDb.coerceIn(-12f, 12f)
@@ -2510,7 +2516,9 @@ class  MainActivity : AppCompatActivity() {
             if (cseOn) sigOfSpecs(leftBands) != sigOfEq(curL) || sigOfSpecs(rightBands) != sigOfEq(curR)
             else sigOfSpecs(bothBands) != sigOfEq(stateManager.parametricEq)
 
-        stateManager.applyPresetEqs(cseOn, bothBands, leftBands, rightBands)
+        val sharedBands =
+            if (obj.has("sharedBands")) parseBands(obj.getJSONArray("sharedBands")) else null
+        stateManager.applyPresetEqs(cseOn, bothBands, leftBands, rightBands, sharedBands)
         eqGraphView.setParametricEqualizer(stateManager.parametricEq)
         stateManager.eqPrefs.saveState(stateManager.parametricEq)
         stateManager.persistLeftRightIfCse()
@@ -2524,6 +2532,10 @@ class  MainActivity : AppCompatActivity() {
         stateManager.preampGainDb =
             if (obj.has("preamp")) obj.getDouble("preamp").toFloat() else 0f
         stateManager.eqPrefs.savePreampGain(stateManager.preampGainDb)
+        stateManager.preampLeftDb = obj.optDouble("preampLeft", 0.0).toFloat()
+        stateManager.preampRightDb = obj.optDouble("preampRight", 0.0).toFloat()
+        eqPrefs.savePreampLeft(stateManager.preampLeftDb)
+        eqPrefs.savePreampRight(stateManager.preampRightDb)
         preampSlider.value = stateManager.preampGainDb.coerceIn(-12f, 12f)
         preampText.setText(String.format("%.1f", stateManager.preampGainDb))
         stateManager.pushEqUpdate()
@@ -2660,6 +2672,10 @@ class  MainActivity : AppCompatActivity() {
             val (lEq, rEq) = stateManager.getChannelEqs()
             json.put("leftBands", serialize(lEq))
             json.put("rightBands", serialize(rEq))
+            // Shared "Both" layer + per-channel preamps (adam's report).
+            json.put("sharedBands", serialize(stateManager.getSharedEqForPreset()))
+            json.put("preampLeft", stateManager.preampLeftDb.toDouble())
+            json.put("preampRight", stateManager.preampRightDb.toDouble())
             // Back-compat: also write the active EQ under the legacy "bands".
             json.put("bands", serialize(stateManager.parametricEq))
         } else {

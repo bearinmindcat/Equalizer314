@@ -73,6 +73,18 @@ class RouteSwitchCoordinator(
             eqPrefs.saveLeftBands(leftEq)
             eqPrefs.saveRightBands(rightEq)
             livePrefs.edit().putString("bands", leftArr.toString()).apply()
+            // Shared "Both" layer + per-channel preamps ride the preset.
+            val sharedArr = preset.optJSONArray("sharedBands")
+            val sharedEq = if (sharedArr != null) buildEqualizerFromBands(sharedArr) else ParametricEqualizer()
+            eqPrefs.saveSharedBands(sharedEq)
+            com.bearinmind.equalizer314.dsp.ParametricToDpConverter.overlayEq =
+                if (sharedEq.getBandCount() > 0) sharedEq else null
+            eqPrefs.savePreampLeft(preset.optDouble("preampLeft", 0.0).toFloat())
+            eqPrefs.savePreampRight(preset.optDouble("preampRight", 0.0).toFloat())
+            if (dynamicsManager.isActive) {
+                dynamicsManager.leftChannelGainDb = eqPrefs.getLeftChannelGainDb() + eqPrefs.getPreampLeft()
+                dynamicsManager.rightChannelGainDb = eqPrefs.getRightChannelGainDb() + eqPrefs.getPreampRight()
+            }
         } else {
             // Single / shared preset — mirror its `bands` and clear stale per-channel divergence + flag
             // so a later CSE-enable forks cleanly.
@@ -80,6 +92,13 @@ class RouteSwitchCoordinator(
             livePrefs.edit().putString("bands", bandsJson.toString()).apply()
             eqPrefs.saveChannelSideEqEnabled(false)
             eqPrefs.clearLeftRightBands()
+            com.bearinmind.equalizer314.dsp.ParametricToDpConverter.overlayEq = null
+            eqPrefs.savePreampLeft(0f)
+            eqPrefs.savePreampRight(0f)
+            if (dynamicsManager.isActive) {
+                dynamicsManager.leftChannelGainDb = eqPrefs.getLeftChannelGainDb()
+                dynamicsManager.rightChannelGainDb = eqPrefs.getRightChannelGainDb()
+            }
         }
 
         // Push saved preamp to the live DP, not just prefs — else the audio path keeps the previous
