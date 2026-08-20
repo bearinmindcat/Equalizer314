@@ -318,13 +318,7 @@ class EqService : Service() {
         override fun onPlaybackConfigChanged(configs: MutableList<AudioPlaybackConfiguration>?) {
             applySystemSoundBypass(configs ?: emptyList())
             // API 33+: report the actual routed device (output-switcher moves fire no device callbacks).
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                val routed = configs
-                    ?.filter { it.audioAttributes.usage == android.media.AudioAttributes.USAGE_MEDIA }
-                    ?.firstNotNullOfOrNull { it.audioDeviceInfo }
-                    ?: configs?.firstNotNullOfOrNull { it.audioDeviceInfo }
-                routingMonitor?.reportRoutedDevice(routed)
-            }
+            feedRoutedDeviceFromPlayback()
             // Playback config changes are exactly when OEM ROMs drop the
             // session-0 effect — re-verify after the foreign session settles
             // (mirrors reclaimSession's small delay).
@@ -370,6 +364,58 @@ class EqService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder = binder
+
+    /** API 33+: read the routed device off live media playback and feed the routing monitor. */
+    private fun feedRoutedDeviceFromPlayback() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val configs = getSystemService(AudioManager::class.java)?.activePlaybackConfigurations ?: return
+        val routed = configs
+            .filter { it.audioAttributes.usage == android.media.AudioAttributes.USAGE_MEDIA }
+            .firstNotNullOfOrNull { it.audioDeviceInfo }
+            ?: configs.firstNotNullOfOrNull { it.audioDeviceInfo }
+        routingMonitor?.reportRoutedDevice(routed)
+    }
+
+    // MediaRouter2 selected-route watcher (API 30+): the system output switcher changes
+    // the SELECTED route with no device add/remove, so AudioDeviceCallback (and on some
+    // HALs the playback callback) never fires — Wavelet catches this with a
+    // ControllerCallback (docs/WAVELET_DEVICE_SWITCHING.md).
+    private var mediaRouter2: android.media.MediaRouter2? = null
+    private var mr2RouteCallback: android.media.MediaRouter2.RouteCallback? = null
+    private var mr2ControllerCallback: android.media.MediaRouter2.ControllerCallback? = null
+
+    private fun startRouteSelectionWatcher() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        try {
+            val mr2 = android.media.MediaRouter2.getInstance(this)
+            val pref = android.media.RouteDiscoveryPreference.Builder(
+                listOf(android.media.MediaRoute2Info.FEATURE_LIVE_AUDIO), true
+            ).build()
+            val rcb = object : android.media.MediaRouter2.RouteCallback() {}
+            val ccb = object : android.media.MediaRouter2.ControllerCallback() {
+                override fun onControllerUpdated(controller: android.media.MediaRouter2.RoutingController) {
+                    // Poll now and again after the route settles — the playback
+                    // configs can lag the selection by a beat.
+                    feedRoutedDeviceFromPlayback()
+                    watchdogHandler.postDelayed({ feedRoutedDeviceFromPlayback() }, 350)
+                }
+            }
+            mr2.registerRouteCallback(mainExecutor, rcb, pref)
+            mr2.registerControllerCallback(mainExecutor, ccb)
+            mediaRouter2 = mr2; mr2RouteCallback = rcb; mr2ControllerCallback = ccb
+        } catch (e: Exception) {
+            Log.w(TAG, "MediaRouter2 route watcher unavailable: ${e.message}")
+        }
+    }
+
+    private fun stopRouteSelectionWatcher() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        try {
+            mr2RouteCallback?.let { mediaRouter2?.unregisterRouteCallback(it) }
+            mr2ControllerCallback?.let { mediaRouter2?.unregisterControllerCallback(it) }
+        } catch (_: Exception) {}
+        mediaRouter2 = null; mr2RouteCallback = null; mr2ControllerCallback = null
+    }
 
     /** Same "DynamicsProcessing Start/Stop" toast as a power-FAB tap, fired
      *  from the service so it shows when MainActivity is closed (QS tile /
@@ -469,6 +515,7 @@ class EqService : Service() {
         routingMonitor = monitor
         routeCoordinator = coordinator
         monitor.start()
+        startRouteSelectionWatcher()
 
         // Session-0 control watchdog: self-gates (early-returns unless EQ is
         // live in System-wide mode); real recovery is driven by the
@@ -1008,6 +1055,7 @@ class EqService : Service() {
             getSystemService(AudioManager::class.java)
                 ?.unregisterAudioPlaybackCallback(systemSoundCallback)
         } catch (_: Exception) {}
+        stopRouteSelectionWatcher()
         routingMonitor?.stop()
         routingMonitor = null
         routeCoordinator = null

@@ -17,11 +17,10 @@ Done:
 - Our device keys (`DeviceIdentity`: BT MAC / wired / USB) are more stable than Wavelet's
   (sanitized display names — break on rename or system-language change). Keep ours.
 
-Open / to verify:
-- **Output-switcher move with no playback restart** (speaker↔BT while both stay connected):
-  fires no device add/remove, and `onPlaybackConfigChanged` may not fire either. Wavelet
-  catches this with `MediaRouter2.ControllerCallback` (selected-route change, API 30+).
-  If testing shows we miss it, add a ControllerCallback that kicks the routing monitor.
+Done (2026-08-20): **Output-switcher moves** — `EqService.startRouteSelectionWatcher()`
+registers `MediaRouter2` RouteCallback + ControllerCallback (API 30+, `FEATURE_LIVE_AUDIO`);
+on a selected-route change it re-reads the routed device from live playback configs
+(immediately + a 350 ms settle re-poll) and feeds `reportRoutedDevice`.
 
 Optional grafts (small, not urgent):
 - Label sanitization: reject `Build.MODEL`, `"boot_headset"`, `"h2w"` as wired product names

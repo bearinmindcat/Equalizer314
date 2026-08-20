@@ -1,0 +1,8 @@
+- All 4 EQ modes are back (issue #77): toggle which show and drag their order in the new "EQ Modes & UI" settings screen; the graph resizes when two mode rows show.
+- Notification Settings (issue #65): pick and reorder what the notification shows (volume/mode/preset/device) with a live preview; hide-notification toggle moved there.
+- Gain coloring on the EQ graph (issues #67/#68): ear-icon toggle colors the curve green/yellow/red on boosts, teal/blue on cuts.
+- Channel Settings card restored with an on/off toggle (issue #75); Channel Side EQ presets now save left/right filters, the shared Both layer, and per-channel preamps.
+- Full-chain presets (issue #78): MBC + limiter save into presets, show as MBC/LIM tags, apply reliably on preset switch, and export into the .txt below the APO section.
+- Device switching: output-switcher moves are now detected (MediaRouter2), and preset MBC/limiter apply correctly on auto-switch.
+- Pixel Compatibility Mode forces a 10 ms window and disables post-EQ, matching Wavelet's AIDL profile (issue #74) — Pixel owners please test.
+- Fixes: MBC second-mode crash with 3+ bands and live band updates there (issue #76); double "DynamicsProcessing Stop" toast (issue #79); misplaced graph overlay buttons; Experimental screen layout + lock removed.
