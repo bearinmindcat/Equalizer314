@@ -238,6 +238,18 @@ class ChannelSideEqActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Tethered to the graph popout's power toggle — re-sync in case CSE flipped elsewhere.
+        findViewById<MaterialSwitch>(R.id.channelSideMasterSwitch)?.apply {
+            setOnCheckedChangeListener(null)
+            isChecked = eqPrefs.getChannelSideEqEnabled()
+            setOnCheckedChangeListener { _, isChecked ->
+                eqPrefs.saveChannelSideEqEnabled(isChecked)
+            }
+        }
+    }
+
     override fun finish() {
         super.finish()
         overridePendingTransition(R.anim.fade_in, R.anim.fade_out)

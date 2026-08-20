@@ -400,6 +400,10 @@ class  MainActivity : AppCompatActivity() {
     private lateinit var modeGraphicBtn: MaterialButton
     private lateinit var modeTableBtn: MaterialButton
     private lateinit var modeSimpleBtn: MaterialButton
+
+    // The eye and channel popouts share row-2 cells — only one may be open (L-button tap steal).
+    private var closeViewOptionsPopoutInstant: (() -> Unit)? = null
+    private var closeChannelPopoutInstant: (() -> Unit)? = null
     private lateinit var parametricControlsCard: View
     private lateinit var hzControlRow: View
     private lateinit var tableEqCard: View
@@ -1137,9 +1141,23 @@ class  MainActivity : AppCompatActivity() {
         settingsGearBtn.visibility = View.GONE
 
         var channelPopoutOpen = false
+        closeChannelPopoutInstant = {
+            if (channelPopoutOpen) {
+                channelPopoutOpen = false
+                for (b in listOf(channelBothBtn, channelLBtn, channelRBtn, settingsGearBtn)) {
+                    b.animate().cancel()
+                    b.visibility = View.GONE
+                    b.alpha = 1f; b.scaleX = 1f; b.scaleY = 1f; b.translationY = 0f
+                }
+                altRouteBtn.setBackgroundColor(graphBtnDimBg)
+                altRouteBtn.strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                altRouteBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+            }
+        }
         altRouteBtn.setOnClickListener {
             channelPopoutOpen = !channelPopoutOpen
             if (channelPopoutOpen) {
+                closeViewOptionsPopoutInstant?.invoke()
                 val offsetY = -(altRouteBtn.height.toFloat() + gapPx)
                 // L/R dim when CSE off, bright when on. Full alpha always — dim palette
                 // conveys inactive; translucency let graph badges bleed through.
@@ -2064,11 +2082,24 @@ class  MainActivity : AppCompatActivity() {
         paintLit(fillBtn, false)
         eqGraphView.showGainHeat = eqPrefs.getGraphHeat()
         paintLit(heatBtn, eqGraphView.showGainHeat)
+        closeViewOptionsPopoutInstant = {
+            if (viewOptionsOpen) {
+                viewOptionsOpen = false
+                for (b in listOf(onOffBtn, fillBtn, heatBtn)) {
+                    b.animate().cancel()
+                    b.visibility = android.view.View.GONE
+                    b.alpha = 1f; b.scaleX = 1f; b.scaleY = 1f; b.translationY = 0f
+                }
+                paintLit(bandPtsBtn, false)
+                bandPtsBtn.iconTint = android.content.res.ColorStateList.valueOf(0xFFDDDDDD.toInt())
+            }
+        }
 
         bandPtsBtn.setOnClickListener {
             viewOptionsOpen = !viewOptionsOpen
             val offsetY = -(bandPtsBtn.height.toFloat() + gapPx)
             if (viewOptionsOpen) {
+                closeChannelPopoutInstant?.invoke()
                 onOffBtn.visibility = android.view.View.VISIBLE
                 fillBtn.visibility = android.view.View.VISIBLE
                 heatBtn.visibility = android.view.View.VISIBLE

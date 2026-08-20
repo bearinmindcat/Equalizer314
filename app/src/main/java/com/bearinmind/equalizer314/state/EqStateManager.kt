@@ -365,6 +365,8 @@ class EqStateManager(
     /** Channel Side EQ switch: on enable, fork the current shared EQ into leftEq/rightEq
      *  (identical start) with L as the editing target; on disable, flip back to the "both" EQ. */
     fun setChannelSideEqEnabled(enabled: Boolean) {
+        // Persist first — the gear's paint and the L/R tap guards read this pref.
+        eqPrefs.saveChannelSideEqEnabled(enabled)
         if (enabled) {
             // Prefer prior L/R divergence when prefs carry it (CSE flipped off + back on); fork
             // from the current active EQ when either pref is absent (first enable / fresh install).
