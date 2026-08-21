@@ -77,6 +77,145 @@ class  MainActivity : AppCompatActivity() {
         presetExportLauncher.launch(intent)
     }
 
+    // ---- Preset import ----
+    private var refreshPresetPicker: (() -> Unit)? = null
+
+    private val presetImportLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri == null) return@registerForActivityResult
+        try {
+            val text = contentResolver.openInputStream(uri)?.bufferedReader()?.readText()
+                ?: throw Exception("empty file")
+            var fileName = "Imported"
+            contentResolver.query(uri, null, null, null, null)?.use { c ->
+                val idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (idx >= 0 && c.moveToFirst()) fileName = c.getString(idx) ?: fileName
+            }
+            fileName = fileName.substringBeforeLast('.')
+            val presetJson = parseImportedPreset(text) ?: throw Exception("unrecognized preset format")
+            val name = uniquePresetName(presetJson.optString("presetName").ifBlank { fileName })
+            presetJson.remove("presetName")
+            val prefs = getSharedPreferences("custom_presets", MODE_PRIVATE)
+            val names = prefs.getStringSet("preset_names", emptySet())?.toMutableSet() ?: mutableSetOf()
+            names.add(name)
+            prefs.edit()
+                .putString("preset_$name", presetJson.toString())
+                .putStringSet("preset_names", names)
+                .apply()
+            refreshPresetPicker?.invoke()
+            android.widget.Toast.makeText(this, "Imported \"$name\"", android.widget.Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            android.widget.Toast.makeText(this, "Import failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun uniquePresetName(base: String): String {
+        val prefs = getSharedPreferences("custom_presets", MODE_PRIVATE)
+        if (!prefs.contains("preset_$base")) return base
+        var i = 2
+        while (prefs.contains("preset_$base ($i)")) i++
+        return "$base ($i)"
+    }
+
+    /** Parse a native preset JSON or an APO .txt (incl. the EQ314 chain section) into preset JSON. */
+    private fun parseImportedPreset(text: String): org.json.JSONObject? {
+        val trimmed = text.trim()
+        if (trimmed.startsWith("{")) {
+            val obj = try { org.json.JSONObject(trimmed) } catch (_: Exception) { return null }
+            // Native concept nests bands under "eq"; our preset JSON keeps them top-level.
+            if (!obj.has("bands") && obj.optJSONObject("eq")?.has("bands") == true) {
+                obj.put("bands", obj.getJSONObject("eq").getJSONArray("bands"))
+            }
+            return if (obj.has("bands")) obj else null
+        }
+        val profile = com.bearinmind.equalizer314.autoeq.AutoEqParser.parse(trimmed) ?: return null
+        if (profile.filters.isEmpty() && profile.leftFilters.isEmpty()) return null
+        fun bandsOf(filters: List<com.bearinmind.equalizer314.autoeq.AutoEqFilter>): org.json.JSONArray {
+            val arr = org.json.JSONArray()
+            for (f in filters) {
+                arr.put(org.json.JSONObject().apply {
+                    put("frequency", f.frequency.toDouble())
+                    put("gain", f.gain.toDouble())
+                    put("q", f.q.toDouble())
+                    put("filterType", com.bearinmind.equalizer314.autoeq.apoTokenToFilterType(f.filterType).name)
+                    put("enabled", true)
+                })
+            }
+            return arr
+        }
+        val json = org.json.JSONObject()
+        json.put("preamp", profile.preampDb.toDouble())
+        if (profile.perChannel) {
+            json.put("channelSideEqEnabled", true)
+            json.put("leftBands", bandsOf(profile.leftFilters))
+            json.put("rightBands", bandsOf(profile.rightFilters))
+            json.put("bands", bandsOf(profile.leftFilters))
+        } else {
+            json.put("channelSideEqEnabled", false)
+            json.put("bands", bandsOf(profile.filters))
+        }
+        parseEq314ChainSection(trimmed, json)
+        return json
+    }
+
+    /** Parse the "# EQ314 Specific" MBC / Limiter export lines back into preset JSON blocks. */
+    private fun parseEq314ChainSection(text: String, json: org.json.JSONObject) {
+        val mbcHead = Regex("""^MBC:\s+(ON|OFF)\s+Bands\s+(\d+)""", RegexOption.IGNORE_CASE)
+        val mbcBand = Regex(
+            """^MBC\s+(\d+):\s+(ON|OFF)\s+Fc\s+([\d.]+)\s*Hz\s+Atk\s+(-?[\d.]+)\s+Rel\s+(-?[\d.]+)\s+Ratio\s+(-?[\d.]+)\s+Thr\s+(-?[\d.]+)\s*dB\s+Knee\s+(-?[\d.]+)\s+Gate\s+(-?[\d.]+)\s+Exp\s+(-?[\d.]+)\s+Pre\s+(-?[\d.]+)\s+Post\s+(-?[\d.]+)""",
+            RegexOption.IGNORE_CASE)
+        val mbcCross = Regex("""^MBC Crossovers:\s+([\d.,\s]+)\s*Hz""", RegexOption.IGNORE_CASE)
+        val limiterLine = Regex(
+            """^Limiter:\s+(ON|OFF)\s+Atk\s+(-?[\d.]+)\s+Rel\s+(-?[\d.]+)\s+Ratio\s+(-?[\d.]+)\s+Thr\s+(-?[\d.]+)\s*dB\s+Post\s+(-?[\d.]+)""",
+            RegexOption.IGNORE_CASE)
+        var mbcObj: org.json.JSONObject? = null
+        val bandArr = org.json.JSONArray()
+        for (raw in text.lines()) {
+            val line = raw.trim()
+            mbcHead.find(line)?.let { m ->
+                mbcObj = org.json.JSONObject().apply {
+                    put("enabled", m.groupValues[1].equals("ON", true))
+                    put("bandCount", m.groupValues[2].toInt())
+                    put("bands", bandArr)
+                }
+            }
+            mbcBand.find(line)?.let { m ->
+                bandArr.put(org.json.JSONObject().apply {
+                    put("enabled", m.groupValues[2].equals("ON", true))
+                    put("cutoff", m.groupValues[3].toDouble())
+                    put("attack", m.groupValues[4].toDouble())
+                    put("release", m.groupValues[5].toDouble())
+                    put("ratio", m.groupValues[6].toDouble())
+                    put("threshold", m.groupValues[7].toDouble())
+                    put("knee", m.groupValues[8].toDouble())
+                    put("noiseGate", m.groupValues[9].toDouble())
+                    put("expander", m.groupValues[10].toDouble())
+                    put("preGain", m.groupValues[11].toDouble())
+                    put("postGain", m.groupValues[12].toDouble())
+                })
+            }
+            mbcCross.find(line)?.let { m ->
+                val arr = org.json.JSONArray()
+                m.groupValues[1].split(",").forEach { s ->
+                    s.trim().toDoubleOrNull()?.let { arr.put(it) }
+                }
+                mbcObj?.put("crossovers", arr)
+            }
+            limiterLine.find(line)?.let { m ->
+                json.put("limiter", org.json.JSONObject().apply {
+                    put("enabled", m.groupValues[1].equals("ON", true))
+                    put("attack", m.groupValues[2].toDouble())
+                    put("release", m.groupValues[3].toDouble())
+                    put("ratio", m.groupValues[4].toDouble())
+                    put("threshold", m.groupValues[5].toDouble())
+                    put("postGain", m.groupValues[6].toDouble())
+                })
+            }
+        }
+        mbcObj?.let { json.put("mbc", it) }
+    }
+
     // ---- Whole-app backup / restore ----
     private val backupExportLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
@@ -1257,26 +1396,49 @@ class  MainActivity : AppCompatActivity() {
 
             val density = resources.displayMetrics.density
 
-            // "+" button at top — exact copy of the band add button style, full width
-            val saveCurrentBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-                text = "+"
+            refreshPresetPicker = { populatePresetPicker() }
+            fun pickerActionBtn(label: String, endMargin: Boolean) =
+                com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                    text = label
+                    layoutParams = android.widget.LinearLayout.LayoutParams(
+                        0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                        if (endMargin) marginEnd = (4 * density).toInt()
+                    }
+                    cornerRadius = (12 * density).toInt()
+                    textSize = 14f
+                    isAllCaps = false
+                    val vertPad = (10 * density).toInt()
+                    setPadding(0, vertPad, 0, vertPad)
+                    insetTop = 0; insetBottom = 0
+                    minWidth = 0; minimumWidth = 0
+                    gravity = android.view.Gravity.CENTER
+                    setBackgroundColor(0x00000000)
+                    setTextColor(0xFF888888.toInt())
+                    strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                    strokeWidth = (1 * density).toInt()
+                }
+            val actionRow = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
                 layoutParams = android.widget.LinearLayout.LayoutParams(
                     android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
                     android.widget.LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                     setMargins(0, 0, 0, (4 * density).toInt())
                 }
-                cornerRadius = (12 * density).toInt()
-                textSize = 11f
-                val vertPad = (6 * density).toInt()
-                setPadding(0, vertPad, 0, vertPad)
-                insetTop = 0; insetBottom = 0
-                minWidth = 0; minimumWidth = 0
-                gravity = android.view.Gravity.CENTER
-                setBackgroundColor(0x00000000)
-                setTextColor(0xFF888888.toInt())
-                strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
-                strokeWidth = (1 * density).toInt()
             }
+            fun pickerBtnIcon(btn: com.google.android.material.button.MaterialButton, iconRes: Int) {
+                btn.icon = resources.getDrawable(iconRes, theme)
+                btn.iconGravity = com.google.android.material.button.MaterialButton.ICON_GRAVITY_TEXT_START
+                btn.iconPadding = (6 * density).toInt()
+                btn.iconSize = (18 * density).toInt()
+                btn.iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+            }
+            val saveCurrentBtn = pickerActionBtn("New Preset", endMargin = true)
+            pickerBtnIcon(saveCurrentBtn, R.drawable.ic_add)
+            val importPresetBtn = pickerActionBtn("Import Preset", endMargin = false)
+            pickerBtnIcon(importPresetBtn, R.drawable.ic_export)
+            importPresetBtn.setOnClickListener { presetImportLauncher.launch("*/*") }
+            actionRow.addView(saveCurrentBtn)
+            actionRow.addView(importPresetBtn)
             saveCurrentBtn.setOnClickListener {
                 // Find next Custom # number
                 var nextNum = 1
@@ -1381,7 +1543,7 @@ class  MainActivity : AppCompatActivity() {
                 }
                 dialog.show()
             }
-            presetPickerContainer.addView(saveCurrentBtn)
+            presetPickerContainer.addView(actionRow)
 
             // List saved presets — styled like (+) band buttons
             for (name in presetNames) {
@@ -1670,7 +1832,7 @@ class  MainActivity : AppCompatActivity() {
                     insetTop = 0; insetBottom = 0
                     minWidth = 0; minimumWidth = 0; minHeight = 0; minimumHeight = 0
                     setBackgroundColor(0x00000000)
-                    icon = resources.getDrawable(R.drawable.ic_export, theme)
+                    icon = resources.getDrawable(R.drawable.ic_export_up, theme)
                     iconGravity = com.google.android.material.button.MaterialButton.ICON_GRAVITY_TEXT_START
                     iconPadding = 0
                     iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
