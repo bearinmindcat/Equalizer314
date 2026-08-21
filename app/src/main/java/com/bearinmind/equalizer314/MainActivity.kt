@@ -390,6 +390,20 @@ class  MainActivity : AppCompatActivity() {
                 android.widget.Toast.makeText(this, "Could not parse APO preset", android.widget.Toast.LENGTH_LONG).show()
                 return@registerForActivityResult
             }
+            applyParsedProfile(profile, "APO Import", "", "")
+        } catch (e: Exception) {
+            android.widget.Toast.makeText(this, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /** Apply a parsed AutoEQ/APO profile to the live EQ (APO import + the picker's AutoEQ rows). */
+    private fun applyParsedProfile(
+        profile: com.bearinmind.equalizer314.autoeq.AutoEqProfile,
+        presetLabel: String,
+        autoEqName: String,
+        autoEqSource: String,
+    ) {
+        try {
             fun toBandSpecs(filters: List<com.bearinmind.equalizer314.autoeq.AutoEqFilter>):
                     List<com.bearinmind.equalizer314.state.EqStateManager.BandSpec> =
                 filters.map {
@@ -402,9 +416,10 @@ class  MainActivity : AppCompatActivity() {
                 }
 
             eqPrefs.savePreampGain(profile.preampDb)
-            eqPrefs.savePresetName("APO Import")
-            eqPrefs.saveAutoEqName("")
-            eqPrefs.saveAutoEqSource("")
+            eqPrefs.savePresetName(presetLabel)
+            eqPrefs.saveAutoEqName(autoEqName)
+            eqPrefs.saveAutoEqSource(autoEqSource)
+            presetDropdown.setText(presetLabel, false)
 
             if (profile.perChannel) {
                 // Fork into L/R editors and flip Channel Side EQ on.
@@ -470,6 +485,8 @@ class  MainActivity : AppCompatActivity() {
             android.widget.Toast.makeText(this, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
         }
     }
+
+    private val autoEqDatabase by lazy { com.bearinmind.equalizer314.autoeq.AutoEqDatabase(this) }
 
     // Views
     private lateinit var eqGraphView: EqGraphView
@@ -1545,6 +1562,118 @@ class  MainActivity : AppCompatActivity() {
             }
             presetPickerContainer.addView(actionRow)
 
+            val pickerSectionPrefs = getSharedPreferences("eq_settings", MODE_PRIVATE)
+            fun collapsibleSection(
+                label: String,
+                rightText: String?,
+                prefKey: String,
+                body: android.widget.LinearLayout,
+            ): android.view.View {
+                val header = android.widget.LinearLayout(this).apply {
+                    orientation = android.widget.LinearLayout.HORIZONTAL
+                    gravity = android.view.Gravity.CENTER_VERTICAL
+                    // Baseline alignment shoves the text below center next to the chevron.
+                    isBaselineAligned = false
+                    layoutParams = android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                        // Bottom margin mirrors the 6dp gap above so the ripple clears the card below.
+                        setMargins(0, (2 * density).toInt(), 0, (6 * density).toInt())
+                    }
+                    setPadding((8 * density).toInt(), (8 * density).toInt(), (8 * density).toInt(), (8 * density).toInt())
+                    val hl = android.util.TypedValue()
+                    theme.resolveAttribute(android.R.attr.colorControlHighlight, hl, true)
+                    val rippleColor = if (hl.resourceId != 0) resources.getColor(hl.resourceId, theme) else hl.data
+                    background = android.graphics.drawable.RippleDrawable(
+                        android.content.res.ColorStateList.valueOf(rippleColor),
+                        null,
+                        android.graphics.drawable.GradientDrawable().apply {
+                            cornerRadius = 12 * density
+                            setColor(0xFFFFFFFF.toInt())
+                        }
+                    )
+                    isClickable = true; isFocusable = true
+                }
+                val chevron = android.widget.ImageView(this).apply {
+                    setImageResource(R.drawable.ic_chevron_right)
+                    imageTintList = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+                    layoutParams = android.widget.LinearLayout.LayoutParams(
+                        (16 * density).toInt(), (16 * density).toInt()
+                    ).apply { marginEnd = (6 * density).toInt() }
+                }
+                header.addView(chevron)
+                header.addView(android.widget.TextView(this).apply {
+                    text = label
+                    textSize = 12f
+                    letterSpacing = 0.08f
+                    setTextColor(0xFF888888.toInt())
+                    layoutParams = android.widget.LinearLayout.LayoutParams(
+                        0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                })
+                if (rightText != null) header.addView(android.widget.TextView(this).apply {
+                    text = rightText
+                    textSize = 12f
+                    setTextColor(0xFF888888.toInt())
+                })
+                var open = pickerSectionPrefs.getBoolean(prefKey, true)
+                val interp = androidx.interpolator.view.animation.FastOutSlowInInterpolator()
+                fun applyOpen(animate: Boolean) {
+                    val target = if (open) 90f else 0f
+                    if (!animate) {
+                        body.visibility = if (open) View.VISIBLE else View.GONE
+                        body.layoutParams.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+                        chevron.rotation = target
+                        return
+                    }
+                    chevron.animate().rotation(target).setDuration(200).setInterpolator(interp).start()
+                    if (open) {
+                        body.visibility = View.VISIBLE
+                        val widthSpec = View.MeasureSpec.makeMeasureSpec(
+                            (body.parent as View).width, View.MeasureSpec.EXACTLY)
+                        body.measure(widthSpec, View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+                        android.animation.ValueAnimator.ofInt(0, body.measuredHeight).apply {
+                            duration = 200; interpolator = interp
+                            addUpdateListener { body.layoutParams.height = it.animatedValue as Int; body.requestLayout() }
+                            addListener(object : android.animation.AnimatorListenerAdapter() {
+                                override fun onAnimationEnd(animation: android.animation.Animator) {
+                                    body.layoutParams.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+                                    body.requestLayout()
+                                }
+                            })
+                            start()
+                        }
+                    } else {
+                        android.animation.ValueAnimator.ofInt(body.height, 0).apply {
+                            duration = 200; interpolator = interp
+                            addUpdateListener { body.layoutParams.height = it.animatedValue as Int; body.requestLayout() }
+                            addListener(object : android.animation.AnimatorListenerAdapter() {
+                                override fun onAnimationEnd(animation: android.animation.Animator) {
+                                    body.visibility = View.GONE
+                                    body.layoutParams.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+                                }
+                            })
+                            start()
+                        }
+                    }
+                }
+                applyOpen(false)
+                header.setOnClickListener {
+                    open = !open
+                    pickerSectionPrefs.edit().putBoolean(prefKey, open).apply()
+                    applyOpen(true)
+                }
+                return header
+            }
+            val userPresetsBody = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
+            }
+            presetPickerContainer.addView(
+                collapsibleSection("USER PRESETS", null, "pickerUserPresetsOpen", userPresetsBody))
+            presetPickerContainer.addView(userPresetsBody)
+
             // List saved presets — styled like (+) band buttons
             for (name in presetNames) {
                 // Parse preset data for thumbnail
@@ -2160,8 +2289,168 @@ class  MainActivity : AppCompatActivity() {
                     saveBtn.iconTint = android.content.res.ColorStateList.valueOf(graphBtnDimContent)
                     android.widget.Toast.makeText(this, "Loaded \"$name\"", android.widget.Toast.LENGTH_SHORT).show()
                 }
-                presetPickerContainer.addView(presetRow)
+                userPresetsBody.addView(presetRow)
             }
+
+            // ---- AutoEQ presets section ----
+            val importedNames = eqPrefs.getImportedPresets()
+            val autoEqTotal = autoEqDatabase.totalCount() + importedNames.size
+            val autoEqBody = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
+            }
+            presetPickerContainer.addView(
+                collapsibleSection("AUTOEQ PRESETS", "$autoEqTotal presets", "pickerAutoEqOpen", autoEqBody))
+            presetPickerContainer.addView(autoEqBody)
+
+            val autoEqSearch = android.widget.EditText(this).apply {
+                hint = "Search AutoEQ..."
+                setTextColor(if (isLightUi) 0xFF202020.toInt() else 0xFFFFFFFF.toInt())
+                setHintTextColor(0xFF888888.toInt())
+                textSize = 14f
+                isSingleLine = true
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(0x00000000)
+                    setStroke((1 * density).toInt(), 0xFF444444.toInt())
+                    cornerRadius = 12 * density
+                }
+                val padH = (12 * density).toInt(); val padV = (10 * density).toInt()
+                setPadding(padH, padV, padH, padV)
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                    setMargins(0, 0, 0, (4 * density).toInt())
+                }
+            }
+            autoEqBody.addView(autoEqSearch)
+            val autoEqResults = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
+            }
+            autoEqBody.addView(autoEqResults)
+
+            fun renderAutoEqRows(query: String) {
+                autoEqResults.removeAllViews()
+                val q = query.trim().lowercase()
+                // Favorites first, then imported, then database matches (capped).
+                val favs = eqPrefs.getFavoritePresets()
+                val favKeys = favs.map { (n, s) -> "$n|$s" }.toHashSet()
+                val entries = mutableListOf<com.bearinmind.equalizer314.autoeq.AutoEqEntry>()
+                for ((favName, favSource) in favs) {
+                    if (q.isNotEmpty() && !favName.lowercase().contains(q)) continue
+                    val e = if (favSource == "Imported") {
+                        if (importedNames.contains(favName))
+                            com.bearinmind.equalizer314.autoeq.AutoEqEntry(favName, "Imported", "", "", "") else null
+                    } else {
+                        autoEqDatabase.search(favName).firstOrNull { it.name == favName && it.source == favSource }
+                    }
+                    if (e != null) entries.add(e)
+                }
+                importedNames
+                    .filter { (q.isEmpty() || it.lowercase().contains(q)) && "$it|Imported" !in favKeys }
+                    .forEach { entries.add(com.bearinmind.equalizer314.autoeq.AutoEqEntry(it, "Imported", "", "", "")) }
+                entries.addAll(autoEqDatabase.search(query).filter { "${it.name}|${it.source}" !in favKeys })
+
+                val capped = entries.take(25)
+                for (entry in capped) {
+                    val row = android.widget.LinearLayout(this).apply {
+                        orientation = android.widget.LinearLayout.HORIZONTAL
+                        gravity = android.view.Gravity.CENTER_VERTICAL
+                        layoutParams = android.widget.LinearLayout.LayoutParams(
+                            android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                            setMargins(0, 0, 0, (4 * density).toInt())
+                        }
+                        background = android.graphics.drawable.GradientDrawable().apply {
+                            setColor(0x00000000)
+                            setStroke((1 * density).toInt(), 0xFF444444.toInt())
+                            cornerRadius = 12 * density
+                        }
+                        val padH = (12 * density).toInt(); val padV = (10 * density).toInt()
+                        setPadding(padH, padV, padH, padV)
+                        isClickable = true; isFocusable = true
+                    }
+                    val nameCol = android.widget.LinearLayout(this).apply {
+                        orientation = android.widget.LinearLayout.VERTICAL
+                        layoutParams = android.widget.LinearLayout.LayoutParams(
+                            0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                    }
+                    nameCol.addView(android.widget.TextView(this).apply {
+                        text = entry.name
+                        textSize = 14f
+                        isSingleLine = true
+                        setTextColor(if (isLightUi) 0xFF202020.toInt() else 0xFFE2E2E2.toInt())
+                    })
+                    nameCol.addView(android.widget.TextView(this).apply {
+                        text = entry.source
+                        textSize = 11f
+                        isSingleLine = true
+                        setTextColor(0xFF888888.toInt())
+                    })
+                    row.addView(nameCol)
+                    val rippleBorderless = android.util.TypedValue()
+                    theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, rippleBorderless, true)
+                    row.addView(android.widget.ImageButton(this).apply {
+                        val btnSize = (28 * density).toInt()
+                        layoutParams = android.widget.LinearLayout.LayoutParams(btnSize, btnSize).apply {
+                            marginStart = (8 * density).toInt()
+                        }
+                        setBackgroundResource(rippleBorderless.resourceId)
+                        scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                        val pad = (4 * density).toInt()
+                        setPadding(pad, pad, pad, pad)
+                        contentDescription = "Favorite"
+                        imageTintList = null
+                        setImageResource(
+                            if (eqPrefs.isFavoritePreset(entry.name, entry.source)) R.drawable.ic_star_filled
+                            else R.drawable.ic_star_outline
+                        )
+                        setOnClickListener {
+                            if (eqPrefs.isFavoritePreset(entry.name, entry.source)) {
+                                eqPrefs.removeFavoritePreset(entry.name, entry.source)
+                            } else {
+                                eqPrefs.addFavoritePreset(entry.name, entry.source)
+                            }
+                            renderAutoEqRows(query)
+                        }
+                    })
+                    row.setOnClickListener {
+                        val profile = if (entry.source == "Imported") {
+                            eqPrefs.getImportedPresetText(entry.name)
+                                ?.let { com.bearinmind.equalizer314.autoeq.AutoEqParser.parse(it) }
+                        } else {
+                            autoEqDatabase.loadProfile(entry)
+                        }
+                        if (profile == null || (profile.filters.isEmpty() && profile.leftFilters.isEmpty())) {
+                            android.widget.Toast.makeText(this, "Failed to load profile", android.widget.Toast.LENGTH_SHORT).show()
+                        } else {
+                            applyParsedProfile(profile, entry.name, entry.name, entry.source)
+                        }
+                    }
+                    autoEqResults.addView(row)
+                }
+                if (entries.size > capped.size) {
+                    autoEqResults.addView(android.widget.TextView(this).apply {
+                        text = "Showing ${capped.size} of ${entries.size} — search to narrow"
+                        textSize = 11f
+                        setTextColor(0xFF666666.toInt())
+                        gravity = android.view.Gravity.CENTER
+                        setPadding(0, (4 * density).toInt(), 0, (8 * density).toInt())
+                    })
+                }
+            }
+            renderAutoEqRows("")
+            autoEqSearch.addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun afterTextChanged(s: android.text.Editable?) {
+                    renderAutoEqRows(s?.toString() ?: "")
+                }
+            })
         }
 
         // Bound the picker to the viewport below the graph so it scrolls internally
