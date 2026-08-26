@@ -43,14 +43,27 @@ class AutoEqActivity : AppCompatActivity() {
         if (uri == null) return@registerForActivityResult
         try {
             val text = contentResolver.openInputStream(uri)?.bufferedReader()?.readText() ?: return@registerForActivityResult
+            val fileName = contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) cursor.getString(0) else null
+            } ?: uri.lastPathSegment?.substringAfterLast("/") ?: "APO Import"
+            // Native .json / chain-carrying .txt hold more than an AutoEQ entry can —
+            // save those as full user presets so MBC & limiter survive (issue #78).
+            if (com.bearinmind.equalizer314.state.PresetFileIo.hasChainData(text)) {
+                val presetJson = com.bearinmind.equalizer314.state.PresetFileIo.parseImportedPreset(text)
+                if (presetJson != null) {
+                    val name = com.bearinmind.equalizer314.state.PresetFileIo.uniquePresetName(
+                        this, presetJson.optString("presetName").ifBlank { fileName.substringBeforeLast('.') })
+                    presetJson.remove("presetName")
+                    com.bearinmind.equalizer314.state.PresetFileIo.saveUserPreset(this, name, presetJson)
+                    Toast.makeText(this, "Imported \"$name\" to User Presets", Toast.LENGTH_LONG).show()
+                    return@registerForActivityResult
+                }
+            }
             val profile = AutoEqParser.parse(text)
             if (profile == null || profile.filters.isEmpty()) {
                 Toast.makeText(this, "Could not parse APO preset", Toast.LENGTH_LONG).show()
                 return@registerForActivityResult
             }
-            val fileName = contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
-                if (cursor.moveToFirst()) cursor.getString(0) else null
-            } ?: uri.lastPathSegment?.substringAfterLast("/") ?: "APO Import"
             eqPrefs.addImportedPreset(fileName, text)
             // Imported successfully
             performSearch(searchInput.text?.toString() ?: "")
@@ -637,7 +650,7 @@ class AutoEqActivity : AppCompatActivity() {
         ) : RecyclerView.ViewHolder(view)
     }
 
-    private class MiniEqView(context: android.content.Context) : View(context) {
+    class MiniEqView(context: android.content.Context) : View(context) {
         private var profile: AutoEqProfile? = null
         private val curvePaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
             color = 0xFFAAAAAA.toInt()

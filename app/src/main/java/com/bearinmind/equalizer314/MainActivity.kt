@@ -67,11 +67,11 @@ class  MainActivity : AppCompatActivity() {
         }
     }
 
-    internal fun launchPresetExport(text: String, fileName: String) {
+    internal fun launchPresetExport(text: String, fileName: String, mimeType: String = "text/plain") {
         pendingExportText = text
         val intent = android.content.Intent(android.content.Intent.ACTION_CREATE_DOCUMENT).apply {
             addCategory(android.content.Intent.CATEGORY_OPENABLE)
-            type = "text/plain"
+            type = mimeType
             putExtra(android.content.Intent.EXTRA_TITLE, fileName)
         }
         presetExportLauncher.launch(intent)
@@ -93,16 +93,12 @@ class  MainActivity : AppCompatActivity() {
                 if (idx >= 0 && c.moveToFirst()) fileName = c.getString(idx) ?: fileName
             }
             fileName = fileName.substringBeforeLast('.')
-            val presetJson = parseImportedPreset(text) ?: throw Exception("unrecognized preset format")
-            val name = uniquePresetName(presetJson.optString("presetName").ifBlank { fileName })
+            val presetJson = com.bearinmind.equalizer314.state.PresetFileIo.parseImportedPreset(text)
+                ?: throw Exception("unrecognized preset format")
+            val name = com.bearinmind.equalizer314.state.PresetFileIo.uniquePresetName(
+                this, presetJson.optString("presetName").ifBlank { fileName })
             presetJson.remove("presetName")
-            val prefs = getSharedPreferences("custom_presets", MODE_PRIVATE)
-            val names = prefs.getStringSet("preset_names", emptySet())?.toMutableSet() ?: mutableSetOf()
-            names.add(name)
-            prefs.edit()
-                .putString("preset_$name", presetJson.toString())
-                .putStringSet("preset_names", names)
-                .apply()
+            com.bearinmind.equalizer314.state.PresetFileIo.saveUserPreset(this, name, presetJson)
             refreshPresetPicker?.invoke()
             android.widget.Toast.makeText(this, "Imported \"$name\"", android.widget.Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
@@ -110,111 +106,166 @@ class  MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun uniquePresetName(base: String): String {
-        val prefs = getSharedPreferences("custom_presets", MODE_PRIVATE)
-        if (!prefs.contains("preset_$base")) return base
-        var i = 2
-        while (prefs.contains("preset_$base ($i)")) i++
-        return "$base ($i)"
-    }
-
-    /** Parse a native preset JSON or an APO .txt (incl. the EQ314 chain section) into preset JSON. */
-    private fun parseImportedPreset(text: String): org.json.JSONObject? {
-        val trimmed = text.trim()
-        if (trimmed.startsWith("{")) {
-            val obj = try { org.json.JSONObject(trimmed) } catch (_: Exception) { return null }
-            // Native concept nests bands under "eq"; our preset JSON keeps them top-level.
-            if (!obj.has("bands") && obj.optJSONObject("eq")?.has("bands") == true) {
-                obj.put("bands", obj.getJSONObject("eq").getJSONArray("bands"))
+    /** Clean APO text for a preset (EQ only — the chain travels via the .json export). */
+    private fun buildApoExportText(obj: org.json.JSONObject): String {
+        val sb = StringBuilder()
+        sb.append("Preamp: ${String.format("%.1f", obj.optDouble("preamp", 0.0))} dB\n")
+        fun appendFilters(bands: org.json.JSONArray, indexOffset: Int = 0) {
+            for (i in 0 until bands.length()) {
+                val b = bands.getJSONObject(i)
+                // FilterType → APO token. BP/NO/AP/LP/HP have no Gain;
+                // 1st-order LS/HS/LP/HP have no Q.
+                val apoType: String
+                val hasGain: Boolean
+                val hasQ: Boolean
+                when (b.getString("filterType")) {
+                    "BELL"         -> { apoType = "PK";  hasGain = true;  hasQ = true  }
+                    "LOW_SHELF"    -> { apoType = "LSC"; hasGain = true;  hasQ = true  }
+                    "HIGH_SHELF"   -> { apoType = "HSC"; hasGain = true;  hasQ = true  }
+                    "LOW_PASS"     -> { apoType = "LPQ"; hasGain = false; hasQ = true  }
+                    "HIGH_PASS"    -> { apoType = "HPQ"; hasGain = false; hasQ = true  }
+                    "LOW_SHELF_1"  -> { apoType = "LS";  hasGain = true;  hasQ = false }
+                    "HIGH_SHELF_1" -> { apoType = "HS";  hasGain = true;  hasQ = false }
+                    "LOW_PASS_1"   -> { apoType = "LP";  hasGain = false; hasQ = false }
+                    "HIGH_PASS_1"  -> { apoType = "HP";  hasGain = false; hasQ = false }
+                    "BAND_PASS"    -> { apoType = "BP";  hasGain = false; hasQ = true  }
+                    "NOTCH"        -> { apoType = "NO";  hasGain = false; hasQ = true  }
+                    "ALL_PASS"     -> { apoType = "AP";  hasGain = false; hasQ = true  }
+                    else           -> { apoType = "PK";  hasGain = true;  hasQ = true  }
+                }
+                val line = StringBuilder("Filter ${i + 1 + indexOffset}: ON $apoType Fc ${b.getDouble("frequency").toInt()} Hz")
+                if (hasGain) line.append(" Gain ${String.format("%.1f", b.getDouble("gain"))} dB")
+                if (hasQ) line.append(" Q ${String.format("%.2f", b.getDouble("q"))}")
+                sb.append(line).append('\n')
             }
-            return if (obj.has("bands")) obj else null
         }
-        val profile = com.bearinmind.equalizer314.autoeq.AutoEqParser.parse(trimmed) ?: return null
-        if (profile.filters.isEmpty() && profile.leftFilters.isEmpty()) return null
-        fun bandsOf(filters: List<com.bearinmind.equalizer314.autoeq.AutoEqFilter>): org.json.JSONArray {
-            val arr = org.json.JSONArray()
-            for (f in filters) {
-                arr.put(org.json.JSONObject().apply {
-                    put("frequency", f.frequency.toDouble())
-                    put("gain", f.gain.toDouble())
-                    put("q", f.q.toDouble())
-                    put("filterType", com.bearinmind.equalizer314.autoeq.apoTokenToFilterType(f.filterType).name)
-                    put("enabled", true)
-                })
-            }
-            return arr
-        }
-        val json = org.json.JSONObject()
-        json.put("preamp", profile.preampDb.toDouble())
-        if (profile.perChannel) {
-            json.put("channelSideEqEnabled", true)
-            json.put("leftBands", bandsOf(profile.leftFilters))
-            json.put("rightBands", bandsOf(profile.rightFilters))
-            json.put("bands", bandsOf(profile.leftFilters))
+        val cseOn = obj.optBoolean("channelSideEqEnabled", false)
+        if (cseOn && obj.has("leftBands") && obj.has("rightBands")) {
+            val leftArr = obj.getJSONArray("leftBands")
+            sb.append("Channel: L\n")
+            appendFilters(leftArr)
+            sb.append("Channel: R\n")
+            appendFilters(obj.getJSONArray("rightBands"), indexOffset = leftArr.length())
         } else {
-            json.put("channelSideEqEnabled", false)
-            json.put("bands", bandsOf(profile.filters))
+            appendFilters(obj.getJSONArray("bands"))
         }
-        parseEq314ChainSection(trimmed, json)
-        return json
+        return sb.toString()
     }
 
-    /** Parse the "# EQ314 Specific" MBC / Limiter export lines back into preset JSON blocks. */
-    private fun parseEq314ChainSection(text: String, json: org.json.JSONObject) {
-        val mbcHead = Regex("""^MBC:\s+(ON|OFF)\s+Bands\s+(\d+)""", RegexOption.IGNORE_CASE)
-        val mbcBand = Regex(
-            """^MBC\s+(\d+):\s+(ON|OFF)\s+Fc\s+([\d.]+)\s*Hz\s+Atk\s+(-?[\d.]+)\s+Rel\s+(-?[\d.]+)\s+Ratio\s+(-?[\d.]+)\s+Thr\s+(-?[\d.]+)\s*dB\s+Knee\s+(-?[\d.]+)\s+Gate\s+(-?[\d.]+)\s+Exp\s+(-?[\d.]+)\s+Pre\s+(-?[\d.]+)\s+Post\s+(-?[\d.]+)""",
-            RegexOption.IGNORE_CASE)
-        val mbcCross = Regex("""^MBC Crossovers:\s+([\d.,\s]+)\s*Hz""", RegexOption.IGNORE_CASE)
-        val limiterLine = Regex(
-            """^Limiter:\s+(ON|OFF)\s+Atk\s+(-?[\d.]+)\s+Rel\s+(-?[\d.]+)\s+Ratio\s+(-?[\d.]+)\s+Thr\s+(-?[\d.]+)\s*dB\s+Post\s+(-?[\d.]+)""",
-            RegexOption.IGNORE_CASE)
-        var mbcObj: org.json.JSONObject? = null
-        val bandArr = org.json.JSONArray()
-        for (raw in text.lines()) {
-            val line = raw.trim()
-            mbcHead.find(line)?.let { m ->
-                mbcObj = org.json.JSONObject().apply {
-                    put("enabled", m.groupValues[1].equals("ON", true))
-                    put("bandCount", m.groupValues[2].toInt())
-                    put("bands", bandArr)
-                }
-            }
-            mbcBand.find(line)?.let { m ->
-                bandArr.put(org.json.JSONObject().apply {
-                    put("enabled", m.groupValues[2].equals("ON", true))
-                    put("cutoff", m.groupValues[3].toDouble())
-                    put("attack", m.groupValues[4].toDouble())
-                    put("release", m.groupValues[5].toDouble())
-                    put("ratio", m.groupValues[6].toDouble())
-                    put("threshold", m.groupValues[7].toDouble())
-                    put("knee", m.groupValues[8].toDouble())
-                    put("noiseGate", m.groupValues[9].toDouble())
-                    put("expander", m.groupValues[10].toDouble())
-                    put("preGain", m.groupValues[11].toDouble())
-                    put("postGain", m.groupValues[12].toDouble())
-                })
-            }
-            mbcCross.find(line)?.let { m ->
-                val arr = org.json.JSONArray()
-                m.groupValues[1].split(",").forEach { s ->
-                    s.trim().toDoubleOrNull()?.let { arr.put(it) }
-                }
-                mbcObj?.put("crossovers", arr)
-            }
-            limiterLine.find(line)?.let { m ->
-                json.put("limiter", org.json.JSONObject().apply {
-                    put("enabled", m.groupValues[1].equals("ON", true))
-                    put("attack", m.groupValues[2].toDouble())
-                    put("release", m.groupValues[3].toDouble())
-                    put("ratio", m.groupValues[4].toDouble())
-                    put("threshold", m.groupValues[5].toDouble())
-                    put("postGain", m.groupValues[6].toDouble())
-                })
-            }
+    /** Export format popup (issue #78): clean APO .txt, or full native .json incl. MBC & limiter. */
+    private fun showExportFormatDialog(name: String, presetJson: String) {
+        val density = resources.displayMetrics.density
+        val dialogView = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding((24 * density).toInt(), (20 * density).toInt(), (24 * density).toInt(), (16 * density).toInt())
         }
-        mbcObj?.let { json.put("mbc", it) }
+        dialogView.addView(android.widget.TextView(this).apply {
+            text = "Export \"$name\""
+            setTextColor(0xFFE2E2E2.toInt()); textSize = 20f
+            setPadding(0, 0, 0, (8 * density).toInt())
+        })
+        dialogView.addView(android.widget.TextView(this).apply {
+            text = "EqualizerAPO (.txt)\nEqualizer314 (.json)"
+            setTextColor(0xFFAAAAAA.toInt()); textSize = 13f
+            setPadding(0, 0, 0, (16 * density).toInt())
+        })
+        dialogView.addView(android.view.View(this).apply {
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, (1 * density).toInt()
+            ).apply { bottomMargin = (12 * density).toInt() }
+            setBackgroundColor(0xFF444444.toInt())
+        })
+        val btnRow = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+        fun formatBtn(label: String) =
+            com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                text = label
+                isAllCaps = false
+                layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    marginStart = (3 * density).toInt(); marginEnd = (3 * density).toInt()
+                }
+                cornerRadius = (12 * density).toInt()
+                setTextColor(0xFFDDDDDD.toInt())
+                strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                strokeWidth = (1 * density).toInt()
+                setBackgroundColor(0x00000000)
+                insetTop = 0; insetBottom = 0
+            }
+        val apoBtn = formatBtn("EqualizerAPO")
+        val nativeBtn = formatBtn("Equalizer314")
+        btnRow.addView(apoBtn); btnRow.addView(nativeBtn)
+        dialogView.addView(btnRow)
+        val dialog = android.app.AlertDialog.Builder(this, R.style.Theme_Equalizer314_Dialog)
+            .setView(dialogView).create()
+        apoBtn.setOnClickListener {
+            dialog.dismiss()
+            launchPresetExport(buildApoExportText(org.json.JSONObject(presetJson)), "$name.txt")
+        }
+        nativeBtn.setOnClickListener {
+            dialog.dismiss()
+            val json = org.json.JSONObject(presetJson).put("presetName", name)
+            launchPresetExport(json.toString(2), "$name.json", "application/json")
+        }
+        dialog.show()
     }
+
+    private fun showPickerDeleteDialog(name: String, onConfirm: () -> Unit) {
+        val density = resources.displayMetrics.density
+        val dialogView = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding((24 * density).toInt(), (20 * density).toInt(), (24 * density).toInt(), (16 * density).toInt())
+        }
+        dialogView.addView(android.widget.TextView(this).apply {
+            text = "Delete"
+            setTextColor(0xFFE2E2E2.toInt()); textSize = 20f
+            setPadding(0, 0, 0, (12 * density).toInt())
+        })
+        dialogView.addView(android.widget.TextView(this).apply {
+            text = "Delete \"$name\"?"
+            setTextColor(0xFFAAAAAA.toInt()); textSize = 14f
+            setPadding(0, 0, 0, (16 * density).toInt())
+        })
+        dialogView.addView(android.view.View(this).apply {
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, (1 * density).toInt()).apply {
+                bottomMargin = (12 * density).toInt()
+            }
+            setBackgroundColor(0xFF444444.toInt())
+        })
+        val btnRow = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+        fun dlgBtn(label: String, color: Int, endMargin: Boolean) =
+            com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                text = label
+                layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    if (endMargin) marginEnd = (3 * density).toInt() else marginStart = (3 * density).toInt()
+                }
+                cornerRadius = (12 * density).toInt(); setTextColor(color)
+                strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                strokeWidth = (1 * density).toInt()
+                setBackgroundColor(0x00000000); insetTop = 0; insetBottom = 0
+            }
+        val deleteBtn = dlgBtn("Delete", 0xFFEF9A9A.toInt(), endMargin = true)
+        val cancelBtn = dlgBtn("Cancel", 0xFFDDDDDD.toInt(), endMargin = false)
+        btnRow.addView(deleteBtn); btnRow.addView(cancelBtn)
+        dialogView.addView(btnRow)
+        val dialog = android.app.AlertDialog.Builder(this, R.style.Theme_Equalizer314_Dialog)
+            .setView(dialogView).create()
+        deleteBtn.setOnClickListener { dialog.dismiss(); onConfirm() }
+        cancelBtn.setOnClickListener { dialog.dismiss() }
+        dialog.show()
+    }
+
+
+
 
     // ---- Whole-app backup / restore ----
     private val backupExportLauncher = registerForActivityResult(
@@ -487,6 +538,7 @@ class  MainActivity : AppCompatActivity() {
     }
 
     private val autoEqDatabase by lazy { com.bearinmind.equalizer314.autoeq.AutoEqDatabase(this) }
+    private val autoEqThumbCache = HashMap<String, com.bearinmind.equalizer314.autoeq.AutoEqProfile?>()
 
     // Views
     private lateinit var eqGraphView: EqGraphView
@@ -1971,112 +2023,7 @@ class  MainActivity : AppCompatActivity() {
                 }
                 exportBtn.setOnClickListener {
                     val presetJson = prefs.getString("preset_$name", null) ?: return@setOnClickListener
-                    val obj = org.json.JSONObject(presetJson)
-                    val sb = StringBuilder()
-                    val preamp = obj.optDouble("preamp", 0.0)
-                    sb.append("Preamp: ${String.format("%.1f", preamp)} dB\n")
-
-                    // Emit one APO filter line per band.
-                    fun appendFilters(bands: org.json.JSONArray, indexOffset: Int = 0) {
-                        for (i in 0 until bands.length()) {
-                            val b = bands.getJSONObject(i)
-                            val ft = b.getString("filterType")
-                            // FilterType → APO token. BP/NO/AP/LP/HP have no Gain;
-                            // 1st-order LS/HS/LP/HP have no Q.
-                            val apoType: String
-                            val hasGain: Boolean
-                            val hasQ: Boolean
-                            when (ft) {
-                                "BELL"         -> { apoType = "PK";  hasGain = true;  hasQ = true  }
-                                "LOW_SHELF"    -> { apoType = "LSC"; hasGain = true;  hasQ = true  }
-                                "HIGH_SHELF"   -> { apoType = "HSC"; hasGain = true;  hasQ = true  }
-                                "LOW_PASS"     -> { apoType = "LPQ"; hasGain = false; hasQ = true  }
-                                "HIGH_PASS"    -> { apoType = "HPQ"; hasGain = false; hasQ = true  }
-                                "LOW_SHELF_1"  -> { apoType = "LS";  hasGain = true;  hasQ = false }
-                                "HIGH_SHELF_1" -> { apoType = "HS";  hasGain = true;  hasQ = false }
-                                "LOW_PASS_1"   -> { apoType = "LP";  hasGain = false; hasQ = false }
-                                "HIGH_PASS_1"  -> { apoType = "HP";  hasGain = false; hasQ = false }
-                                "BAND_PASS"    -> { apoType = "BP";  hasGain = false; hasQ = true  }
-                                "NOTCH"        -> { apoType = "NO";  hasGain = false; hasQ = true  }
-                                "ALL_PASS"     -> { apoType = "AP";  hasGain = false; hasQ = true  }
-                                else           -> { apoType = "PK";  hasGain = true;  hasQ = true  }
-                            }
-                            val fc = b.getDouble("frequency").toInt()
-                            val line = StringBuilder("Filter ${i + 1 + indexOffset}: ON $apoType Fc $fc Hz")
-                            if (hasGain) line.append(" Gain ${String.format("%.1f", b.getDouble("gain"))} dB")
-                            if (hasQ) line.append(" Q ${String.format("%.2f", b.getDouble("q"))}")
-                            sb.append(line).append('\n')
-                        }
-                    }
-
-                    val cseOn = obj.optBoolean("channelSideEqEnabled", false)
-                    if (cseOn && obj.has("leftBands") && obj.has("rightBands")) {
-                        val leftArr = obj.getJSONArray("leftBands")
-                        val rightArr = obj.getJSONArray("rightBands")
-                        sb.append("Channel: L\n")
-                        appendFilters(leftArr)
-                        sb.append("Channel: R\n")
-                        // Continue filter numbering from where L ended so the
-                        // file has globally unique Filter N indices.
-                        appendFilters(rightArr, indexOffset = leftArr.length())
-                    } else {
-                        // Single / shared EQ preset — no Channel: directive
-                        // means APO applies all filters to every channel.
-                        appendFilters(obj.getJSONArray("bands"))
-                    }
-                    // EQ314-specific chain section (issue #78), APO-style terse lines.
-                    val mbcObj = obj.optJSONObject("mbc")
-                    val limObj = obj.optJSONObject("limiter")
-                    if (mbcObj != null || limObj != null) {
-                        fun f1(v: Double) = String.format("%.1f", v)
-                        sb.append("\n# EQ314 Specific\n# Delete if importing into Equalizer APO\n")
-                        if (mbcObj != null) {
-                            val count = mbcObj.optInt("bandCount", 0)
-                            sb.append("MBC: ${if (mbcObj.optBoolean("enabled", false)) "ON" else "OFF"} Bands $count\n")
-                            val mbcBands = mbcObj.optJSONArray("bands")
-                            if (mbcBands != null) {
-                                for (i in 0 until minOf(mbcBands.length(), count)) {
-                                    val b = mbcBands.optJSONObject(i) ?: continue
-                                    sb.append(
-                                        "MBC ${i + 1}: ${if (b.optBoolean("enabled", true)) "ON" else "OFF"}" +
-                                            " Fc ${b.optDouble("cutoff", 0.0).toInt()} Hz" +
-                                            " Atk ${f1(b.optDouble("attack", 0.0))}" +
-                                            " Rel ${f1(b.optDouble("release", 0.0))}" +
-                                            " Ratio ${f1(b.optDouble("ratio", 1.0))}" +
-                                            " Thr ${f1(b.optDouble("threshold", 0.0))} dB" +
-                                            " Knee ${f1(b.optDouble("knee", 0.0))}" +
-                                            " Gate ${f1(b.optDouble("noiseGate", 0.0))}" +
-                                            " Exp ${f1(b.optDouble("expander", 1.0))}" +
-                                            " Pre ${f1(b.optDouble("preGain", 0.0))}" +
-                                            " Post ${f1(b.optDouble("postGain", 0.0))}\n"
-                                    )
-                                }
-                            }
-                            val crossovers = mbcObj.optJSONArray("crossovers")
-                            if (crossovers != null && crossovers.length() > 0) {
-                                val xs = (0 until crossovers.length())
-                                    .joinToString(", ") { crossovers.optDouble(it, 0.0).toInt().toString() }
-                                sb.append("MBC Crossovers: $xs Hz\n")
-                            }
-                        }
-                        if (limObj != null) {
-                            sb.append(
-                                "Limiter: ${if (limObj.optBoolean("enabled", false)) "ON" else "OFF"}" +
-                                    " Atk ${f1(limObj.optDouble("attack", 0.0))}" +
-                                    " Rel ${f1(limObj.optDouble("release", 0.0))}" +
-                                    " Ratio ${f1(limObj.optDouble("ratio", 1.0))}" +
-                                    " Thr ${f1(limObj.optDouble("threshold", 0.0))} dB" +
-                                    " Post ${f1(limObj.optDouble("postGain", 0.0))}\n"
-                            )
-                        }
-                    }
-                    pendingExportText = sb.toString()
-                    val intent = android.content.Intent(android.content.Intent.ACTION_CREATE_DOCUMENT).apply {
-                        addCategory(android.content.Intent.CATEGORY_OPENABLE)
-                        type = "text/plain"
-                        putExtra(android.content.Intent.EXTRA_TITLE, "${name}.txt")
-                    }
-                    presetExportLauncher.launch(intent)
+                    showExportFormatDialog(name, presetJson)
                 }
 
                 // Overwrite button — re-saves the CURRENT EQ into this preset.
@@ -2333,6 +2280,9 @@ class  MainActivity : AppCompatActivity() {
             }
             autoEqBody.addView(autoEqResults)
 
+            var pendingAutoEqEntries: List<com.bearinmind.equalizer314.autoeq.AutoEqEntry> = emptyList()
+            var renderedAutoEqCount = 0
+            var appendAutoEqBatch: (() -> Unit)? = null
             fun renderAutoEqRows(query: String) {
                 autoEqResults.removeAllViews()
                 val q = query.trim().lowercase()
@@ -2355,8 +2305,13 @@ class  MainActivity : AppCompatActivity() {
                     .forEach { entries.add(com.bearinmind.equalizer314.autoeq.AutoEqEntry(it, "Imported", "", "", "")) }
                 entries.addAll(autoEqDatabase.search(query).filter { "${it.name}|${it.source}" !in favKeys })
 
-                val capped = entries.take(25)
-                for (entry in capped) {
+                // All entries render, batched in as the picker scrolls near the bottom.
+                pendingAutoEqEntries = entries
+                renderedAutoEqCount = 0
+                fun addBatch() {
+                    val batch = pendingAutoEqEntries.drop(renderedAutoEqCount).take(60)
+                    renderedAutoEqCount += batch.size
+                    for (entry in batch) {
                     val row = android.widget.LinearLayout(this).apply {
                         orientation = android.widget.LinearLayout.HORIZONTAL
                         gravity = android.view.Gravity.CENTER_VERTICAL
@@ -2392,6 +2347,61 @@ class  MainActivity : AppCompatActivity() {
                         setTextColor(0xFF888888.toInt())
                     })
                     row.addView(nameCol)
+                    val cacheKey = "${entry.source}|${entry.path.ifEmpty { entry.name }}"
+                    val entryProfile = autoEqThumbCache.getOrPut(cacheKey) {
+                        if (entry.source == "Imported") {
+                            eqPrefs.getImportedPresetText(entry.name)
+                                ?.let { com.bearinmind.equalizer314.autoeq.AutoEqParser.parse(it) }
+                        } else {
+                            autoEqDatabase.loadProfile(entry)
+                        }
+                    }
+                    val rightCol = android.widget.LinearLayout(this).apply {
+                        orientation = android.widget.LinearLayout.VERTICAL
+                        gravity = android.view.Gravity.CENTER_HORIZONTAL
+                        layoutParams = android.widget.LinearLayout.LayoutParams(
+                            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                        ).apply { marginStart = (8 * density).toInt() }
+                    }
+                    rightCol.addView(AutoEqActivity.MiniEqView(this).apply {
+                        layoutParams = android.widget.LinearLayout.LayoutParams(
+                            (48 * density).toInt(), (24 * density).toInt())
+                        setProfile(entryProfile)
+                    })
+                    rightCol.addView(android.widget.TextView(this).apply {
+                        text = "${entryProfile?.filters?.size ?: "?"} filters"
+                        setTextColor(0xFF888888.toInt())
+                        textSize = 10f
+                        gravity = android.view.Gravity.CENTER
+                    })
+                    row.addView(rightCol)
+                    if (entry.source == "Imported") {
+                        row.addView(android.widget.TextView(this).apply {
+                            text = "×"
+                            setTextColor(0xFFEF9A9A.toInt())
+                            textSize = 18f
+                            gravity = android.view.Gravity.CENTER
+                            val btnSize = (30 * density).toInt()
+                            layoutParams = android.widget.LinearLayout.LayoutParams(btnSize, btnSize).apply {
+                                marginStart = (8 * density).toInt()
+                            }
+                            background = android.graphics.drawable.GradientDrawable().apply {
+                                setColor(0x00000000)
+                                setStroke((1 * density).toInt(), 0xFF444444.toInt())
+                                cornerRadius = 10 * density
+                            }
+                            isClickable = true; isFocusable = true
+                            contentDescription = "Remove"
+                            setOnClickListener {
+                                showPickerDeleteDialog(entry.name) {
+                                    eqPrefs.removeImportedPreset(entry.name)
+                                    autoEqThumbCache.remove(cacheKey)
+                                    refreshPresetPicker?.invoke()
+                                }
+                            }
+                        })
+                    }
                     val rippleBorderless = android.util.TypedValue()
                     theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, rippleBorderless, true)
                     row.addView(android.widget.ImageButton(this).apply {
@@ -2419,29 +2429,18 @@ class  MainActivity : AppCompatActivity() {
                         }
                     })
                     row.setOnClickListener {
-                        val profile = if (entry.source == "Imported") {
-                            eqPrefs.getImportedPresetText(entry.name)
-                                ?.let { com.bearinmind.equalizer314.autoeq.AutoEqParser.parse(it) }
-                        } else {
-                            autoEqDatabase.loadProfile(entry)
-                        }
-                        if (profile == null || (profile.filters.isEmpty() && profile.leftFilters.isEmpty())) {
+                        if (entryProfile == null ||
+                            (entryProfile.filters.isEmpty() && entryProfile.leftFilters.isEmpty())) {
                             android.widget.Toast.makeText(this, "Failed to load profile", android.widget.Toast.LENGTH_SHORT).show()
                         } else {
-                            applyParsedProfile(profile, entry.name, entry.name, entry.source)
+                            applyParsedProfile(entryProfile, entry.name, entry.name, entry.source)
                         }
                     }
                     autoEqResults.addView(row)
+                    }
                 }
-                if (entries.size > capped.size) {
-                    autoEqResults.addView(android.widget.TextView(this).apply {
-                        text = "Showing ${capped.size} of ${entries.size} — search to narrow"
-                        textSize = 11f
-                        setTextColor(0xFF666666.toInt())
-                        gravity = android.view.Gravity.CENTER
-                        setPadding(0, (4 * density).toInt(), 0, (8 * density).toInt())
-                    })
-                }
+                appendAutoEqBatch = { addBatch() }
+                addBatch()
             }
             renderAutoEqRows("")
             autoEqSearch.addTextChangedListener(object : android.text.TextWatcher {
@@ -2451,6 +2450,13 @@ class  MainActivity : AppCompatActivity() {
                     renderAutoEqRows(s?.toString() ?: "")
                 }
             })
+            presetPickerScroll.setOnScrollChangeListener { _, _, scrollY, _, _ ->
+                val content = presetPickerScroll.getChildAt(0)
+                if (content != null && renderedAutoEqCount < pendingAutoEqEntries.size &&
+                    scrollY + presetPickerScroll.height >= content.height - (600 * density).toInt()) {
+                    appendAutoEqBatch?.invoke()
+                }
+            }
         }
 
         // Bound the picker to the viewport below the graph so it scrolls internally
