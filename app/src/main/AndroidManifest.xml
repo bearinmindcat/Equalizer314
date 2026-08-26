@@ -18,11 +18,25 @@
          had it on before the device powered off. Without this the
          user has to open the app and tap Power after every reboot. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <!-- Needed to list installed apps in the Channel Input screen so
-         the user can pre-assign EQ presets to apps that have not yet
-         broadcast an audio-effect session. Required on API 30+. -->
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
-        tools:ignore="QueryAllPackagesPermission" />
+    <!-- App visibility for the Channel Input binding list (launchable + audio
+         apps) via <queries> — QUERY_ALL_PACKAGES is Play-restricted and was
+         swapped out for these intent filters. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="audio/*" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MEDIA_BUTTON" />
+        </intent>
+        <intent>
+            <action android:name="android.media.browse.MediaBrowserService" />
+        </intent>
+    </queries>
     <!-- Used by AudioPolicyDumpParser to read audioserver's
          AudioPlaybackConfiguration table via the reflected
          ServiceManager.getService("audio").dumpAsync(...) call, which

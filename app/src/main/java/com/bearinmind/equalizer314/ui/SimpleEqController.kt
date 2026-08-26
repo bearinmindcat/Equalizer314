@@ -776,7 +776,7 @@ class SimpleEqController(
         val presetJson = eqPrefs.getCustomPresetJson(name) ?: return
         val obj = org.json.JSONObject(presetJson)
         val sb = StringBuilder()
-        sb.append("Preamp: ${String.format("%.1f", obj.optDouble("preamp", 0.0))} dB\n")
+        sb.append("Preamp: ${String.format(java.util.Locale.US, "%.1f", obj.optDouble("preamp", 0.0))} dB\n")
 
         fun appendFilters(bands: org.json.JSONArray, indexOffset: Int = 0) {
             for (i in 0 until bands.length()) {
@@ -799,8 +799,8 @@ class SimpleEqController(
                 }
                 val fc = b.getDouble("frequency").toInt()
                 val line = StringBuilder("Filter ${i + 1 + indexOffset}: ON $apoType Fc $fc Hz")
-                if (hasGain) line.append(" Gain ${String.format("%.1f", b.getDouble("gain"))} dB")
-                if (hasQ) line.append(" Q ${String.format("%.2f", b.getDouble("q"))}")
+                if (hasGain) line.append(" Gain ${String.format(java.util.Locale.US, "%.1f", b.getDouble("gain"))} dB")
+                if (hasQ) line.append(" Q ${String.format(java.util.Locale.US, "%.2f", b.getDouble("q"))}")
                 sb.append(line).append('\n')
             }
         }

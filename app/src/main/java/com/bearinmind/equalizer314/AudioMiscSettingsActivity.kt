@@ -26,6 +26,7 @@ class AudioMiscSettingsActivity : AppCompatActivity() {
             startActivity(android.content.Intent(this, AudioEffectsPipelineActivity::class.java))
             overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
         }
+
     }
 
     override fun onResume() {

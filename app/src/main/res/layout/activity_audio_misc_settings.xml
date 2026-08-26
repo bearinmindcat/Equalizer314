@@ -190,6 +190,7 @@
                         android:layout_marginStart="16dp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
+
         </LinearLayout>
     </ScrollView>
 </LinearLayout>

@@ -415,7 +415,7 @@ class TargetCurveActivity : AppCompatActivity() {
         val sb = StringBuilder()
         sb.append("Preamp: ${String.format("%.1f", profile.preampDb)} dB\n")
         for ((i, f) in profile.filters.withIndex()) {
-            sb.append("Filter ${i + 1}: ON ${f.filterType} Fc ${f.frequency.toInt()} Hz Gain ${String.format("%.1f", f.gain)} dB Q ${String.format("%.2f", f.q)}\n")
+            sb.append("Filter ${i + 1}: ON ${f.filterType} Fc ${f.frequency.toInt()} Hz Gain ${String.format(java.util.Locale.US, "%.1f", f.gain)} dB Q ${String.format(java.util.Locale.US, "%.2f", f.q)}\n")
         }
         return sb.toString()
     }

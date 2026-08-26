@@ -966,8 +966,8 @@
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:valueFrom="-12"
-                            android:valueTo="12"
+                            android:valueFrom="-20"
+                            android:valueTo="20"
                             android:value="0"
                             app:tickVisible="false"
                             app:labelBehavior="gone" />

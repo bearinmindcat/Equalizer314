@@ -109,7 +109,9 @@ class  MainActivity : AppCompatActivity() {
     /** Clean APO text for a preset (EQ only — the chain travels via the .json export). */
     private fun buildApoExportText(obj: org.json.JSONObject): String {
         val sb = StringBuilder()
-        sb.append("Preamp: ${String.format("%.1f", obj.optDouble("preamp", 0.0))} dB\n")
+        // Locale.US: comma-decimal locales exported "Q 0,71", which APO and our
+        // own importer can't read (FaridZelli's missing-Q report, issue #78).
+        sb.append("Preamp: ${String.format(java.util.Locale.US, "%.1f", obj.optDouble("preamp", 0.0))} dB\n")
         fun appendFilters(bands: org.json.JSONArray, indexOffset: Int = 0) {
             for (i in 0 until bands.length()) {
                 val b = bands.getJSONObject(i)
@@ -134,8 +136,8 @@ class  MainActivity : AppCompatActivity() {
                     else           -> { apoType = "PK";  hasGain = true;  hasQ = true  }
                 }
                 val line = StringBuilder("Filter ${i + 1 + indexOffset}: ON $apoType Fc ${b.getDouble("frequency").toInt()} Hz")
-                if (hasGain) line.append(" Gain ${String.format("%.1f", b.getDouble("gain"))} dB")
-                if (hasQ) line.append(" Q ${String.format("%.2f", b.getDouble("q"))}")
+                if (hasGain) line.append(" Gain ${String.format(java.util.Locale.US, "%.1f", b.getDouble("gain"))} dB")
+                if (hasQ) line.append(" Q ${String.format(java.util.Locale.US, "%.2f", b.getDouble("q"))}")
                 sb.append(line).append('\n')
             }
         }
@@ -385,7 +387,7 @@ class  MainActivity : AppCompatActivity() {
         stateManager.preampGainDb = eqPrefs.getPreampGain()
         stateManager.preampLeftDb = eqPrefs.getPreampLeft()
         stateManager.preampRightDb = eqPrefs.getPreampRight()
-        preampSlider.value = stateManager.getActivePreamp().coerceIn(-12f, 12f)
+        preampSlider.value = stateManager.getActivePreamp().coerceIn(-preampRange(), preampRange())
         preampText.setText(String.format("%.1f", stateManager.getActivePreamp()))
         eqGraphView.updateBandLevels()
         bandToggleManager.setupToggles()
@@ -988,7 +990,7 @@ class  MainActivity : AppCompatActivity() {
 
     /** Called after initEQ() to sync preamp UI with restored state */
     private fun syncPreampUI() {
-        preampSlider.value = stateManager.preampGainDb.coerceIn(-12f, 12f)
+        preampSlider.value = stateManager.preampGainDb.coerceIn(-preampRange(), preampRange())
         preampText.setText(String.format("%.1f", stateManager.preampGainDb))
         autoGainSwitch.isChecked = stateManager.autoGainEnabled
         updateAutoGainOffsetText()
@@ -2196,7 +2198,7 @@ class  MainActivity : AppCompatActivity() {
                     eqPrefs.savePreampRight(stateManager.preampRightDb)
                     // Sync preamp slider/text to the loaded value; pref alone leaves
                     // stale UI + stale DP preamp.
-                    preampSlider.value = stateManager.preampGainDb.coerceIn(-12f, 12f)
+                    preampSlider.value = stateManager.preampGainDb.coerceIn(-preampRange(), preampRange())
                     preampText.setText(String.format("%.1f", stateManager.preampGainDb))
                     // Persist the loaded preset's name so the notification, getPresetName()
                     // readers, and the next save prompt reflect what's loaded (otherwise the
@@ -3024,7 +3026,7 @@ class  MainActivity : AppCompatActivity() {
         stateManager.preampRightDb = obj.optDouble("preampRight", 0.0).toFloat()
         eqPrefs.savePreampLeft(stateManager.preampLeftDb)
         eqPrefs.savePreampRight(stateManager.preampRightDb)
-        preampSlider.value = stateManager.preampGainDb.coerceIn(-12f, 12f)
+        preampSlider.value = stateManager.preampGainDb.coerceIn(-preampRange(), preampRange())
         preampText.setText(String.format("%.1f", stateManager.preampGainDb))
         stateManager.pushEqUpdate()
         stateManager.getGhostEqs().let { eqGraphView.setGhostEqualizer(it.first, it.second) }
@@ -3205,6 +3207,8 @@ class  MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun preampRange(): Float = 20f
+
     // EQ mode tabs (issue #77): visibility + order from prefs, wrapping to a second
     // row past two enabled modes; falls back off a disabled active mode.
     private fun applyEqModeTabs() {
@@ -3331,9 +3335,32 @@ class  MainActivity : AppCompatActivity() {
             updateAutoGainOffsetText()
         }
 
+        var preampJustDoubleTapped = false
+        val preampDetector = android.view.GestureDetector(this, object : android.view.GestureDetector.SimpleOnGestureListener() {
+            override fun onDoubleTap(e: android.view.MotionEvent): Boolean {
+                preampSlider.value = 0f
+                preampText.setText(String.format("%.1f", 0f))
+                stateManager.setActivePreamp(0f)
+                persistPreamps()
+                stateManager.pushEqUpdate()
+                updateAutoGainOffsetText()
+                preampJustDoubleTapped = true
+                return true
+            }
+        })
+        preampSlider.setOnTouchListener { _, event ->
+            preampDetector.onTouchEvent(event)
+            if (preampJustDoubleTapped) {
+                if (event.action == android.view.MotionEvent.ACTION_UP || event.action == android.view.MotionEvent.ACTION_CANCEL) {
+                    preampJustDoubleTapped = false
+                }
+                true  // swallow so Slider doesn't commit the tap position
+            } else false
+        }
+
         preampText.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
-                val gain = preampText.text.toString().replace(',', '.').toFloatOrNull()?.coerceIn(-12f, 12f) ?: 0f
+                val gain = preampText.text.toString().replace(',', '.').toFloatOrNull()?.coerceIn(-preampRange(), preampRange()) ?: 0f
                 preampText.setText(String.format("%.1f", gain))
                 preampSlider.value = gain
                 stateManager.setActivePreamp(gain)
@@ -4843,7 +4870,7 @@ class  MainActivity : AppCompatActivity() {
      *  (shared, L, R, or Both — issue: per-side preamps in CSE mode). */
     private fun syncPreampUi() {
         val v = stateManager.getActivePreamp()
-        preampSlider.value = v.coerceIn(-12f, 12f)
+        preampSlider.value = v.coerceIn(-preampRange(), preampRange())
         preampText.setText(String.format("%.1f", v))
     }
 

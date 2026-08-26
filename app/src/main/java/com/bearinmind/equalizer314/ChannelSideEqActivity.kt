@@ -100,8 +100,12 @@ class ChannelSideEqActivity : AppCompatActivity() {
 
         fun format(db: Float) = String.format("%.1f", db)
 
+        val range = 20f
+        slider.valueFrom = -range
+        slider.valueTo = range
+
         var suppress = false
-        val start = initial.coerceIn(-12f, 12f)
+        val start = initial.coerceIn(-range, range)
         suppress = true
         slider.value = start
         input.setText(format(start))
@@ -119,7 +123,7 @@ class ChannelSideEqActivity : AppCompatActivity() {
 
         input.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_DONE) {
-                val parsed = input.text.toString().replace(',', '.').toFloatOrNull()?.coerceIn(-12f, 12f) ?: 0f
+                val parsed = input.text.toString().replace(',', '.').toFloatOrNull()?.coerceIn(-range, range) ?: 0f
                 val rounded = Math.round(parsed * 10f) / 10f
                 suppress = true
                 slider.value = rounded
