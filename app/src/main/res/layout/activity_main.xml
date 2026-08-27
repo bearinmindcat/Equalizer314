@@ -910,7 +910,7 @@
                         </LinearLayout>
 
                         <!-- Band rows in scrollable container (card height set programmatically) -->
-                        <ScrollView
+                        <com.bearinmind.equalizer314.ui.TableScrollView
                             android:id="@+id/tableScrollView"
                             android:layout_width="match_parent"
                             android:layout_height="0dp"
@@ -927,7 +927,7 @@
                                 android:orientation="vertical"
                                 android:paddingEnd="12dp" />
 
-                        </ScrollView>
+                        </com.bearinmind.equalizer314.ui.TableScrollView>
 
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>

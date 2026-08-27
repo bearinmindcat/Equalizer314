@@ -3569,7 +3569,6 @@ class  MainActivity : AppCompatActivity() {
 
         when (mode) {
             EqUiMode.PARAMETRIC -> {
-                tableEqCard.setOnTouchListener(null)
                 // Restore preamp margin — side effect sets the controls FrameLayout's
                 // topMargin to 8dp, which positions the table card; do NOT remove.
                 val contentLayout0 = (pageEq as ScrollView).getChildAt(0) as LinearLayout
@@ -3600,7 +3599,6 @@ class  MainActivity : AppCompatActivity() {
                 reorderToggleRows(animate = false)
             }
             EqUiMode.GRAPHIC -> {
-                tableEqCard.setOnTouchListener(null)
                 // Restore preamp margin — side effect sets the controls FrameLayout's
                 // topMargin to 8dp, which positions the table card; do NOT remove.
                 val contentLayoutG = (pageEq as ScrollView).getChildAt(0) as LinearLayout
@@ -3673,12 +3671,6 @@ class  MainActivity : AppCompatActivity() {
                 // Re-run after first layout — cold start measures with stale zero widths.
                 pageEq.post {
                     if (stateManager.currentEqUiMode == EqUiMode.TABLE) applyTableSizing()
-                }
-
-                // Let table card's inner ScrollView handle touches, block outer scroll
-                tableEqCard.setOnTouchListener { v, event ->
-                    v.parent.requestDisallowInterceptTouchEvent(true)
-                    false
                 }
 
                 // Defensive: clear any leftover translationY from prior animations.
