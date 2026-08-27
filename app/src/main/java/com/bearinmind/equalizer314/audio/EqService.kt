@@ -844,9 +844,7 @@ class EqService : Service() {
             // re-fire on a warm start, so without this the first audio after
             // Power-on plays whatever EQ was on the main screen.
             reapplyCurrentDeviceBinding()
-            // Flip the notification to "Online" immediately, not on the next
-            // volume tick.
-            updateNotification()
+            safeStartForeground()
             scheduleNotificationSettle()
             // Attach reverb per current routing mode (session 0 in global
             // mode). No-op unless the reverb toggle is on.
