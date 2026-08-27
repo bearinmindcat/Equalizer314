@@ -528,15 +528,20 @@ class SessionEffectManager(private val context: Context) {
         ).setPreferredFrameDuration(10f).build()
 
         val dp = DynamicsProcessing(Integer.MAX_VALUE, sessionId, config)
-        // Convert each channel independently so Channel-Side-EQ presets get
-        // their separate L/R filters. For non-CSE presets leftEq === rightEq
-        // so both channels resolve to identical gains (cutoffs are the same
-        // log-spaced set either way).
-        val leftResp = ParametricToDpConverter.convertFeatureAware(leftEq)
-        val rightResp = ParametricToDpConverter.convertFeatureAware(rightEq)
-        val leftCutoffs = leftResp.cutoffs
-        val leftGains = leftResp.gains
-        val rightGains = rightResp.gains
+        val leftCutoffs: FloatArray
+        val leftGains: FloatArray
+        val rightGains: FloatArray
+        if (leftEq === rightEq) {
+            val resp = ParametricToDpConverter.convertFeatureAware(leftEq)
+            leftCutoffs = resp.cutoffs
+            leftGains = resp.gains
+            rightGains = resp.gains
+        } else {
+            val dual = ParametricToDpConverter.convertFeatureAwareDual(leftEq, rightEq)
+            leftCutoffs = dual.cutoffs
+            leftGains = dual.leftGains
+            rightGains = dual.rightGains
+        }
         val n = leftCutoffs.size
         val leftEqObj = DynamicsProcessing.Eq(true, true, n)
         val rightEqObj = DynamicsProcessing.Eq(true, true, n)

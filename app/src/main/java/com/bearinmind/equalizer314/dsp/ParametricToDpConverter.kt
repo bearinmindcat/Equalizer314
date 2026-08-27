@@ -75,8 +75,17 @@ object ParametricToDpConverter {
      * can't render the boundary). Two sub-20 Hz seeds give bins 0/1
      * independent stairs to shape the lowest octave.
      */
+    private fun responseGrid(eq: ParametricEqualizer): FloatArray {
+        val gMin = 10f
+        val gMax = 20000f
+        val logSpan = ln(gMax / gMin)
+        return FloatArray(GRID_SIZE) {
+            respond(eq, gMin * kotlin.math.exp(logSpan * it / (GRID_SIZE - 1)))
+        }
+    }
+
     private fun adaptiveCutoffs(
-        eq: ParametricEqualizer,
+        grids: List<FloatArray>,
         anchors: List<Float>,
         total: Int,
         binHz: Float,
@@ -84,9 +93,6 @@ object ParametricToDpConverter {
         val gMin = 10f
         val gMax = 20000f
         val logSpan = ln(gMax / gMin)
-        val gridDb = FloatArray(GRID_SIZE) {
-            respond(eq, gMin * kotlin.math.exp(logSpan * it / (GRID_SIZE - 1)))
-        }
         fun gi(f: Float): Int {
             val fc = f.coerceIn(gMin, gMax)
             return ((ln(fc / gMin) / logSpan) * (GRID_SIZE - 1) + 0.5f).toInt()
@@ -94,10 +100,18 @@ object ParametricToDpConverter {
         }
         fun variation(lo: Float, hi: Float): Float {
             val i0 = gi(lo); val i1 = gi(hi)
-            if (i1 <= i0) return abs(gridDb[i1] - gridDb[i0])
-            var mn = Float.MAX_VALUE; var mx = -Float.MAX_VALUE
-            for (k in i0..i1) { val v = gridDb[k]; if (v < mn) mn = v; if (v > mx) mx = v }
-            return mx - mn
+            var worst = 0f
+            for (gridDb in grids) {
+                val v = if (i1 <= i0) {
+                    abs(gridDb[i1] - gridDb[i0])
+                } else {
+                    var mn = Float.MAX_VALUE; var mx = -Float.MAX_VALUE
+                    for (k in i0..i1) { val g = gridDb[k]; if (g < mn) mn = g; if (g > mx) mx = g }
+                    mx - mn
+                }
+                if (v > worst) worst = v
+            }
+            return worst
         }
 
         // Seed: sub-bin splitters + Wavelet table + anchors, sorted, deduped
@@ -310,11 +324,44 @@ object ParametricToDpConverter {
         val cutoffs = if (frozen != null && frozen.size == total) {
             frozen
         } else {
-            adaptiveCutoffs(eq, collectAnchors(eq), total, binHz).also {
+            adaptiveCutoffs(listOf(responseGrid(eq)), collectAnchors(eq), total, binHz).also {
                 if (layoutFrozen) frozenCutoffs = it
             }
         }
         return ConvertedBands(cutoffs, bandSpaceDeconvolve(eq, cutoffs, n, fs))
+    }
+
+    data class DualBands(
+        val cutoffs: FloatArray,
+        val leftGains: FloatArray,
+        val rightGains: FloatArray,
+    )
+
+    fun convertFeatureAwareDual(
+        leftEq: ParametricEqualizer,
+        rightEq: ParametricEqualizer,
+    ): DualBands {
+        val total = numBands
+        val fs = deviceSampleRateHz
+        val n = dpBlockSize(fs)
+        val binHz = fs / n
+
+        val frozen = if (layoutFrozen) frozenCutoffs else null
+        val cutoffs = if (frozen != null && frozen.size == total) {
+            frozen
+        } else {
+            adaptiveCutoffs(
+                listOf(responseGrid(leftEq), responseGrid(rightEq)),
+                collectAnchors(leftEq) + collectAnchors(rightEq),
+                total,
+                binHz,
+            ).also { if (layoutFrozen) frozenCutoffs = it }
+        }
+        return DualBands(
+            cutoffs,
+            bandSpaceDeconvolve(leftEq, cutoffs, n, fs),
+            bandSpaceDeconvolve(rightEq, cutoffs, n, fs),
+        )
     }
 
     private fun collectAnchors(eq: ParametricEqualizer): List<Float> {
@@ -374,6 +421,39 @@ object ParametricToDpConverter {
         val postFit = bandSpaceDeconvolve(eq, postCutoffs, n, fs)
         val postGains = FloatArray(postCutoffs.size) { postFit[it] * 0.5f }
         return InterleavedBands(pc, preGains, postCutoffs, postGains)
+    }
+
+    data class DualInterleavedBands(
+        val preCutoffs: FloatArray,
+        val leftPreGains: FloatArray, val rightPreGains: FloatArray,
+        val postCutoffs: FloatArray,
+        val leftPostGains: FloatArray, val rightPostGains: FloatArray,
+    )
+
+    fun convertInterleavedDual(
+        leftEq: ParametricEqualizer,
+        rightEq: ParametricEqualizer,
+    ): DualInterleavedBands {
+        val fs = deviceSampleRateHz
+        val n = dpBlockSize(fs)
+
+        val pre = convertFeatureAwareDual(leftEq, rightEq)
+        val pc = pre.cutoffs
+
+        val postCutoffs = FloatArray(pc.size)
+        for (i in 0 until pc.size - 1) postCutoffs[i] = (pc[i] + pc[i + 1]) / 2f
+        postCutoffs[pc.size - 1] = MAX_FREQ
+
+        val leftPreGains = FloatArray(pc.size) { pre.leftGains[it] * 0.5f }
+        val rightPreGains = FloatArray(pc.size) { pre.rightGains[it] * 0.5f }
+        val leftPostFit = bandSpaceDeconvolve(leftEq, postCutoffs, n, fs)
+        val rightPostFit = bandSpaceDeconvolve(rightEq, postCutoffs, n, fs)
+        val leftPostGains = FloatArray(postCutoffs.size) { leftPostFit[it] * 0.5f }
+        val rightPostGains = FloatArray(postCutoffs.size) { rightPostFit[it] * 0.5f }
+        return DualInterleavedBands(
+            pc, leftPreGains, rightPreGains,
+            postCutoffs, leftPostGains, rightPostGains,
+        )
     }
 
 }

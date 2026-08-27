@@ -416,25 +416,35 @@ class DynamicsProcessingManager {
         val leftPostGains: FloatArray?
         val rightPostGains: FloatArray?
         if (useInterleave) {
-            val li = ParametricToDpConverter.convertInterleaved(leftEq)
-            cutoffs = li.preCutoffs
-            leftGains = li.preGains
-            postCutoffs = li.postCutoffs
-            leftPostGains = li.postGains
             if (leftEq === rightEq) {
+                val li = ParametricToDpConverter.convertInterleaved(leftEq)
+                cutoffs = li.preCutoffs
+                leftGains = li.preGains
+                postCutoffs = li.postCutoffs
+                leftPostGains = li.postGains
                 rightGains = leftGains.copyOf()
                 rightPostGains = leftPostGains.copyOf()
             } else {
-                val ri = ParametricToDpConverter.convertInterleaved(rightEq)
-                rightGains = ri.preGains
-                rightPostGains = ri.postGains
+                val di = ParametricToDpConverter.convertInterleavedDual(leftEq, rightEq)
+                cutoffs = di.preCutoffs
+                leftGains = di.leftPreGains
+                rightGains = di.rightPreGains
+                postCutoffs = di.postCutoffs
+                leftPostGains = di.leftPostGains
+                rightPostGains = di.rightPostGains
             }
         } else {
-            val l = ParametricToDpConverter.convertFeatureAware(leftEq)
-            cutoffs = l.cutoffs
-            leftGains = l.gains
-            rightGains = if (leftEq === rightEq) leftGains.copyOf()
-                else ParametricToDpConverter.convertFeatureAware(rightEq).gains
+            if (leftEq === rightEq) {
+                val l = ParametricToDpConverter.convertFeatureAware(leftEq)
+                cutoffs = l.cutoffs
+                leftGains = l.gains
+                rightGains = leftGains.copyOf()
+            } else {
+                val d = ParametricToDpConverter.convertFeatureAwareDual(leftEq, rightEq)
+                cutoffs = d.cutoffs
+                leftGains = d.leftGains
+                rightGains = d.rightGains
+            }
             postCutoffs = null
             leftPostGains = null
             rightPostGains = null
