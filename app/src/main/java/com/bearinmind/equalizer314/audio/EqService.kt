@@ -798,6 +798,8 @@ class EqService : Service() {
                 if (prefs.getAudioRoutingMode() == 1) {
                     dynamicsManager.stop()
                     setDpRunning(false)
+                    // Session mode has no global DP — power-off persists here, not in the silent-stop receiver (issue #91).
+                    prefs.savePowerState(false)
                     // Silent stop — routing-mode flip, not a power tap.
                     // MainActivity still drops its bind / animates the FAB.
                     sendBroadcast(
@@ -905,6 +907,9 @@ class EqService : Service() {
                     )
                     updateNotification()
                     Log.d(TAG, "Device '$deviceKey' bound to Disable EQ — DP detached")
+                } else if (prefs.getPowerState()) {
+                    // DP already off with power on — still mark so the next non-disable device auto-resumes (issue #91).
+                    disabledByDevice = true
                 }
             }
             dynamicsManager.isActive -> {

@@ -666,7 +666,10 @@ class  MainActivity : AppCompatActivity() {
             }
             animatePowerFab(false)
             // State commit only — toast fired by EqService so it surfaces with the app closed.
-            eqPrefs.savePowerState(false)
+            // Silent stops own the power pref in EqService (issue #91).
+            if (intent?.getBooleanExtra(EqService.EXTRA_SILENT_STOP, false) != true) {
+                eqPrefs.savePowerState(false)
+            }
             com.bearinmind.equalizer314.ui.BottomNavHelper.updatePowerFab(this@MainActivity, false)
             updateDevicePresetStatus()
             // TV Mode: DP stopped — sync power to the peer.
