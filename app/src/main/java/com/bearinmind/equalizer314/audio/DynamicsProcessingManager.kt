@@ -667,8 +667,9 @@ class DynamicsProcessingManager {
             for (i in bands.indices) {
                 val b = bands[i]
                 val cutoff = if (i < crossovers.size) crossovers[i] else 20000f
-                val mbcBand = DynamicsProcessing.MbcBand(
-                    b.enabled,
+                // AOSP ignores per-band inUse=false, so a disabled band gets neutral pass-through params instead.
+                val mbcBand = if (b.enabled) DynamicsProcessing.MbcBand(
+                    true,
                     cutoff,
                     b.attackMs,
                     b.releaseMs,
@@ -679,6 +680,18 @@ class DynamicsProcessingManager {
                     b.expanderRatio,
                     b.preGainDb,
                     b.postGainDb
+                ) else DynamicsProcessing.MbcBand(
+                    false,
+                    cutoff,
+                    b.attackMs,
+                    b.releaseMs,
+                    1f,
+                    0f,
+                    b.kneeDb,
+                    -125f,
+                    1f,
+                    0f,
+                    0f
                 )
                 dp.setMbcBandByChannelIndex(0, i, mbcBand)
                 dp.setMbcBandByChannelIndex(1, i, mbcBand)
