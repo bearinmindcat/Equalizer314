@@ -475,9 +475,11 @@ class  MainActivity : AppCompatActivity() {
             presetDropdown.setText(presetLabel, false)
 
             if (profile.perChannel) {
-                // Fork into L/R editors and flip Channel Side EQ on.
+                // Fork into L/R editors and flip Channel Side EQ on; filters scoped
+                // to both channels land in the shared "Both" layer.
                 val leftSpecs = toBandSpecs(profile.leftFilters)
                 val rightSpecs = toBandSpecs(profile.rightFilters)
+                val sharedSpecs = toBandSpecs(profile.sharedFilters)
                 // bothBands falls back to the combined flat list in case the
                 // user later turns CSE off.
                 val bothSpecs = toBandSpecs(profile.filters)
@@ -486,6 +488,7 @@ class  MainActivity : AppCompatActivity() {
                     bothBands = bothSpecs,
                     leftBands = leftSpecs,
                     rightBands = rightSpecs,
+                    sharedBands = sharedSpecs,
                 )
                 // Persist L as the main "bands" state + L/R under their own keys
                 // so the divergence survives a process restart.
@@ -500,10 +503,12 @@ class  MainActivity : AppCompatActivity() {
                     }
                 }
                 reloadEqFromPrefs()
+                // Re-push so the converter's shared-layer overlay + per-side preamps land on the live DP.
+                stateManager.pushEqUpdate()
                 refreshChannelPopoutDim()
                 android.widget.Toast.makeText(
                     this,
-                    "Applied L:${profile.leftFilters.size} R:${profile.rightFilters.size} filters",
+                    "Applied L:${profile.leftFilters.size} R:${profile.rightFilters.size} Both:${profile.sharedFilters.size} filters",
                     android.widget.Toast.LENGTH_SHORT
                 ).show()
             } else {

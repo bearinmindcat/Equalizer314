@@ -59,6 +59,7 @@ object AutoEqParser {
         val allFilters = mutableListOf<AutoEqFilter>()
         val leftFilters = mutableListOf<AutoEqFilter>()
         val rightFilters = mutableListOf<AutoEqFilter>()
+        val sharedFilters = mutableListOf<AutoEqFilter>()
         var perChannel = false
 
         // Scope: which channels subsequent filters apply to. Default is ALL
@@ -115,8 +116,11 @@ object AutoEqParser {
             if (freq in 1f..100000f && gain in -30f..30f && q in 0.01f..20f) {
                 val filter = AutoEqFilter(type, freq, gain, q)
                 allFilters += filter
-                if (scopeLeft) leftFilters += filter
-                if (scopeRight) rightFilters += filter
+                when {
+                    scopeLeft && scopeRight -> sharedFilters += filter
+                    scopeLeft -> leftFilters += filter
+                    scopeRight -> rightFilters += filter
+                }
             }
         }
 
@@ -131,6 +135,7 @@ object AutoEqParser {
                 leftFilters = leftFilters.toList(),
                 rightFilters = rightFilters.toList(),
                 perChannel = true,
+                sharedFilters = sharedFilters.toList(),
             )
         } else {
             AutoEqProfile(

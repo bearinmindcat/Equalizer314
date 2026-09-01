@@ -666,8 +666,10 @@ class EqStateManager(
     ) {
         eqPrefs.saveChannelSideEqEnabled(cseEnabled)
         if (cseEnabled) {
-            loadBandsInto(leftEq, leftBands)
-            loadBandsInto(rightEq, rightBands)
+            // A channel with only shared bands still needs one editable band.
+            val flat = listOf(BandSpec(1000f, 0f, 0.707, BiquadFilter.FilterType.BELL))
+            loadBandsInto(leftEq, leftBands.ifEmpty { flat })
+            loadBandsInto(rightEq, rightBands.ifEmpty { flat })
             // Shared "Both" layer from the preset — flat when the preset predates it,
             // so stale layers never leak into a loaded preset (adam's report).
             if (sharedBands != null && sharedBands.isNotEmpty()) {

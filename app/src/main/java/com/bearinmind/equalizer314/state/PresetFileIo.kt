@@ -68,7 +68,11 @@ object PresetFileIo {
             json.put("channelSideEqEnabled", true)
             json.put("leftBands", bandsOf(profile.leftFilters))
             json.put("rightBands", bandsOf(profile.rightFilters))
-            json.put("bands", bandsOf(profile.leftFilters))
+            if (profile.sharedFilters.isNotEmpty()) {
+                json.put("sharedBands", bandsOf(profile.sharedFilters))
+            }
+            // Flat fallback = the left channel's full curve (shared + L-exclusive).
+            json.put("bands", bandsOf(profile.sharedFilters + profile.leftFilters))
         } else {
             json.put("channelSideEqEnabled", false)
             json.put("bands", bandsOf(profile.filters))

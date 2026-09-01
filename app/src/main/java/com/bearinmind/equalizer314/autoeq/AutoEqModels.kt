@@ -20,9 +20,11 @@ data class AutoEqFilter(
  *
  * - [filters] — flat list of every filter in source order; always populated,
  *   authoritative for single-channel (no `Channel:` directive) files.
- * - [leftFilters] / [rightFilters] — per-channel buckets for `Channel: L`/`R`
- *   directives. Filters scoped to both (`Channel: L R` or before any directive)
- *   appear in BOTH lists.
+ * - [leftFilters] / [rightFilters] — per-channel EXCLUSIVE buckets for
+ *   `Channel: L`/`R` directives.
+ * - [sharedFilters] — filters scoped to both channels (`Channel: L R` /
+ *   `Channel: All` / before any directive) in a per-channel file; maps to the
+ *   app's shared "Both" CSE layer.
  * - [perChannel] — true iff any `Channel: L`/`R` line appeared. When false,
  *   [filters] == [leftFilters] == [rightFilters]; callers can ignore the split.
  */
@@ -32,4 +34,5 @@ data class AutoEqProfile(
     val leftFilters: List<AutoEqFilter> = filters,
     val rightFilters: List<AutoEqFilter> = filters,
     val perChannel: Boolean = false,
+    val sharedFilters: List<AutoEqFilter> = emptyList(),
 )
