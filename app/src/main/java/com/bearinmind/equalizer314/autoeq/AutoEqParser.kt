@@ -77,10 +77,11 @@ object AutoEqParser {
                     .split(Regex("""[\s,]+"""))
                     .map { it.trim().uppercase() }
                     .filter { it.isNotEmpty() }
-                // Stereo channels we care about. Filters scoped to other
-                // channels (C, SL, SR, LFE, etc.) are ignored.
-                val scL = "L" in tokens
-                val scR = "R" in tokens
+                // Stereo channels we care about. APO's "ALL" selects every
+                // channel; filters scoped to others (C, SL, SR, LFE, etc.) are ignored.
+                val scAll = "ALL" in tokens
+                val scL = scAll || "L" in tokens
+                val scR = scAll || "R" in tokens
                 if (scL || scR) {
                     scopeLeft = scL
                     scopeRight = scR
