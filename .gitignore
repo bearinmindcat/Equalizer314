@@ -15,3 +15,6 @@ local.properties
 *.aab
 CLAUDE.md
 ClaudeWebHelp/
+
+# Local working notes — not published
+docs/
