@@ -4969,13 +4969,6 @@ class  MainActivity : AppCompatActivity() {
         com.bearinmind.equalizer314.ui.BottomNavHelper.updateStatus(this, eqPrefs)
         updateAutoEqStatus()
         updateTargetStatus()
-
-        // Simple mode retired — the simpleEqEnabled resume-sync is retired
-        // with it, except one direction: if something left us IN Simple
-        // mode, fall back to a visible tab (see LegacyFeatures.kt).
-        if (stateManager.currentEqUiMode == EqUiMode.SIMPLE) {
-            switchEqUiMode(EqUiMode.PARAMETRIC)
-        }
     }
 
     override fun onPause() {
