@@ -321,8 +321,38 @@ class EqService : Service() {
             feedRoutedDeviceFromPlayback()
             // Playback config changes are exactly when OEM ROMs drop the
             // session-0 effect — re-verify after the foreign session settles
-            // (mirrors reclaimSession's small delay).
-            watchdogHandler.postDelayed({ verifyAndReclaimGlobalDp() }, 300)
+            // (mirrors reclaimSession's small delay). Stream/thread rebuilds can
+            // break the chain late, so re-check twice more (issue #82).
+            watchdogHandler.removeCallbacks(playbackSettleVerify)
+            watchdogHandler.postDelayed(playbackSettleVerify, 300)
+            watchdogHandler.postDelayed(playbackSettleVerify, 1200)
+            watchdogHandler.postDelayed(playbackSettleVerify, 2500)
+        }
+    }
+
+    private val playbackSettleVerify = Runnable { verifyAndReclaimGlobalDp() }
+    private var lastPlayingPackages: Set<String> = emptySet()
+    private var lastForcedReattachMs = 0L
+
+    /** A different app starting playback is when OEM thread shuffles strand the
+     *  session-0 chain while health reads stay green — reattach unconditionally
+     *  (issue #47). Same-app pause/resume never triggers. */
+    private fun onPlayingPackagesChanged(playingNow: Set<String>) {
+        if (playingNow.isEmpty()) return
+        val appChanged = lastPlayingPackages.isNotEmpty() && playingNow.any { it !in lastPlayingPackages }
+        lastPlayingPackages = playingNow
+        if (!appChanged) return
+        val prefs = EqPreferencesManager(this)
+        if (prefs.getAudioRoutingMode() == 1) return
+        if (!prefs.getPowerState()) return
+        if (!dynamicsManager.isActive) return
+        val now = System.currentTimeMillis()
+        if (now - lastForcedReattachMs < 3000) return
+        lastForcedReattachMs = now
+        if (dynamicsManager.reattachActive()) {
+            applyPersistedMbcConfig()
+            syncSystemSoundBypassFromCurrent()
+            Log.d(TAG, "Playing app changed — proactive DP reattach")
         }
     }
 
@@ -787,6 +817,7 @@ class EqService : Service() {
                     }
                 }
                 sessionEffects?.observeDetectedPlayback(detected, playingNow)
+                onPlayingPackagesChanged(playingNow)
                 return START_STICKY
             }
             ACTION_APPLY_ROUTING_MODE -> {
