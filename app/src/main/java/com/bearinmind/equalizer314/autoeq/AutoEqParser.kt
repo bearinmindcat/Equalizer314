@@ -56,6 +56,8 @@ object AutoEqParser {
     fun parse(text: String): AutoEqProfile? {
         val lines = text.lines()
         var preampDb = 0f
+        var preampLeft: Float? = null
+        var preampRight: Float? = null
         val allFilters = mutableListOf<AutoEqFilter>()
         val leftFilters = mutableListOf<AutoEqFilter>()
         val rightFilters = mutableListOf<AutoEqFilter>()
@@ -69,7 +71,13 @@ object AutoEqParser {
 
         for (line in lines) {
             preampRegex.find(line)?.let {
-                preampDb = it.groupValues[1].toFloatOrNull() ?: 0f
+                val v = it.groupValues[1].toFloatOrNull() ?: 0f
+                // Scope-aware: a Preamp under `Channel: L`/`R` belongs to that side only.
+                when {
+                    scopeLeft && scopeRight -> preampDb = v
+                    scopeLeft -> preampLeft = v
+                    scopeRight -> preampRight = v
+                }
                 return@let
             }
 
@@ -136,6 +144,8 @@ object AutoEqParser {
                 rightFilters = rightFilters.toList(),
                 perChannel = true,
                 sharedFilters = sharedFilters.toList(),
+                preampLeftDb = preampLeft,
+                preampRightDb = preampRight,
             )
         } else {
             AutoEqProfile(

@@ -35,4 +35,7 @@ data class AutoEqProfile(
     val rightFilters: List<AutoEqFilter> = filters,
     val perChannel: Boolean = false,
     val sharedFilters: List<AutoEqFilter> = emptyList(),
+    /** Preamp lines scoped to a single channel; null = use [preampDb]. */
+    val preampLeftDb: Float? = null,
+    val preampRightDb: Float? = null,
 )

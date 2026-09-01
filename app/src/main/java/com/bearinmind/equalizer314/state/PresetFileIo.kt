@@ -66,6 +66,8 @@ object PresetFileIo {
         json.put("preamp", profile.preampDb.toDouble())
         if (profile.perChannel) {
             json.put("channelSideEqEnabled", true)
+            json.put("preampLeft", (profile.preampLeftDb ?: profile.preampDb).toDouble())
+            json.put("preampRight", (profile.preampRightDb ?: profile.preampDb).toDouble())
             json.put("leftBands", bandsOf(profile.leftFilters))
             json.put("rightBands", bandsOf(profile.rightFilters))
             if (profile.sharedFilters.isNotEmpty()) {

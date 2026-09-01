@@ -480,6 +480,9 @@ class  MainActivity : AppCompatActivity() {
                 val leftSpecs = toBandSpecs(profile.leftFilters)
                 val rightSpecs = toBandSpecs(profile.rightFilters)
                 val sharedSpecs = toBandSpecs(profile.sharedFilters)
+                // CSE mode reads the per-side preamps, not the shared one (issue #50).
+                eqPrefs.savePreampLeft(profile.preampLeftDb ?: profile.preampDb)
+                eqPrefs.savePreampRight(profile.preampRightDb ?: profile.preampDb)
                 // bothBands falls back to the combined flat list in case the
                 // user later turns CSE off.
                 val bothSpecs = toBandSpecs(profile.filters)
