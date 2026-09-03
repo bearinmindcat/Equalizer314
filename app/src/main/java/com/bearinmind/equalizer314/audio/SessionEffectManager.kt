@@ -14,30 +14,13 @@ import com.bearinmind.equalizer314.state.EqPreferencesManager
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * Owns per-session [DynamicsProcessing] instances created when an audio app
- * broadcasts `OPEN_AUDIO_EFFECT_CONTROL_SESSION` (Spotify, Poweramp, AIMP…).
- * OPEN → attach a DP with the package's bound preset at `Integer.MAX_VALUE`
- * priority (Wavelet `a6/n0.java:46` pattern); CLOSE → release.
- * No-binding policy (option A): do nothing — the session falls through to
- * the global session-0 DP.
- */
+/** Per-app DynamicsProcessing instances: OPEN session → attach the bound preset's DP, CLOSE → release; unbound sessions fall through to session 0. */
 class SessionEffectManager(private val context: Context) {
 
-    /** Where the system learned this session was alive.
-     *  - [BROADCAST]: app called `ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION`
-     *    (Spotify, Poweramp, AIMP, …). Authoritative; cannot be downgraded
-     *    or removed by detection.
-     *  - [DETECTED]: surfaced via the NLS + dump-parse path
-     *    ([PlaybackListenerService] → [AudioPolicyDumpParser]). Used for
-     *    YouTube / Chrome / ExoPlayer apps that never broadcast. */
+    /** How the session was learned: BROADCAST (app's effect-control broadcast, authoritative) or DETECTED (NLS + dump-parse). */
     enum class AttachSource { BROADCAST, DETECTED }
 
-    /** Snapshot of a known session; shown live in ChannelInputActivity's
-     *  "Now playing" panel. [isPlaying] = package's [MediaController]
-     *  reports `PlaybackState.STATE_PLAYING` now; a session can be known
-     *  but paused (Spotify OPEN then pause). Drives the per-row
-     *  speaker-pulse animation. */
+    /** Known session for the "Now playing" panel; [isPlaying] drives the speaker pulse. */
     data class ActiveSession(
         val sessionId: Int,
         val packageName: String,
@@ -47,17 +30,10 @@ class SessionEffectManager(private val context: Context) {
     )
 
     private val sessions = mutableMapOf<Int, DynamicsProcessing>()
-    // Reverb is the *insert* EnvironmentalReverb implementation, created via the
-    // low-level AudioEffect ctor so it attaches inline like DynamicsProcessing
-    // (the convenience EnvironmentalReverb(...) ctor gives the silent auxiliary
-    // variant). Hence AudioEffect, not EnvironmentalReverb, as the value type.
+    // Insert reverb via the low-level AudioEffect ctor (the SDK ctor gives the silent auxiliary variant).
     private val reverbs = mutableMapOf<Int, AudioEffect>()
 
-    // The (type, uuid, priority, session) AudioEffect ctor and the
-    // setParameter(byte[], byte[]) method aren't in the public SDK, so we
-    // reach them by reflection (this is exactly what the framework's own
-    // EnvironmentalReverb does internally). Resolved once, lazily; null if the
-    // platform blocks the access, in which case reverb just doesn't attach.
+    // Hidden AudioEffect ctor reached by reflection; null when blocked (reverb then doesn't attach).
     private val insertReverbCtor: java.lang.reflect.Constructor<*>? by lazy {
         try {
             AudioEffect::class.java.getDeclaredConstructor(
@@ -69,14 +45,7 @@ class SessionEffectManager(private val context: Context) {
             null
         }
     }
-    // Param-setting overload selection matters under hidden-API enforcement:
-    // setParameter(int,short) / (int,int) / (byte[],byte[]) are all @TestApi
-    // → BLOCKED for normal apps. But setParameter(int[] param, short[] value)
-    // carries @UnsupportedAppUsage with NO maxTargetSdk (the light greylist),
-    // so it stays reflection-accessible under normal enforcement — the same
-    // tier as the AudioEffect(UUID,UUID,int,int) ctor we already rely on. This
-    // is the one path that lets us configure the insert reverb in production.
-    // (Int-valued params are packed into two little-endian shorts = 4 bytes.)
+    // setParameter(int[], short[]) is the only overload still reflection-accessible under hidden-API enforcement.
     private val setParamArr: java.lang.reflect.Method? by lazy {
         try {
             AudioEffect::class.java.getDeclaredMethod(
@@ -88,23 +57,16 @@ class SessionEffectManager(private val context: Context) {
         }
     }
     private val sessionInfo = mutableMapOf<Int, ActiveSession>()
-    /** (package, sessionId) pairs observed via detection — diffed in
-     *  [observeDetectedPlayback] so attach/detach fires only on
-     *  transitions, not every poll. */
+    /** Detected (package, sessionId) pairs — diffed so attach/detach fires only on transitions. */
     private val detectedKeys = mutableSetOf<Pair<String, Int>>()
-    /** Packages currently in `PlaybackState.STATE_PLAYING` (pushed via
-     *  [observeDetectedPlayback]); consulted when building an
-     *  [ActiveSession] so the speaker pulse tracks real-time playback. */
+    /** Packages currently in STATE_PLAYING — feeds the speaker pulse. */
     private var playingPackages: Set<String> = emptySet()
     private val eqPrefs = EqPreferencesManager(context)
 
     @Synchronized
     fun getActiveSessions(): List<ActiveSession> = sessionInfo.values.toList()
 
-    /** Preset currently driving per-app audio (notification + status chip
-     *  "(app preset)" label): bound preset of the first session that is
-     *  playing AND bound. Null when routing isn't Session-based or nothing
-     *  playing has a binding — callers fall back to other display modes. */
+    /** Bound preset of the first playing bound session; null outside Session mode or when none. */
     @Synchronized
     fun getCurrentDrivingPreset(): String? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return null
@@ -114,11 +76,7 @@ class SessionEffectManager(private val context: Context) {
             ?.presetName
     }
 
-    /** Re-attach every active session of [packageName] so a binding edit in
-     *  ChannelInputActivity hits the live per-session DP — otherwise the old
-     *  preset's bands persist until the stream closes/reopens. Session-based
-     *  mode only (per-app DPs aren't attached otherwise). Reverbs untouched:
-     *  keyed on session id, not tied to the binding's preset. */
+    /** Rebuild every active session of [packageName] so a binding edit hits the live DP (reverbs untouched). */
     @Synchronized
     fun reapplyBindingFor(packageName: String) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
@@ -128,9 +86,7 @@ class SessionEffectManager(private val context: Context) {
             .filter { it.packageName == packageName }
             .toList()
         for (entry in affected) {
-            // Drop the existing DP so attach() builds a fresh one with the
-            // new binding's bands + preamp; if the new binding is null,
-            // attach() short-circuits after releasing (plays unmodified).
+            // Drop the existing DP so attach() builds a fresh one for the new binding.
             sessions.remove(entry.sessionId)?.let {
                 try { it.release() } catch (_: Throwable) {}
             }
@@ -155,22 +111,16 @@ class SessionEffectManager(private val context: Context) {
         source: AttachSource = AttachSource.BROADCAST,
     ) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
-        // BROADCAST requires a real session id (non-positive = misbehaving
-        // broadcaster). DETECTED may use negative synthetic ids
-        // (package-hash based) when the OEM blocks `dumpsys audio`; those
-        // are tracked for the "Now playing" UI but skip DP attach — no real
-        // audio stream behind them.
+        // BROADCAST needs a real session id; DETECTED may carry synthetic negative ids (UI-only).
         if (source == AttachSource.BROADCAST && sessionId <= 0) return
 
-        // Remember the package even without a binding so Channel Input
-        // lists it for retroactive binding.
+        // Remember the package even without a binding — Channel Input lists it.
         eqPrefs.rememberSeenApp(packageName)
 
         val binding = eqPrefs.getAppBinding(packageName)
         val existing = sessionInfo[sessionId]
 
-        // BROADCAST is authoritative: a DETECTED observation must not
-        // overwrite it or re-attach the DP (broadcast lifecycle owns it).
+        // BROADCAST is authoritative — a DETECTED observation never overrides it.
         if (existing != null &&
             existing.source == AttachSource.BROADCAST &&
             source == AttachSource.DETECTED
@@ -179,27 +129,22 @@ class SessionEffectManager(private val context: Context) {
             return
         }
 
-        // sessionInfo update BEFORE the routing-mode gate so "Now playing"
-        // shows the session even in System-wide mode.
+        // Track before the routing-mode gate so "Now playing" works in System-wide too.
         sessionInfo[sessionId] = ActiveSession(
             sessionId, packageName, binding?.presetName, source,
             isPlaying = playingPackages.contains(packageName),
         )
         notifySessionsChanged()
 
-        // Tracking is mode-independent (above); DP / reverb attachment is
-        // Session-based only (1 = SESSION_BASED).
+        // DP / reverb attachment is Session-based only (mode 1).
         if (eqPrefs.getAudioRoutingMode() != 1) {
             return
         }
 
-        // Synthetic-id DETECTED entry: no real stream, skip DP/reverb attach;
-        // the "Now playing" row shows "Detected (no session)".
+        // Synthetic id = no real stream; skip attach.
         if (sessionId <= 0) return
 
-        // Reverb is independent of the EQ binding (reverb without preset, or
-        // preset without reverb, are both valid). Attach if the pipeline's
-        // ENVIRONMENTAL_REVERB toggle is on.
+        // Reverb is independent of the EQ binding — attach when the pipeline toggle is on.
         if (eqPrefs.isAudioEffectEnabled(EFFECT_REVERB_NAME)) {
             attachReverbLocked(sessionId)
         }
@@ -215,31 +160,22 @@ class SessionEffectManager(private val context: Context) {
             return
         }
 
-        // Replace any existing DP for this session; preserve the reverb
-        // (different effect, different lifecycle).
+        // Replace any existing DP for this session; the reverb has its own lifecycle.
         sessions.remove(sessionId)?.let {
             try { it.release() } catch (_: Throwable) {}
         }
 
         try {
-            val dp = createSessionDp(sessionId, loaded.leftEq, loaded.rightEq, loaded.preampDb)
+            val dp = createSessionDp(sessionId, loaded)
             sessions[sessionId] = dp
             Log.d(TAG, "Attached DP session=$sessionId pkg=$packageName preset=${binding.presetName} preamp=${"%.1f".format(loaded.preampDb)}dB source=$source")
         } catch (t: Throwable) {
-            // Wavelet a6/n0.java:47 — swallow construction failure (another
-            // EQ app may own the session at higher priority, or it closed).
+            // Swallow construction failure — another EQ may own the session, or it closed.
             Log.w(TAG, "Could not attach DP to session $sessionId", t)
         }
     }
 
-    /** Called by [EqService] on each [PlaybackListenerService] dump-parse
-     *  snapshot. Diffs against the previous detection set so attach/detach
-     *  fires only on transitions, not every 100 ms poll:
-     *  new pairs → `attach(.., DETECTED)`; vanished pairs → `detach(..)`
-     *  only if still DETECTED-sourced (BROADCAST entries tear down via
-     *  CLOSE_AUDIO_EFFECT_CONTROL_SESSION). [playingNow] = packages in
-     *  `PlaybackState.STATE_PLAYING`; every entry's `isPlaying` is
-     *  reconciled against it for the speaker-pulse UI. */
+    /** Per detection snapshot: new pairs attach (DETECTED), vanished DETECTED pairs detach, isPlaying reconciled. */
     @Synchronized
     fun observeDetectedPlayback(
         detected: Map<String, Set<Int>>,
@@ -259,8 +195,7 @@ class SessionEffectManager(private val context: Context) {
             attach(sid, pkg, AttachSource.DETECTED)
         }
         for ((_, sid) in removed) {
-            // Detach only if still DETECTED — if BROADCAST took over,
-            // its CLOSE manages teardown.
+            // Detach only if still DETECTED — BROADCAST's CLOSE owns teardown otherwise.
             if (sessionInfo[sid]?.source == AttachSource.DETECTED) {
                 detach(sid)
             }
@@ -269,8 +204,7 @@ class SessionEffectManager(private val context: Context) {
         detectedKeys.clear()
         detectedKeys.addAll(newPairs)
 
-        // Reconcile isPlaying for every row (BROADCAST included — a pause is
-        // the same signal either way); notify once if anything changed.
+        // Reconcile isPlaying for every row; notify once if anything changed.
         var changed = false
         for ((sid, info) in sessionInfo.toMap()) {
             val nowPlaying = playingPackages.contains(info.packageName)
@@ -282,41 +216,30 @@ class SessionEffectManager(private val context: Context) {
         if (changed) notifySessionsChanged()
     }
 
-    /** Re-evaluate DP / reverb attachment for every tracked session on a
-     *  routing-mode change (Session-based=1 ↔ System-wide=0). Reverb is
-     *  also handled in [applyReverbParamsToAll], called right after this
-     *  elsewhere so both effect types stay in sync. */
+    /** Re-evaluate per-session DP attachment on a routing-mode change. */
     @Synchronized
     fun onRoutingModeChanged() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
         val isSessionBased = eqPrefs.getAudioRoutingMode() == 1
         if (!isSessionBased) {
-            // Leaving Session-based: release per-session DPs but keep
-            // sessionInfo for the "what's playing" UI (reverbs handled by
-            // applyReverbParamsToAll).
+            // Leaving Session-based: release per-session DPs, keep sessionInfo for the UI.
             for ((_, dp) in sessions) {
                 try { dp.release() } catch (_: Throwable) {}
             }
             sessions.clear()
             return
         }
-        // Entering Session-based: re-attach DPs for every tracked session.
-        // attach() is idempotent (releases any prior DP for the sessionId).
+        // Entering Session-based: re-attach DPs for every tracked session (attach is idempotent).
         for ((sid, info) in sessionInfo.toMap()) {
             attach(sid, info.packageName, info.source)
         }
     }
 
-    /** Re-apply persisted reverb params to every attached reverb (called per
-     *  slider / XY-graph move). Also handles toggle transitions: off →
-     *  detach all; on → attach one per tracked session. */
+    /** Re-apply persisted reverb params everywhere; handles the toggle's attach/detach transitions. */
     @Synchronized
     fun applyReverbParamsToAll() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
-        // Reverb follows the EQ's routing: Session-based → one per tracked
-        // app session; System-wide → single reverb on session 0 (output
-        // mix), same place as the global EQ. Toggle gates whether it runs;
-        // routing mode only decides where it attaches.
+        // Reverb follows the EQ's routing: per session in Session-based, session 0 in System-wide.
         val reverbOn = eqPrefs.isAudioEffectEnabled(EFFECT_REVERB_NAME)
         if (!reverbOn) {
             for ((_, r) in reverbs) {
@@ -331,8 +254,7 @@ class SessionEffectManager(private val context: Context) {
         } else {
             setOf(GLOBAL_REVERB_SESSION)
         }
-        // Release any reverb that no longer belongs (wrong mode, or a session
-        // that closed) so the global and per-session paths never run at once.
+        // Release reverbs that no longer belong so global and per-session never run at once.
         for (sid in reverbs.keys.filter { it !in wanted }) {
             reverbs.remove(sid)?.let { try { it.release() } catch (_: Throwable) {} }
         }
@@ -356,14 +278,7 @@ class SessionEffectManager(private val context: Context) {
             try { it.release() } catch (_: Throwable) {}
         }
         try {
-            // INSERT EnvironmentalReverb impl, NOT the high-level
-            // EnvironmentalReverb(priority, session) ctor — that resolves to
-            // the *auxiliary* reverb, which only processes audio routed via
-            // AudioTrack.attachAuxEffect(); a system-wide effect can't open
-            // that send on other apps' tracks, so aux sits fed silence
-            // (AudioFlinger dump confirmed: "Auxiliary Environmental
-            // Reverb"). INSERT processes inline like DynamicsProcessing —
-            // it actually affects audio, including over Bluetooth.
+            // INSERT reverb impl — the SDK ctor's auxiliary variant only hears attachAuxEffect sends (silent system-wide).
             val ctor = insertReverbCtor ?: run {
                 Log.w(TAG, "Insert reverb unavailable (reflection blocked) — session=$sessionId")
                 return
@@ -380,17 +295,9 @@ class SessionEffectManager(private val context: Context) {
         }
     }
 
-    /** Pushes the persisted reverb prefs into [r]. All API setters
-     *  take signed shorts/ints — we clamp every value to the doc'd
-     *  range before casting so a stale pref can't crash the effect. */
+    /** Push persisted reverb prefs into [r], clamped to the documented ranges. */
     private fun configureReverb(fx: AudioEffect) {
-        // Params go through the low-level AudioEffect.setParameter(byte[],byte[])
-        // (the high-level EnvironmentalReverb setters aren't available on a raw
-        // AudioEffect). Param ids are the public EnvironmentalReverb.PARAM_*
-        // constants; values are little-endian shorts (mB / permille) or ints
-        // (ms), matching what the EnvironmentalReverb wrapper would send.
-        // Each is applied independently so one rejected value can't abort the
-        // whole config (which would leave reverb attached but silent).
+        // Low-level setParameter with the public PARAM_* ids; each applied independently so one rejection can't abort the rest.
         val m = setParamArr
         fun invoke(name: String, paramId: Int, value: ShortArray) {
             if (m == null) { Log.w(TAG, "Reverb '$name': setParameter unavailable"); return }
@@ -407,9 +314,7 @@ class SessionEffectManager(private val context: Context) {
         // Int-valued param (ms) → low + high 16 bits, little-endian (4 bytes).
         fun setI(name: String, paramId: Int, value: Int) =
             invoke(name, paramId, shortArrayOf((value and 0xFFFF).toShort(), (value ushr 16).toShort()))
-        // dB × 100 = millibel; % × 10 = permille; ms as-is. Ranges clamped to
-        // what real engines accept (decay ≤7 s, reverbLevel ≤0) — wider doc
-        // maxima get ERROR_BAD_VALUE and silently leave the wet level muted.
+        // dB×100 = mB, %×10 = permille; clamped to what real engines accept (decay ≤ 7 s, reverbLevel ≤ 0).
         setS("roomLevel", EnvironmentalReverb.PARAM_ROOM_LEVEL,
             (eqPrefs.getReverbRoomLevelDb() * 100f).coerceIn(-9000f, 0f).toInt().toShort())
         setS("roomHFLevel", EnvironmentalReverb.PARAM_ROOM_HF_LEVEL,
@@ -444,20 +349,14 @@ class SessionEffectManager(private val context: Context) {
             Log.d(TAG, "Detached reverb from session $sessionId")
         }
         val removed = sessionInfo.remove(sessionId)
-        // Clear from the detection set too so we don't try to re-detach
-        // a session we already let go.
+        // Clear from the detection set so it isn't re-detached later.
         if (removed != null) {
             detectedKeys.removeAll { it.second == sessionId }
             notifySessionsChanged()
         }
     }
 
-    /** Releases every effect attached via the DETECTED source (and only
-     *  those — BROADCAST entries are managed by their own CLOSE
-     *  lifecycle). Called when the user revokes Notification access,
-     *  matching Wavelet's `SessionListenerService.java:71-80` teardown
-     *  where the session map is cleared to empty on
-     *  `onListenerDisconnected`, cascading effect release. */
+    /** Release every DETECTED-source effect (BROADCAST entries keep their own CLOSE lifecycle). */
     @Synchronized
     fun releaseDetected() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
@@ -495,70 +394,56 @@ class SessionEffectManager(private val context: Context) {
         if (hadInfo) notifySessionsChanged()
     }
 
-    /** Build a fresh DP on [sessionId] with the [eq]'s curve applied
-     *  to the Pre-EQ stage (both channels) and [preampDb] applied via
-     *  the input-gain stage on both channels (matches how the global
-     *  DP on session 0 handles preamp). No MBC / limiter / post-EQ on
-     *  per-session — those are global-only concerns and the global DP
-     *  handles them. */
-    private fun createSessionDp(
-        sessionId: Int,
-        leftEq: ParametricEqualizer,
-        rightEq: ParametricEqualizer,
-        preampDb: Float = 0f,
-    ): DynamicsProcessing {
-        // Keep the same band count as the global DP so a preset
-        // renders identically across session 0 and the per-app
-        // attachment.
-        if (ParametricToDpConverter.numBands < 32) {
-            ParametricToDpConverter.setNumBands(127)
-        }
+    /** Full-chain per-app DP from the preset's chain (global prefs as fallback) — same engine settings as session 0. */
+    private fun createSessionDp(sessionId: Int, loaded: LoadedPreset): DynamicsProcessing {
+        if (ParametricToDpConverter.numBands < 32) ParametricToDpConverter.setNumBands(127)
         val bandCount = ParametricToDpConverter.numBands
+        val frameMs = DynamicsProcessingManager.effectiveFrameMs
+        ParametricToDpConverter.frameDurationMs = frameMs
+        val chain = resolveChain(loaded.json)
+        val mbcStageBands = if (chain.mbcEnabled) chain.mbcBands.size.coerceAtLeast(1) else 1
 
-        val config = DynamicsProcessing.Config.Builder(
-            DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,
-            2,                  // stereo
-            true,               // pre-EQ on
-            bandCount,
-            false,              // MBC off (handled globally)
-            0,
-            false,              // post-EQ off
-            0,
-            false,              // limiter off (handled globally)
-        ).setPreferredFrameDuration(10f).build()
+        fun build(interleave: Boolean): DynamicsProcessing {
+            val config = DynamicsProcessing.Config.Builder(
+                DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,
+                2, true, bandCount,
+                true, mbcStageBands,
+                interleave, if (interleave) bandCount else 0,
+                true,
+            ).setPreferredFrameDuration(frameMs).build()
+            return DynamicsProcessing(Integer.MAX_VALUE, sessionId, config)
+        }
+        var interleave = DynamicsProcessingManager.effectiveInterleave
+        val dp = try {
+            build(interleave)
+        } catch (t: Throwable) {
+            if (!interleave) throw t
+            interleave = false
+            build(false)
+        }
 
-        val dp = DynamicsProcessing(Integer.MAX_VALUE, sessionId, config)
-        val leftCutoffs: FloatArray
-        val leftGains: FloatArray
-        val rightGains: FloatArray
-        if (leftEq === rightEq) {
-            val resp = ParametricToDpConverter.convertFeatureAware(leftEq)
-            leftCutoffs = resp.cutoffs
-            leftGains = resp.gains
-            rightGains = resp.gains
+        // Stage order matches the global DP: limiter -> MBC -> EQ -> enable.
+        val limiter = DynamicsProcessing.Limiter(
+            chain.limiterEnabled, chain.limiterEnabled, 0,
+            chain.limiterAttack, chain.limiterRelease, chain.limiterRatio,
+            chain.limiterThreshold, chain.limiterPostGain,
+        )
+        dp.setLimiterByChannelIndex(0, limiter)
+        dp.setLimiterByChannelIndex(1, limiter)
+        if (chain.mbcEnabled) {
+            DynamicsProcessingManager.writeMbcBands(dp, chain.mbcBands, chain.crossovers, 0f)
         } else {
-            val dual = ParametricToDpConverter.convertFeatureAwareDual(leftEq, rightEq)
-            leftCutoffs = dual.cutoffs
-            leftGains = dual.leftGains
-            rightGains = dual.rightGains
+            val dummy = DynamicsProcessingManager.mbcPassthroughBand()
+            dp.setMbcBandByChannelIndex(0, 0, dummy)
+            dp.setMbcBandByChannelIndex(1, 0, dummy)
         }
-        val n = leftCutoffs.size
-        val leftEqObj = DynamicsProcessing.Eq(true, true, n)
-        val rightEqObj = DynamicsProcessing.Eq(true, true, n)
-        for (i in 0 until n) {
-            leftEqObj.setBand(i, DynamicsProcessing.EqBand(true, leftCutoffs[i], leftGains[i]))
-            rightEqObj.setBand(i, DynamicsProcessing.EqBand(true, leftCutoffs[i], rightGains[i]))
-        }
-        dp.setPreEqByChannelIndex(0, leftEqObj)
-        dp.setPreEqByChannelIndex(1, rightEqObj)
-        // Apply preamp via the DP's native input-gain stage on both
-        // channels — same approach DynamicsProcessingManager uses for
-        // the global DP (setInputGainbyChannel at line ~334), so a
-        // preset sounds identical at session 0 and per-app.
-        if (preampDb != 0f) {
+
+        applySessionEq(dp, loaded.leftEq, loaded.rightEq, interleave)
+
+        if (loaded.preampDb != 0f) {
             try {
-                dp.setInputGainbyChannel(0, preampDb)
-                dp.setInputGainbyChannel(1, preampDb)
+                dp.setInputGainbyChannel(0, loaded.preampDb)
+                dp.setInputGainbyChannel(1, loaded.preampDb)
             } catch (e: Throwable) {
                 Log.w(TAG, "setInputGainbyChannel failed for session $sessionId", e)
             }
@@ -567,24 +452,136 @@ class SessionEffectManager(private val context: Context) {
         return dp
     }
 
-    /** Left + right EQ + preamp as parsed out of a saved preset JSON.
-     *  For non-CSE presets [leftEq] and [rightEq] reference the same bands
-     *  (identical channels); for Channel-Side-EQ presets they hold the
-     *  independent per-channel filters. */
+    private fun applySessionEq(
+        dp: DynamicsProcessing,
+        leftEq: ParametricEqualizer,
+        rightEq: ParametricEqualizer,
+        interleave: Boolean,
+    ) {
+        val cutoffs: FloatArray
+        val leftGains: FloatArray
+        val rightGains: FloatArray
+        var postCutoffs: FloatArray? = null
+        var leftPost: FloatArray? = null
+        var rightPost: FloatArray? = null
+        if (interleave) {
+            if (leftEq === rightEq) {
+                val li = ParametricToDpConverter.convertInterleaved(leftEq)
+                cutoffs = li.preCutoffs; leftGains = li.preGains; rightGains = li.preGains.copyOf()
+                postCutoffs = li.postCutoffs; leftPost = li.postGains; rightPost = li.postGains.copyOf()
+            } else {
+                val di = ParametricToDpConverter.convertInterleavedDual(leftEq, rightEq)
+                cutoffs = di.preCutoffs; leftGains = di.leftPreGains; rightGains = di.rightPreGains
+                postCutoffs = di.postCutoffs; leftPost = di.leftPostGains; rightPost = di.rightPostGains
+            }
+        } else {
+            if (leftEq === rightEq) {
+                val r = ParametricToDpConverter.convertFeatureAware(leftEq)
+                cutoffs = r.cutoffs; leftGains = r.gains; rightGains = r.gains.copyOf()
+            } else {
+                val d = ParametricToDpConverter.convertFeatureAwareDual(leftEq, rightEq)
+                cutoffs = d.cutoffs; leftGains = d.leftGains; rightGains = d.rightGains
+            }
+        }
+        // Auto-gain: flat shift on the Pre stage so the loudest band lands at <= 0 dB.
+        if (eqPrefs.getAutoGainEnabled()) {
+            val scale = if (interleave) 2f else 1f
+            var peak = Float.NEGATIVE_INFINITY
+            for (g in leftGains) if (g * scale > peak) peak = g * scale
+            for (g in rightGains) if (g * scale > peak) peak = g * scale
+            leftPost?.forEach { if (it * scale > peak) peak = it * scale }
+            rightPost?.forEach { if (it * scale > peak) peak = it * scale }
+            if (peak > 0f) {
+                for (i in leftGains.indices) leftGains[i] -= peak
+                for (i in rightGains.indices) rightGains[i] -= peak
+            }
+        }
+        fun eqOf(c: FloatArray, g: FloatArray): DynamicsProcessing.Eq {
+            val e = DynamicsProcessing.Eq(true, true, c.size)
+            for (i in c.indices) e.setBand(i, DynamicsProcessing.EqBand(true, c[i], g[i]))
+            return e
+        }
+        dp.setPreEqByChannelIndex(0, eqOf(cutoffs, leftGains))
+        dp.setPreEqByChannelIndex(1, eqOf(cutoffs, rightGains))
+        if (interleave && postCutoffs != null && leftPost != null && rightPost != null) {
+            dp.setPostEqByChannelIndex(0, eqOf(postCutoffs, leftPost))
+            dp.setPostEqByChannelIndex(1, eqOf(postCutoffs, rightPost))
+        }
+    }
+
+    private class SessionChain(
+        val limiterEnabled: Boolean,
+        val limiterAttack: Float,
+        val limiterRelease: Float,
+        val limiterRatio: Float,
+        val limiterThreshold: Float,
+        val limiterPostGain: Float,
+        val mbcEnabled: Boolean,
+        val mbcBands: List<DynamicsProcessingManager.MbcBandParams>,
+        val crossovers: FloatArray,
+    )
+
+    /** Preset chain with the global prefs filling anything the preset omits. */
+    private fun resolveChain(json: JSONObject): SessionChain {
+        val p = eqPrefs
+        val lim = json.optJSONObject("limiter")
+        val mbc = json.optJSONObject("mbc")
+        val mbcEnabled = mbc?.optBoolean("enabled", p.getMbcEnabled()) ?: p.getMbcEnabled()
+        val count = (mbc?.optInt("bandCount", p.getMbcBandCount()) ?: p.getMbcBandCount()).coerceIn(1, 8)
+        val bandsJson = mbc?.optJSONArray("bands")
+        val bands = (0 until count).map { i ->
+            val b = bandsJson?.optJSONObject(i)
+            if (b != null) DynamicsProcessingManager.MbcBandParams(
+                enabled = b.optBoolean("enabled", true),
+                attackMs = b.optDouble("attack", 1.0).toFloat(),
+                releaseMs = b.optDouble("release", 100.0).toFloat(),
+                ratio = b.optDouble("ratio", 2.0).toFloat(),
+                thresholdDb = b.optDouble("threshold", 0.0).toFloat(),
+                kneeDb = b.optDouble("knee", 8.0).toFloat(),
+                noiseGateDb = b.optDouble("noiseGate", -60.0).toFloat(),
+                expanderRatio = b.optDouble("expander", 1.0).toFloat(),
+                preGainDb = b.optDouble("preGain", 0.0).toFloat(),
+                postGainDb = b.optDouble("postGain", 0.0).toFloat(),
+            ) else DynamicsProcessingManager.MbcBandParams(
+                enabled = p.getMbcBandEnabled(i),
+                attackMs = p.getMbcBandAttack(i),
+                releaseMs = p.getMbcBandRelease(i),
+                ratio = p.getMbcBandRatio(i),
+                thresholdDb = p.getMbcBandThreshold(i),
+                kneeDb = p.getMbcBandKnee(i),
+                noiseGateDb = p.getMbcBandNoiseGate(i),
+                expanderRatio = p.getMbcBandExpander(i),
+                preGainDb = p.getMbcBandPreGain(i),
+                postGainDb = p.getMbcBandPostGain(i),
+            )
+        }
+        val crossJson = mbc?.optJSONArray("crossovers")
+        val crossovers = FloatArray(maxOf(0, count - 1)) { i ->
+            val fallback = p.getMbcCrossover(i, EqService.MBC_DEFAULT_CUTOFFS.getOrElse(i) { 1000f })
+            crossJson?.optDouble(i, fallback.toDouble())?.toFloat() ?: fallback
+        }
+        return SessionChain(
+            limiterEnabled = lim?.optBoolean("enabled", p.getLimiterEnabled()) ?: p.getLimiterEnabled(),
+            limiterAttack = lim?.optDouble("attack", p.getLimiterAttack().toDouble())?.toFloat() ?: p.getLimiterAttack(),
+            limiterRelease = lim?.optDouble("release", p.getLimiterRelease().toDouble())?.toFloat() ?: p.getLimiterRelease(),
+            limiterRatio = lim?.optDouble("ratio", p.getLimiterRatio().toDouble())?.toFloat() ?: p.getLimiterRatio(),
+            limiterThreshold = lim?.optDouble("threshold", p.getLimiterThreshold().toDouble())?.toFloat() ?: p.getLimiterThreshold(),
+            limiterPostGain = lim?.optDouble("postGain", p.getLimiterPostGain().toDouble())?.toFloat() ?: p.getLimiterPostGain(),
+            mbcEnabled = mbcEnabled,
+            mbcBands = bands,
+            crossovers = crossovers,
+        )
+    }
+
+    /** Parsed preset: L/R EQs (same instance for non-CSE presets), preamp, and the raw JSON for the chain. */
     private data class LoadedPreset(
         val leftEq: ParametricEqualizer,
         val rightEq: ParametricEqualizer,
         val preampDb: Float,
+        val json: JSONObject,
     )
 
-    /** Loads a custom preset's bands AND preamp from `custom_presets`
-     *  SP and returns them together. Preamp defaults to 0 dB when the
-     *  preset JSON is missing the field (older presets, or imports
-     *  that never went through Save Preset). Mirrors the same JSON
-     *  shape MainActivity / AudioOutputActivity / RouteSwitchCoordinator
-     *  use — including Channel-Side-EQ's leftBands / rightBands so a
-     *  per-app binding applies independent L/R filters just like the
-     *  global/device path. */
+    /** Load a pool preset's bands + preamp (CSE leftBands/rightBands honored); preamp defaults to 0 dB. */
     private fun loadPreset(name: String): LoadedPreset? {
         val prefs = context.getSharedPreferences("custom_presets", Context.MODE_PRIVATE)
         val str = runCatching { prefs.getString("preset_$name", null) }
@@ -616,38 +613,29 @@ class SessionEffectManager(private val context: Context) {
                     buildEq(obj.getJSONArray("leftBands")),
                     buildEq(obj.getJSONArray("rightBands")),
                     preamp,
+                    obj,
                 )
             } else {
                 val bandsArr = obj.optJSONArray("bands") ?: return@runCatching null
                 val eq = buildEq(bandsArr)
-                LoadedPreset(eq, eq, preamp)
+                LoadedPreset(eq, eq, preamp, obj)
             }
         }.getOrNull()
     }
 
     companion object {
         private const val TAG = "SessionEffectManager"
-        /** Broadcast (package-targeted) emitted whenever the set of
-         *  active broadcasting sessions changes. The Channel Input
-         *  screen's "Current session" panel listens for this. */
+        /** Package-targeted broadcast when the active session set changes (Channel Input listens). */
         const val ACTION_SESSIONS_CHANGED =
             "com.bearinmind.equalizer314.SESSIONS_CHANGED"
-        /** Pipeline EffectId.name for the reverb card — must stay in
-         *  sync with [com.bearinmind.equalizer314.AudioEffectsPipelineActivity.EffectId.ENVIRONMENTAL_REVERB]. */
+        /** Pipeline EffectId.name for the reverb card — keep in sync with AudioEffectsPipelineActivity. */
         const val EFFECT_REVERB_NAME = "ENVIRONMENTAL_REVERB"
-        /** Audio session 0 = the global output mix. Used to attach reverb in
-         *  System-wide (global) routing mode, the same place the global EQ
-         *  (DynamicsProcessing) lives. */
+        /** Session 0 = global output mix — where System-wide reverb attaches. */
         const val GLOBAL_REVERB_SESSION = 0
-        /** Implementation UUID of the *insert* Environmental Reverb (AOSP/NXP
-         *  reverb bundle, `reverb_env_ins`). The high-level EnvironmentalReverb
-         *  ctor resolves to the auxiliary variant (`4a387fc0-…`), which is
-         *  silent for system-wide use; the insert variant processes inline like
-         *  DynamicsProcessing. */
+        /** Insert Environmental Reverb impl UUID — the auxiliary variant the SDK ctor picks is silent system-wide. */
         val INSERT_ENV_REVERB_UUID: UUID =
             UUID.fromString("c7a511a0-a3bb-11df-860e-0002a5d5c51b")
-        /** AudioEffect.EFFECT_TYPE_NULL (hidden in the SDK). Passed as the
-         *  `type` arg so the specific impl `uuid` above is what gets loaded. */
+        /** AudioEffect.EFFECT_TYPE_NULL (hidden) — lets the impl uuid above select the effect. */
         val EFFECT_TYPE_NULL_UUID: UUID =
             UUID.fromString("ec7178ec-e5e1-4432-a3f4-4657e6795210")
     }

@@ -84,7 +84,7 @@ class EqService : Service() {
 
         /** Usages that bypass the EQ — short transient streams crack through the FFT chain. */
         /** Mirror of MbcActivity.DEFAULT_CUTOFFS — keep in lock-step. */
-        private val MBC_DEFAULT_CUTOFFS =
+        internal val MBC_DEFAULT_CUTOFFS =
             floatArrayOf(200f, 700f, 2000f, 5000f, 7000f, 10000f)
 
         private val BYPASS_USAGES = setOf(
