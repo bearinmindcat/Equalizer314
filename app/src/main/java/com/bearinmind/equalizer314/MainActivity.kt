@@ -497,8 +497,7 @@ class  MainActivity : AppCompatActivity() {
                     }
                 }
                 reloadEqFromPrefs()
-                // Re-push so the converter's shared-layer overlay + per-side preamps land on the live DP.
-                stateManager.pushEqUpdate()
+                rebindActiveEq()
                 refreshChannelPopoutDim()
                 android.widget.Toast.makeText(
                     this,
@@ -2192,6 +2191,10 @@ class  MainActivity : AppCompatActivity() {
                     stateManager.persistLeftRightIfCse()
                     stateManager.initBandSlots()
                     bandToggleManager.setupToggles()
+                    // Ghost curves + shared overlay follow the new preset too, else the old one lingers dotted.
+                    stateManager.getGhostEqs().let { eqGraphView.setGhostEqualizer(it.first, it.second) }
+                    eqGraphView.setOverlayEqualizer(stateManager.getGraphOverlayEq())
+                    if (stateManager.currentEqUiMode == EqUiMode.TABLE) tableController.buildTable()
                     // Legacy presets without a preamp field load as 0.0, matching the picker row's "Preamp: 0.0".
                     stateManager.preampGainDb =
                         if (obj.has("preamp")) obj.getDouble("preamp").toFloat() else 0f
