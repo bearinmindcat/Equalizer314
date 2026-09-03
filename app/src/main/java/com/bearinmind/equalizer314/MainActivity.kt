@@ -725,7 +725,6 @@ class  MainActivity : AppCompatActivity() {
         presetDropdown.setText(name, false)
         stateManager.initBandSlots()
         rebindActiveEq()
-        if (stateManager.currentEqUiMode == EqUiMode.TABLE) tableController.buildTable()
         updateDevicePresetStatus()
     }
 
@@ -4799,6 +4798,7 @@ class  MainActivity : AppCompatActivity() {
             updateBandInputs(idx)
         }
         bandToggleManager.setupToggles()
+        if (stateManager.currentEqUiMode == EqUiMode.TABLE) tableController.buildTable()
         refreshChannelPopoutDim()
     }
 
