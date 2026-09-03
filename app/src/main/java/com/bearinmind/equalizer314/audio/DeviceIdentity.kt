@@ -2,73 +2,86 @@ package com.bearinmind.equalizer314.audio
 
 import android.media.AudioDeviceInfo
 
-/**
- * Pure helper mapping an [AudioDeviceInfo] to a stable identity key + human-readable label,
- * centralising knowledge of [AudioDeviceInfo.getType] constants. Type buckets follow Wavelet's
- * `p5/a.java` filters so binding bucketing matches user expectations:
- *  - Bluetooth = {A2DP, BLE_HEADSET, BLE_BROADCAST}; SCO/HFP excluded.
- *  - Wired = {WIRED_HEADSET, WIRED_HEADPHONES, LINE_ANALOG} collapsed.
- *  - USB = {USB_HEADSET, USB_DEVICE, USB_ACCESSORY}, keyed by product name (USB has no stable address).
- *  - Built-in speaker is a singleton.
- *  - Everything else rejected — `keyOf` returns null and routing ignores it for binding.
- */
+/** Maps an [AudioDeviceInfo] to a stable identity key + label; SCO/HFP, HDMI, cast etc. are untracked. */
 object DeviceIdentity {
 
-    private const val TYPE_BLE_HEADSET = 26    // API 31+ constant, hard-coded for compileSdk-agnostic safety
-    private const val TYPE_BLE_BROADCAST = 27  // API 33+ constant
+    // API 28-33 constants, hard-coded for compileSdk-agnostic safety
+    private const val TYPE_HEARING_AID = 23
+    private const val TYPE_BUILTIN_SPEAKER_SAFE = 24
+    private const val TYPE_BLE_HEADSET = 26
+    private const val TYPE_BLE_SPEAKER = 27
+    private const val TYPE_BLE_BROADCAST = 30
 
     /** Output sinks the binding system tracks. */
     private fun bucket(type: Int): Bucket? = when (type) {
         AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
         TYPE_BLE_HEADSET,
-        TYPE_BLE_BROADCAST -> Bucket.BLUETOOTH
+        TYPE_BLE_SPEAKER,
+        TYPE_BLE_BROADCAST,
+        TYPE_HEARING_AID -> Bucket.BLUETOOTH
         AudioDeviceInfo.TYPE_WIRED_HEADSET,
         AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
-        AudioDeviceInfo.TYPE_LINE_ANALOG -> Bucket.WIRED
+        AudioDeviceInfo.TYPE_LINE_ANALOG,
+        AudioDeviceInfo.TYPE_LINE_DIGITAL,
+        AudioDeviceInfo.TYPE_AUX_LINE -> Bucket.WIRED
         AudioDeviceInfo.TYPE_USB_HEADSET,
         AudioDeviceInfo.TYPE_USB_DEVICE,
         AudioDeviceInfo.TYPE_USB_ACCESSORY -> Bucket.USB
-        AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> Bucket.SPEAKER
+        AudioDeviceInfo.TYPE_BUILTIN_SPEAKER,
+        TYPE_BUILTIN_SPEAKER_SAFE -> Bucket.SPEAKER
         else -> null
+    }
+
+    /** Product name with junk rejected (Wavelet's rules) and Poweramp's "USB-Audio - " prefix stripped. */
+    private fun cleanProductName(raw: CharSequence?): String? {
+        var s = raw?.toString()?.trim()
+        if (s.isNullOrEmpty()) return null
+        if (s == android.os.Build.MODEL || s == "boot_headset" || s == "h2w") return null
+        if (s.startsWith("USB-Audio - ") && s.length > 12) s = s.substring(12)
+        return s
+    }
+
+    /** Canonical name for alias matching — TWS " L"/" R" bud names merge to one identity. */
+    fun aliasName(label: String?): String? {
+        val s = cleanProductName(label)
+            ?.replace(" L ", " ")?.replace(" R ", " ")
+            ?.removeSuffix(" L")?.removeSuffix(" R")?.trim()
+        return if (s.isNullOrEmpty()) null else s
     }
 
     private enum class Bucket { BLUETOOTH, WIRED, USB, SPEAKER }
 
-    /** Composes a stable identity key for a tracked output. Returns
-     *  null for HFP/SCO, HDMI, cast, telephony, and other outputs we
-     *  deliberately don't bind EQ to. */
+    /** Stable identity key for a tracked output; null for outputs we don't bind. */
     fun keyOf(info: AudioDeviceInfo): String? {
         val b = bucket(info.type) ?: return null
         return when (b) {
             Bucket.BLUETOOTH -> {
                 val addr = info.address
                 if (!addr.isNullOrBlank()) "BT:$addr"
-                else "BT-NAME:${info.productName?.toString().orEmpty()}"
+                else "BT-NAME:${cleanProductName(info.productName) ?: info.productName?.toString().orEmpty()}"
             }
             Bucket.WIRED -> "WIRED:"
-            Bucket.USB -> "USB:${info.productName?.toString().orEmpty()}"
+            Bucket.USB -> "USB:${cleanProductName(info.productName) ?: info.productName?.toString().orEmpty()}"
             Bucket.SPEAKER -> "SPEAKER:"
         }
     }
 
-    /** Friendly label for the UI. Falls back to a type-derived name
-     *  when `productName` is empty (built-in / wired never carry one). */
+    /** Friendly UI label; type-derived fallback when productName is empty or junk. */
     fun labelOf(info: AudioDeviceInfo): String {
-        val product = info.productName?.toString()?.trim()
-        if (!product.isNullOrEmpty() && bucket(info.type) !in setOf(Bucket.WIRED, Bucket.SPEAKER)) {
+        val product = cleanProductName(info.productName)
+        if (product != null && bucket(info.type) !in setOf(Bucket.WIRED, Bucket.SPEAKER)) {
             return product
         }
         return when (bucket(info.type)) {
-            Bucket.BLUETOOTH -> product?.takeIf { it.isNotEmpty() } ?: "Bluetooth"
+            Bucket.BLUETOOTH -> product ?: "Bluetooth"
             Bucket.WIRED -> "Wired headphones"
-            Bucket.USB -> product?.takeIf { it.isNotEmpty() } ?: "USB audio"
+            Bucket.USB -> product ?: "USB audio"
             Bucket.SPEAKER -> "Phone speaker"
             null -> product ?: "Unknown output"
         }
     }
 
-    /** Priority order used when multiple outputs are connected and we
-     *  must pick which one the EQ "follows". Higher number wins. */
+    /** Pick priority when multiple outputs are connected — higher wins. */
     fun priority(info: AudioDeviceInfo): Int = when (bucket(info.type)) {
         Bucket.BLUETOOTH -> 4
         Bucket.USB -> 3
@@ -77,8 +90,7 @@ object DeviceIdentity {
         null -> 0
     }
 
-    /** Friendly second-line display for a stored device key. BT shows the MAC (the meaningful id);
-     *  other buckets already show product name on the first line, so this states the connection type. */
+    /** Second-line display for a stored key — BT shows the MAC, others the connection type. */
     fun displayKey(key: String): String = when {
         key.startsWith("BT:") -> key.removePrefix("BT:")
         key.startsWith("BT-NAME:") -> "Bluetooth"

@@ -26,105 +26,64 @@ class EqService : Service() {
         private const val CHANNEL_ID = "eq_service_channel"
         private const val NOTIFICATION_ID = 1
         const val ACTION_STOP = "com.bearinmind.equalizer314.STOP_EQ"
-        /** Re-evaluate the notification (e.g. after the "Hide notification"
-         *  setting changes while the EQ is off) — issue #58. */
+        /** Re-evaluate the notification after a "Hide notification" change (issue #58). */
         const val ACTION_REFRESH_NOTIFICATION = "com.bearinmind.equalizer314.REFRESH_NOTIFICATION"
         const val ACTION_RECYCLE_DP = "com.bearinmind.equalizer314.RECYCLE_DP"
         const val ACTION_DP_RECYCLED = "com.bearinmind.equalizer314.DP_RECYCLED"
         const val ACTION_TVMODE_REFRESH = "com.bearinmind.equalizer314.TVMODE_REFRESH"
         const val ACTION_REAPPLY_MBC = "com.bearinmind.equalizer314.REAPPLY_MBC"
-        /** Tile counterpart to [ACTION_STOP]: loads persisted EQ state and
-         *  starts DynamicsProcessing without MainActivity running. */
+        /** Tile start: loads persisted EQ state and starts DP without MainActivity. */
         const val ACTION_START_FROM_TILE = "com.bearinmind.equalizer314.START_FROM_TILE"
-        /** Idempotent headless start (start-or-no-op, never toggles off).
-         *  Fired by [BootCompletedReceiver] after reboot, and by
-         *  MainActivity.onCreate when `powerOn` pref is true but the service
-         *  isn't running (OEMs that strip BOOT_COMPLETED). */
+        /** Idempotent headless start — boot receiver + MainActivity's app-open fallback. */
         const val ACTION_AUTO_START = "com.bearinmind.equalizer314.AUTO_START"
-        /** "Notification body may be stale — rebuild" signal. Sent by
-         *  MainActivity after `presetName` / similar pref writes so the
-         *  Preset line updates even when DP is off and nothing is bound. */
+        /** Rebuild the notification after presetName-style pref writes. */
         const val ACTION_NOTIFICATION_REFRESH = "com.bearinmind.equalizer314.NOTIFICATION_REFRESH"
-        /** Fired by AudioOutputActivity when a device binding is added /
-         *  changed / removed. Service re-runs the route coordinator for the
-         *  currently-routed device so the edit hits the live DP immediately
-         *  (otherwise requires disconnect/reconnect or app restart). */
+        /** Device binding edited — re-run the coordinator for the routed device immediately. */
         const val ACTION_REAPPLY_DEVICE_BINDING = "com.bearinmind.equalizer314.REAPPLY_DEVICE_BINDING"
-        /** Fired by ChannelInputActivity on per-app binding edits. Carries
-         *  [EXTRA_APP_PACKAGE]; SessionEffectManager rebuilds that package's
-         *  active per-session DPs so the new preset applies without
-         *  restarting the audio app. */
+        /** Per-app binding edited — rebuild that package's active per-session DPs. */
         const val ACTION_REAPPLY_APP_BINDING = "com.bearinmind.equalizer314.REAPPLY_APP_BINDING"
         const val EXTRA_APP_PACKAGE = "app_package"
         const val ACTION_EQ_STOPPED = "com.bearinmind.equalizer314.EQ_STOPPED"
         const val EXTRA_SILENT_TOAST = "silentToast"
-        /** Broadcast on any successful headless start (QS tile etc.) so a
-         *  foregrounded MainActivity can re-sync its UI. */
+        /** Broadcast on any successful headless start so MainActivity re-syncs. */
         const val ACTION_EQ_STARTED = "com.bearinmind.equalizer314.EQ_STARTED"
 
-        /** In-process flag the QS tile reads for authoritative on/off state.
-         *  Prefs can drift (MainActivity resets the power-state pref on every
-         *  cold launch by design); same-process volatile read is safe/cheap. */
+        /** In-process on/off flag the QS tile reads (prefs can drift by design). */
         @Volatile
         var isDpRunning: Boolean = false
             private set
 
         internal fun setDpRunning(running: Boolean) { isDpRunning = running }
 
-        /** Static mirrors of instance `lastDeviceLabel`/`lastDeviceKey` for
-         *  binder-free route reads — MainActivity unbinds whenever DP is
-         *  toggled off (EqStateManager.stopProcessing), and the on-graph
-         *  status chip still needs the current output. */
+        /** Static mirrors of lastDeviceLabel/Key for binder-free route reads. */
         @Volatile
         var staticLastDeviceLabel: String? = null
             internal set
         @Volatile
         var staticLastDeviceKey: String? = null
             internal set
-        /** Set on [ACTION_EQ_STOPPED] broadcasts from internal state changes
-         *  (e.g. routing-mode switch) rather than user gestures: MainActivity
-         *  still runs full cleanup but skips the toast. */
+        /** Marks internal (non-user) EQ_STOPPED broadcasts: full cleanup, no toast. */
         const val EXTRA_SILENT_STOP = "silent_stop"
-        // Forwarded from AudioSessionReceiver when an audio-effect
-        // control session opens / closes for a per-app session.
+        // Forwarded from AudioSessionReceiver on per-app effect-session open/close.
         const val ACTION_ATTACH_SESSION = "com.bearinmind.equalizer314.ATTACH_SESSION"
         const val ACTION_DETACH_SESSION = "com.bearinmind.equalizer314.DETACH_SESSION"
         const val ACTION_APPLY_ROUTING_MODE = "com.bearinmind.equalizer314.APPLY_ROUTING_MODE"
-        /** Fired by EnvironmentalReverbActivity / pipeline reverb toggle.
-         *  Service re-reads reverb prefs and pushes them to every attached
-         *  per-session reverb (creating/releasing as the toggle requires). */
+        /** Reverb prefs changed — push to every attached per-session reverb. */
         const val ACTION_APPLY_REVERB = "com.bearinmind.equalizer314.APPLY_REVERB"
-        /** Fired by [PlaybackListenerService] after each debounced dump-parse
-         *  cycle. [EXTRA_DETECTED_BUNDLE]: keys = package names, values =
-         *  `int[]` session IDs; routed to
-         *  [SessionEffectManager.observeDetectedPlayback]. */
+        /** PlaybackListenerService result bundle: package → int[] session IDs. */
         const val ACTION_PLAYBACK_DETECTED = "com.bearinmind.equalizer314.PLAYBACK_DETECTED"
         const val EXTRA_DETECTED_BUNDLE = "detected_bundle"
-        /** Reserved key inside [EXTRA_DETECTED_BUNDLE]: String[] of packages
-         *  in `PlaybackState.STATE_PLAYING`. '_' prefix can't collide with
-         *  real package names. */
+        /** Reserved bundle key: String[] of packages currently in STATE_PLAYING. */
         const val EXTRA_PLAYING_PACKAGES_KEY = "_playing_packages_"
-        /** Fired by [PlaybackListenerService.onListenerDisconnected] (user
-         *  revoked Notification access / system unbound the listener).
-         *  Releases every detection-path per-session effect; broadcast-source
-         *  effects survive — they have their own CLOSE lifecycle. */
+        /** Notification access revoked — release detection-path per-session effects. */
         const val ACTION_RELEASE_DETECTED = "com.bearinmind.equalizer314.RELEASE_DETECTED"
-        /** Fired when the user flips ChannelInputActivity's "Skip system
-         *  sounds" toggle; re-evaluates the bypass against current playback
-         *  configs so it applies immediately, not on next callback. */
+        /** "Skip system sounds" flipped — re-evaluate the bypass immediately. */
         const val ACTION_APPLY_BYPASS_PREF = "com.bearinmind.equalizer314.APPLY_BYPASS_PREF"
         const val EXTRA_SESSION_ID = "session_id"
         const val EXTRA_PACKAGE_NAME = "package_name"
 
-        /** AudioAttributes usages that should *not* be EQ'd (see
-         *  BYPASS_USAGES below): short transient-heavy streams don't survive
-         *  the 127-band FFT pre-EQ + limiter cleanly (cracking on Samsung
-         *  starting in 0.0.7). USAGE_MEDIA / USAGE_GAME / USAGE_UNKNOWN stay
-         *  processed; this set triggers a bypass while active, restored the
-         *  moment the stream stops. */
-        /** Mirror of `MbcActivity.DEFAULT_CUTOFFS` — fallback crossovers when
-         *  a fresh install starts DP before MbcActivity has written prefs.
-         *  Must stay in lock-step with MbcActivity's defaults. */
+        /** Usages that bypass the EQ — short transient streams crack through the FFT chain. */
+        /** Mirror of MbcActivity.DEFAULT_CUTOFFS — keep in lock-step. */
         private val MBC_DEFAULT_CUTOFFS =
             floatArrayOf(200f, 700f, 2000f, 5000f, 7000f, 10000f)
 
@@ -150,8 +109,7 @@ class EqService : Service() {
         }
 
         fun stop(context: Context, silentToast: Boolean = false) {
-            // ACTION_STOP (not stopService) keeps the service alive so the
-            // notification flips to "Offline + Turn On" instead of vanishing.
+            // ACTION_STOP keeps the service alive so the notification flips to "Offline + Turn On".
             val intent = Intent(context, EqService::class.java)
                 .setAction(ACTION_STOP)
                 .putExtra(EXTRA_SILENT_TOAST, silentToast)
@@ -166,14 +124,12 @@ class EqService : Service() {
     val dynamicsManager = DynamicsProcessingManager()
     private val binder = EqBinder()
 
-    /** Public so [com.bearinmind.equalizer314.AudioOutputActivity] can
-     *  read the currently routed device for its "Active" pin. */
+    /** Public for AudioOutputActivity's "Active" pin. */
     var routingMonitor: AudioRoutingMonitor? = null
         private set
     private var routeCoordinator: RouteSwitchCoordinator? = null
 
-    /** Per-app DP instances attached via OPEN_AUDIO_EFFECT_CONTROL_SESSION
-     *  broadcasts. Public for Channel Input diagnostics. */
+    /** Per-app DP instances from effect-control-session broadcasts. */
     var sessionEffects: SessionEffectManager? = null
         private set
 
@@ -211,35 +167,26 @@ class EqService : Service() {
         } catch (_: Exception) { 0f }
     }
 
-    /** Label of the currently-routed output (BT name, "Phone speaker",
-     *  "USB DAC", …). Updated by the routing monitor and the
-     *  ACTION_ROUTE_PRESET_APPLIED receiver; read by buildNotification's
-     *  "Device: X" line and MainActivity's status indicator. */
+    /** Label of the routed output — notification "Device:" line + status chip. */
     @Volatile
     var lastDeviceLabel: String? = null
         private set
 
-    /** Stable key for the routed device (BT MAC, "speaker",
-     *  "usb_dac:VENDOR:PID"). Used to look up the active device binding for
-     *  the "Mode: Device" notification line and main-screen indicator. */
+    /** Stable key of the routed device — active-binding lookups. */
     @Volatile
     var lastDeviceKey: String? = null
         private set
 
-    /** Refreshes the notification on RouteSwitchCoordinator's bound-preset-
-     *  applied broadcast, ACTION_NOTIFICATION_REFRESH (preset-name pref
-     *  changed), and ACTION_REAPPLY_DEVICE_BINDING (binding edited). */
+    /** Refreshes the notification on preset/binding broadcasts. */
     private val routePresetReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
                 ACTION_REAPPLY_DEVICE_BINDING -> {
-                    // Re-run the coordinator for the routed device; edits to
-                    // a non-routed device are a harmless no-op.
+                    // Re-run the coordinator for the routed device; non-routed edits no-op.
                     reapplyCurrentDeviceBinding()
                 }
                 ACTION_REAPPLY_APP_BINDING -> {
-                    // Rebuild the edited package's per-session DPs; manager
-                    // short-circuits when routing mode isn't Session-based.
+                    // Rebuild the edited package's per-session DPs; no-op outside Session mode.
                     val pkg = intent.getStringExtra(EXTRA_APP_PACKAGE)
                     if (pkg != null) {
                         sessionEffects?.reapplyBindingFor(pkg)
@@ -255,18 +202,10 @@ class EqService : Service() {
         }
     }
 
-    /** Last seen "system sound active" state — tracked so we only call
-     *  setEnabled() on actual transitions, not on every callback. */
+    /** Last "system sound active" state — setEnabled only on transitions. */
     private var systemSoundBypassActive = false
 
-    // ---- Session-0 control watchdog ----------------------------------
-    // Session 0 is a shared/non-exclusive effect chain: when another app
-    // opens its own session (Spotify → TikTok → Spotify), aggressive OEM
-    // policies (Vivo, Pixel Adaptive Sound) silently drop our effect, and
-    // AudioEffect OnControl/OnEnable listeners often don't fire on those
-    // ROMs — EQ goes flat until a manual power toggle. Watchdog re-verifies
-    // control and re-attaches: promptly on playback changes (event hook in
-    // systemSoundCallback) plus a 5s backstop timer.
+    // ---- Session-0 control watchdog: OEM policies silently drop the effect with no listener firing — event hooks + 5s backstop re-verify ----
     private val watchdogHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val watchdogIntervalMs = 5_000L
     private val watchdogTick = object : Runnable {
@@ -284,11 +223,7 @@ class EqService : Service() {
         watchdogHandler.removeCallbacks(watchdogTick)
     }
 
-    /** Re-verify the session-0 effect holds control; re-attach if displaced.
-     *  No-op unless the EQ should be live in System-wide mode (early-returns
-     *  keep it cheap per tick). Reuses the reclaim cooldown to avoid
-     *  tug-of-war with competing apps; re-applies MBC + system-sound bypass
-     *  after recreate (same sequence as a route change). */
+    /** Re-verify session-0 control, re-attach if displaced; cooldown-gated, MBC + bypass re-applied. */
     private fun verifyAndReclaimGlobalDp() {
         val prefs = EqPreferencesManager(this)
         if (prefs.getAudioRoutingMode() == 1) return   // Session-based: no global DP
@@ -304,25 +239,18 @@ class EqService : Service() {
         }
     }
 
-    /** Main-thread re-check requested from outside (e.g. MainActivity
-     *  returning to the foreground after an app-switch dropout). */
+    /** Main-thread re-check requested from outside (e.g. MainActivity resume). */
     fun requestWatchdogCheck() {
         watchdogHandler.post { verifyAndReclaimGlobalDp() }
     }
 
-    /** Bypasses the global DP while any [BYPASS_USAGES] stream plays
-     *  (notifications, ringtones, alarms, calls, navigation…) — these don't
-     *  survive the 127-band FFT pre-EQ + limiter (distortion/crackle). DP
-     *  stays attached so re-enable is a single `enabled = true`, no rebuild. */
+    /** Bypasses the global DP while a [BYPASS_USAGES] stream plays; re-enable is a single setEnabled. */
     private val systemSoundCallback = object : AudioManager.AudioPlaybackCallback() {
         override fun onPlaybackConfigChanged(configs: MutableList<AudioPlaybackConfiguration>?) {
             applySystemSoundBypass(configs ?: emptyList())
             // API 33+: report the actual routed device (output-switcher moves fire no device callbacks).
             feedRoutedDeviceFromPlayback()
-            // Playback config changes are exactly when OEM ROMs drop the
-            // session-0 effect — re-verify after the foreign session settles
-            // (mirrors reclaimSession's small delay). Stream/thread rebuilds can
-            // break the chain late, so re-check twice more (issue #82).
+            // OEMs drop the session-0 effect on playback changes; breaks can land late — re-check thrice (issue #82).
             watchdogHandler.removeCallbacks(playbackSettleVerify)
             watchdogHandler.postDelayed(playbackSettleVerify, 300)
             watchdogHandler.postDelayed(playbackSettleVerify, 1200)
@@ -334,9 +262,7 @@ class EqService : Service() {
     private var lastPlayingPackages: Set<String> = emptySet()
     private var lastForcedReattachMs = 0L
 
-    /** A different app starting playback is when OEM thread shuffles strand the
-     *  session-0 chain while health reads stay green — reattach unconditionally
-     *  (issue #47). Same-app pause/resume never triggers. */
+    /** A new playing app can strand the chain while health reads green — reattach unconditionally (issue #47). */
     private fun onPlayingPackagesChanged(playingNow: Set<String>) {
         if (playingNow.isEmpty()) return
         val appChanged = lastPlayingPackages.isNotEmpty() && playingNow.any { it !in lastPlayingPackages }
@@ -356,12 +282,7 @@ class EqService : Service() {
         }
     }
 
-    /** Sets the global DP's enabled flag from whether any active stream's
-     *  usage is in [BYPASS_USAGES]. Transition-driven — only writes
-     *  `setEnabled` on an actual flip, no framework churn per callback.
-     *  Gated by [EqPreferencesManager.getBypassSystemSounds] (default on);
-     *  when disabled, re-enables DP if previously bypassed and
-     *  short-circuits — every stream gets EQ'd. */
+    /** Drive the bypass from active playback usages — transition-driven, pref-gated. */
     private fun applySystemSoundBypass(configs: List<AudioPlaybackConfiguration>) {
         val bypassEnabled = EqPreferencesManager(this).getBypassSystemSounds()
         if (!bypassEnabled) {
@@ -382,8 +303,7 @@ class EqService : Service() {
         }
     }
 
-    /** One-shot playback-config read at DP start so a notification already
-     *  playing at power-on flips the bypass without waiting for a callback. */
+    /** One-shot bypass evaluation at DP start. */
     private fun syncSystemSoundBypassFromCurrent() {
         val am = getSystemService(AudioManager::class.java) ?: return
         applySystemSoundBypass(am.activePlaybackConfigurations.orEmpty())
@@ -406,10 +326,7 @@ class EqService : Service() {
         routingMonitor?.reportRoutedDevice(routed)
     }
 
-    // MediaRouter2 selected-route watcher (API 30+): the system output switcher changes
-    // the SELECTED route with no device add/remove, so AudioDeviceCallback (and on some
-    // HALs the playback callback) never fires — Wavelet catches this with a
-    // ControllerCallback (docs/WAVELET_DEVICE_SWITCHING.md).
+    // MediaRouter2 watcher (API 30+): output-switcher moves fire no device callbacks (see Wavelet doc).
     private var mediaRouter2: android.media.MediaRouter2? = null
     private var mr2RouteCallback: android.media.MediaRouter2.RouteCallback? = null
     private var mr2ControllerCallback: android.media.MediaRouter2.ControllerCallback? = null
@@ -424,8 +341,7 @@ class EqService : Service() {
             val rcb = object : android.media.MediaRouter2.RouteCallback() {}
             val ccb = object : android.media.MediaRouter2.ControllerCallback() {
                 override fun onControllerUpdated(controller: android.media.MediaRouter2.RoutingController) {
-                    // Poll now and again after the route settles — the playback
-                    // configs can lag the selection by a beat.
+                    // Poll now and after the route settles — playback configs lag the selection.
                     feedRoutedDeviceFromPlayback()
                     watchdogHandler.postDelayed({ feedRoutedDeviceFromPlayback() }, 350)
                 }
@@ -447,9 +363,7 @@ class EqService : Service() {
         mediaRouter2 = null; mr2RouteCallback = null; mr2ControllerCallback = null
     }
 
-    /** Same "DynamicsProcessing Start/Stop" toast as a power-FAB tap, fired
-     *  from the service so it shows when MainActivity is closed (QS tile /
-     *  notification button). onStartCommand is main-thread — Toast is safe. */
+    /** Start/Stop toast from the service so it shows with MainActivity closed. */
     private fun showDpStateToast(started: Boolean) {
         val message = if (started) "DynamicsProcessing Start" else "DynamicsProcessing Stop"
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
@@ -458,16 +372,14 @@ class EqService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        // Tell the converter the device's real mixer sample rate so its
-        // bin-aware gain sampling matches DP's actual FFT bin layout (#26).
+        // Feed the converter the device's real mixer sample rate (#26).
         try {
             getSystemService(AudioManager::class.java)
                 ?.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)
                 ?.toFloatOrNull()?.takeIf { it > 0f }
                 ?.let { com.bearinmind.equalizer314.dsp.ParametricToDpConverter.deviceSampleRateHz = it }
         } catch (_: Exception) {}
-        // Experimental frame size (#26): user-selected DP FFT window.
-        // And the Pre+Post interleave toggle — both baked in at DP creation.
+        // Frame size + interleave (#26) — both baked in at DP creation.
         EqPreferencesManager(this).let { p ->
             DynamicsProcessingManager.frameDurationMs = p.getDpFrameMs()
             DynamicsProcessingManager.interleaveEnabled = p.getDpInterleave()
@@ -506,18 +418,14 @@ class EqService : Service() {
             )
         }
 
-        // Register unconditionally — AudioPlaybackCallback needs no
-        // permission / NLS bind, and short-circuits when DP isn't running.
+        // Register unconditionally — needs no permission, short-circuits when DP is off.
         getSystemService(AudioManager::class.java)
             ?.registerAudioPlaybackCallback(systemSoundCallback, null)
 
-        // Per-output-device EQ auto-switching lives in this service so it
-        // works when MainActivity is closed.
+        // Device auto-switching lives here so it works with MainActivity closed.
         val eqPrefs = EqPreferencesManager(this)
         val coordinator = RouteSwitchCoordinator(this, eqPrefs, dynamicsManager)
-        // Per-app session attachment (Wavelet-style OPEN/CLOSE broadcasts via
-        // AudioSessionReceiver). Created BEFORE AudioRoutingMonitor so the
-        // monitor's onRouteRebuild listener can reach it.
+        // Per-app session attachment; created before the monitor so onRouteRebuild can reach it.
         sessionEffects = SessionEffectManager(this)
 
         val monitor = AudioRoutingMonitor(this).apply {
@@ -527,19 +435,12 @@ class EqService : Service() {
                 staticLastDeviceKey = change.key
                 staticLastDeviceLabel = change.label
                 coordinator.onRouteChange(change)
-                // Physical output change → device lifecycle with the Fix-1
-                // recreate (Disable-EQ detach, recovery, or re-attach on the
-                // new output).
+                // Physical output change → device lifecycle with the route-change recreate.
                 handleDeviceRouteLifecycle(change.key, recreateOnActive = true)
             }
-            // Populate the Audio Output screen's "seen" list as soon as
-            // devices appear — even before they're routed to.
+            // Populate the "seen" list as devices appear, before they're routed.
             onDeviceSeen = { key, label -> eqPrefs.rememberSeenDevice(key, label) }
-            // On any device add/remove (route flip, USB-DAC plug, BT codec
-            // swap, sample-rate change), rebuild every per-session DP to
-            // track the new format. Matches Poweramp's e80.java +
-            // s90.java:377-400 path — Wavelet skips this and glitches on
-            // USB swaps.
+            // Any device add/remove rebuilds per-session DPs to track the new format (Poweramp's path).
             onRouteRebuild = { sessionEffects?.onRoutingModeChanged() }
         }
         routingMonitor = monitor
@@ -547,19 +448,11 @@ class EqService : Service() {
         monitor.start()
         startRouteSelectionWatcher()
 
-        // Session-0 control watchdog: self-gates (early-returns unless EQ is
-        // live in System-wide mode); real recovery is driven by the
-        // playback-change / session-open event hooks above.
+        // Watchdog self-gates; real recovery is the event hooks above.
         startWatchdog()
     }
 
-    /** startForeground that survives OS refusal of the mediaPlayback FGS.
-     *  Android 14+ (strict on Pixel / API 34+, also seen on Android 17)
-     *  throws ForegroundServiceStartNotAllowedException when started from a
-     *  BOOT_COMPLETED receiver. Catch, stopSelf cleanly (satisfies the
-     *  startForegroundService → startForeground contract, avoiding the
-     *  "did not start in time" crash), and rely on MainActivity's app-open
-     *  fallback. Returns true only if we actually went foreground. */
+    /** startForeground that survives FGS refusal (Android 14+ boot path): stopSelf cleanly, rely on the app-open fallback. */
     private fun safeStartForeground(): Boolean {
         return try {
             startForeground(NOTIFICATION_ID, buildNotification())
@@ -576,18 +469,12 @@ class EqService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_REFRESH_NOTIFICATION -> {
-                // Apply a changed "Hide notification" setting immediately.
-                // Never forces foreground (startService, no FGS contract).
+                // Apply a changed "Hide notification" setting immediately; never forces foreground.
                 updateNotification()
                 return START_NOT_STICKY
             }
             ACTION_TVMODE_REFRESH -> {
-                // TV Mode toggled. While a link role (TV/Remote) is active the
-                // service must hold FOREGROUND even with DP off — else the
-                // cached-app freezer suspends the process on app switch and
-                // the LAN socket goes silent ("sync stops when I leave the
-                // app"). Also retitles the notification (Remote / Remote
-                // Controlled).
+                // TV link role must hold FOREGROUND even with DP off (freezer kills the LAN socket); retitles the notification.
                 if (com.bearinmind.equalizer314.remote.TvRemoteHub.getMode(this) !=
                     com.bearinmind.equalizer314.remote.TvRemoteHub.MODE_OFF) {
                     safeStartForeground()
@@ -597,8 +484,7 @@ class EqService : Service() {
                 return START_NOT_STICKY
             }
             ACTION_REAPPLY_MBC -> {
-                // Prefs are the source of truth (preset loads write prefs only, issue #78):
-                // sync limiter + MBC live fields here, rebuild when the MBC structure changed.
+                // Prefs are the source of truth (#78): sync limiter + MBC, rebuild on structure change.
                 val p = EqPreferencesManager(this)
                 val limChanged = dynamicsManager.limiterEnabled != p.getLimiterEnabled() ||
                     dynamicsManager.limiterAttackMs != p.getLimiterAttack() ||
@@ -632,11 +518,7 @@ class EqService : Service() {
                 return START_NOT_STICKY
             }
             ACTION_RECYCLE_DP -> {
-                // Rebuild live DP in place so creation-time settings (Pre+Post
-                // interleave, DP Latency Window) apply without a power cycle.
-                // Same post-reattach sequence as watchdog / route-change.
-                // No-op when EQ is off or session-based.
-                // Refresh MBC stage geometry from prefs — reattach reuses live fields (#78).
+                // Rebuild live DP in place so creation-time settings apply without a power cycle; MBC geometry from prefs (#78).
                 EqPreferencesManager(this).let { p ->
                     dynamicsManager.mbcEnabled = p.getMbcEnabled()
                     dynamicsManager.mbcBandCount = p.getMbcBandCount()
@@ -657,15 +539,13 @@ class EqService : Service() {
             ACTION_STOP -> {
                 dynamicsManager.stop()
                 sessionEffects?.releaseAll()
-                // Persist power-off so tile / notification taps sync the pref
-                // when MainActivity isn't around to run eqStoppedReceiver.
+                // Persist power-off so tile/notification taps sync when MainActivity is gone.
                 EqPreferencesManager(this).savePowerState(false)
                 setDpRunning(false)
                 if (intent?.getBooleanExtra(EXTRA_SILENT_TOAST, false) != true)
                     showDpStateToast(started = false)
                 sendBroadcast(Intent(ACTION_EQ_STOPPED).setPackage(packageName))
-                // Service stays alive + foreground as "Offline + Turn On";
-                // Turn On loops through ACTION_AUTO_START.
+                // Service stays foreground as "Offline + Turn On" (loops via ACTION_AUTO_START).
                 updateNotification()
                 scheduleNotificationSettle()
                 return START_STICKY
@@ -674,8 +554,7 @@ class EqService : Service() {
                 Log.d(TAG, "ACTION_START_FROM_TILE — toggle requested, dynamicsManager.isActive=${dynamicsManager.isActive}")
                 if (!safeStartForeground()) return START_NOT_STICKY
                 if (dynamicsManager.isActive) {
-                    // Tile tapped while DP running — toggle off (same path as
-                    // ACTION_STOP; service stays alive for Turn On).
+                    // Tile tap while running — toggle off, service stays alive for Turn On.
                     dynamicsManager.stop()
                     sessionEffects?.releaseAll()
                     EqPreferencesManager(this).savePowerState(false)
@@ -687,8 +566,7 @@ class EqService : Service() {
                 }
                 val eq = loadPersistedParametricEq()
                 if (eq != null) {
-                    // Configure DP from prefs first — mirrors
-                    // EqStateManager.doStartEq so tile start == FAB tap.
+                    // Configure DP from prefs first — tile start == FAB tap.
                     val p = EqPreferencesManager(this)
                     with(dynamicsManager) {
                         preampGainDb = p.getPreampGain()
@@ -772,9 +650,7 @@ class EqService : Service() {
                 val sessionId = intent.getIntExtra(EXTRA_SESSION_ID, 0)
                 val pkg = intent.getStringExtra(EXTRA_PACKAGE_NAME).orEmpty()
                 sessionEffects?.attach(sessionId, pkg)
-                // Another app opening an effect-control session means the
-                // session-0 chain is contested — re-verify the global DP
-                // (no-op in Session-based mode / when off).
+                // Foreign effect-control session = contested session 0 — re-verify the global DP.
                 watchdogHandler.postDelayed({ verifyAndReclaimGlobalDp() }, 300)
                 return START_STICKY
             }
@@ -782,8 +658,7 @@ class EqService : Service() {
                 val sessionId = intent.getIntExtra(EXTRA_SESSION_ID, 0)
                 sessionEffects?.detach(sessionId)
                 watchdogHandler.postDelayed({ verifyAndReclaimGlobalDp() }, 300)
-                // No stopSelf — other sessions / global DP may still be
-                // active; lifecycle is managed by the EQ on/off flow.
+                // No stopSelf — lifecycle is owned by the EQ on/off flow.
                 return START_STICKY
             }
             ACTION_APPLY_REVERB -> {
@@ -822,9 +697,7 @@ class EqService : Service() {
             }
             ACTION_APPLY_ROUTING_MODE -> {
                 if (!safeStartForeground()) return START_NOT_STICKY
-                // Session-based is Wavelet-style: per-session effects only,
-                // never a parallel session-0 instance — stop the global DP so
-                // bound apps aren't EQ'd twice.
+                // Session-based never runs a parallel session-0 instance — stop the global DP.
                 val prefs = EqPreferencesManager(this)
                 if (prefs.getAudioRoutingMode() == 1) {
                     dynamicsManager.stop()
@@ -832,7 +705,6 @@ class EqService : Service() {
                     // Session mode has no global DP — power-off persists here, not in the silent-stop receiver (issue #91).
                     prefs.savePowerState(false)
                     // Silent stop — routing-mode flip, not a power tap.
-                    // MainActivity still drops its bind / animates the FAB.
                     sendBroadcast(
                         Intent(ACTION_EQ_STOPPED)
                             .setPackage(packageName)
@@ -840,15 +712,11 @@ class EqService : Service() {
                     )
                     updateNotification()
                 }
-                // applyReverbParamsToAll handles both entering Session-based
-                // (attach, if reverb toggle on) and leaving it (release).
+                // Handles both entering (attach) and leaving (release) Session-based reverb.
                 sessionEffects?.applyReverbParamsToAll()
-                // DPs are independent of reverbs — onRoutingModeChanged
-                // releases per-session DPs on leave, re-attaches on enter.
+                // onRoutingModeChanged releases/re-attaches per-session DPs independently of reverbs.
                 sessionEffects?.onRoutingModeChanged()
-                // On System-wide we don't auto-start the global DP —
-                // MainActivity owns the EQ instance (bands, preamp, MBC);
-                // the Power button restarts it cleanly.
+                // System-wide: MainActivity owns the EQ instance — no auto-start here.
                 return START_STICKY
             }
         }
@@ -872,57 +740,36 @@ class EqService : Service() {
         setDpRunning(active)
         if (active) {
             syncSystemSoundBypassFromCurrent()
-            // Apply the current device's bound preset now: the route
-            // monitor's same-key short-circuit means onRouteChange doesn't
-            // re-fire on a warm start, so without this the first audio after
-            // Power-on plays whatever EQ was on the main screen.
+            // Warm start: the monitor won't re-emit the same key — apply the binding explicitly.
             reapplyCurrentDeviceBinding()
             safeStartForeground()
             scheduleNotificationSettle()
-            // Attach reverb per current routing mode (session 0 in global
-            // mode). No-op unless the reverb toggle is on.
+            // Attach reverb for the current routing mode; no-op unless toggled on.
             sessionEffects?.applyReverbParamsToAll()
         }
         return active
     }
 
-    /** Push the current device's bound preset into the live DP, if any.
-     *  Called after every DP-start path (FAB / tile / boot) because
-     *  AudioRoutingMonitor short-circuits same-key events — on a warm start
-     *  the monitor never re-emits, so the coordinator wouldn't apply the
-     *  binding. No-op when unbound (coordinator early-returns). */
+    /** Apply the routed device's binding after every DP start — the monitor's same-key short-circuit won't re-emit. */
     private fun reapplyCurrentDeviceBinding() {
         val key = lastDeviceKey ?: return
         val label = lastDeviceLabel ?: ""
         routeCoordinator?.onRouteChange(AudioRoutingMonitor.RouteChange(key, label))
-        // Run disable/recovery lifecycle too, but WITHOUT the route-change
-        // recreate — no physical output changed here.
+        // Disable/recovery lifecycle only — no physical output changed here.
         handleDeviceRouteLifecycle(key, recreateOnActive = false)
     }
 
-    /** True while DP is detached because the active output is bound to
-     *  "Disable EQ" ([EqPreferencesManager.DEVICE_PRESET_DISABLED]).
-     *  Distinct from user power-off: `powerOn` stays true, so a non-disable
-     *  device auto-resumes processing. */
+    /** True while DP is detached by a "Disable EQ" binding; powerOn stays true for auto-resume. */
     @Volatile
     private var disabledByDevice = false
 
-    /** Owns device-dependent global-DP lifecycle so isDpRunning /
-     *  notification / MBC / bypass stay consistent (no parallel ownership in
-     *  the coordinator):
-     *   - device bound "Disable EQ" → stop DP, keep `powerOn` for resume.
-     *   - DP active + [recreateOnActive] → recreate on the new output
-     *     (Fix 1: dodges the Adaptive-Sound route-transition silence).
-     *   - DP off, `powerOn`, previously device-disabled → resume via
-     *     AUTO_START.
-     *  [recreateOnActive] true only for real physical route changes (from
-     *  AudioRoutingMonitor); false for binding edits / start-path reapplies. */
+    /** Device-driven global-DP lifecycle: Disable-EQ detach, route-change recreate ([recreateOnActive]), auto-resume. */
     private fun handleDeviceRouteLifecycle(deviceKey: String, recreateOnActive: Boolean) {
         val prefs = EqPreferencesManager(this)
         // Session-based routing doesn't use the global DP at all.
         if (prefs.getAudioRoutingMode() == 1) return
         if (!prefs.getDeviceAutoSwitchEnabled()) return
-        val binding = prefs.getDeviceBinding(deviceKey)
+        val binding = prefs.getDeviceBindingSmart(deviceKey, lastDeviceLabel ?: "")
         val isDisable = binding?.presetName == EqPreferencesManager.DEVICE_PRESET_DISABLED
         when {
             isDisable -> {
@@ -955,9 +802,7 @@ class EqService : Service() {
                 }
             }
             prefs.getPowerState() && disabledByDevice -> {
-                // Non-disable device routed in after a Disable detach —
-                // resume via AUTO_START (which also re-applies this device's
-                // binding through reapplyCurrentDeviceBinding).
+                // Non-disable device after a Disable detach — resume via AUTO_START.
                 disabledByDevice = false
                 val svc = Intent(this, EqService::class.java)
                     .setAction(ACTION_AUTO_START)
@@ -987,11 +832,7 @@ class EqService : Service() {
         dynamicsManager.applyMbcBands(bands, crossovers)
     }
 
-    /** Load persisted MBC band params + crossovers into the live DP.
-     *  Idempotent; no-op if DP off or MBC disabled. Mirrors
-     *  MbcActivity.pushMbcToService but prefs-driven, so it runs on
-     *  cold-start — fixes "MBC says on but isn't compressing until you
-     *  touch a slider". */
+    /** Load persisted MBC bands + crossovers into the live DP — prefs-driven so it runs on cold start. */
     fun applyPersistedMbcConfig() {
         if (!dynamicsManager.isActive) return
         if (!dynamicsManager.mbcEnabled) return
@@ -1020,9 +861,7 @@ class EqService : Service() {
         dynamicsManager.applyMbcBands(bands, crossovers)
     }
 
-    /** Build a [ParametricEqualizer] from the persisted `eq_settings.bands`
-     *  JSON — lets the QS tile start EQ without MainActivity. Null when no
-     *  usable band data (fresh install, corrupt state); caller logs and bails. */
+    /** ParametricEqualizer from the persisted bands JSON; null when unusable. */
     private fun loadPersistedParametricEq(): ParametricEqualizer? {
         val prefs = getSharedPreferences("eq_settings", Context.MODE_PRIVATE)
         val str = runCatching { prefs.getString("bands", null) }.getOrNull() ?: return null
@@ -1047,10 +886,7 @@ class EqService : Service() {
         }.getOrNull()
     }
 
-    /** Android rate-limits back-to-back NotificationManager.notify() calls
-     *  and silently DROPS the excess — a state flip landing with a volume
-     *  tick can lose its update. This settle pass re-posts once (1200ms)
-     *  after any state change so a swallowed update self-heals. */
+    /** Android drops rate-limited notify() calls — one settle re-post (1200ms) self-heals. */
     private val notifSettleHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val notifSettleRunnable = Runnable { updateNotification() }
     private fun scheduleNotificationSettle() {
@@ -1058,15 +894,10 @@ class EqService : Service() {
         notifSettleHandler.postDelayed(notifSettleRunnable, 1200L)
     }
 
-    /** Re-post the notification with current state. Public so outside
-     *  callers (e.g. MainActivity on preset-row tap) can refresh the
-     *  Preset / Device / Mode lines immediately. */
+    /** Re-post the notification with current state; public for outside refreshes. */
     fun updateNotification() {
         val nm = getSystemService(NotificationManager::class.java)
-        // Issue #58: optionally hide the notification while EQ is off (drop
-        // foreground + cancel); returns when DP starts (startEq re-enters
-        // foreground). TV Mode pins the service foreground regardless —
-        // never drop the notification while a link role is active.
+        // Issue #58: hide-while-off drops foreground + cancels; TV Mode pins the notification.
         val tvModeOn = com.bearinmind.equalizer314.remote.TvRemoteHub.getMode(this) !=
             com.bearinmind.equalizer314.remote.TvRemoteHub.MODE_OFF
         if (!tvModeOn && !dynamicsManager.isActive && EqPreferencesManager(this).getHideNotificationWhenOff()) {
@@ -1096,8 +927,7 @@ class EqService : Service() {
         sessionEffects?.releaseAll()
         sessionEffects = null
         dynamicsManager.stop()
-        // Keep the QS tile flag in sync across process death — else a
-        // system-reclaim leaves the tile stuck reading "on".
+        // Keep the QS tile flag in sync across process death.
         setDpRunning(false)
         Log.d(TAG, "EqService destroyed")
         super.onDestroy()
@@ -1127,15 +957,12 @@ class EqService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Notification mirrors live DP state: Online + Turn Off (ACTION_STOP)
-        // vs Offline + Turn On (ACTION_AUTO_START). Service stays alive
-        // across the toggle so the notification persists.
+        // Notification mirrors live DP state; service stays alive across the toggle.
         val isOn = dynamicsManager.isActive
         val toggleIntent = Intent(this, EqService::class.java).apply {
             action = if (isOn) ACTION_STOP else ACTION_AUTO_START
         }
-        // Different requestCodes for on/off so Android doesn't collapse the
-        // PendingIntents when FLAG_UPDATE_CURRENT rewrites extras.
+        // Distinct requestCodes so Android doesn't collapse the PendingIntents.
         val togglePending = PendingIntent.getService(
             this, if (isOn) 1 else 2, toggleIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -1162,29 +989,16 @@ class EqService : Service() {
             .setSilent(true)
             .addAction(R.drawable.ic_nav_power, actionLabel, togglePending)
 
-        // Expanded (BigText) body surfaces preset + device on both Online and
-        // Offline (off = "what would apply if turned on"). Preset source:
-        // eqPrefs.getPresetName() (RouteSwitchCoordinator updates it when a
-        // device-bound preset auto-applies); in Session-based routing the
-        // global preset isn't meaningful. Device: cached from
-        // AudioRoutingMonitor.onRouteChange + ACTION_ROUTE_PRESET_APPLIED.
+        // BigText body: preset + device on both Online and Offline.
         val prefs = EqPreferencesManager(this)
         val routingMode = prefs.getAudioRoutingMode()
         val activePresetName = prefs.getPresetName()
-        // Only a name backed by a saved `custom_presets` entry counts as a
-        // real preset — import flows (AutoEQ / APO Import / Generate Custom
-        // EQ), built-ins, and manual edits write non-bindable labels; those
-        // display as "none" since the live EQ isn't a re-selectable preset.
+        // Only names backed by custom_presets count — other labels display as "none".
         val customPresetsPrefs = getSharedPreferences("custom_presets", Context.MODE_PRIVATE)
         val isRealPreset = activePresetName.isNotBlank() &&
             customPresetsPrefs.contains("preset_$activePresetName")
         val presetDisplay = if (isRealPreset) activePresetName else "none"
-        // Three labelled lines:
-        //  Mode: "Session" = per-app bindings; "Device" = System-wide with
-        //        the current device's binding live; "System" = user's pick.
-        //  Preset: name being applied ("none" in Session-based when nothing
-        //          playing has a binding).
-        //  Device: currently-routed output label.
+        // Three lines — Mode (Session/Device/System), Preset, Device.
         val appPreset = sessionEffects?.getCurrentDrivingPreset()
         val deviceBinding = lastDeviceKey?.let { prefs.getDeviceBinding(it) }
         val deviceDrivesPreset = routingMode != 1 &&

@@ -9,18 +9,7 @@ import com.bearinmind.equalizer314.state.EqPreferencesManager
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * Policy run when [AudioRoutingMonitor] reports a new active output:
- *  1. Look up the device→preset binding.
- *  2. If found, snapshot current live state into `lastManualState` (for MainActivity's Undo).
- *  3. Load the named custom preset, copy its bands into live EQ state (same SP key the activity reads).
- *  4. Push new bands to [DynamicsProcessingManager] if the EQ is running.
- *  5. Broadcast [ACTION_ROUTE_PRESET_APPLIED] so a foregrounded MainActivity reloads and shows Undo.
- *
- * No binding for the device → strict no-op (matches the §C edge-case 1 default). Invoked on the main
- * thread from the routing monitor's debounce callback; SP reads are cheap, DP updates serialized in
- * [DynamicsProcessingManager].
- */
+/** Applies the device→preset binding on route change: Undo snapshot, load preset into live state + DP, broadcast. */
 class RouteSwitchCoordinator(
     private val context: Context,
     private val eqPrefs: EqPreferencesManager,
@@ -28,23 +17,18 @@ class RouteSwitchCoordinator(
 ) {
 
     fun onRouteChange(change: AudioRoutingMonitor.RouteChange) {
-        // Remember the device even without a binding, so it appears in the Audio Output screen's
-        // "seen devices" list for manual binding later.
+        // Remember the device even without a binding — feeds the "seen devices" list.
         eqPrefs.rememberSeenDevice(change.key, change.label)
 
-        // Master gate: with "Device auto-switch" off, route changes still populate seen-devices
-        // (above) but never overwrite the loaded preset.
+        // Auto-switch off: still populate seen-devices, never overwrite the loaded preset.
         if (!eqPrefs.getDeviceAutoSwitchEnabled()) {
             Log.d(TAG, "Auto-switch disabled — keeping current preset on route change to '${change.label}'")
             return
         }
 
-        // No binding ("(none)" deletes the entry, or never bound) → leave live DP as-is.
-        // "(none)" means "don't touch what's loaded," not "disable the EQ."
-        val binding = eqPrefs.getDeviceBinding(change.key) ?: return
-        // "Disable EQ" binding: global-DP detach is owned by EqService.handleDeviceRouteLifecycle
-        // (keeps isDpRunning / notification consistent). Bail before loadCustomPreset so we don't
-        // log a bogus "missing preset" for the sentinel name.
+        // "(none)" / never bound → leave the live DP as-is.
+        val binding = eqPrefs.getDeviceBindingSmart(change.key, change.label) ?: return
+        // "Disable EQ" detach is owned by EqService.handleDeviceRouteLifecycle — bail here.
         if (binding.presetName == EqPreferencesManager.DEVICE_PRESET_DISABLED) return
         val preset = loadCustomPreset(binding.presetName)
         if (preset == null) {
@@ -56,8 +40,7 @@ class RouteSwitchCoordinator(
         // Snapshot the current live state so MainActivity's Undo can revert.
         eqPrefs.saveLastManualState(livePrefs.getString("bands", null))
 
-        // Channel-Side-EQ presets carry independent leftBands / rightBands. Branch on the saved CSE
-        // flag and apply per-channel when present (else a TWS preset's per-channel filters drop).
+        // CSE presets carry independent leftBands / rightBands — apply per-channel when present.
         val cseOn = preset.optBoolean("channelSideEqEnabled", false)
         val hasLeftRight = cseOn && preset.has("leftBands") && preset.has("rightBands")
 
@@ -66,9 +49,7 @@ class RouteSwitchCoordinator(
             val rightArr = preset.getJSONArray("rightBands")
             val leftEq = buildEqualizerFromBands(leftArr)
             val rightEq = buildEqualizerFromBands(rightArr)
-            // Persist to the same prefs keys EqStateManager reads on launch so the app shows
-            // per-channel divergence. Live `bands` key mirrors the (active) left channel for
-            // back-compat / non-CSE views.
+            // Same prefs keys EqStateManager reads on launch; `bands` mirrors L for back-compat.
             eqPrefs.saveChannelSideEqEnabled(true)
             eqPrefs.saveLeftBands(leftEq)
             eqPrefs.saveRightBands(rightEq)
@@ -86,8 +67,7 @@ class RouteSwitchCoordinator(
                 dynamicsManager.rightChannelGainDb = eqPrefs.getRightChannelGainDb() + eqPrefs.getPreampRight()
             }
         } else {
-            // Single / shared preset — mirror its `bands` and clear stale per-channel divergence + flag
-            // so a later CSE-enable forks cleanly.
+            // Single preset — mirror `bands`, clear stale per-channel divergence.
             val bandsJson = preset.optJSONArray("bands") ?: return
             livePrefs.edit().putString("bands", bandsJson.toString()).apply()
             eqPrefs.saveChannelSideEqEnabled(false)
@@ -101,8 +81,7 @@ class RouteSwitchCoordinator(
             }
         }
 
-        // Push saved preamp to the live DP, not just prefs — else the audio path keeps the previous
-        // device's preamp and an AutoEQ preset's -6 dB headroom drops on every route-in.
+        // Push the preamp to the live DP too — prefs alone keep the previous device's preamp.
         if (preset.has("preamp")) {
             val preamp = preset.getDouble("preamp").toFloat()
             eqPrefs.savePreampGain(preamp)
@@ -125,8 +104,7 @@ class RouteSwitchCoordinator(
         // Full-chain presets: apply MBC + limiter too.
         com.bearinmind.equalizer314.state.PresetChainIo.applyChain(context, preset, eqPrefs, dynamicsManager)
 
-        // Persist active preset name so getPresetName() reflects what's driving audio. EqService's
-        // notification reads it for "Preset: X" in the BigText body; MainActivity's dropdown stays in sync.
+        // Persist the preset name — notification "Preset:" line + dropdown read it.
         eqPrefs.savePresetName(binding.presetName)
 
         Log.d(TAG, "Applied '${binding.presetName}' for device '${change.label}'")
