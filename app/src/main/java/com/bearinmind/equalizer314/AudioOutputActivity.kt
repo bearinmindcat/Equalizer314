@@ -37,10 +37,7 @@ import androidx.recyclerview.widget.RecyclerView
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * Detail screen of the "Audio Output" pipeline card — per-device EQ binding: shows the currently
- * routed output, every device the app has seen, and lets the user assign saved presets to each.
- */
+/** Audio Output screen — per-device EQ bindings: current output + seen devices with preset dropdowns. */
 class AudioOutputActivity : AppCompatActivity() {
 
     private lateinit var eqPrefs: EqPreferencesManager
@@ -60,8 +57,14 @@ class AudioOutputActivity : AppCompatActivity() {
     private lateinit var currentDeviceDropdown: MaterialAutoCompleteTextView
     private lateinit var currentDeviceDropdownLayout: TextInputLayout
     private var devicesExpanded = true
-    // Suppresses the click-handler's reopen when a popup auto-dismisses via outside-tap on the
-    // dropdown box — the same touch that dismisses also fires our click handler.
+    private lateinit var hiddenSection: LinearLayout
+    private lateinit var hiddenHeader: LinearLayout
+    private lateinit var hiddenBody: LinearLayout
+    private lateinit var hiddenChevron: TextView
+    private lateinit var hiddenList: RecyclerView
+    private lateinit var hiddenAdapter: DevicesAdapter
+    private var hiddenExpanded = false
+    // Suppresses the click-handler's reopen when a popup auto-dismisses via outside-tap on the dropdown box.
     private var currentDeviceLastDismissAt = 0L
 
     private var eqService: EqService? = null
@@ -75,8 +78,7 @@ class AudioOutputActivity : AppCompatActivity() {
             eqService = binder.service
             serviceBound = true
             refreshActiveDevice()
-            // Subscribe to live route changes so the screen updates as
-            // the user plugs / unplugs devices while it's open.
+            // Subscribe to live route changes so the screen updates as the user plugs / unplugs devices while it's open.
             binder.service.routingMonitor?.let { monitor ->
                 val previous = monitor.onRouteChange
                 monitor.onRouteChange = { change ->
@@ -105,8 +107,7 @@ class AudioOutputActivity : AppCompatActivity() {
 
         findViewById<ImageButton>(R.id.audioOutputBackButton).setOnClickListener { finish() }
 
-        // Device auto-switch toggle — twin of Channel Input's Session detection card. Flips the
-        // persisted flag synchronously so the next route change applies the bound preset (on) or no-ops (off).
+        // Device auto-switch toggle — twin of Channel Input's Session detection card.
         deviceAutoSwitchCard = findViewById(R.id.deviceAutoSwitchCard)
         deviceAutoSwitchSwitch = findViewById(R.id.deviceAutoSwitchSwitch)
         deviceAutoSwitchBody = findViewById(R.id.deviceAutoSwitchBody)
@@ -125,7 +126,7 @@ class AudioOutputActivity : AppCompatActivity() {
         emptyState = findViewById(R.id.devicesEmptyState)
 
         // RecyclerView setup + ItemTouchHelper-driven drag-to-reorder.
-        devicesAdapter = DevicesAdapter()
+        devicesAdapter = DevicesAdapter(hiddenMode = false)
         devicesList.layoutManager = LinearLayoutManager(this)
         devicesList.adapter = devicesAdapter
         devicesList.isNestedScrollingEnabled = false
@@ -154,9 +155,7 @@ class AudioOutputActivity : AppCompatActivity() {
                 if (actionState == ItemTouchHelper.ACTION_STATE_DRAG &&
                     viewHolder is DevicesAdapter.VH) {
                     val handle = viewHolder.handle
-                    // Hold the handle's pressed state so the ripple stays lit during the drag;
-                    // post()'ed because ItemTouchHelper fires this callback BEFORE dispatching
-                    // ACTION_CANCEL to the handle, which would reset isPressed=false right after.
+                    // Hold the handle's pressed state so the ripple stays lit during the drag.
                     handle.post { handle.isPressed = true }
                     // Opaque card while dragging so it covers rows underneath (vs transparent fill)
                     val surfaceColor = MaterialColors.getColor(
@@ -185,8 +184,7 @@ class AudioOutputActivity : AppCompatActivity() {
         devicesChevron = findViewById(R.id.devicesChevron)
         currentDeviceDropdownLayout = findViewById(R.id.currentDevicePresetLayout)
         currentDeviceDropdown = findViewById(R.id.currentDevicePresetDropdown)
-        // TextInputLayout (holder of the ripple foreground) intercepts touches; forward them to
-        // popup open/dismiss so the dropdown still toggles on box tap.
+        // TextInputLayout intercepts touches — forward them to popup open/dismiss.
         currentDeviceDropdown.setOnDismissListener {
             currentDeviceLastDismissAt = System.currentTimeMillis()
         }
@@ -213,6 +211,21 @@ class AudioOutputActivity : AppCompatActivity() {
             applyDevicesExpanded(animate = true)
         }
 
+        hiddenSection = findViewById(R.id.hiddenSection)
+        hiddenHeader = findViewById(R.id.hiddenHeader)
+        hiddenBody = findViewById(R.id.hiddenBody)
+        hiddenChevron = findViewById(R.id.hiddenChevron)
+        hiddenList = findViewById(R.id.hiddenList)
+        hiddenAdapter = DevicesAdapter(hiddenMode = true)
+        hiddenList.layoutManager = LinearLayoutManager(this)
+        hiddenList.adapter = hiddenAdapter
+        hiddenList.isNestedScrollingEnabled = false
+        applySectionExpanded(hiddenBody, hiddenChevron, hiddenExpanded, animate = false)
+        hiddenHeader.setOnClickListener {
+            hiddenExpanded = !hiddenExpanded
+            applySectionExpanded(hiddenBody, hiddenChevron, hiddenExpanded, animate = true)
+        }
+
         maybeRequestBluetoothPermission()
     }
 
@@ -222,15 +235,12 @@ class AudioOutputActivity : AppCompatActivity() {
         refreshDeviceAutoSwitchUi()
         // Bind to EqService (same pattern as MainActivity) to read the live routing monitor
         bindService(Intent(this, EqService::class.java), serviceConnection, Context.BIND_AUTO_CREATE)
-        // Standalone scan: with the EQ service off the routing monitor isn't alive and nothing has
-        // been remembered — enumerate output sinks ourselves so the list still populates.
+        // Standalone scan: with the EQ service off the routing monitor isn't alive and nothing has been remembered.
         scanCurrentlyConnectedOutputs()
         refreshDevices()
     }
 
-    /** Push the persisted auto-switch state into the toggle card. Body copy is fixed (matches the
-     *  Channel Input Session-detection card); the switch position alone communicates on/off. Gates
-     *  [com.bearinmind.equalizer314.audio.RouteSwitchCoordinator] — off = route changes tracked but no preset applied. */
+    /** Push the persisted auto-switch state into the toggle card. */
     private fun refreshDeviceAutoSwitchUi() {
         deviceAutoSwitchSwitch.isChecked = eqPrefs.getDeviceAutoSwitchEnabled()
     }
@@ -244,8 +254,7 @@ class AudioOutputActivity : AppCompatActivity() {
         }
     }
 
-    /** Pick the highest-priority connected output via AudioManager directly — fallback when the
-     *  service's AudioRoutingMonitor isn't running or its dedupe never emitted for the current device. */
+    /** Pick the highest-priority connected output via AudioManager directly. */
     private fun pickActiveOutputDirect(): android.media.AudioDeviceInfo? {
         val am = getSystemService(android.media.AudioManager::class.java) ?: return null
         var best: android.media.AudioDeviceInfo? = null
@@ -280,9 +289,7 @@ class AudioOutputActivity : AppCompatActivity() {
 
     private fun refreshActiveDevice() {
         val monitor = eqService?.routingMonitor
-        // Prefer the service's monitor (live add/remove callbacks) with a direct AudioManager scan
-        // fallback so the card still shows something when the EQ service is off, or when the
-        // monitor's stale-key dedupe never emitted for the current output (e.g. USB connected before service start).
+        // Prefer the service's monitor, with a direct AudioManager scan fallback for when the service is off.
         val active = monitor?.pickActiveOutput() ?: pickActiveOutputDirect()
         if (active == null) {
             activeKey = null
@@ -296,8 +303,7 @@ class AudioOutputActivity : AppCompatActivity() {
         activeKey = DeviceIdentity.keyOf(active)
         activeLabel = DeviceIdentity.labelOf(active)
         activeDeviceLabel.text = activeLabel ?: "Current output"
-        // Device key on a second line via DeviceIdentity.displayKey: USB/wired/speaker show
-        // "USB"/"Wired"/"Speaker" instead of duplicating the product name; Bluetooth still shows the MAC.
+        // Second line via DeviceIdentity.displayKey — type for USB/wired/speaker, MAC for Bluetooth.
         val keyDisplay = activeKey?.let { DeviceIdentity.displayKey(it) }.orEmpty()
         if (keyDisplay.isNotEmpty()) {
             activeDeviceKey.text = keyDisplay
@@ -308,8 +314,7 @@ class AudioOutputActivity : AppCompatActivity() {
         }
         val binding = activeKey?.let { eqPrefs.getDeviceBinding(it) }
 
-        // Mirror of the per-row dropdown, bound to the active device — writes the same binding
-        // entry; both stay in sync via refreshActiveDevice + refreshDevices.
+        // Mirror of the per-row dropdown, bound to the active device — writes the same binding entry.
         val key = activeKey
         currentDeviceDropdownLayout.visibility = View.VISIBLE
         if (key == null) {
@@ -351,11 +356,7 @@ class AudioOutputActivity : AppCompatActivity() {
                 }
                 else -> {
                     eqPrefs.saveDeviceBinding(EqPreferencesManager.Binding(key, label, pick))
-                    // This dropdown edits the active device, so the pick IS the preset driving
-                    // audio. Write the preset name pref directly in addition to the broadcast —
-                    // the broadcast's RouteSwitchCoordinator calls savePresetName only when
-                    // auto-switch is on; direct write makes the chip/notification reflect the
-                    // explicit binding regardless of the toggle.
+                    // This dropdown edits the active device, so the pick IS the preset driving audio.
                     eqPrefs.savePresetName(pick)
                     notifyBindingChanged()
                     Toast.makeText(this, "Bound \"$pick\" to $label", Toast.LENGTH_SHORT).show()
@@ -379,29 +380,73 @@ class AudioOutputActivity : AppCompatActivity() {
         if (activeKey != null && activeLabel != null && seen.none { it.first == activeKey }) {
             seen.add(0, activeKey to activeLabel)
         }
-        // Apply user-saved drag order; devices not in it append in natural (insertion) order,
-        // active device pinned first.
+        // Apply user-saved drag order; devices not in it append in natural (insertion) order, active device pinned first.
         val savedOrder = eqPrefs.getDevicesOrder()
         val byKey = seen.associateBy { it.first }
         val ordered = mutableListOf<Pair<String, String>>()
         for (k in savedOrder) byKey[k]?.let { ordered.add(it) }
         for (item in seen) if (ordered.none { it.first == item.first }) ordered.add(item)
 
-        if (ordered.isEmpty()) {
-            emptyState.visibility = View.VISIBLE
-            devicesAdapter.setItems(emptyList())
-            return
-        }
-        emptyState.visibility = View.GONE
-        devicesAdapter.setItems(ordered)
+        val hiddenKeys = eqPrefs.getHiddenDeviceKeys()
+        val visible = ordered.filter { it.first !in hiddenKeys }
+        val hidden = ordered.filter { it.first in hiddenKeys }
+        emptyState.visibility = if (visible.isEmpty()) View.VISIBLE else View.GONE
+        devicesAdapter.setItems(visible)
+        hiddenAdapter.setItems(hidden)
+        hiddenSection.visibility = if (hidden.isEmpty()) View.GONE else View.VISIBLE
     }
 
-    /**
-     * Devices-list adapter. Each row is `item_device_row.xml` (drag handle left, outlined card
-     * right); the handle's touch listener starts an [ItemTouchHelper] drag whose onMove/clearView
-     * callbacks reorder + persist the list.
-     */
-    private inner class DevicesAdapter : RecyclerView.Adapter<DevicesAdapter.VH>() {
+    /** House-style confirm before dropping a device — it comes back on its next connection. */
+    private fun showRemoveDeviceDialog(label: String, onConfirm: () -> Unit) {
+        val density = resources.displayMetrics.density
+        val dialogView = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((24 * density).toInt(), (20 * density).toInt(), (24 * density).toInt(), (16 * density).toInt())
+        }
+        dialogView.addView(TextView(this).apply {
+            text = "Remove device"
+            setTextColor(0xFFE2E2E2.toInt()); textSize = 20f
+            setPadding(0, 0, 0, (12 * density).toInt())
+        })
+        dialogView.addView(TextView(this).apply {
+            text = "Remove \"$label\" and its preset binding? Reappears next time device connects."
+            setTextColor(0xFFAAAAAA.toInt()); textSize = 14f
+            setPadding(0, 0, 0, (16 * density).toInt())
+        })
+        dialogView.addView(View(this).apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (1 * density).toInt()).apply {
+                bottomMargin = (12 * density).toInt()
+            }
+            setBackgroundColor(0xFF444444.toInt())
+        })
+        val btnRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+        fun dlgBtn(label: String, color: Int, endMargin: Boolean) =
+            com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                text = label
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    if (endMargin) marginEnd = (3 * density).toInt() else marginStart = (3 * density).toInt()
+                }
+                cornerRadius = (12 * density).toInt(); setTextColor(color)
+                strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                strokeWidth = (1 * density).toInt()
+                setBackgroundColor(0x00000000); insetTop = 0; insetBottom = 0
+            }
+        val removeBtn = dlgBtn("Remove", 0xFFEF9A9A.toInt(), endMargin = true)
+        val cancelBtn = dlgBtn("Cancel", 0xFFDDDDDD.toInt(), endMargin = false)
+        btnRow.addView(removeBtn); btnRow.addView(cancelBtn)
+        dialogView.addView(btnRow)
+        val dialog = android.app.AlertDialog.Builder(this, R.style.Theme_Equalizer314_Dialog)
+            .setView(dialogView).create()
+        removeBtn.setOnClickListener { dialog.dismiss(); onConfirm() }
+        cancelBtn.setOnClickListener { dialog.dismiss() }
+        dialog.show()
+    }
+
+    /** Devices-list adapter. Each row is `item_device_row.xml` (drag handle left, outlined card right). */
+    private inner class DevicesAdapter(private val hiddenMode: Boolean) : RecyclerView.Adapter<DevicesAdapter.VH>() {
 
         private val items = mutableListOf<Pair<String, String>>()
 
@@ -426,11 +471,11 @@ class AudioOutputActivity : AppCompatActivity() {
             val presetLayout: TextInputLayout = view.findViewById(R.id.deviceRowPresetLayout)
             val dropdown: MaterialAutoCompleteTextView = view.findViewById(R.id.deviceRowPresetDropdown)
             val handle: android.widget.ImageView = view.findViewById(R.id.deviceRowDragHandle)
-            // Top-level is a FrameLayout; the notched card and the
-            // drag handle live as siblings inside it.
+            // Top-level is a FrameLayout; the notched card and the drag handle live as siblings inside it.
             val card: NotchedDeviceCardView = view.findViewById(R.id.deviceRowCard)
-            // Suppresses the click-handler's reopen when this row's
-            // popup auto-dismisses via outside-tap on the dropdown box.
+            val removeBtn: com.google.android.material.button.MaterialButton = view.findViewById(R.id.deviceRowRemoveButton)
+            val hideBtn: com.google.android.material.button.MaterialButton = view.findViewById(R.id.deviceRowHideButton)
+            // Suppresses the click-handler's reopen when this row's popup auto-dismisses via outside-tap on the dropdown box.
             var lastDismissAt = 0L
         }
 
@@ -445,8 +490,7 @@ class AudioOutputActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: VH, position: Int) {
             val (key, label) = items[position]
 
-            // Name on top, key below via DeviceIdentity.displayKey: USB/wired/speaker show
-            // "USB"/"Wired"/"Speaker" (not the product name again); Bluetooth shows the MAC (unique identifier).
+            // Name on top, key below via DeviceIdentity.displayKey: USB/wired/speaker show "USB"/"Wired"/"Speaker".
             val keyDisplay = DeviceIdentity.displayKey(key)
             holder.name.text = label
             if (keyDisplay.isNotEmpty()) {
@@ -475,9 +519,7 @@ class AudioOutputActivity : AppCompatActivity() {
             )
             dropdown.setAdapter(PresetDropdownAdapter(this@AudioOutputActivity, entries))
 
-            // TextInputLayout owns the ripple foreground + touch handling; route clicks to popup
-            // open/dismiss. The dismiss-listener + 300ms suppression avoids the reopen cycle when
-            // an outside-tap both dismisses the popup AND fires this click.
+            // TextInputLayout owns the ripple foreground + touch handling; route clicks to popup open/dismiss.
             dropdown.setOnDismissListener {
                 holder.lastDismissAt = System.currentTimeMillis()
             }
@@ -510,9 +552,7 @@ class AudioOutputActivity : AppCompatActivity() {
                     }
                     else -> {
                         eqPrefs.saveDeviceBinding(EqPreferencesManager.Binding(key, label, pick))
-                        // If this row IS the active device, apply the pick to the preset name pref
-                        // immediately — mirrors the top dropdown, bypassing RouteSwitchCoordinator's
-                        // auto-switch gate for explicit user actions.
+                        // If this row IS the active device, apply the pick to the preset name pref immediately — mirrors the top dropdown.
                         if (key == activeKey) {
                             eqPrefs.savePresetName(pick)
                         }
@@ -523,6 +563,26 @@ class AudioOutputActivity : AppCompatActivity() {
                 dropdown.clearFocus()
                 refreshActiveDevice()
             }
+
+            // × removes the row + binding (not a blacklist — the device relists on its next connection).
+            holder.removeBtn.setOnClickListener {
+                showRemoveDeviceDialog(label) {
+                    eqPrefs.forgetSeenDevice(key)
+                    eqPrefs.removeDeviceBinding(key)
+                    eqPrefs.setDeviceHidden(key, false)
+                    notifyBindingChanged()
+                    refreshActiveDevice()
+                    refreshDevices()
+                }
+            }
+            // Eye tucks the row into the Hidden devices section (binding + auto-switch untouched).
+            holder.hideBtn.setIconResource(if (hiddenMode) R.drawable.ic_visibility_off else R.drawable.ic_visibility)
+            holder.hideBtn.setOnClickListener {
+                eqPrefs.setDeviceHidden(key, !hiddenMode)
+                refreshDevices()
+            }
+            // Reorder drag only lives in the main list.
+            holder.handle.visibility = if (hiddenMode) View.INVISIBLE else View.VISIBLE
 
             // Long-press the card → "Forget device" option.
             holder.card.setOnLongClickListener {
@@ -540,11 +600,7 @@ class AudioOutputActivity : AppCompatActivity() {
                 true
             }
 
-            // Drag handle starts the ItemTouchHelper drag. Pressed-state is driven manually so the
-            // ripple stays lit for the whole gesture: DOWN → isPressed=true; UP → isPressed=false
-            // (tap-without-drag); CANCEL → consume so View.onTouchEvent never sets isPressed=false
-            // (ItemTouchHelper dispatches CANCEL when it takes over the touch stream — unconsumed,
-            // the framework's cancel handler kills the ripple mid-drag; clearView() releases isPressed instead).
+            // Drag handle starts the ItemTouchHelper drag.
             holder.handle.setOnTouchListener { v, event ->
                 when (event.actionMasked) {
                     android.view.MotionEvent.ACTION_DOWN -> {
@@ -565,13 +621,7 @@ class AudioOutputActivity : AppCompatActivity() {
 
     // ---- Helpers -------------------------------------------------------
 
-    /**
-     * Ripple foreground whose bounds match the actual outlined-box rect, so the ripple stops at
-     * every outline edge. Hard-coded insets never lined up — the offset depends on the floated
-     * label's vertical centre, which varies with font scale. In OutlinedBox mode the box drawable
-     * is the inner AutoCompleteTextView's background; `offsetDescendantRectToMyCoords` translates
-     * its bounds into TextInputLayout space, giving the exact outline rect to inset to.
-     */
+    /** Ripple foreground whose bounds match the actual outlined-box rect, so the ripple stops at every outline edge. */
     private fun applyBoxOutlineRipple(layout: TextInputLayout, dropdown: android.view.View) {
         layout.viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
             override fun onPreDraw(): Boolean {
@@ -594,15 +644,10 @@ class AudioOutputActivity : AppCompatActivity() {
                     this.cornerRadius = cornerRadius
                     setColor(android.graphics.Color.WHITE)
                 }
-                // Bump mask above the outline at the "Preset" label. LayerDrawable unions it with
-                // the outline mask — ripple clip = outline + a small rounded tab following the
-                // label. Position comes from the label's measured width plus Material3's known
-                // padding (16dp from outline.left to the text baseline, ~4dp cutout padding around
-                // the label), so the bump tracks the label across font scales.
+                // Bump mask above the outline at the "Preset" label.
                 val labelText = (layout.hint ?: "Preset").toString()
                 val labelTextSizePx = 12f * resources.displayMetrics.scaledDensity
-                // Same typeface + letter spacing as the dropdown so the measurement tracks what
-                // Material's CollapsingTextHelper actually paints.
+                // Same typeface + letter spacing as the dropdown so the measurement matches Material's label.
                 val labelMeasuredWidth = android.graphics.Paint().apply {
                     textSize = labelTextSizePx
                     typeface = (dropdown as? android.widget.TextView)?.typeface
@@ -614,8 +659,7 @@ class AudioOutputActivity : AppCompatActivity() {
                 val labelCutoutPaddingPx = (4 * density).toInt()
                 val labelHorizontalInsetPx = (16 * density).toInt()
                 val bumpHeightPx = (labelTextSizePx + 2 * 2 * density).toInt()
-                // Bump spans label-left − 4dp to label-right + 4dp — the exact width of the outline
-                // cutout Material draws around the floated label.
+                // Bump spans label-left − 4dp to label-right + 4dp.
                 val labelTextLeft = rect.left + labelHorizontalInsetPx
                 val labelTextRight = labelTextLeft + labelMeasuredWidth.toInt()
                 val bumpLeft = labelTextLeft - labelCutoutPaddingPx
@@ -659,8 +703,7 @@ class AudioOutputActivity : AppCompatActivity() {
         })
     }
 
-    /** Re-run EqService's route coordinator for the currently-routed device — called after any
-     *  binding add/change/remove so it takes effect on live DP immediately (no disconnect/reconnect needed). */
+    /** Re-run EqService's route coordinator for the currently-routed device. */
     private fun notifyBindingChanged() {
         sendBroadcast(
             Intent(com.bearinmind.equalizer314.audio.EqService.ACTION_REAPPLY_DEVICE_BINDING)
@@ -670,8 +713,7 @@ class AudioOutputActivity : AppCompatActivity() {
 
     private fun listCustomPresetNames(): List<String> {
         val prefs = getSharedPreferences("custom_presets", MODE_PRIVATE)
-        // Only String values are real presets — MainActivity also stores a `preset_names` StringSet
-        // bookkeeping key here, which would parse as a preset "names" and crash ClassCastException on getString().
+        // Only String values are real presets — MainActivity also stores a `preset_names` StringSet bookkeeping key here.
         return prefs.all
             .filter { (k, v) -> k.startsWith("preset_") && v is String }
             .keys
@@ -686,13 +728,11 @@ class AudioOutputActivity : AppCompatActivity() {
         return runCatching { JSONObject(str) }.getOrNull()
     }
 
-    /** Entries for every preset dropdown on this screen. Order: "(none)", each custom preset
-     *  (with full JSON so the curve preview can detect CSE), then optionally a dangling/missing sentinel. */
+    /** Entries for every preset dropdown on this screen. */
     private fun buildPresetEntries(missingPresetName: String?): List<PresetDropdownAdapter.Entry> {
         val out = mutableListOf<PresetDropdownAdapter.Entry>()
         out.add(PresetDropdownAdapter.Entry("(none)", null))
-        // "Disable EQ" fully detaches our DP while this device is active (vs "(none)" which keeps
-        // the current preset); null JSON → blank curve, no preamp subtitle.
+        // "Disable EQ" fully detaches our DP while this device is active (vs "(none)" which keeps the current preset).
         out.add(PresetDropdownAdapter.Entry(DISABLE_LABEL, null, isDisable = true))
         for (name in listCustomPresetNames()) {
             out.add(PresetDropdownAdapter.Entry(name, loadPresetJson(name)))
@@ -708,8 +748,7 @@ class AudioOutputActivity : AppCompatActivity() {
         if (checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT)
             == PackageManager.PERMISSION_GRANTED
         ) return
-        // Fire-and-forget (like the notification permission flow); UI isn't gated on it — without
-        // it, BT identity falls back to product name only.
+        // Fire-and-forget permission request; the UI isn't gated on it.
         requestPermissions(arrayOf(android.Manifest.permission.BLUETOOTH_CONNECT), REQ_BT_CONNECT)
     }
 
@@ -733,67 +772,65 @@ class AudioOutputActivity : AppCompatActivity() {
         }
     }
 
-    /** Compose-style expand/collapse (AppDrawer `AnimatedVisibility` feel): pure height
-     *  interpolation via ValueAnimator on `layoutParams.height` — no Transition fade, no visibility
-     *  blink. Symmetric [EXPAND_DURATION_MS], FastOutSlowInInterpolator (Compose default); chevron rotates in lockstep. */
-    private fun applyDevicesExpanded(animate: Boolean) {
-        val targetRotation = if (devicesExpanded) 90f else 0f
+    private fun applyDevicesExpanded(animate: Boolean) =
+        applySectionExpanded(devicesBody, devicesChevron, devicesExpanded, animate)
+
+    private fun applySectionExpanded(body: View, chevron: View, expanded: Boolean, animate: Boolean) {
+        val targetRotation = if (expanded) 90f else 0f
         if (!animate) {
-            devicesBody.visibility = if (devicesExpanded) View.VISIBLE else View.GONE
-            if (devicesExpanded) {
-                devicesBody.layoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
-                devicesBody.requestLayout()
+            body.visibility = if (expanded) View.VISIBLE else View.GONE
+            if (expanded) {
+                body.layoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                body.requestLayout()
             }
-            devicesChevron.rotation = targetRotation
+            chevron.rotation = targetRotation
             return
         }
-        animateDevicesBody(devicesExpanded)
-        devicesChevron.animate()
+        animateSectionBody(body, expanded)
+        chevron.animate()
             .rotation(targetRotation)
             .setDuration(EXPAND_DURATION_MS)
             .setInterpolator(androidx.interpolator.view.animation.FastOutSlowInInterpolator())
             .start()
     }
 
-    private fun animateDevicesBody(expand: Boolean) {
+    private fun animateSectionBody(body: View, expand: Boolean) {
         val interp = androidx.interpolator.view.animation.FastOutSlowInInterpolator()
         if (expand) {
-            devicesBody.visibility = View.VISIBLE
-            val widthSpec = View.MeasureSpec.makeMeasureSpec(
-                (devicesBody.parent as View).width, View.MeasureSpec.EXACTLY,
-            )
+            body.visibility = View.VISIBLE
+            val widthSpec = View.MeasureSpec.makeMeasureSpec((body.parent as View).width, View.MeasureSpec.EXACTLY)
             val heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-            devicesBody.measure(widthSpec, heightSpec)
-            val target = devicesBody.measuredHeight
+            body.measure(widthSpec, heightSpec)
+            val target = body.measuredHeight
             android.animation.ValueAnimator.ofInt(0, target).apply {
                 duration = EXPAND_DURATION_MS
                 interpolator = interp
                 addUpdateListener {
-                    devicesBody.layoutParams.height = it.animatedValue as Int
-                    devicesBody.requestLayout()
+                    body.layoutParams.height = it.animatedValue as Int
+                    body.requestLayout()
                 }
                 addListener(object : android.animation.AnimatorListenerAdapter() {
                     override fun onAnimationEnd(animation: android.animation.Animator) {
-                        devicesBody.layoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
-                        devicesBody.requestLayout()
+                        body.layoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                        body.requestLayout()
                     }
                 })
                 start()
             }
         } else {
-            val start = devicesBody.height
+            val start = body.height
             android.animation.ValueAnimator.ofInt(start, 0).apply {
                 duration = EXPAND_DURATION_MS
                 interpolator = interp
                 addUpdateListener {
-                    devicesBody.layoutParams.height = it.animatedValue as Int
-                    devicesBody.requestLayout()
+                    body.layoutParams.height = it.animatedValue as Int
+                    body.requestLayout()
                 }
                 addListener(object : android.animation.AnimatorListenerAdapter() {
                     override fun onAnimationEnd(animation: android.animation.Animator) {
-                        devicesBody.visibility = View.GONE
-                        devicesBody.layoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
-                        devicesBody.requestLayout()
+                        body.visibility = View.GONE
+                        body.layoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                        body.requestLayout()
                     }
                 })
                 start()
@@ -803,12 +840,10 @@ class AudioOutputActivity : AppCompatActivity() {
 
     companion object {
         private const val REQ_BT_CONNECT = 300
-        /** Display label for the "fully detach DP for this device" dropdown choice; persisted as
-         *  [EqPreferencesManager.DEVICE_PRESET_DISABLED] in the binding. */
+        /** Display label for the "fully detach DP for this device" dropdown choice. */
         private const val DISABLE_LABEL = "Disable EQ"
         private const val PREF_DEVICES_EXPANDED = "devicesExpanded"
-        /** Devices section open/close duration — past Compose's 300 ms `AnimatedVisibility` default
-         *  toward Material's "Emphasized" ≈500 ms so the slide reads deliberate. */
+        /** Section open/close duration — ~500 ms so the slide reads deliberate. */
         private const val EXPAND_DURATION_MS = 500L
     }
 }

@@ -823,6 +823,16 @@ class EqPreferencesManager(context: Context) {
         bindingsPrefs.edit().remove("seen_$key").apply()
     }
 
+    /** Devices tucked away by the eye button — still bound and auto-switching, just out of the main list. */
+    fun getHiddenDeviceKeys(): Set<String> =
+        bindingsPrefs.getStringSet("hidden_devices", emptySet())?.toSet() ?: emptySet()
+
+    fun setDeviceHidden(key: String, hidden: Boolean) {
+        val set = getHiddenDeviceKeys().toMutableSet()
+        if (hidden) set.add(key) else set.remove(key)
+        bindingsPrefs.edit().putStringSet("hidden_devices", set).apply()
+    }
+
     /** Drag-reorder ordering of seen devices; unknown devices sort alphabetically after. */
     fun saveDevicesOrder(keys: List<String>) {
         val arr = JSONArray()
