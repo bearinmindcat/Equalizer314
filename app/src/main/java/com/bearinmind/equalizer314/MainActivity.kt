@@ -1741,9 +1741,7 @@ class  MainActivity : AppCompatActivity() {
             for (name in presetNames) {
                 // Parse preset data for thumbnail
                 val presetJson = prefs.getString("preset_$name", null)
-                val bandCount = try {
-                    org.json.JSONObject(presetJson ?: "{}").getJSONArray("bands").length()
-                } catch (_: Exception) { 0 }
+                val bandCount = com.bearinmind.equalizer314.state.PresetFileIo.filterCount(presetJson)
 
                 val presetRow = android.widget.LinearLayout(this).apply {
                     orientation = android.widget.LinearLayout.HORIZONTAL

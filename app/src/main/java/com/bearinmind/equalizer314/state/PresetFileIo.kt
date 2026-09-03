@@ -7,9 +7,19 @@ import com.bearinmind.equalizer314.autoeq.apoTokenToFilterType
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Shared preset-file import: native Equalizer314 .json, APO .txt, and the legacy
- *  EQ314 chain section — one parser for every import entry point (issue #78). */
+/** Shared preset-file import: native Equalizer314 .json, APO .txt, and the legacy EQ314 chain section. */
 object PresetFileIo {
+    /** Total filters in a preset JSON — CSE presets sum left + right + shared instead of the legacy `bands` copy. */
+    fun filterCount(json: String?): Int {
+        val obj = try { JSONObject(json ?: return 0) } catch (_: Exception) { return 0 }
+        if (obj.optBoolean("channelSideEqEnabled", false) && obj.has("leftBands")) {
+            return (obj.optJSONArray("leftBands")?.length() ?: 0) +
+                (obj.optJSONArray("rightBands")?.length() ?: 0) +
+                (obj.optJSONArray("sharedBands")?.length() ?: 0)
+        }
+        return obj.optJSONArray("bands")?.length() ?: 0
+    }
+
 
     /** True when [text] carries more than plain APO (native JSON or a chain section). */
     fun hasChainData(text: String): Boolean {
