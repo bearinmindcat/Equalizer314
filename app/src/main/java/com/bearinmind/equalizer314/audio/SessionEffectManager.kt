@@ -98,6 +98,7 @@ class SessionEffectManager(private val context: Context) {
     }
 
     private fun notifySessionsChanged() {
+        drivingPresetName = getCurrentDrivingPreset()
         context.sendBroadcast(
             android.content.Intent(ACTION_SESSIONS_CHANGED)
                 .setPackage(context.packageName),
@@ -625,6 +626,10 @@ class SessionEffectManager(private val context: Context) {
 
     companion object {
         private const val TAG = "SessionEffectManager"
+        /** Binder-free mirror of [getCurrentDrivingPreset] for MainActivity's graph follow. */
+        @Volatile
+        var drivingPresetName: String? = null
+            private set
         /** Package-targeted broadcast when the active session set changes (Channel Input listens). */
         const val ACTION_SESSIONS_CHANGED =
             "com.bearinmind.equalizer314.SESSIONS_CHANGED"

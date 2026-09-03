@@ -890,7 +890,7 @@ class EqPreferencesManager(context: Context) {
         appBindingsPrefs.edit().remove("seen_$packageName").apply()
     }
 
-    /** Routing mode: 0 = global session 0 (default), 1 = per-app only, 2 = both. */
+    /** Routing mode: 0 = System-wide (default), 1 = Session-based; a legacy 2 reads as System-wide. */
     fun getAudioRoutingMode(): Int =
         appBindingsPrefs.getInt("audio_routing_mode", 0)
 
