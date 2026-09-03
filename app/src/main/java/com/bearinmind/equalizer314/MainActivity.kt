@@ -821,7 +821,11 @@ class  MainActivity : AppCompatActivity() {
             state.toString()
         }
         com.bearinmind.equalizer314.remote.TvRemoteHub.stateApplier = { obj -> applyRemotePresetJson(obj) }
-        stateManager.onEqPushed = { com.bearinmind.equalizer314.remote.TvRemoteHub.onLocalEqChanged() }
+        stateManager.onEqPushed = {
+            com.bearinmind.equalizer314.remote.TvRemoteHub.onLocalEqChanged()
+            presetAutosaveHandler.removeCallbacks(presetAutosaveRunnable)
+            presetAutosaveHandler.postDelayed(presetAutosaveRunnable, 1500L)
+        }
         com.bearinmind.equalizer314.remote.TvRemoteHub.resetModeOnColdStart(this)
         com.bearinmind.equalizer314.remote.TvRemoteHub.onUiReady()
         com.bearinmind.equalizer314.remote.RemoteScrim.setActive(
@@ -3147,6 +3151,19 @@ class  MainActivity : AppCompatActivity() {
             eqGraphView.setActiveBand(sel)
             bandToggleManager.updateSelection(sel)
         }
+    }
+
+    private val presetAutosaveHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val presetAutosaveRunnable = Runnable { autosaveLoadedPreset() }
+
+    /** Writes edits back into the loaded pool preset so tweaks survive reconnects. */
+    private fun autosaveLoadedPreset() {
+        if (!eqPrefs.getPresetAutosave()) return
+        if (System.currentTimeMillis() - stateManager.lastPresetApplyMs < 2500L) return
+        val name = eqPrefs.getPresetName()
+        if (name.isBlank()) return
+        if (eqPrefs.getCustomPresetJson(name) == null) return
+        eqPrefs.updateCustomPresetJson(name, buildCurrentPresetJson())
     }
 
     private fun buildCurrentPresetJson(): String {

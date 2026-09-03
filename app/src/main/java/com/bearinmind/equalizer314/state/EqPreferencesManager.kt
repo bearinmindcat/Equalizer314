@@ -228,6 +228,14 @@ class EqPreferencesManager(context: Context) {
 
     fun getPresetName(): String = prefs.getString("presetName", "Flat") ?: "Flat"
 
+    fun savePresetAutosave(enabled: Boolean) { prefs.edit().putBoolean("presetAutosave", enabled).apply() }
+    fun getPresetAutosave(): Boolean = prefs.getBoolean("presetAutosave", false)
+
+    /** Overwrites a pool preset's JSON only — never touches the name set. */
+    fun updateCustomPresetJson(name: String, json: String) {
+        customPresetsPrefs.edit().putString("preset_$name", json).apply()
+    }
+
     fun saveDpBandCount(count: Int) {
         prefs.edit().putInt("dpBandCount", count).apply()
     }

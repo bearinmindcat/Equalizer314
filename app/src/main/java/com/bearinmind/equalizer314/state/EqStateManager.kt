@@ -664,6 +664,7 @@ class EqStateManager(
         rightBands: List<BandSpec>,
         sharedBands: List<BandSpec>? = null,
     ) {
+        lastPresetApplyMs = System.currentTimeMillis()
         eqPrefs.saveChannelSideEqEnabled(cseEnabled)
         if (cseEnabled) {
             // A channel with only shared bands still needs one editable band.
@@ -737,7 +738,12 @@ class EqStateManager(
     }
 
 
+    /** Last preset load/apply time — autosave skips writes right after an apply. */
+    @Volatile
+    var lastPresetApplyMs = 0L
+
     fun loadPreset(name: String, graphView: EqGraphView) {
+        lastPresetApplyMs = System.currentTimeMillis()
         parametricEq.loadPreset(name)
         graphView.updateBandLevels()
         eqPrefs.savePresetName(name)
