@@ -354,6 +354,72 @@ class EqService : Service() {
         }
     }
 
+    // Legacy MediaRouter fallback (SDK < 33) — the only pre-33 "where is audio going" source (Wavelet/Poweramp parity).
+    private var legacyRouter: android.media.MediaRouter? = null
+    private var legacyRouteCallback: android.media.MediaRouter.SimpleCallback? = null
+
+    @Suppress("DEPRECATION")
+    private fun startLegacyRouteWatcher() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) return
+        try {
+            val mr = getSystemService(android.media.MediaRouter::class.java) ?: return
+            val cb = object : android.media.MediaRouter.SimpleCallback() {
+                private fun feed() {
+                    feedRoutedDeviceFromLegacyRouter()
+                    // Settle re-poll — the selection can lag the event by a beat.
+                    watchdogHandler.postDelayed({ feedRoutedDeviceFromLegacyRouter() }, 350)
+                }
+                override fun onRouteSelected(router: android.media.MediaRouter, type: Int, info: android.media.MediaRouter.RouteInfo) = feed()
+                override fun onRouteUnselected(router: android.media.MediaRouter, type: Int, info: android.media.MediaRouter.RouteInfo) = feed()
+                override fun onRouteRemoved(router: android.media.MediaRouter, info: android.media.MediaRouter.RouteInfo) = feed()
+                override fun onRouteChanged(router: android.media.MediaRouter, info: android.media.MediaRouter.RouteInfo) {
+                    // Only the selected route's changes matter (Wavelet's filter).
+                    if (info == router.getSelectedRoute(android.media.MediaRouter.ROUTE_TYPE_LIVE_AUDIO)) feed()
+                }
+                override fun onRouteVolumeChanged(router: android.media.MediaRouter, info: android.media.MediaRouter.RouteInfo) = feed()
+            }
+            mr.addCallback(android.media.MediaRouter.ROUTE_TYPE_LIVE_AUDIO, cb)
+            legacyRouter = mr
+            legacyRouteCallback = cb
+            feedRoutedDeviceFromLegacyRouter()
+        } catch (e: Exception) {
+            Log.w(TAG, "legacy route watcher unavailable: ${e.message}")
+        }
+    }
+
+    private fun stopLegacyRouteWatcher() {
+        try { legacyRouteCallback?.let { legacyRouter?.removeCallback(it) } } catch (_: Exception) {}
+        legacyRouteCallback = null
+        legacyRouter = null
+    }
+
+    /** Map the legacy selected route to a connected sink and feed the routing monitor. */
+    @Suppress("DEPRECATION")
+    private fun feedRoutedDeviceFromLegacyRouter() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) return
+        val mr = legacyRouter ?: return
+        val selected = try {
+            mr.getSelectedRoute(android.media.MediaRouter.ROUTE_TYPE_LIVE_AUDIO)
+        } catch (_: Exception) { null } ?: return
+        // Stale-selection guard (Wavelet's check): the route must still exist.
+        val live = (0 until mr.routeCount).any { mr.getRouteAt(it) == selected }
+        if (!live) return
+        val am = getSystemService(AudioManager::class.java) ?: return
+        val sinks = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+            .filter { it.isSink && DeviceIdentity.keyOf(it) != null }
+        val isBt = selected.deviceType == android.media.MediaRouter.RouteInfo.DEVICE_TYPE_BLUETOOTH
+        val routeName = selected.name?.toString()
+        val routed = if (isBt) {
+            val bts = sinks.filter { DeviceIdentity.keyOf(it)!!.startsWith("BT") }
+            bts.firstOrNull { it.productName?.toString() == routeName }
+                ?: bts.maxByOrNull { DeviceIdentity.priority(it) }
+        } else {
+            sinks.filter { !DeviceIdentity.keyOf(it)!!.startsWith("BT") }
+                .maxByOrNull { DeviceIdentity.priority(it) }
+        } ?: return
+        routingMonitor?.reportRoutedDevice(routed)
+    }
+
     private fun stopRouteSelectionWatcher() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
         try {
@@ -447,6 +513,7 @@ class EqService : Service() {
         routeCoordinator = coordinator
         monitor.start()
         startRouteSelectionWatcher()
+        startLegacyRouteWatcher()
 
         // Watchdog self-gates; real recovery is the event hooks above.
         startWatchdog()
@@ -921,6 +988,7 @@ class EqService : Service() {
                 ?.unregisterAudioPlaybackCallback(systemSoundCallback)
         } catch (_: Exception) {}
         stopRouteSelectionWatcher()
+        stopLegacyRouteWatcher()
         routingMonitor?.stop()
         routingMonitor = null
         routeCoordinator = null
