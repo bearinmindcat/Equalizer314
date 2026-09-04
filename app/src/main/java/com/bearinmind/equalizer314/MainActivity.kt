@@ -113,7 +113,7 @@ class  MainActivity : AppCompatActivity() {
         fun appendFilters(bands: org.json.JSONArray, indexOffset: Int = 0) {
             for (i in 0 until bands.length()) {
                 val b = bands.getJSONObject(i)
-                // FilterType → APO token. BP/NO/AP/LP/HP have no Gain; 1st-order LS/HS/LP/HP have no Q.
+                // FilterType → APO token. BP/NO/AP/LP/HP have no Gain; the 6 dB shelves and 1st-order LP/HP have no Q.
                 val apoType: String
                 val hasGain: Boolean
                 val hasQ: Boolean
@@ -123,8 +123,8 @@ class  MainActivity : AppCompatActivity() {
                     "HIGH_SHELF"   -> { apoType = "HSC"; hasGain = true;  hasQ = true  }
                     "LOW_PASS"     -> { apoType = "LPQ"; hasGain = false; hasQ = true  }
                     "HIGH_PASS"    -> { apoType = "HPQ"; hasGain = false; hasQ = true  }
-                    "LOW_SHELF_1"  -> { apoType = "LS";  hasGain = true;  hasQ = false }
-                    "HIGH_SHELF_1" -> { apoType = "HS";  hasGain = true;  hasQ = false }
+                    "LOW_SHELF_1"  -> { apoType = "LS 6dB"; hasGain = true; hasQ = false }
+                    "HIGH_SHELF_1" -> { apoType = "HS 6dB"; hasGain = true; hasQ = false }
                     "LOW_PASS_1"   -> { apoType = "LP";  hasGain = false; hasQ = false }
                     "HIGH_PASS_1"  -> { apoType = "HP";  hasGain = false; hasQ = false }
                     "BAND_PASS"    -> { apoType = "BP";  hasGain = false; hasQ = true  }

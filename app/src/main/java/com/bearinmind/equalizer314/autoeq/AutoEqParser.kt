@@ -2,17 +2,7 @@ package com.bearinmind.equalizer314.autoeq
 
 import com.bearinmind.equalizer314.dsp.BiquadFilter
 
-/**
- * Parser for Equalizer APO "config.txt" style files. Accepts every filter
- * type APO emits, including variants that omit `Gain` or `Q` and the
- * `LS 6 dB` / `LS 12 dB` slope-qualified shelf forms that EasyEffects /
- * Owliophile export by default. Also honors APO's `Channel:` directive so
- * per-channel presets round-trip into the app's Channel Side EQ model.
- *
- * Output `filterType` strings are the *normalized* APO type tokens that
- * downstream code maps to BiquadFilter.FilterType values:
- *   PK  LSC  HSC  LS  HS  LPQ  HPQ  LP  HP  BP  NO  AP
- */
+/** Equalizer APO config parser: every APO filter token incl. slope-qualified shelves and the `Channel:` directive; emits normalized tokens (PK LSC HSC LS HS LPQ HPQ LP HP BP NO AP). */
 fun apoTokenToFilterType(token: String): BiquadFilter.FilterType =
     when (token) {
         "PK"  -> BiquadFilter.FilterType.BELL
@@ -34,17 +24,13 @@ object AutoEqParser {
 
     private val preampRegex = Regex("""Preamp:\s*(-?[\d.]+)\s*dB""", RegexOption.IGNORE_CASE)
 
-    // `Channel: L` / `Channel: R` / `Channel: L R` / `Channel: L R C` etc.
-    // The capture group grabs everything after the colon; we tokenize by
-    // whitespace below.
+    // `Channel: L` / `Channel: L R C` etc. — everything after the colon is tokenized below.
     private val channelRegex = Regex("""^\s*Channel:\s*(.+)$""", RegexOption.IGNORE_CASE)
 
-    // Match the "Filter N: ON" prefix and capture the rest of the line for
-    // per-field sub-matching. Lines with `OFF` are deliberately skipped.
+    // "Filter N: ON" prefix + the rest of the line for per-field matching; OFF lines are skipped.
     private val filterLineRegex = Regex("""Filter\s+\d+:\s+ON\s+(.*)""", RegexOption.IGNORE_CASE)
 
-    // Type token + optional slope qualifier ("6 dB" / "12 dB") that APO only
-    // attaches to LS / HS shelves.
+    // Type token + optional slope qualifier ("6 dB" / "12 dB", LS/HS shelves only).
     private val typeRegex = Regex(
         """^(PK|LSC|HSC|LS|HS|LPQ|HPQ|LP|HP|BP|NO|AP)(?:\s+(6|12)\s*dB)?""",
         RegexOption.IGNORE_CASE
@@ -64,8 +50,7 @@ object AutoEqParser {
         val sharedFilters = mutableListOf<AutoEqFilter>()
         var perChannel = false
 
-        // Scope: which channels subsequent filters apply to. Default is ALL
-        // (pre-directive filters apply to every channel).
+        // Channel scope for subsequent filters; default ALL until a `Channel:` directive.
         var scopeLeft = true
         var scopeRight = true
 
@@ -86,8 +71,7 @@ object AutoEqParser {
                     .split(Regex("""[\s,]+"""))
                     .map { it.trim().uppercase() }
                     .filter { it.isNotEmpty() }
-                // Stereo channels we care about. APO's "ALL" selects every
-                // channel; filters scoped to others (C, SL, SR, LFE, etc.) are ignored.
+                // Only L/R matter; "ALL" selects both, other channels (C, SL, SR, LFE…) are ignored.
                 val scAll = "ALL" in tokens
                 val scL = scAll || "L" in tokens
                 val scR = scAll || "R" in tokens
@@ -96,8 +80,7 @@ object AutoEqParser {
                     scopeRight = scR
                     perChannel = perChannel || (scL xor scR)
                 } else {
-                    // Non-stereo scope — subsequent filters won't apply to
-                    // either L or R until a future `Channel: L` / `Channel: R`.
+                    // Non-stereo scope: nothing applies to L or R until the next `Channel:` line.
                     scopeLeft = false
                     scopeRight = false
                 }
@@ -111,9 +94,10 @@ object AutoEqParser {
             val rawType = typeMatch.groupValues[1].uppercase()
             val slope = typeMatch.groupValues[2]
 
+            // APO's plain LS/HS are the standard (Q-capable) shelves; only an explicit "6 dB" slope is the 1st-order shelf.
             val type = when (rawType) {
-                "LS" -> if (slope == "12") "LSC" else "LS"
-                "HS" -> if (slope == "12") "HSC" else "HS"
+                "LS" -> if (slope == "6") "LS" else "LSC"
+                "HS" -> if (slope == "6") "HS" else "HSC"
                 else -> rawType
             }
 
@@ -133,9 +117,7 @@ object AutoEqParser {
         }
 
         if (allFilters.isEmpty()) return null
-        // When no Channel: directive was seen (or only stereo `L R` scopes),
-        // L and R buckets equal the flat list; the caller can just use
-        // `filters` and ignore the split.
+        // Without per-channel scopes the L and R buckets equal the flat list.
         return if (perChannel) {
             AutoEqProfile(
                 preampDb = preampDb,

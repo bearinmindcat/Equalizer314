@@ -775,8 +775,8 @@ class SimpleEqController(
                     "HIGH_SHELF"   -> { apoType = "HSC"; hasGain = true;  hasQ = true  }
                     "LOW_PASS"     -> { apoType = "LPQ"; hasGain = false; hasQ = true  }
                     "HIGH_PASS"    -> { apoType = "HPQ"; hasGain = false; hasQ = true  }
-                    "LOW_SHELF_1"  -> { apoType = "LS";  hasGain = true;  hasQ = false }
-                    "HIGH_SHELF_1" -> { apoType = "HS";  hasGain = true;  hasQ = false }
+                    "LOW_SHELF_1"  -> { apoType = "LS 6dB"; hasGain = true; hasQ = false }
+                    "HIGH_SHELF_1" -> { apoType = "HS 6dB"; hasGain = true; hasQ = false }
                     "LOW_PASS_1"   -> { apoType = "LP";  hasGain = false; hasQ = false }
                     "HIGH_PASS_1"  -> { apoType = "HP";  hasGain = false; hasQ = false }
                     "BAND_PASS"    -> { apoType = "BP";  hasGain = false; hasQ = true  }

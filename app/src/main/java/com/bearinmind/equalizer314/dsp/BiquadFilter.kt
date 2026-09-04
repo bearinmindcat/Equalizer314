@@ -2,30 +2,23 @@ package com.bearinmind.equalizer314.dsp
 
 import kotlin.math.*
 
-/**
- * Biquad filter implementation for parametric EQ
- * Supports Bell, Low Shelf, High Shelf, Low Pass, High Pass filters
- */
+/** Biquad filter for the parametric EQ: bell, shelves, passes, band-pass, notch, all-pass. */
 class BiquadFilter(
     var frequency: Float,
     var gain: Float,
     var filterType: FilterType,
-    // Default 48000 Hz = the audio HAL rate on virtually every modern Android
-    // device. Audio-path instances (via EqStateManager) override with the actual
-    // rate from AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE; utility callers (preset
-    // import, target-curve fitting, auto-EQ) use the default (viz-only response
-    // curves; per-band-gain pipeline is <1 dB off in the bass at worst).
+    // 48000 Hz default; audio-path instances get the real HAL rate, utility callers (import, fitting) keep the default.
     private val sampleRate: Int = 48000,
     var q: Double = 0.707  // Q factor (0.1 to 10.0, default Butterworth)
 ) {
     enum class FilterType {
         BELL,           // APO "PK" — peaking bell at Fc with Q
-        LOW_SHELF,      // APO "LSC" / "LS 12 dB" — 2nd-order low shelf, 12 dB/oct
-        HIGH_SHELF,     // APO "HSC" / "HS 12 dB" — 2nd-order high shelf, 12 dB/oct
+        LOW_SHELF,      // APO "LSC" / "LS" / "LS 12 dB" — 2nd-order low shelf, 12 dB/oct, takes Q
+        HIGH_SHELF,     // APO "HSC" / "HS" / "HS 12 dB" — 2nd-order high shelf, 12 dB/oct, takes Q
         LOW_PASS,       // APO "LPQ" — 2nd-order low pass, 12 dB/oct, with Q
         HIGH_PASS,      // APO "HPQ" — 2nd-order high pass, 12 dB/oct, with Q
-        LOW_SHELF_1,    // APO "LS" / "LS 6 dB" — 1st-order low shelf, 6 dB/oct
-        HIGH_SHELF_1,   // APO "HS" / "HS 6 dB" — 1st-order high shelf, 6 dB/oct
+        LOW_SHELF_1,    // APO "LS 6 dB" — 1st-order low shelf, 6 dB/oct, no Q
+        HIGH_SHELF_1,   // APO "HS 6 dB" — 1st-order high shelf, 6 dB/oct, no Q
         LOW_PASS_1,     // APO "LP" — 1st-order low pass, 6 dB/oct (no Q)
         HIGH_PASS_1,    // APO "HP" — 1st-order high pass, 6 dB/oct (no Q)
         BAND_PASS,      // APO "BP" — 2nd-order band-pass (constant skirt, peak gain = Q)
@@ -72,8 +65,7 @@ class BiquadFilter(
     }
 
     private fun calculateCoefficients() {
-        // Raw omega — no bilinear pre-warping for any filter type. Pre-warping's
-        // tan() diverges near Nyquist, warping/distorting high-freq curves.
+        // Raw omega, no bilinear pre-warping — tan() diverges near Nyquist and distorts the high end.
         val omega = 2.0 * PI * frequency / sampleRate
         val cosOmega = cos(omega)
         val sinOmega = sin(omega)
@@ -143,9 +135,7 @@ class BiquadFilter(
                 a2 = 1.0 - alpha
             }
 
-            // 1st-order filters — bilinear-transform biquad form (Zölzer DAFX):
-            // b2 = a2 = 0, only b0/b1/a1 set. process/getFrequencyResponse handle
-            // the zeroed 2nd-order terms with no extra code.
+            // 1st-order filters in biquad form (Zölzer DAFX): b2 = a2 = 0, only b0/b1/a1 set.
             FilterType.LOW_PASS_1 -> {
                 val K = tan(PI * frequency / sampleRate).coerceAtLeast(1e-9)
                 val denom = 1.0 + K
@@ -212,8 +202,7 @@ class BiquadFilter(
                 }
             }
 
-            // 2nd-order band-pass — RBJ cookbook "constant skirt gain,
-            // peak gain = Q" form. Peaks at Fc, rolls off either side.
+            // 2nd-order band-pass — RBJ "constant skirt gain, peak gain = Q" form.
             FilterType.BAND_PASS -> {
                 b0 = alpha
                 b1 = 0.0
@@ -233,8 +222,7 @@ class BiquadFilter(
                 a2 = 1.0 - alpha
             }
 
-            // 2nd-order all-pass — RBJ cookbook. Unity magnitude at every
-            // frequency, only the phase changes.
+            // 2nd-order all-pass — RBJ cookbook; unity magnitude, phase only.
             FilterType.ALL_PASS -> {
                 b0 = 1.0 - alpha
                 b1 = -2.0 * cosOmega
@@ -256,8 +244,7 @@ class BiquadFilter(
 
         val expTerm = exp(-q_factor * omega0)
 
-        // Underdamped (Q > 0.5): complex conjugate poles → cos
-        // Overdamped (Q < 0.5): two real poles → cosh
+        // Underdamped (Q > 0.5): complex poles → cos; overdamped (Q < 0.5): real poles → cosh.
         a1 = if (q_factor < 1.0) {
             -2.0 * expTerm * cos(sqrt(1.0 - q_factor * q_factor) * omega0)
         } else {
@@ -287,10 +274,7 @@ class BiquadFilter(
         b2 = if (b0 > 1e-12) -B2 / (4.0 * b0) else 0.0
     }
 
-    /**
-     * Process stereo sample pair in-place.
-     * buffer[offset] = left, buffer[offset+1] = right
-     */
+    /** Process a stereo sample pair in place: buffer[offset] = left, buffer[offset+1] = right. */
     fun processStereoInPlace(buffer: FloatArray, offset: Int) {
         val inputL = buffer[offset].toDouble()
         val inputR = buffer[offset + 1].toDouble()
