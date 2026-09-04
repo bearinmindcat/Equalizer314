@@ -439,6 +439,11 @@ class EqService : Service() {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 
+    /** Shown when a start was immediately detached by the current device's Disable-EQ binding. */
+    private fun showDisabledByDeviceToast() {
+        Toast.makeText(this, "EQ disabled for ${lastDeviceLabel ?: "this device"} (device binding)", Toast.LENGTH_LONG).show()
+    }
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
@@ -627,6 +632,7 @@ class EqService : Service() {
                 return START_NOT_STICKY
             }
             ACTION_STOP -> {
+                manualOverrideDeviceKey = null
                 dynamicsManager.stop()
                 sessionEffects?.releaseAll()
                 // Persist power-off so tile/notification taps sync when MainActivity is gone.
@@ -645,6 +651,7 @@ class EqService : Service() {
                 if (!safeStartForeground()) return START_NOT_STICKY
                 if (dynamicsManager.isActive) {
                     // Tile tap while running — toggle off, service stays alive for Turn On.
+                    manualOverrideDeviceKey = null
                     dynamicsManager.stop()
                     sessionEffects?.releaseAll()
                     EqPreferencesManager(this).savePowerState(false)
@@ -656,6 +663,7 @@ class EqService : Service() {
                 }
                 val eq = loadPersistedParametricEq()
                 if (eq != null) {
+                    manualOverrideDeviceKey = lastDeviceKey ?: overridePending
                     // Configure DP from prefs first — tile start == FAB tap.
                     val p = EqPreferencesManager(this)
                     with(dynamicsManager) {
@@ -680,8 +688,10 @@ class EqService : Service() {
                         syncSystemSoundBypassFromCurrent()
                         applyPersistedMbcConfig()
                         reapplyCurrentDeviceBinding()
-                        showDpStateToast(started = true)
-                        sendBroadcast(Intent(ACTION_EQ_STARTED).setPackage(packageName))
+                        if (dynamicsManager.isActive) {
+                            showDpStateToast(started = true)
+                            sendBroadcast(Intent(ACTION_EQ_STARTED).setPackage(packageName))
+                        }
                         updateNotification()
                         // Re-attach reverb for the active routing mode (global → session 0).
                         sessionEffects?.applyReverbParamsToAll()
@@ -722,8 +732,10 @@ class EqService : Service() {
                         syncSystemSoundBypassFromCurrent()
                         applyPersistedMbcConfig()
                         reapplyCurrentDeviceBinding()
-                        showDpStateToast(started = true)
-                        sendBroadcast(Intent(ACTION_EQ_STARTED).setPackage(packageName))
+                        if (dynamicsManager.isActive) {
+                            showDpStateToast(started = true)
+                            sendBroadcast(Intent(ACTION_EQ_STARTED).setPackage(packageName))
+                        }
                         updateNotification()
                         // Re-attach reverb for the active routing mode (global → session 0).
                         sessionEffects?.applyReverbParamsToAll()
@@ -825,6 +837,7 @@ class EqService : Service() {
 
     fun startEq(eq: ParametricEqualizer): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return false
+        manualOverrideDeviceKey = lastDeviceKey ?: overridePending
         dynamicsManager.start(eq)
         val active = dynamicsManager.isActive
         setDpRunning(active)
@@ -852,6 +865,12 @@ class EqService : Service() {
     /** True while DP is detached by a "Disable EQ" binding; powerOn stays true for auto-resume. */
     @Volatile
     private var disabledByDevice = false
+    val isDisabledByDevice: Boolean get() = disabledByDevice
+
+    // A user-started EQ overrides the current device's Disable-EQ binding until the route changes; pending = claim the first reported device.
+    @Volatile
+    private var manualOverrideDeviceKey: String? = null
+    private val overridePending = "__pending__"
 
     /** Device-driven global-DP lifecycle: Disable-EQ detach, route-change recreate ([recreateOnActive]), auto-resume. */
     private fun handleDeviceRouteLifecycle(deviceKey: String, recreateOnActive: Boolean) {
@@ -861,7 +880,13 @@ class EqService : Service() {
         if (!prefs.getDeviceAutoSwitchEnabled()) return
         val binding = prefs.getDeviceBindingSmart(deviceKey, lastDeviceLabel ?: "")
         val isDisable = binding?.presetName == EqPreferencesManager.DEVICE_PRESET_DISABLED
+        if (manualOverrideDeviceKey == overridePending) manualOverrideDeviceKey = deviceKey
+        if (recreateOnActive && deviceKey != manualOverrideDeviceKey) manualOverrideDeviceKey = null
         when {
+            isDisable && manualOverrideDeviceKey == deviceKey -> {
+                disabledByDevice = false
+                Log.d(TAG, "Device '$deviceKey' bound to Disable EQ — kept on by manual override")
+            }
             isDisable -> {
                 if (dynamicsManager.isActive) {
                     dynamicsManager.stop()
@@ -874,6 +899,7 @@ class EqService : Service() {
                             .putExtra(EXTRA_SILENT_STOP, true),
                     )
                     updateNotification()
+                    showDisabledByDeviceToast()
                     Log.d(TAG, "Device '$deviceKey' bound to Disable EQ — DP detached")
                 } else if (prefs.getPowerState()) {
                     // DP already off with power on — still mark so the next non-disable device auto-resumes (issue #91).

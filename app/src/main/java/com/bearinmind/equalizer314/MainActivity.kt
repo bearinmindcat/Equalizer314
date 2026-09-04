@@ -4909,6 +4909,10 @@ class  MainActivity : AppCompatActivity() {
         com.bearinmind.equalizer314.ui.BottomNavHelper.setPowerFabInstant(this, savedPower)
         if (stateManager.serviceBound && stateManager.eqService != null) {
             stateManager.isProcessing = stateManager.eqService!!.dynamicsManager.isActive
+            // A Disable-EQ binding keeps power on with the DP detached — show the real state.
+            if (savedPower && !stateManager.isProcessing && stateManager.eqService!!.isDisabledByDevice) {
+                com.bearinmind.equalizer314.ui.BottomNavHelper.setPowerFabInstant(this, false)
+            }
             // Safety net: restore the EQ after an app-switch dropout even if the watchdog hasn't ticked.
             stateManager.eqService?.let { svc ->
                 if (svc.dynamicsManager.isActive && svc.dynamicsManager.hasLostControl()) {
