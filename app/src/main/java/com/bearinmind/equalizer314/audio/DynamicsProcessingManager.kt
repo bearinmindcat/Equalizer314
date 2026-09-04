@@ -5,6 +5,7 @@ import android.os.Build
 import android.util.Log
 import com.bearinmind.equalizer314.dsp.ParametricEqualizer
 import com.bearinmind.equalizer314.dsp.ParametricToDpConverter
+import com.bearinmind.equalizer314.state.saneOr
 
 /** System-wide EQ on session-0 DynamicsProcessing (API 28+): limiter → MBC → pre-EQ → enable, preamp on the input-gain stage. */
 class DynamicsProcessingManager {
@@ -40,14 +41,20 @@ class DynamicsProcessingManager {
             for (i in bands.indices) {
                 val b = bands[i]
                 val cutoff = if (i < crossovers.size) crossovers[i] else 20000f
+                // Clamp to the slider ranges here too — a NaN threshold turns the whole output into silence.
+                val offset = thresholdOffsetDb.saneOr(0f, -60f, 0f)
+                val safeCutoff = cutoff.saneOr(20000f, 20f, 20000f)
+                val attack = b.attackMs.saneOr(1f, 0.01f, 500f)
+                val release = b.releaseMs.saneOr(100f, 1f, 5000f)
+                val knee = b.kneeDb.saneOr(8f, 0.01f, 24f)
                 val mbcBand = if (b.enabled) DynamicsProcessing.MbcBand(
-                    true, cutoff, b.attackMs, b.releaseMs, b.ratio,
-                    (b.thresholdDb + thresholdOffsetDb).coerceIn(-125f, 0f),
-                    b.kneeDb,
-                    (b.noiseGateDb + thresholdOffsetDb).coerceIn(-125f, 0f),
-                    b.expanderRatio, b.preGainDb, b.postGainDb,
+                    true, safeCutoff, attack, release, b.ratio.saneOr(2f, 1f, 50f),
+                    (b.thresholdDb.saneOr(0f, -60f, 0f) + offset).coerceIn(-125f, 0f),
+                    knee,
+                    (b.noiseGateDb.saneOr(-60f, -90f, 0f) + offset).coerceIn(-125f, 0f),
+                    b.expanderRatio.saneOr(1f, 1f, 50f), b.preGainDb.saneOr(0f, -30f, 30f), b.postGainDb.saneOr(0f, -30f, 30f),
                 ) else DynamicsProcessing.MbcBand(
-                    false, cutoff, b.attackMs, b.releaseMs, 1f, 0f, b.kneeDb, -125f, 1f, 0f, 0f,
+                    false, safeCutoff, attack, release, 1f, 0f, knee, -125f, 1f, 0f, 0f,
                 )
                 dp.setMbcBandByChannelIndex(0, i, mbcBand)
                 dp.setMbcBandByChannelIndex(1, i, mbcBand)
@@ -180,11 +187,7 @@ class DynamicsProcessingManager {
                 // Stage order: limiter → MBC → pre-EQ → enable (never process default bands).
 
                 // Limiter for clipping protection
-                val limiter = DynamicsProcessing.Limiter(
-                    limiterEnabled, limiterEnabled, 0,
-                    limiterAttackMs, limiterReleaseMs, limiterRatio,
-                    limiterThresholdDb, limiterPostGainDb
-                )
+                val limiter = buildLimiter()
                 setLimiterByChannelIndex(0, limiter)
                 setLimiterByChannelIndex(1, limiter)
                 Log.d(TAG, "Limiter config: enabled=$limiterEnabled thresh=$limiterThresholdDb ratio=$limiterRatio attack=$limiterAttackMs release=$limiterReleaseMs postGain=$limiterPostGainDb")
@@ -238,6 +241,13 @@ class DynamicsProcessingManager {
             return false
         }
     }
+
+    /** Limiter from the live fields, clamped to the slider ranges — the last guard before the engine. */
+    private fun buildLimiter() = DynamicsProcessing.Limiter(
+        limiterEnabled, limiterEnabled, 0,
+        limiterAttackMs.saneOr(1f, 0.01f, 100f), limiterReleaseMs.saneOr(60f, 1f, 500f), limiterRatio.saneOr(10f, 1f, 50f),
+        limiterThresholdDb.saneOr(-2f, -30f, 0f), limiterPostGainDb.saneOr(0f, -12f, 12f),
+    )
 
     /** Block until any queued band write lands — start() enables only after the bands are in. */
     private fun drainPendingApply() {
@@ -429,8 +439,9 @@ class DynamicsProcessingManager {
         val n = ParametricToDpConverter.numBands
         val cutoffsSnap = cutoffs
         // Input gain = preamp + channel offset (auto-gain is already in the bands).
-        val leftInputGainDb = preampGainDb + leftOffsetDb
-        val rightInputGainDb = preampGainDb + rightOffsetDb
+        val preamp = preampGainDb.saneOr(0f, -20f, 20f)
+        val leftInputGainDb = preamp + leftOffsetDb
+        val rightInputGainDb = preamp + rightOffsetDb
         val job = Runnable {
             try {
                 // Without control every setter silently no-ops — skip; reclaim recreates later.
@@ -515,8 +526,8 @@ class DynamicsProcessingManager {
             20f * kotlin.math.log10(ratio)
         } else 0f
         // Clamp to -60..+24 dB before feeding DynamicsProcessing.
-        val left = (leftChannelGainDb + leftBalanceDb).coerceIn(-60f, 24f)
-        val right = (rightChannelGainDb + rightBalanceDb).coerceIn(-60f, 24f)
+        val left = (leftChannelGainDb.saneOr(0f, -12f, 12f) + leftBalanceDb).coerceIn(-60f, 24f)
+        val right = (rightChannelGainDb.saneOr(0f, -12f, 12f) + rightBalanceDb).coerceIn(-60f, 24f)
         return Pair(left, right)
     }
 
@@ -534,11 +545,7 @@ class DynamicsProcessingManager {
     fun updateLimiter() {
         val dp = dynamicsProcessing ?: return
         try {
-            val limiter = DynamicsProcessing.Limiter(
-                limiterEnabled, limiterEnabled, 0,
-                limiterAttackMs, limiterReleaseMs, limiterRatio,
-                limiterThresholdDb, limiterPostGainDb
-            )
+            val limiter = buildLimiter()
             dp.setLimiterByChannelIndex(0, limiter)
             dp.setLimiterByChannelIndex(1, limiter)
         } catch (e: Exception) {
@@ -588,11 +595,7 @@ class DynamicsProcessingManager {
     /** Push the limiter fields to the live DP without a rebuild — worker-thread, coalesced. */
     fun pushLimiterUpdate() {
         val dp = dynamicsProcessing ?: return
-        val limiter = DynamicsProcessing.Limiter(
-            limiterEnabled, limiterEnabled, 0,
-            limiterAttackMs, limiterReleaseMs, limiterRatio,
-            limiterThresholdDb, limiterPostGainDb
-        )
+        val limiter = buildLimiter()
         val job = Runnable {
             try {
                 dp.setLimiterByChannelIndex(0, limiter)

@@ -290,6 +290,8 @@ class  MainActivity : AppCompatActivity() {
             val text = contentResolver.openInputStream(uri)?.bufferedReader()?.readText()
             if (text != null && BackupManager.importAll(this, text)) {
                 android.widget.Toast.makeText(this, "Backup restored", android.widget.Toast.LENGTH_SHORT).show()
+                // Rebuild the live DSP from the restored settings before the UI reloads.
+                startService(Intent(this, EqService::class.java).setAction(EqService.ACTION_RELOAD_PREFS))
                 // Re-apply the restored theme choice, then recreate so all screens, presets, and bindings reload from the new prefs.
                 val light = getSharedPreferences("eq_settings", MODE_PRIVATE).getBoolean("lightTheme", false)
                 androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(
@@ -4821,7 +4823,6 @@ class  MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.channelBothButton)?.alpha = 1.0f
     }
 
-    /** Rebind graph + toggles + inputs after the active EQ reference changes (CSE on/off, L/R switch). */
     /** Persist all three preamp values (shared + per-side). */
     private fun persistPreamps() {
         eqPrefs.savePreampGain(stateManager.preampGainDb)
@@ -4836,6 +4837,7 @@ class  MainActivity : AppCompatActivity() {
         preampText.setText(String.format("%.1f", v))
     }
 
+    /** Rebind graph + toggles + inputs after the active EQ reference changes (CSE on/off, L/R switch). */
     private fun rebindActiveEq() {
         val eq = stateManager.parametricEq
         eqGraphView.setParametricEqualizer(eq)

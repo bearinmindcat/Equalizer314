@@ -4,15 +4,7 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * Whole-app backup / restore. Serializes every SharedPreferences file the app uses
- * (settings, custom-preset pool, device/app bindings) into one JSON document for
- * save + re-import on a fresh install (e.g. switching APK source wipes app data).
- *
- * Each value carries a one-char type tag so it round-trips to the exact
- * SharedPreferences type. New prefs files must be added to [PREF_FILES] (old backups
- * lacking them are skipped on restore).
- */
+/** Whole-app backup/restore: every prefs file in [PREF_FILES] round-trips through one JSON with per-value type tags. */
 object BackupManager {
     const val BACKUP_VERSION = 1
     private val PREF_FILES = listOf(
@@ -52,12 +44,10 @@ object BackupManager {
         return root.toString(2)
     }
 
-    /** Returns true if the document was a valid backup and was applied. Caller should
-     *  reload UI/state afterwards (e.g. recreate the activity). */
+    /** True when the document was a valid backup and got applied; the caller reloads UI/state afterwards. */
     fun importAll(context: Context, json: String): Boolean {
         val root = try { JSONObject(json) } catch (_: Exception) { return false }
-        // Sanity check — a real backup always carries the settings or the
-        // preset pool. Guards against importing an arbitrary JSON file.
+        // A real backup always carries the settings or the preset pool — rejects arbitrary JSON.
         if (!root.has("eq_settings") && !root.has("custom_presets")) return false
 
         for (file in PREF_FILES) {
@@ -72,7 +62,8 @@ object BackupManager {
                     "s" -> editor.putString(key, entry.optString("v"))
                     "b" -> editor.putBoolean(key, entry.optBoolean("v"))
                     "i" -> editor.putInt(key, entry.optInt("v"))
-                    "f" -> editor.putFloat(key, entry.optDouble("v").toFloat())
+                    "f" -> entry.optDouble("v").takeIf { !it.isNaN() && !it.isInfinite() }
+                        ?.let { editor.putFloat(key, it.toFloat()) }
                     "l" -> editor.putLong(key, entry.optLong("v"))
                     "ss" -> {
                         val arr = entry.optJSONArray("v") ?: JSONArray()
@@ -84,6 +75,8 @@ object BackupManager {
             }
             editor.apply()
         }
+        // Old backups carry values the current build never writes itself — clamp them to the slider ranges.
+        com.bearinmind.equalizer314.state.EqPreferencesManager(context).sanitizeDspSettings()
         return true
     }
 }

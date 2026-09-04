@@ -258,11 +258,11 @@ class EqPreferencesManager(context: Context) {
     }
 
     // Preamp
-    fun savePreampGain(gain: Float) { prefs.edit().putFloat("preampGain", gain).apply() }
+    fun savePreampGain(gain: Float) { prefs.edit().putFloat("preampGain", gain.saneOr(0f, -20f, 20f)).apply() }
     // Per-side preamps for CSE mode (shared preamp used when CSE off).
-    fun savePreampLeft(v: Float) { prefs.edit().putFloat("preampLeftDb", v).apply() }
+    fun savePreampLeft(v: Float) { prefs.edit().putFloat("preampLeftDb", v.saneOr(0f, -20f, 20f)).apply() }
     fun getPreampLeft(): Float = prefs.getFloat("preampLeftDb", 0f)
-    fun savePreampRight(v: Float) { prefs.edit().putFloat("preampRightDb", v).apply() }
+    fun savePreampRight(v: Float) { prefs.edit().putFloat("preampRightDb", v.saneOr(0f, -20f, 20f)).apply() }
     fun getPreampRight(): Float = prefs.getFloat("preampRightDb", 0f)
     fun getPreampGain(): Float = prefs.getFloat("preampGain", 0f)
 
@@ -328,15 +328,15 @@ class EqPreferencesManager(context: Context) {
     // Limiter
     fun saveLimiterEnabled(enabled: Boolean) { prefs.edit().putBoolean("limiterEnabled", enabled).apply() }
     fun getLimiterEnabled(): Boolean = prefs.getBoolean("limiterEnabled", false)
-    fun saveLimiterAttack(ms: Float) { prefs.edit().putFloat("limiterAttack", ms).apply() }
+    fun saveLimiterAttack(ms: Float) { prefs.edit().putFloat("limiterAttack", ms.saneOr(0.01f, 0.01f, 100f)).apply() }
     fun getLimiterAttack(): Float = prefs.getFloat("limiterAttack", 0.01f)
-    fun saveLimiterRelease(ms: Float) { prefs.edit().putFloat("limiterRelease", ms).apply() }
+    fun saveLimiterRelease(ms: Float) { prefs.edit().putFloat("limiterRelease", ms.saneOr(1f, 1f, 500f)).apply() }
     fun getLimiterRelease(): Float = prefs.getFloat("limiterRelease", 1f)
-    fun saveLimiterRatio(ratio: Float) { prefs.edit().putFloat("limiterRatio", ratio).apply() }
+    fun saveLimiterRatio(ratio: Float) { prefs.edit().putFloat("limiterRatio", ratio.saneOr(2f, 1f, 50f)).apply() }
     fun getLimiterRatio(): Float = prefs.getFloat("limiterRatio", 2f)
-    fun saveLimiterThreshold(db: Float) { prefs.edit().putFloat("limiterThreshold", db).apply() }
+    fun saveLimiterThreshold(db: Float) { prefs.edit().putFloat("limiterThreshold", db.saneOr(0f, -30f, 0f)).apply() }
     fun getLimiterThreshold(): Float = prefs.getFloat("limiterThreshold", 0f)
-    fun saveLimiterPostGain(db: Float) { prefs.edit().putFloat("limiterPostGain", db).apply() }
+    fun saveLimiterPostGain(db: Float) { prefs.edit().putFloat("limiterPostGain", db.saneOr(0f, -12f, 12f)).apply() }
     fun getLimiterPostGain(): Float = prefs.getFloat("limiterPostGain", 0f)
 
     fun saveLastFileUri(uri: Uri) {
@@ -543,7 +543,7 @@ class EqPreferencesManager(context: Context) {
     // MBC
     fun saveMbcEnabled(enabled: Boolean) { prefs.edit().putBoolean("mbcEnabled", enabled).apply() }
     fun getMbcEnabled(): Boolean = prefs.getBoolean("mbcEnabled", false)
-    fun saveMbcBandCount(count: Int) { prefs.edit().putInt("mbcBandCount", count).apply() }
+    fun saveMbcBandCount(count: Int) { prefs.edit().putInt("mbcBandCount", count.coerceIn(1, 8)).apply() }
     fun getMbcBandCount(): Int = prefs.getInt("mbcBandCount", 3)
 
     fun saveMbcBand(i: Int, enabled: Boolean, cutoff: Float, attack: Float, release: Float,
@@ -551,17 +551,17 @@ class EqPreferencesManager(context: Context) {
                     expander: Float, preGain: Float, postGain: Float, range: Float) {
         prefs.edit()
             .putBoolean("mbc_${i}_enabled", enabled)
-            .putFloat("mbc_${i}_cutoff", cutoff)
-            .putFloat("mbc_${i}_attack", attack)
-            .putFloat("mbc_${i}_release", release)
-            .putFloat("mbc_${i}_ratio", ratio)
-            .putFloat("mbc_${i}_threshold", threshold)
-            .putFloat("mbc_${i}_knee", knee)
-            .putFloat("mbc_${i}_noiseGate", noiseGate)
-            .putFloat("mbc_${i}_expander", expander)
-            .putFloat("mbc_${i}_preGain", preGain)
-            .putFloat("mbc_${i}_postGain", postGain)
-            .putFloat("mbc_${i}_range", range)
+            .putFloat("mbc_${i}_cutoff", cutoff.saneOr(1000f, 20f, 20000f))
+            .putFloat("mbc_${i}_attack", attack.saneOr(1f, 0.01f, 500f))
+            .putFloat("mbc_${i}_release", release.saneOr(100f, 1f, 5000f))
+            .putFloat("mbc_${i}_ratio", ratio.saneOr(2f, 1f, 50f))
+            .putFloat("mbc_${i}_threshold", threshold.saneOr(0f, -60f, 0f))
+            .putFloat("mbc_${i}_knee", knee.saneOr(8f, 0.01f, 24f))
+            .putFloat("mbc_${i}_noiseGate", noiseGate.saneOr(-60f, -90f, 0f))
+            .putFloat("mbc_${i}_expander", expander.saneOr(1f, 1f, 50f))
+            .putFloat("mbc_${i}_preGain", preGain.saneOr(0f, -30f, 30f))
+            .putFloat("mbc_${i}_postGain", postGain.saneOr(0f, -30f, 30f))
+            .putFloat("mbc_${i}_range", range.saneOr(-12f, -12f, 0f))
             .apply()
     }
 
@@ -579,7 +579,7 @@ class EqPreferencesManager(context: Context) {
     fun getMbcBandRange(i: Int, default: Float = -12f): Float = prefs.getFloat("mbc_${i}_range", default)
 
     // MBC Crossovers
-    fun saveMbcCrossover(i: Int, freq: Float) { prefs.edit().putFloat("mbc_crossover_$i", freq).apply() }
+    fun saveMbcCrossover(i: Int, freq: Float) { prefs.edit().putFloat("mbc_crossover_$i", freq.saneOr(1000f, 20f, 20000f)).apply() }
     fun getMbcCrossover(i: Int, default: Float): Float = prefs.getFloat("mbc_crossover_$i", default)
 
     // Simple EQ
@@ -613,14 +613,47 @@ class EqPreferencesManager(context: Context) {
     fun getChannelSideEqEnabled(): Boolean = prefs.getBoolean("channelSideEqEnabled", false)
 
     // Channel balance — integer percent, -100 (left) to +100 (right).
-    fun saveChannelBalancePercent(pct: Int) { prefs.edit().putInt("channelBalancePercent", pct).apply() }
+    fun saveChannelBalancePercent(pct: Int) { prefs.edit().putInt("channelBalancePercent", pct.coerceIn(-100, 100)).apply() }
     fun getChannelBalancePercent(): Int = prefs.getInt("channelBalancePercent", 0)
 
     // Per-channel preamp gain in dB. Range ±12 dB. Stored only; no runtime hookup yet.
-    fun saveLeftChannelGainDb(db: Float) { prefs.edit().putFloat("leftChannelGainDb", db).apply() }
+    fun saveLeftChannelGainDb(db: Float) { prefs.edit().putFloat("leftChannelGainDb", db.saneOr(0f, -12f, 12f)).apply() }
     fun getLeftChannelGainDb(): Float = prefs.getFloat("leftChannelGainDb", 0f)
-    fun saveRightChannelGainDb(db: Float) { prefs.edit().putFloat("rightChannelGainDb", db).apply() }
+    fun saveRightChannelGainDb(db: Float) { prefs.edit().putFloat("rightChannelGainDb", db.saneOr(0f, -12f, 12f)).apply() }
     fun getRightChannelGainDb(): Float = prefs.getFloat("rightChannelGainDb", 0f)
+
+    /** Clamps every stored DSP-facing value to its slider range (NaN / wrong type → default); only keys that exist are touched. */
+    fun sanitizeDspSettings() {
+        val e = prefs.edit()
+        var dirty = false
+        fun f(key: String, default: Float, lo: Float, hi: Float) {
+            if (!prefs.contains(key)) return
+            val v = prefs.all[key] as? Float
+            val s = (v ?: Float.NaN).saneOr(default, lo, hi)
+            if (v == null || s != v) { e.putFloat(key, s); dirty = true }
+        }
+        fun i(key: String, lo: Int, hi: Int) {
+            if (!prefs.contains(key)) return
+            val v = prefs.all[key] as? Int
+            val s = (v ?: lo).coerceIn(lo, hi)
+            if (v == null || s != v) { e.putInt(key, s); dirty = true }
+        }
+        f("preampGain", 0f, -20f, 20f); f("preampLeftDb", 0f, -20f, 20f); f("preampRightDb", 0f, -20f, 20f)
+        i("channelBalancePercent", -100, 100)
+        f("leftChannelGainDb", 0f, -12f, 12f); f("rightChannelGainDb", 0f, -12f, 12f)
+        f("limiterAttack", 0.01f, 0.01f, 100f); f("limiterRelease", 1f, 1f, 500f); f("limiterRatio", 2f, 1f, 50f)
+        f("limiterThreshold", 0f, -30f, 0f); f("limiterPostGain", 0f, -12f, 12f)
+        i("mbcBandCount", 1, 8)
+        for (b in 0 until 8) {
+            f("mbc_${b}_cutoff", 1000f, 20f, 20000f); f("mbc_${b}_attack", 1f, 0.01f, 500f)
+            f("mbc_${b}_release", 100f, 1f, 5000f); f("mbc_${b}_ratio", 2f, 1f, 50f)
+            f("mbc_${b}_threshold", 0f, -60f, 0f); f("mbc_${b}_knee", 8f, 0.01f, 24f)
+            f("mbc_${b}_noiseGate", -60f, -90f, 0f); f("mbc_${b}_expander", 1f, 1f, 50f)
+            f("mbc_${b}_preGain", 0f, -30f, 30f); f("mbc_${b}_postGain", 0f, -30f, 30f)
+            f("mbc_${b}_range", -12f, -12f, 0f); f("mbc_crossover_$b", 1000f, 20f, 20000f)
+        }
+        if (dirty) e.apply()
+    }
 
     // ---- Simple EQ Presets: saved as full-JSON pool presets; loading INTO Simple samples the composite at the 10 fixed freqs ----
     fun getSimpleEqPresetNames(): List<String> {
@@ -932,3 +965,7 @@ class EqPreferencesManager(context: Context) {
         appBindingsPrefs.edit().putBoolean("device_auto_switch_enabled", enabled).apply()
     }
 }
+
+/** NaN / infinite → [default], otherwise clamped to [lo]..[hi]. */
+internal fun Float.saneOr(default: Float, lo: Float, hi: Float): Float =
+    if (isNaN() || isInfinite()) default else coerceIn(lo, hi)

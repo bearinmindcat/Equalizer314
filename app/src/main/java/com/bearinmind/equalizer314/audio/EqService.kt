@@ -32,6 +32,8 @@ class EqService : Service() {
         const val ACTION_DP_RECYCLED = "com.bearinmind.equalizer314.DP_RECYCLED"
         const val ACTION_TVMODE_REFRESH = "com.bearinmind.equalizer314.TVMODE_REFRESH"
         const val ACTION_REAPPLY_MBC = "com.bearinmind.equalizer314.REAPPLY_MBC"
+        /** After a backup restore: sanitize prefs, refresh creation-time settings, rebuild the DP from them. */
+        const val ACTION_RELOAD_PREFS = "com.bearinmind.equalizer314.RELOAD_PREFS"
         /** Tile start: loads persisted EQ state and starts DP without MainActivity. */
         const val ACTION_START_FROM_TILE = "com.bearinmind.equalizer314.START_FROM_TILE"
         /** Idempotent headless start — boot receiver + MainActivity's app-open fallback. */
@@ -82,11 +84,11 @@ class EqService : Service() {
         const val EXTRA_SESSION_ID = "session_id"
         const val EXTRA_PACKAGE_NAME = "package_name"
 
-        /** Usages that bypass the EQ — short transient streams crack through the FFT chain. */
         /** Mirror of MbcActivity.DEFAULT_CUTOFFS — keep in lock-step. */
         internal val MBC_DEFAULT_CUTOFFS =
             floatArrayOf(200f, 700f, 2000f, 5000f, 7000f, 10000f)
 
+        /** Usages that bypass the EQ — short transient streams crack through the FFT chain. */
         private val BYPASS_USAGES = setOf(
             AudioAttributes.USAGE_NOTIFICATION,
             AudioAttributes.USAGE_NOTIFICATION_RINGTONE,
@@ -163,7 +165,9 @@ class EqService : Service() {
                 AudioManager.STREAM_MUSIC, am.getStreamVolume(AudioManager.STREAM_MUSIC), dev)
             val max = am.getStreamVolumeDb(
                 AudioManager.STREAM_MUSIC, am.getStreamMaxVolume(AudioManager.STREAM_MUSIC), dev)
-            (cur - max).coerceIn(-60f, 0f)
+            // getStreamVolumeDb returns NaN when it can't answer for a device — never let that reach the thresholds.
+            val off = cur - max
+            if (off.isNaN() || off.isInfinite()) 0f else off.coerceIn(-60f, 0f)
         } catch (_: Exception) { 0f }
     }
 
@@ -447,6 +451,7 @@ class EqService : Service() {
         } catch (_: Exception) {}
         // Frame size + interleave (#26) — both baked in at DP creation.
         EqPreferencesManager(this).let { p ->
+            p.sanitizeDspSettings()
             DynamicsProcessingManager.frameDurationMs = p.getDpFrameMs()
             DynamicsProcessingManager.interleaveEnabled = p.getDpInterleave()
             DynamicsProcessingManager.compatMode = p.getDpCompatMode()
@@ -581,6 +586,24 @@ class EqService : Service() {
                     }
                 } else {
                     applyPersistedMbcConfig()
+                }
+                return START_NOT_STICKY
+            }
+            ACTION_RELOAD_PREFS -> {
+                val p = EqPreferencesManager(this)
+                p.sanitizeDspSettings()
+                DynamicsProcessingManager.frameDurationMs = p.getDpFrameMs()
+                DynamicsProcessingManager.interleaveEnabled = p.getDpInterleave()
+                DynamicsProcessingManager.compatMode = p.getDpCompatMode()
+                if (dynamicsManager.isActive) {
+                    dynamicsManager.stop()
+                    sessionEffects?.releaseAll()
+                    setDpRunning(false)
+                }
+                if (p.getPowerState() && p.getAudioRoutingMode() != 1) {
+                    startService(Intent(this, EqService::class.java).setAction(ACTION_AUTO_START))
+                } else {
+                    updateNotification()
                 }
                 return START_NOT_STICKY
             }
