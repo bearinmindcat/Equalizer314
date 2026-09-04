@@ -909,6 +909,7 @@ class  MainActivity : AppCompatActivity() {
             if (eqPrefs.getSimpleEqEnabled() && eqPrefs.getEqModeEnabled("simple")) EqUiMode.SIMPLE else savedMode
         switchEqUiMode(launchMode)
         applyEqModeTabs()
+        pageEq.viewTreeObserver.addOnGlobalLayoutListener { fitToViewport() }
         // Ensure rows are properly ordered after views are laid out
         pageEq.post { reorderToggleRows(animate = false) }
 
@@ -3236,11 +3237,9 @@ class  MainActivity : AppCompatActivity() {
         order.filter { !eqPrefs.getEqModeEnabled(it) }.forEach { place(it, row1, false, false) }
         val twoRows = enabledKeys.size > 2
         row2.visibility = if (twoRows) View.VISIBLE else View.GONE
-        // Graph gives back the second row's height when it shows (246dp vs 288dp single-row).
-        val targetH = ((if (twoRows) 246 else 288) * density).toInt()
-        if (eqGraphView.layoutParams.height != targetH) {
-            eqGraphView.layoutParams = eqGraphView.layoutParams.apply { height = targetH }
-        }
+        // Base graph size: the fit measures against it and caps the graph at 2x.
+        graphDesiredPx = ((if (twoRows) 246 else 288) * density).toInt()
+        fitToViewport()
         val currentKey = when (stateManager.currentEqUiMode) {
             EqUiMode.PARAMETRIC -> "parametric"
             EqUiMode.GRAPHIC -> "graphic"
@@ -3254,6 +3253,112 @@ class  MainActivity : AppCompatActivity() {
                 "simple" -> { eqPrefs.saveSimpleEqEnabled(true); switchEqUiMode(EqUiMode.SIMPLE) }
                 else -> { eqPrefs.saveSimpleEqEnabled(false); switchEqUiMode(EqUiMode.PARAMETRIC) }
             }
+        }
+    }
+
+    private var graphDesiredPx = 0
+    private var viewportMaxHeight = 0
+    private var fitting = false
+    private var compactApplied = false
+
+    /** Fits the EQ page: the graph takes what the two-row Parametric layout leaves (same size in every mode), so nothing else resizes on mode or band changes. */
+    private fun fitToViewport() {
+        if (fitting || graphDesiredPx <= 0 || !::eqGraphView.isInitialized) return
+        val viewport = pageEq.height
+        val width = pageEq.width
+        if (viewport <= 0 || width <= 0) return
+        val density = resources.displayMetrics.density
+        // Ignore keyboard-sized shrinks (IME); smaller changes are insets/bottom bar settling and count.
+        if (viewport > viewportMaxHeight || viewportMaxHeight - viewport < 100 * density) viewportMaxHeight = viewport
+        val h = viewportMaxHeight
+        val column = (pageEq as ScrollView).getChildAt(0) as? LinearLayout ?: return
+        fitting = true
+        try {
+            fun measureColumn(): Int {
+                column.measure(
+                    View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                )
+                return column.measuredHeight
+            }
+            val mode = stateManager.currentEqUiMode
+            if (mode == EqUiMode.SIMPLE) {
+                val bars = simpleEqController.bars ?: return
+                val lp = bars.layoutParams ?: return
+                val current = lp.height
+                val desired = (256 * density).toInt()
+                lp.height = desired
+                val overflow = measureColumn() - h
+                val target = (desired - overflow).coerceIn((160 * density).toInt(), desired)
+                lp.height = target
+                if (target != current) bars.requestLayout()
+                return
+            }
+            // Reference block = two toggle rows + triangle + controls card (measured even when GONE); Table/Graphic content is sized to match it.
+            val contentWidth = width - column.paddingLeft - column.paddingRight
+            val wSpec = View.MeasureSpec.makeMeasureSpec(contentWidth, View.MeasureSpec.EXACTLY)
+            val uSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+            bandToggleGroup.measure(wSpec, uSpec)
+            parametricControlsCard.measure(wSpec, uSpec)
+            val rowH = bandToggleGroup.measuredHeight
+            val cardH = parametricControlsCard.measuredHeight
+            val triangleH = findViewById<View>(R.id.triangleIndicatorContainer).layoutParams.height
+            val gap8 = (8 * density).toInt()
+            val refControls = 2 * rowH + triangleH + cardH + gap8
+
+            if (mode == EqUiMode.TABLE) {
+                val tableTarget = 2 * rowH + triangleH + cardH
+                val lp = tableEqCard.layoutParams
+                if (lp.height != tableTarget) { lp.height = tableTarget; tableEqCard.requestLayout() }
+            } else if (mode == EqUiMode.GRAPHIC) {
+                graphicController.targetCardHeight = cardH
+                for (v in graphicController.cards) {
+                    if (v.layoutParams.height != cardH) { v.layoutParams.height = cardH; v.requestLayout() }
+                }
+            }
+
+            val graphLp = eqGraphView.layoutParams
+            val graphCurrent = graphLp.height
+            graphLp.height = graphDesiredPx
+            val nonGraph = measureColumn() - graphDesiredPx
+            // Swap the current mode's controls container for the reference block + preamp.
+            val preampCard = findViewById<View>(R.id.preampCardBar)
+            val preampBlock = preampCard.measuredHeight + ((preampCard.layoutParams as? android.view.ViewGroup.MarginLayoutParams)?.topMargin ?: 0)
+            val ref = nonGraph - eqControlsContainer.measuredHeight + refControls + preampBlock
+            val graphMin = (130 * density).toInt()
+            val graphTarget = (h - ref).coerceIn(graphMin, graphDesiredPx * 2)
+            graphLp.height = graphTarget
+            if (graphTarget != graphCurrent) eqGraphView.requestLayout()
+
+            // Graph under 180dp → compact chips/tabs/card padding (~48dp back); 64dp hysteresis so it can't flip-flop.
+            val short = ref + (180 * density).toInt() - h
+            val wantCompact = when {
+                short > 0 -> true
+                short < -(64 * density) -> false
+                else -> BandToggleManager.compact
+            }
+            if (wantCompact != compactApplied) {
+                compactApplied = wantCompact
+                BandToggleManager.compact = wantCompact
+                applyParametricCompact(wantCompact)
+                bandToggleManager.setupToggles()
+            }
+        } finally {
+            fitting = false
+        }
+    }
+
+    private fun applyParametricCompact(compact: Boolean) {
+        val density = resources.displayMetrics.density
+        val h = (16 * density).toInt()
+        val v = ((if (compact) 8 else 16) * density).toInt()
+        (parametricControlsCard as? android.view.ViewGroup)?.getChildAt(0)?.setPadding(h, v, h, v)
+        findViewById<View>(R.id.filterTypeGroup)?.let {
+            it.setPadding(it.paddingLeft, it.paddingTop, it.paddingRight, ((if (compact) 4 else 8) * density).toInt())
+        }
+        val tabPad = ((if (compact) 4 else 7) * density).toInt()
+        for (id in intArrayOf(R.id.modeParametricBtn, R.id.modeGraphicBtn, R.id.modeTableBtn, R.id.modeSimpleBtn)) {
+            findViewById<View>(id)?.let { it.setPadding(it.paddingLeft, tabPad, it.paddingRight, tabPad) }
         }
     }
 
@@ -3544,10 +3649,6 @@ class  MainActivity : AppCompatActivity() {
 
         when (mode) {
             EqUiMode.PARAMETRIC -> {
-                // Restore preamp margin — side effect positions the table card; do NOT remove.
-                val contentLayout0 = (pageEq as ScrollView).getChildAt(0) as LinearLayout
-                val preampCard0 = contentLayout0.getChildAt(contentLayout0.childCount - 1)
-                (preampCard0.layoutParams as? LinearLayout.LayoutParams)?.topMargin = (8 * resources.displayMetrics.density).toInt()
                 // Clear any visual translation on the actual preamp card from table mode
                 findViewById<View>(R.id.preampCardBar).translationY = 0f
                 parametricControlsCard.visibility = View.VISIBLE
@@ -3573,10 +3674,6 @@ class  MainActivity : AppCompatActivity() {
                 reorderToggleRows(animate = false)
             }
             EqUiMode.GRAPHIC -> {
-                // Restore preamp margin — side effect positions the table card; do NOT remove.
-                val contentLayoutG = (pageEq as ScrollView).getChildAt(0) as LinearLayout
-                val preampCardG = contentLayoutG.getChildAt(contentLayoutG.childCount - 1)
-                (preampCardG.layoutParams as? LinearLayout.LayoutParams)?.topMargin = (8 * resources.displayMetrics.density).toInt()
                 // Clear any visual translation on the actual preamp card from table mode
                 findViewById<View>(R.id.preampCardBar).translationY = 0f
                 parametricControlsCard.measure(
@@ -3602,50 +3699,12 @@ class  MainActivity : AppCompatActivity() {
                 findViewById<View>(R.id.triangleIndicatorContainer).visibility = View.GONE
                 tableEqCard.visibility = View.VISIBLE
 
-                val density = resources.displayMetrics.density
+                // The fit sizes the table card to the two-row Parametric controls block; re-run after layout for cold start.
+                fitToViewport()
+                pageEq.post { if (stateManager.currentEqUiMode == EqUiMode.TABLE) fitToViewport() }
 
-                // Table card height + preamp translationY.
-                val applyTableSizing = {
-                    // Outer LinearLayout content width when available, else (screen width - 32dp parent padding) on cold start.
-                    val outerLayout = (pageEq as ScrollView).getChildAt(0) as LinearLayout
-                    val effectiveWidth = if (outerLayout.width > 0) {
-                        outerLayout.width - outerLayout.paddingLeft - outerLayout.paddingRight
-                    } else {
-                        resources.displayMetrics.widthPixels - (32 * density).toInt()
-                    }
-                    val widthSpec = View.MeasureSpec.makeMeasureSpec(effectiveWidth, View.MeasureSpec.EXACTLY)
-                    val heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-
-                    bandToggleGroup.measure(widthSpec, heightSpec)
-                    parametricControlsCard.measure(widthSpec, heightSpec)
-
-                    // bandToggleGroup.measuredHeight counted twice (rows 1+2) so the card size is constant; triangle container hardcoded 8dp.
-                    var targetHeight = bandToggleGroup.measuredHeight +
-                        (8 * density).toInt() +
-                        parametricControlsCard.measuredHeight +
-                        bandToggleGroup.measuredHeight
-                    // Add bottom margin from parametric card (8dp)
-                    targetHeight += (8 * density).toInt()
-
-                    val currentLp = tableEqCard.layoutParams
-                    if (currentLp.height != targetHeight) {
-                        tableEqCard.layoutParams = currentLp.apply { height = targetHeight }
-                    }
-                }
-
-                // Synchronous best-effort
-                applyTableSizing()
-
-                // Re-run after first layout — cold start measures with stale zero widths.
-                pageEq.post {
-                    if (stateManager.currentEqUiMode == EqUiMode.TABLE) applyTableSizing()
-                }
-
-                // Defensive: clear any leftover translationY from prior animations.
                 tableEqCard.translationY = 0f
-
-                // Move ONLY the preamp card up 7dp visually to match its Y in parametric/graphic mode.
-                findViewById<View>(R.id.preampCardBar).translationY = -(7 * density)
+                findViewById<View>(R.id.preampCardBar).translationY = 0f
 
                 tableController.buildTable()
             }
@@ -3683,10 +3742,10 @@ class  MainActivity : AppCompatActivity() {
                 (preampCard.parent as? android.view.ViewGroup)?.removeView(preampCard)
                 simpleEqContainer.addView(preampCard, simpleEqContainer.childCount)
                 preampCard.translationY = 0f
-                // 12dp inter-card gap matching the other cards; topMargin 0 so the bars card's bottom margin isn't doubled.
+                // topMargin 0 so the bars card's bottom margin isn't doubled; the page's bottom padding supplies the gap below.
                 (preampCard.layoutParams as? LinearLayout.LayoutParams)?.apply {
                     topMargin = 0
-                    bottomMargin = (12 * resources.displayMetrics.density).toInt()
+                    bottomMargin = 0
                 }
             }
         }

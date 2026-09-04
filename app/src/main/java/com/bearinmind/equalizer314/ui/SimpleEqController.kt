@@ -25,6 +25,8 @@ class SimpleEqController(
     }
 
     private var barsView: SimpleEqBarsView? = null
+    /** The bars view — MainActivity's viewport fit resizes it. */
+    val bars: View? get() = barsView
     private var miniGraph: EqGraphView? = null
     private var barsCard: View? = null
     private var presetPickerScroll: android.widget.ScrollView? = null

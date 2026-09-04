@@ -29,8 +29,7 @@ class GraphicEqController(
     private val PAGE_SIZE = 8
     var targetCardHeight = 0
 
-    /** Order bands by displayed slot label (1, 2, 3…) regardless of dot positions
-     *  on the graph; falls back to natural index without a slot mapping. */
+    /** Orders bands by displayed slot label; falls back to natural index without a slot mapping. */
     private fun bandOrder(eq: com.bearinmind.equalizer314.dsp.ParametricEqualizer): List<Int> {
         val slots = state.bandSlots
         return (0 until eq.getBandCount()).sortedBy {
@@ -53,6 +52,9 @@ class GraphicEqController(
         }
         return false
     }
+
+    /** Live slider cards (MainActivity's viewport fit resizes them). */
+    val cards: List<View> get() = (0 until container.childCount).map { container.getChildAt(it) }
 
     fun buildSliders(targetHeight: Int = 0) {
         container.removeAllViews()
@@ -149,8 +151,7 @@ class GraphicEqController(
     private fun createSliderCard(bandIndex: Int, targetHeight: Int = 0): com.google.android.material.card.MaterialCardView {
         val eq = state.parametricEq
         val band = eq.getBand(bandIndex)!!
-        // Gainless = slider will drive Q instead of Gain (same rule used in
-        // Parametric mode to disable the dB slider).
+        // Gainless filters drive Q with the slider instead of gain (same rule as Parametric mode).
         val isGainless = when (band.filterType) {
             BiquadFilter.FilterType.LOW_PASS, BiquadFilter.FilterType.HIGH_PASS,
             BiquadFilter.FilterType.LOW_PASS_1, BiquadFilter.FilterType.HIGH_PASS_1,
@@ -163,8 +164,7 @@ class GraphicEqController(
         val sliderVisualHeight = (130 * density).toInt()
         val btnMargin = 2
 
-        // Full 12-token APO vocabulary; tight labels match Parametric mode.
-        // BYPASS is the last entry and maps to ALL_PASS (Bypass↔AP tie).
+        // Full 12-token APO vocabulary; BYPASS is last and maps to ALL_PASS.
         val filterTypes = listOf(
             BiquadFilter.FilterType.BELL,
             BiquadFilter.FilterType.LOW_SHELF, BiquadFilter.FilterType.LOW_SHELF_1,
@@ -340,10 +340,20 @@ class GraphicEqController(
 
         sliderRefs.add(slider)
         sliderFrame.addView(slider)
+        // Rotated slider length follows the frame so a viewport-fitted card keeps a proportional slider.
+        if (targetHeight > 0) {
+            sliderFrame.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+                val len = v.height
+                if (len > 0 && slider.layoutParams.width != len) {
+                    slider.layoutParams = FrameLayout.LayoutParams(
+                        len, LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply { gravity = android.view.Gravity.CENTER }
+                }
+            }
+        }
         cardContent.addView(sliderFrame)
 
-        // Pick the label index matching the band's current filter type. If
-        // the band is legacy-disabled (enabled=false), show BYPASS.
+        // Label index for the band's filter type; legacy-disabled bands show BYPASS.
         val currentFilterIdx = if (!band.enabled) {
             filterTypes.size - 1   // BYPASS (ALL_PASS) — the last entry
         } else {
@@ -386,8 +396,7 @@ class GraphicEqController(
                         setPadding((16 * density).toInt(), (14 * density).toInt(), (16 * density).toInt(), (14 * density).toInt())
                         setOnClickListener {
                             val b = eq.getBand(bandIndex) ?: return@setOnClickListener
-                            // BYPASS (last entry) maps to ALL_PASS — same tie as Parametric
-                            // mode. Re-enable so nothing stays legacy-disabled after selecting.
+                            // BYPASS maps to ALL_PASS (same tie as Parametric); re-enable so nothing stays legacy-disabled.
                             if (!b.enabled) eq.setBandEnabled(bandIndex, true)
                             eq.updateBand(bandIndex, b.frequency, b.gain, filterTypes[idx], b.q)
                             filterBtn.text = filterTypeLabels[idx]

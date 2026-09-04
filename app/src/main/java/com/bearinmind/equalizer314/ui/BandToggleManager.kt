@@ -23,20 +23,16 @@ class BandToggleManager(
     private val onEqChanged: () -> Unit,
     private val onBandCountChanged: () -> Unit,
     private val onBandSelected: (Int?) -> Unit,
-    // Tapping an already-selected band while Channel Side EQ is on — used to
-    // pop up the per-band L / Both / R picker on the band card (issue #53).
+    // Re-tap of the selected band with Channel Side EQ on: per-band L / Both / R picker (issue #53).
     private val onBandReselected: ((anchor: View, bandIdx: Int) -> Unit)? = null
 ) {
-    // 8 buttons per row; the default 16-band cap uses the two fixed rows. The
-    // experimental higher cap (issue #31) spills into on-demand [extraRows] and
-    // skips the row-slide animations (they only model the 2-row layout).
+    // 8 per row: the 16-band cap uses the two fixed rows; the higher cap (issue #31) spills into [extraRows] without animations.
     private val ROW_SIZE = 8
     private var isAnimating = false
 
     private fun getRowForDisplay(displayPos: Int): LinearLayout = when {
         displayPos < ROW_SIZE -> toggleGroup
-        // Expanded (issue #31): every band past row 1 (9+) lives in ONE
-        // horizontal-scrolling row.
+        // Expanded (issue #31): every band past row 1 lives in one horizontal-scrolling row.
         expandedMode -> extraRows
         // Default 16-band layout keeps row 2 as the fixed bottom row.
         else -> toggleGroup2
@@ -46,9 +42,7 @@ class BandToggleManager(
         if (expandedMode && displayPos >= ROW_SIZE) displayPos - ROW_SIZE
         else displayPos % ROW_SIZE
 
-    /** Clone a laid-out row-1 button's width onto every extra-row button (weights
-     *  don't work inside a wrap_content scrolling row) so the extra row renders
-     *  pixel-identical to the fixed row 2 (#31). */
+    /** Clones a row-1 button's width onto the extra-row buttons (weights don't work in a scrolling row) (#31). */
     private fun syncExtraRowItemWidths() {
         fun apply(refW: Int) {
             for (i in 0 until extraRows.childCount) {
@@ -61,21 +55,18 @@ class BandToggleManager(
                 }
             }
         }
-        // Clone immediately (avoids a mis-sized first frame), then refine after the
-        // next layout pass (covers cold start where row 1 isn't measured yet).
+        // Clone now (no mis-sized first frame), then refine after the next layout pass (cold start).
         toggleGroup.getChildAt(0)?.width?.takeIf { it > 0 }?.let(::apply)
         toggleGroup.post {
             toggleGroup.getChildAt(0)?.width?.takeIf { it > 0 }?.let(::apply)
         }
     }
 
-    /** True when the experimental higher band cap is active (issue #31): the
-     *  "+" moves to its own row below the scrollable extra rows. */
+    /** Experimental higher band cap (issue #31): "+" moves below the scrollable extra rows. */
     private val expandedMode get() = EqStateManager.MAX_BANDS > 16
 
     private fun updateRowVisibility() {
-        // Table (and Simple) mode have their own UI and never show the band
-        // toggle rows — hide them no matter who triggered setupToggles().
+        // Table and Simple modes never show the band toggle rows.
         if (state.currentEqUiMode == EqUiMode.TABLE || state.currentEqUiMode == EqUiMode.SIMPLE) {
             toggleGroup.visibility = View.GONE
             toggleGroup2.visibility = View.GONE
@@ -90,8 +81,7 @@ class BandToggleManager(
         toggleGroup.visibility = View.VISIBLE
         addButtonRow.visibility = View.GONE
         if (expandedMode) {
-            // Bands 9+ (and the inline "+") all live in the scroll, which owns
-            // its own vertical scrolling; the fixed row 2 is unused here.
+            // Bands 9+ and the inline "+" live in the scroll; fixed row 2 is unused here.
             toggleGroup2.visibility = View.GONE
             extraScroll.visibility = if (totalSlots > ROW_SIZE) View.VISIBLE else View.GONE
         } else {
@@ -109,8 +99,7 @@ class BandToggleManager(
         val eq = state.parametricEq
         val bandCount = eq.getBandCount()
 
-        // Graphic mode orders toggles by slot label (1, 2, 3…) regardless of dot
-        // positions on the graph; other modes keep natural index order.
+        // Graphic mode orders toggles by slot label regardless of dot positions; other modes keep index order.
         val orderedIndices = if (state.currentEqUiMode == EqUiMode.GRAPHIC) {
             val slots = state.bandSlots
             (0 until bandCount).sortedBy { slots.getOrNull(it) ?: it }
@@ -124,8 +113,7 @@ class BandToggleManager(
             row.addView(createToggleButton(bandIdx))
         }
         if (bandCount < EqStateManager.MAX_BANDS) {
-            // Inline "+": rows 1-2 normally, or inside the scrollable extra rows past
-            // band 16 (issue #31) so it scrolls with the bands.
+            // Inline "+": rows 1-2 normally, or inside the scrollable extra rows past band 16 (issue #31).
             getRowForDisplay(bandCount).addView(createAddButton())
         }
         updateRowVisibility()
@@ -149,7 +137,7 @@ class BandToggleManager(
 
     fun updateIcons() {
         val eq = state.parametricEq
-        val iconSize = (22 * activity.resources.displayMetrics.density).toInt()
+        val iconSize = ((if (compact) 18 else 22) * activity.resources.displayMetrics.density).toInt()
         for (displayPos in state.displayToBandIndex.indices) {
             val bandIdx = state.displayToBandIndex[displayPos]
             val row = getRowForDisplay(displayPos)
@@ -174,8 +162,7 @@ class BandToggleManager(
         val usedSlots = state.bandSlots.toSet()
         val newSlot = (0 until EqStateManager.MAX_BANDS).firstOrNull { it !in usedSlots } ?: return
         val newFreq = state.allDefaultFrequencies[newSlot]
-        // Clamp to band-list bounds — slots/bands stay in sync per-channel, but a
-        // stray desync must never throw in MutableList.add(index) (issue #50).
+        // Clamp to band-list bounds so a stray slot desync can't throw in MutableList.add (issue #50).
         val insertPos = state.bandSlots.indexOfFirst { it > newSlot }
             .let { if (it < 0) state.bandSlots.size else it }
             .coerceIn(0, eq.getBandCount())
@@ -183,8 +170,7 @@ class BandToggleManager(
         eq.insertBand(insertPos, newFreq, 0f, BiquadFilter.FilterType.BELL)
         state.bandSlots.add(insertPos, newSlot)
         state.displayToBandIndex = (0 until eq.getBandCount()).toList()
-        // New bands default to BOTH (tethered): create the synced twin in the
-        // other channel so it really applies to both right away (issue #53).
+        // New bands default to BOTH: create the synced twin in the other channel (issue #53).
         state.ensureBothTwin(insertPos)
 
         state.selectedBandIndex?.let { sel ->
@@ -195,8 +181,7 @@ class BandToggleManager(
         graphView.setBandSlotLabels(state.bandSlots)
         graphView.setBandColors(state.bandColors)
 
-        // Skip the row-slide animation mid-flight or when the cap exceeds 16
-        // (issue #31) — the animations only model the fixed 2-row layout.
+        // Skip the row-slide animation mid-flight or when the cap exceeds 16 (issue #31).
         if (isAnimating || EqStateManager.MAX_BANDS > 16) {
             setupToggles()
             updateSelection(state.selectedBandIndex)
@@ -271,8 +256,7 @@ class BandToggleManager(
             val needsRowReflow = insertPos < ROW_SIZE && oldBandCount >= ROW_SIZE - 1
 
             if (needsRowReflow) {
-                // Single-phase: grow new in row1, shrink overflow in row1,
-                // and grow matching button in row2 — all simultaneously
+                // Single-phase: grow new in row1, shrink overflow in row1, grow matching button in row2.
                 val capturedHeight = (0 until toggleGroup.childCount)
                     .mapNotNull { toggleGroup.getChildAt(it)?.height?.takeIf { h -> h > 0 } }
                     .firstOrNull() ?: 0
@@ -534,8 +518,7 @@ class BandToggleManager(
         val eq = state.parametricEq
         if (eq.getBandCount() <= EqStateManager.MIN_BANDS) return
 
-        // Skip animation mid-flight or when the layout exceeds the two fixed rows
-        // (cap > 16, or >16 bands left after the cap was toggled off — issue #31).
+        // Skip animation mid-flight or when the layout exceeds the two fixed rows (issue #31).
         if (isAnimating || EqStateManager.MAX_BANDS > 16 || eq.getBandCount() > ROW_SIZE * 2) {
             performRemoveBand(index)
             return
@@ -615,8 +598,7 @@ class BandToggleManager(
                     val needsRowReflow = displayPos < ROW_SIZE && bandCount >= ROW_SIZE
 
                     if (needsRowReflow) {
-                        // Single-phase: shrink removed in row1 + grow moved button from row2,
-                        // while row2's first child shrinks out — all simultaneously
+                        // Single-phase: shrink removed in row1, grow moved button from row2, shrink row2's first child.
                         val itemWidth = btn.width
                         val capturedHeight = btn.height
                         val capturedBandCount = bandCount
@@ -856,8 +838,7 @@ class BandToggleManager(
         onBandCountChanged()
     }
 
-    /** Selects the band; tapping the already-selected band while Channel Side EQ
-     *  is on opens the per-band L / Both / R picker anchored to the card (issue #53). */
+    /** Selects the band; re-tapping it with Channel Side EQ on opens the L / Both / R picker (issue #53). */
     private fun onToggleClicked(anchor: View, bandIdx: Int) {
         val cseOn = state.activeChannel != EqStateManager.ActiveChannel.BOTH
         if (cseOn && state.selectedBandIndex == bandIdx && onBandReselected != null) {
@@ -911,7 +892,7 @@ class BandToggleManager(
 
     private fun createToggleButton(bandIdx: Int): MaterialButton {
         val eq = state.parametricEq
-        val iconSize = (22 * activity.resources.displayMetrics.density).toInt()
+        val iconSize = ((if (compact) 18 else 22) * activity.resources.displayMetrics.density).toInt()
         val slotLabel = if (bandIdx < state.bandSlots.size) state.bandSlots[bandIdx] + 1 else bandIdx + 1
         return MaterialButton(activity, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
             text = "$slotLabel"
@@ -920,10 +901,12 @@ class BandToggleManager(
             }
             cornerRadius = (12 * activity.resources.displayMetrics.density).toInt()
             textSize = 11f
-            val vertPad = (6 * activity.resources.displayMetrics.density).toInt()
+            val vertPad = ((if (compact) 3 else 6) * activity.resources.displayMetrics.density).toInt()
             setPadding(0, vertPad, 0, vertPad)
             insetTop = 0; insetBottom = 0
             minWidth = 0; minimumWidth = 0
+            val minH = ((if (compact) 40 else 48) * activity.resources.displayMetrics.density).toInt()
+            minHeight = minH; minimumHeight = minH
             gravity = android.view.Gravity.CENTER
             rippleColor = android.content.res.ColorStateList.valueOf(0x33AAAAAA.toInt())
             compoundDrawablePadding = (1 * activity.resources.displayMetrics.density).toInt()
@@ -956,10 +939,12 @@ class BandToggleManager(
             }
             cornerRadius = (12 * activity.resources.displayMetrics.density).toInt()
             textSize = 11f
-            val vertPad = (6 * activity.resources.displayMetrics.density).toInt()
+            val vertPad = ((if (compact) 3 else 6) * activity.resources.displayMetrics.density).toInt()
             setPadding(0, vertPad, 0, vertPad)
             insetTop = 0; insetBottom = 0
             minWidth = 0; minimumWidth = 0
+            val minH = ((if (compact) 40 else 48) * activity.resources.displayMetrics.density).toInt()
+            minHeight = minH; minimumHeight = minH
             gravity = android.view.Gravity.CENTER
             setBackgroundColor(0x00000000)
             setTextColor(0xFF888888.toInt())
@@ -1035,5 +1020,10 @@ class BandToggleManager(
         val g = (color shr 8) and 0xFF
         val b = color and 0xFF
         return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.5
+    }
+
+    companion object {
+        /** Shorter chips when the viewport fit needs the height back; process-wide so every mode matches. */
+        var compact = false
     }
 }

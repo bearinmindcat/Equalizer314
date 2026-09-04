@@ -29,7 +29,7 @@
                 android:paddingStart="16dp"
                 android:paddingEnd="16dp"
                 android:paddingTop="0dp"
-                android:paddingBottom="0dp">
+                android:paddingBottom="12dp">
 
                 <!-- EQ Mode Selector — single row: Parametric | Table
                      (Graphic + Simple tabs retired/hidden, see
@@ -554,7 +554,8 @@
                 <!-- Controls / Preset picker overlay -->
                 <FrameLayout
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp">
 
                 <!-- EQ Controls container (hidden when preset picker is open) -->
                 <LinearLayout
