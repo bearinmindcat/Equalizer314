@@ -589,6 +589,8 @@ class EqPreferencesManager(context: Context) {
     // Light/dark theme (dark default) — EqApp reads this key raw at process start; keep the name in sync.
     fun saveLightTheme(light: Boolean) { prefs.edit().putBoolean("lightTheme", light).apply() }
     fun getLightTheme(): Boolean = prefs.getBoolean("lightTheme", false)
+    fun saveAmoledTheme(on: Boolean) { prefs.edit().putBoolean("amoledTheme", on).apply() }
+    fun getAmoledTheme(): Boolean = prefs.getBoolean("amoledTheme", false)
     fun saveSimpleEqGains(gains: FloatArray) {
         val arr = JSONArray()
         for (g in gains) arr.put(g.toDouble())

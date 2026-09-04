@@ -575,7 +575,8 @@ class  MainActivity : AppCompatActivity() {
     private val graphBtnDimStroke: Int get() = if (isLightUi) 0xFFBEBEBE.toInt() else 0xFF444444.toInt()
     private val graphBtnDimContent: Int get() = if (isLightUi) 0xFF555555.toInt() else 0xFF888888.toInt()
     // Opaque dim fill matching EqGraphView's canvas background.
-    private val graphBtnDimBg: Int get() = if (isLightUi) 0xFFE4E4E4.toInt() else 0xFF1E1E1E.toInt()
+    private val graphBtnDimBg: Int get() = com.google.android.material.color.MaterialColors.getColor(
+        this, com.google.android.material.R.attr.colorSurfaceVariant, if (isLightUi) 0xFFE4E4E4.toInt() else 0xFF1E1E1E.toInt())
     private lateinit var navSettingsButton: ImageButton
     private lateinit var navPresetsButton: ImageButton
     private lateinit var powerFab: android.widget.ImageButton

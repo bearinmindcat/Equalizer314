@@ -24,24 +24,17 @@ class ExperimentalActivity : AppCompatActivity() {
         setupCompatMode()
         setupMbcVolComp()
         setupPresetAutosave()
+        setupAmoledTheme()
         setupTvMode()
 
-        // Hide the legacy "Experimental DP Engine" switch row — the
-        // experimental path is now the only path. Keeping the view
-        // hidden (rather than removing the layout XML) preserves the
-        // surrounding card structure for the remaining rows.
+        // Hide the legacy "Experimental DP Engine" switch row; the view stays so the card structure holds.
         findViewById<android.view.View>(R.id.expDpModeSwitch)
             ?.let { switch ->
                 (switch.parent as? android.view.View)?.visibility = android.view.View.GONE
             }
     }
 
-    // Gain Compensation (auto-gain) graduated out of Experimental — it now
-    // lives as a real, enabled "Auto-Gain" card on the main settings screen
-    // (on by default; see EqPreferencesManager.getAutoGainEnabled).
-    // DP Band Count is now read-only: the converter always uses the full
-    // Wavelet band table (ParametricToDpConverter.numBands), so we just show
-    // that number rather than a slider that didn't actually change anything.
+    // Auto-gain moved to the main settings; DP Band Count is read-only (the converter always uses the full table).
     private fun setupDpBandCount() {
         // Reflect what the NEXT DP start will use: 32 in Compat Mode, else 128.
         findViewById<android.widget.TextView>(R.id.expDpBandCountValue).text =
@@ -50,9 +43,7 @@ class ExperimentalActivity : AppCompatActivity() {
             else "128"
     }
 
-    // Experimental "Add more EQ bands" toggle (issue #31). On → cap 64,
-    // off → default 16. Updates the live cap so it takes effect on the next
-    // band add / EQ-screen interaction.
+    // "Add more EQ bands" (issue #31): on → cap 64, off → 16; applies on the next band add.
     private fun setupMaxEqBands() {
         val switch = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.expMaxBandsSwitch)
         switch.isChecked = eqPrefs.getMaxEqBands() > 16
@@ -63,13 +54,7 @@ class ExperimentalActivity : AppCompatActivity() {
         }
     }
 
-    // Issue #26: DP FFT window ("EQ precision"). One pref (dpFrameMs),
-    // one 4-stop slider over the engine's useful power-of-two block sizes
-    // (2048/4096/8192/16384 samples). Longer windows render the bass EQ
-    // more faithfully (finer FFT bins) at the cost of audio delay --
-    // REW-measured: a 12 Hz-wide bass filter is erased at 43 ms, renders
-    // within 0.2 dB at 341 ms. Takes effect on the next EQ power cycle
-    // (the window is baked in at DynamicsProcessing creation).
+    // Issue #26: DP FFT window — one pref (dpFrameMs), 4 power-of-two stops; longer = finer bass, more delay; baked at DP creation.
     private val frameRungsMs = floatArrayOf(40f, 80f, 160f, 320f)
     private fun currentFrameRung(): Int {
         val ms = eqPrefs.getDpFrameMs()
@@ -95,8 +80,7 @@ class ExperimentalActivity : AppCompatActivity() {
                 syncFrameUi()
             }
         }
-        // Recycle the live DP only when the finger lifts — one rebuild per
-        // adjustment, not one per rung dragged across.
+        // Recycle the live DP only when the finger lifts — one rebuild per adjustment.
         slider.addOnSliderTouchListener(object : com.google.android.material.slider.Slider.OnSliderTouchListener {
             override fun onStartTrackingTouch(slider: com.google.android.material.slider.Slider) {}
             override fun onStopTrackingTouch(slider: com.google.android.material.slider.Slider) {
@@ -106,10 +90,7 @@ class ExperimentalActivity : AppCompatActivity() {
         syncFrameUi()
     }
 
-    /** Ask EqService to rebuild the live DP so creation-time settings
-     *  (interleave, DP Latency Window) apply immediately. No-op when the
-     *  EQ is off. The service toasts + broadcasts so MainActivity's power
-     *  FAB echoes the off→on cycle. */
+    /** Ask EqService to rebuild the live DP so creation-time settings apply now; no-op when the EQ is off. */
     private fun requestDpRecycle() {
         try {
             startService(
@@ -119,10 +100,7 @@ class ExperimentalActivity : AppCompatActivity() {
         } catch (_: Exception) {}
     }
 
-    // Pre+Post EQ interleave (issue #26 follow-up): second staircase on the
-    // DP's Post-EQ stage, cutoffs offset half a stair — 256 effective stairs.
-    // Baked in at DP creation, so flipping the switch asks EqService to
-    // recycle the live DP — no manual power cycle needed.
+    // Pre+Post EQ interleave (issue #26): second staircase on the Post-EQ stage; baked at creation, so recycle on change.
     private fun setupInterleave() {
         val switch = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.expInterleaveSwitch)
         switch.isChecked = eqPrefs.getDpInterleave()
@@ -133,9 +111,7 @@ class ExperimentalActivity : AppCompatActivity() {
         }
     }
 
-    // Compatibility Mode: cap DP at 32 bands for band-limited HALs (Pixel /
-    // some Samsung). Auto-on for Google/Pixel by default. Baked at DP
-    // creation → recycle the live DP on change.
+    // Compat Mode: 32 DP bands for band-limited HALs, auto-on for Pixels; baked at creation → recycle on change.
     private fun setupCompatMode() {
         val switch = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.expCompatModeSwitch)
         switch.isChecked = eqPrefs.getDpCompatMode()
@@ -165,6 +141,17 @@ class ExperimentalActivity : AppCompatActivity() {
         switch.setOnCheckedChangeListener { _, isChecked -> eqPrefs.savePresetAutosave(isChecked) }
     }
 
+    // Black (AMOLED) theme: EqApp overlays it at activity creation; bump the stamp so live screens rebuild.
+    private fun setupAmoledTheme() {
+        val switch = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.expAmoledThemeSwitch)
+        switch.isChecked = eqPrefs.getAmoledTheme()
+        switch.setOnCheckedChangeListener { _, isChecked ->
+            eqPrefs.saveAmoledTheme(isChecked)
+            EqApp.themeStamp++
+            recreate()
+        }
+    }
+
     // MBC thresholds follow the media volume (applies live via EqService).
     private fun setupMbcVolComp() {
         val switch = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.expMbcVolCompSwitch)
@@ -180,11 +167,7 @@ class ExperimentalActivity : AppCompatActivity() {
         }
     }
 
-    // Issue #58: hide the foreground-service notification while the EQ is off.
-
-    // ---- TV Mode (issues #35 / #55) -------------------------------------
-    // Off / TV (server: this device is remotely controlled) / Remote
-    // (client: this device's UI drives a TV found via LAN discovery).
+    // ---- TV Mode (issues #35 / #55): Off / TV (server, remotely controlled) / Remote (client driving a TV) ----
 
     private var tvDiscovery: com.bearinmind.equalizer314.remote.TvRemoteDiscovery? = null
     private val foundTvs = LinkedHashMap<String, Pair<String, Int>>() // name -> (host, port)
@@ -210,8 +193,7 @@ class ExperimentalActivity : AppCompatActivity() {
                 else -> R.id.expTvModeOff
             }
         )
-        // Re-entering the screen in Remote mode without a live link: rescan
-        // right away so the device picker pops on its own.
+        // Re-entering in Remote mode without a live link: rescan right away so the picker pops on its own.
         if (mode == com.bearinmind.equalizer314.remote.TvRemoteHub.MODE_CLIENT &&
             hub.client?.connected != true
         ) {
@@ -295,9 +277,7 @@ class ExperimentalActivity : AppCompatActivity() {
         tvDiscovery = null
     }
 
-    /** Entering TV or Remote mode powers the DP off — the user turns it
-     *  back on deliberately, so both ends start from a known-off state and
-     *  the first power-on propagates cleanly over the link. */
+    /** Entering TV or Remote mode powers the DP off so both ends start from a known-off state. */
     private fun stopDpForModeChange() {
         try {
             startService(
@@ -307,10 +287,7 @@ class ExperimentalActivity : AppCompatActivity() {
         } catch (_: Exception) {}
     }
 
-    // House dialog style (matches MainActivity's save-preset dialog):
-    // custom vertical layout, 20sp title, rounded outlined widgets, thin
-    // divider, side-by-side outlined buttons with the red Cancel.
-    // Notification info picker (issue #65): choose which lines the notification shows.
+    // House dialog style (matches MainActivity's save-preset dialog).
     private fun styledDialogRoot(): android.widget.LinearLayout {
         val density = resources.displayMetrics.density
         return android.widget.LinearLayout(this).apply {
@@ -355,8 +332,7 @@ class ExperimentalActivity : AppCompatActivity() {
         }
     }
 
-    /** Server-mode PIN popup — the pairing code, house dialog style.
-     *  Auto-dismisses when a remote connects; Cancel backs out of TV mode. */
+    /** Server-mode PIN popup; auto-dismisses when a remote connects, Cancel backs out of TV mode. */
     private var tvPinDialog: android.app.AlertDialog? = null
     private fun showTvPinDialog() {
         val pin = com.bearinmind.equalizer314.remote.TvRemoteHub.server?.pin
@@ -391,8 +367,7 @@ class ExperimentalActivity : AppCompatActivity() {
             .create()
         dialog.setOnDismissListener { if (tvPinDialog === dialog) tvPinDialog = null }
         cancelBtn.setOnClickListener {
-            // Cancel = back out of TV mode entirely (the group listener
-            // handles the teardown).
+            // Cancel = back out of TV mode entirely (the group listener handles the teardown).
             dialog.dismiss()
             findViewById<com.google.android.material.button.MaterialButtonToggleGroup>(R.id.expTvModeGroup)
                 .check(R.id.expTvModeOff)
@@ -401,8 +376,7 @@ class ExperimentalActivity : AppCompatActivity() {
         dialog.show()
     }
 
-    /** Device picker — opens immediately when Remote is selected (even with
-     *  nothing found yet) and fills in rows live as devices appear. */
+    /** Device picker — opens as soon as Remote is selected and fills rows live as devices appear. */
     private fun showTvPicker() {
         if (isFinishing) return
         tvPickerDialog?.dismiss()
@@ -500,8 +474,7 @@ class ExperimentalActivity : AppCompatActivity() {
         val hub = com.bearinmind.equalizer314.remote.TvRemoteHub
         val (host, port) = foundTvs[name] ?: return
         stopTvDiscovery()
-        // Chromecast-style pair-once: a stored token from an earlier pairing
-        // skips the PIN; first contact with a device still requires it.
+        // Pair-once: a stored token from an earlier pairing skips the PIN; first contact still requires it.
         if (!hub.needsPairing(this, name)) {
             hub.connectClient(this, name, host, port, null)
             return
@@ -571,9 +544,7 @@ class ExperimentalActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
-        // Leaving the screen with TV Mode armed but NOTHING connected =
-        // accidental — reset to Off so no orphaned server/scan lingers.
-        // A live connection (either role) is deliberate and survives.
+        // Leaving with TV Mode armed but nothing connected is accidental — reset to Off; a live link survives.
         val hub = com.bearinmind.equalizer314.remote.TvRemoteHub
         val connected = (hub.server?.connectedRemotes() ?: 0) > 0 ||
             hub.client?.connected == true

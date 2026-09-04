@@ -46,6 +46,21 @@
         <item name="android:windowLightStatusBar">true</item>
     </style>
 
+    <!-- Black (AMOLED) overlay: EqApp layers it on the dark theme when the Experimental toggle is on. -->
+    <style name="ThemeOverlay.Equalizer314.Amoled" parent="">
+        <item name="android:colorBackground">#FF000000</item>
+        <item name="android:windowBackground">#FF000000</item>
+        <item name="colorSurface">#FF000000</item>
+        <item name="colorSurfaceDim">#FF000000</item>
+        <item name="colorSurfaceBright">#FF1A1A1A</item>
+        <item name="colorSurfaceVariant">#FF0F0F0F</item>
+        <item name="colorSurfaceContainerLowest">#FF000000</item>
+        <item name="colorSurfaceContainerLow">#FF060606</item>
+        <item name="colorSurfaceContainer">#FF0C0C0C</item>
+        <item name="colorSurfaceContainerHigh">#FF141414</item>
+        <item name="colorSurfaceContainerHighest">#FF1A1A1A</item>
+    </style>
+
     <!-- Rounded dialog -->
     <style name="Theme.Equalizer314.Dialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
         <item name="android:windowBackground">@drawable/bg_dialog_rounded</item>

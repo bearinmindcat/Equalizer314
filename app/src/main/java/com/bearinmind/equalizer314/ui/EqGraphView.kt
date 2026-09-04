@@ -15,11 +15,7 @@ import kotlin.math.abs
 import kotlin.math.log10
 import kotlin.math.pow
 
-/**
- * Custom view for displaying and interacting with parametric equalizer
- * Allows both horizontal (frequency) and vertical (gain) dragging
- * Similar to Ableton's EQ Eight
- */
+/** Parametric EQ graph: bands drag horizontally (frequency) and vertically (gain), Ableton EQ Eight style. */
 class EqGraphView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
@@ -31,14 +27,12 @@ class EqGraphView @JvmOverloads constructor(
     }
 
     private var parametricEq: ParametricEqualizer? = null
-    // The inactive channel's EQ, drawn as a dotted "ghost" curve when Channel
-    // Side EQ is on (R while editing L, and vice-versa) — issue #53. Null = off.
+    // Inactive channel's EQ, drawn as a dotted ghost curve when Channel Side EQ is on (issue #53); null = off.
     private var ghostEq: ParametricEqualizer? = null
     // Second ghost for the Both view: L and R composites drawn together.
     private var ghostEq2: ParametricEqualizer? = null
 
-    // Shared "Both" layer (CSE): summed into solid and ghost curves so every view
-    // shows what's audible; skipped when the solid curve IS the shared layer (Both view).
+    // Shared "Both" layer (CSE): summed into solid and ghost curves; skipped when the solid curve is the shared layer.
     private var overlayEq: ParametricEqualizer? = null
     private val bandPoints = mutableListOf<BandPoint>()
     private var activeBandIndex: Int? = null
@@ -54,13 +48,11 @@ class EqGraphView @JvmOverloads constructor(
     var showEqCurve = true
     // Show dashed tanh saturation curve
     var showSaturationCurve = true
-    // Vertical padding (top/bottom) for labels — default 80f for 246dp graph.
-    // Set lower for mini/scaled-down graphs (e.g. 40f for 123dp).
+    // Vertical label padding — 80f for the 246dp graph, lower for mini graphs (40f at 123dp).
     var verticalPadding = 80f
     // Fill the area between the EQ curve and the 0dB line with a translucent color
     var showCurveFill = false
-    // Per-band curve overlay (issue #40): each enabled band's response as a thin
-    // line + translucent fill in the band's color (grey fallback), under the summed curve.
+    // Per-band curve overlay (issue #40): each enabled band as a thin line + translucent fill under the summed curve.
     var showGainHeat = false
         set(value) { field = value; invalidate() }
     var showBandCurves = false
@@ -68,8 +60,7 @@ class EqGraphView @JvmOverloads constructor(
             field = value
             invalidate()
         }
-    // When true, band points are non-interactive (no dragging, no labels inside dots)
-    // and drawn smaller — purely visual indicators.
+    // True = points are non-interactive visual indicators (no dragging, no labels, drawn smaller).
     var readOnlyPoints = false
 
     private var spectrumAnalyzer: SpectrumAnalyzer? = null
@@ -88,13 +79,11 @@ class EqGraphView @JvmOverloads constructor(
     var mbcBandKnees: FloatArray? = null        // per-band knee width
     var mbcBandGateThresholds: FloatArray? = null // per-band noise gate threshold
     var mbcBandExpanderRatios: FloatArray? = null // per-band expander ratio
-    // RANGE FEATURE COMMENTED OUT — range data not displayed or drawn
-    // var mbcBandRanges: FloatArray? = null        // per-band range in dB (negative, max gain reduction cap)
+    // RANGE FEATURE COMMENTED OUT — range data not displayed or drawn (in git history).
     var mbcSelectedBand: Int = 0
     var onMbcCrossoverChanged: ((crossoverIndex: Int, frequency: Float) -> Unit)? = null
     var onMbcBandGainChanged: ((bandIndex: Int, gain: Float) -> Unit)? = null
-    // RANGE FEATURE COMMENTED OUT
-    // var onMbcBandRangeChanged: ((bandIndex: Int, range: Float) -> Unit)? = null
+    // RANGE FEATURE COMMENTED OUT — parked code (in git history).
     var onMbcBandSelected: ((bandIndex: Int) -> Unit)? = null
     private var mbcHaloAlpha = 0f
     private var mbcHaloAnimator: android.animation.ValueAnimator? = null
@@ -105,8 +94,7 @@ class EqGraphView @JvmOverloads constructor(
     private var lastMbcTapTime = 0L
     private var lastMbcTapBand = -1
     var onMbcBandGainReset: ((bandIndex: Int) -> Unit)? = null
-    // RANGE FEATURE COMMENTED OUT
-    // private var draggingMbcRange: Int = -1
+    // RANGE FEATURE COMMENTED OUT — parked code (in git history).
 
     private val mbcCrossoverLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xAABBBBBB.toInt()
@@ -137,24 +125,7 @@ class EqGraphView @JvmOverloads constructor(
         style = Paint.Style.STROKE
     }
 
-    // RANGE FEATURE COMMENTED OUT — range paint objects
-    // private val mbcRangeCurvePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-    //     color = 0xAA999999.toInt()
-    //     strokeWidth = 2f
-    //     style = Paint.Style.STROKE
-    //     pathEffect = DashPathEffect(floatArrayOf(8f, 6f), 0f)
-    // }
-    //
-    // private val mbcRangeFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-    //     color = 0x30444444.toInt()
-    //     style = Paint.Style.FILL
-    // }
-    //
-    // private val mbcRangeDotRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-    //     color = 0xFF777777.toInt()
-    //     strokeWidth = 2f
-    //     style = Paint.Style.STROKE
-    // }
+    // RANGE FEATURE COMMENTED OUT — range paint objects (in git history).
 
     private val mbcTriTouchPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0x14AAAAAA.toInt()  // colorPrimary (#AAAAAA) at 8% alpha — exact Material3 Slider halo
@@ -338,8 +309,7 @@ class EqGraphView @JvmOverloads constructor(
         invalidate()
     }
 
-    /** Set the other-channel EQ to draw as a dotted ghost curve (issue #53),
-     *  or null to hide it (non-CSE). */
+    /** Other-channel EQ drawn as a dotted ghost curve (issue #53); null hides it. */
     fun setGhostEqualizer(eq: ParametricEqualizer?, eq2: ParametricEqualizer? = null) {
         ghostEq = eq
         ghostEq2 = eq2
@@ -435,9 +405,7 @@ class EqGraphView @JvmOverloads constructor(
         val graphWidth = width.toFloat()
         val graphHeight = height - 2 * vPad
 
-        // Graph background = colorSurfaceVariant in both palettes
-        // (#1E1E1E dark / #E4E4E4 light) — keep in sync with themes.xml.
-        canvas.drawColor(if (isLightTheme()) 0xFFE4E4E4.toInt() else 0xFF1E1E1E.toInt())
+        canvas.drawColor(graphBgColor)
 
         drawGrid(canvas, vPad, graphWidth, graphHeight)
 
@@ -773,8 +741,7 @@ class EqGraphView @JvmOverloads constructor(
         val eq = parametricEq ?: return
         if (bandPoints.isEmpty()) return
 
-        // Dotted ghost curve of the other channel (CSE L/R) — drawn first so the
-        // active channel's curve sits on top (issue #53).
+        // Ghost curve of the other channel (CSE) first, so the active curve sits on top (issue #53).
         drawGhostCurve(canvas, vPad, graphWidth, graphHeight)
 
         val path = Path()
@@ -783,8 +750,7 @@ class EqGraphView @JvmOverloads constructor(
         var pathStarted = false
         var showSaturated = false
 
-        // Graph spans full width: x=0 → 10 Hz, x=width → 22000 Hz
-        // All frequencies within valid biquad range, no Nyquist issues
+        // Full width: x=0 → 10 Hz, x=width → 22000 Hz, all within the biquad range.
         val logMin = log10(graphMinFreq)
         val logMax = log10(graphMaxFreq)
 
@@ -819,9 +785,7 @@ class EqGraphView @JvmOverloads constructor(
             }
         }
 
-        // Per-band curves (issue #40), drawn BEFORE the sum curve so the white line
-        // stays on top. Skipped in MBC mode (EQ curve already de-emphasised) and for
-        // flat bands (0 dB bells would just re-trace the 0 line).
+        // Per-band curves (issue #40) under the sum curve; skipped in MBC mode and for flat bands.
         if (showBandCurves && mbcCrossovers == null) {
             val zeroY = vPad + graphHeight * (1f - (0f - minGain) / (maxGain - minGain))
             val density = resources.displayMetrics.density
@@ -837,8 +801,7 @@ class EqGraphView @JvmOverloads constructor(
                     val db = eq.getBandFrequencyResponse(b, freq)
                     if (db.isNaN() || db.isInfinite()) continue
                     if (abs(db) > maxAbsDb) maxAbsDb = abs(db)
-                    // No clamping (same as the sum curve): LP/HP cuts dive past the plot
-                    // edge, canvas clips at view bounds, fill runs full-graph (SQ-5 style).
+                    // No clamping (like the sum curve): LP/HP cuts dive past the edge, the canvas clips, the fill runs full-graph.
                     val yB = vPad + graphHeight * (1f - (db - minGain) / (maxGain - minGain))
                     if (!started) { bandPath.moveTo(x, yB); started = true }
                     else bandPath.lineTo(x, yB)
@@ -855,15 +818,13 @@ class EqGraphView @JvmOverloads constructor(
                     style = Paint.Style.FILL
                 })
                 canvas.drawPath(bandPath, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    // Dim outline — the fill carries the color; the line is a subtle
-                    // edge that doesn't compete with the white sum curve.
+                    // Dim outline — the fill carries the color so the line doesn't compete with the sum curve.
                     color = (baseColor and 0x00FFFFFF) or 0x55000000
                     style = Paint.Style.STROKE
                     strokeWidth = 1.2f * density
                 })
             }
-            // Re-draw the 0 dB reference over the band fills, slightly brighter than
-            // the grid so it cuts through the colored regions (SQ-5 style).
+            // Re-draw the 0 dB reference over the band fills, slightly brighter than the grid.
             canvas.drawLine(0f, zeroY, graphWidth, zeroY, Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = if (isLightTheme()) 0xFFADADAD.toInt() else 0xFF555555.toInt()
                 strokeWidth = 1f * density
@@ -952,11 +913,7 @@ class EqGraphView @JvmOverloads constructor(
         return colors[slots[index]]
     }
 
-    // ---- Linkwitz-Riley 4th-order crossover math (Giannoulis et al. / Linkwitz-Riley) ----
-    // LR4 = two cascaded 2nd-order Butterworth filters
-    // Lowpass amplitude:  |H_LP(f)| = 1 / (1 + (f/fc)^4)
-    // Highpass amplitude: |H_HP(f)| = (f/fc)^4 / (1 + (f/fc)^4)
-    // LP + HP = 1 (flat sum at all frequencies), -6 dB each at crossover
+    // Linkwitz-Riley 4th-order crossovers: |H_LP| = 1/(1+(f/fc)^4), |H_HP| = (f/fc)^4/(1+(f/fc)^4); LP+HP = 1, -6 dB each at fc.
 
     private fun lr4LowpassAmplitude(f: Float, fc: Float): Float {
         val ratio = f / fc
@@ -970,12 +927,7 @@ class EqGraphView @JvmOverloads constructor(
         return r4 / (1f + r4)
     }
 
-    /**
-     * Compute the crossover filter amplitude for a given band at a given frequency.
-     * Band 0 (lowest):  LP at crossover[0]
-     * Band i (middle):  HP at crossover[i-1] × LP at crossover[i]
-     * Band N-1 (highest): HP at crossover[N-2]
-     */
+    /** Crossover amplitude of a band at a frequency: lowest = LP at xo[0], middle = HP at xo[i-1] × LP at xo[i], highest = HP at xo[N-2]. */
     private fun mbcBandAmplitude(bandIndex: Int, freq: Float, crossovers: FloatArray): Float {
         val bandCount = crossovers.size + 1
         var amplitude = 1f
@@ -990,13 +942,7 @@ class EqGraphView @JvmOverloads constructor(
         return amplitude
     }
 
-    /**
-     * Compute the MBC composite gain in dB at a given frequency.
-     * Each band contributes: crossover_amplitude × band_gain_linear
-     * Total is summed in linear domain, then converted back to dB.
-     *
-     * gain_dB(f) = 20 * log10( Σ_i [ bandAmplitude_i(f) × 10^(bandGain_i / 20) ] )
-     */
+    /** MBC composite gain in dB at a frequency: 20·log10(Σ bandAmplitude_i(f) × 10^(bandGain_i/20)). */
     private fun mbcGainAtFreq(freq: Float, crossovers: FloatArray, gains: FloatArray): Float {
         val bandCount = crossovers.size + 1
         var totalLinear = 0f
@@ -1009,12 +955,7 @@ class EqGraphView @JvmOverloads constructor(
         return 20f * log10(totalLinear.coerceAtLeast(0.00001f))
     }
 
-    // ---- Compressor static gain curve (Giannoulis/Massberg/Reiss 2012) ----
-    // Soft knee gain computer:
-    //   if x < (T - W/2):   gc = 0
-    //   if (T-W/2) ≤ x ≤ (T+W/2):  gc = (1/R - 1) × (x - T + W/2)² / (2W)
-    //   if x > (T + W/2):   gc = (1/R - 1) × (x - T)
-    // Where T = threshold, R = ratio, W = knee width, x = input dB, gc = gain change dB
+    // Soft-knee gain computer (Giannoulis/Massberg/Reiss 2012): 0 below T-W/2, (1/R-1)(x-T+W/2)²/2W across the knee, (1/R-1)(x-T) above.
 
     private fun compressorGainDb(inputDb: Float, threshold: Float, ratio: Float, kneeWidth: Float): Float {
         if (ratio <= 1f) return 0f  // no compression
@@ -1029,8 +970,7 @@ class EqGraphView @JvmOverloads constructor(
         }
     }
 
-    // Expander/gate: downward expansion below noiseGateThreshold —
-    // gain = (expanderRatio − 1) × (input − NGT), always ≤ 0 (pushes quiet signals down).
+    // Expander/gate: gain = (expanderRatio − 1) × (input − NGT) below the gate threshold, always ≤ 0.
     private fun expanderGainDb(inputDb: Float, noiseGateThreshold: Float, expanderRatio: Float): Float {
         if (inputDb >= noiseGateThreshold || expanderRatio <= 1f) return 0f
         // (expanderRatio - 1) is positive, (inputDb - NGT) is negative → result is negative ✓
@@ -1058,73 +998,7 @@ class EqGraphView @JvmOverloads constructor(
         }
         canvas.drawPath(curvePath, mbcCurvePaint)
 
-        // RANGE FEATURE COMMENTED OUT — range curve drawing section
-        // val ranges = mbcBandRanges
-        // if (ranges != null && ranges.size >= bandCount) {
-        //     val rangeGains = FloatArray(bandCount) { gains[it] + ranges[it] }
-        //
-        //     val rangeCurvePath = Path()
-        //     val rangeFillPath = Path()
-        //     val postGainYs = FloatArray(numSamples + 1)
-        //
-        //     for (s in 0..numSamples) {
-        //         val x = graphWidth * s.toFloat() / numSamples
-        //         val freq = xToFreq(x, graphWidth)
-        //         val postGainDb = mbcGainAtFreq(freq, crossovers, gains).coerceIn(minGain, maxGain)
-        //         postGainYs[s] = vPad + graphHeight * (1f - (postGainDb - minGain) / (maxGain - minGain))
-        //         val rangeDb = mbcGainAtFreq(freq, crossovers, rangeGains).coerceIn(minGain, maxGain)
-        //         val ry = vPad + graphHeight * (1f - (rangeDb - minGain) / (maxGain - minGain))
-        //
-        //         if (s == 0) {
-        //             rangeCurvePath.moveTo(x, ry)
-        //             rangeFillPath.moveTo(x, postGainYs[s])
-        //             rangeFillPath.lineTo(x, ry)
-        //         } else {
-        //             rangeCurvePath.lineTo(x, ry)
-        //             rangeFillPath.lineTo(x, ry)
-        //         }
-        //     }
-        //
-        //     for (s in numSamples downTo 0) {
-        //         val x = graphWidth * s.toFloat() / numSamples
-        //         rangeFillPath.lineTo(x, postGainYs[s])
-        //     }
-        //     rangeFillPath.close()
-        //
-        //     // Per-band colored fills
-        //     val bandColorArr = mbcBandColors
-        //     for (b in 0 until bandCount) {
-        //         val bColor = if (bandColorArr != null && b < bandColorArr.size && bandColorArr[b] != 0) bandColorArr[b] else null
-        //         val leftFreq = if (b == 0) graphMinFreq else crossovers[b - 1]
-        //         val rightFreq = if (b == bandCount - 1) graphMaxFreq else crossovers[b]
-        //         val leftS = ((log10(leftFreq) - log10(graphMinFreq)) / (log10(graphMaxFreq) - log10(graphMinFreq)) * numSamples).toInt().coerceIn(0, numSamples)
-        //         val rightS = ((log10(rightFreq) - log10(graphMinFreq)) / (log10(graphMaxFreq) - log10(graphMinFreq)) * numSamples).toInt().coerceIn(0, numSamples)
-        //
-        //         val bandFillPath = Path()
-        //         bandFillPath.moveTo(graphWidth * leftS.toFloat() / numSamples, postGainYs[leftS])
-        //         for (s in leftS..rightS) {
-        //             bandFillPath.lineTo(graphWidth * s.toFloat() / numSamples, postGainYs[s])
-        //         }
-        //         for (s in rightS downTo leftS) {
-        //             val x = graphWidth * s.toFloat() / numSamples
-        //             val freq = xToFreq(x, graphWidth)
-        //             val rangeDb = mbcGainAtFreq(freq, crossovers, rangeGains).coerceIn(minGain, maxGain)
-        //             val ry = vPad + graphHeight * (1f - (rangeDb - minGain) / (maxGain - minGain))
-        //             bandFillPath.lineTo(x, ry)
-        //         }
-        //         bandFillPath.close()
-        //
-        //         if (bColor != null) {
-        //             val coloredFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        //                 color = bColor; style = Paint.Style.FILL; alpha = 40
-        //             }
-        //             canvas.drawPath(bandFillPath, coloredFill)
-        //         } else {
-        //             canvas.drawPath(bandFillPath, mbcRangeFillPaint)
-        //         }
-        //     }
-        //     canvas.drawPath(rangeCurvePath, mbcRangeCurvePaint)
-        // }
+        // RANGE FEATURE COMMENTED OUT — range curve drawing section (in git history).
 
         // --- Draw crossover lines + drag ripple ---
         for (i in crossovers.indices) {
@@ -1144,8 +1018,7 @@ class EqGraphView @JvmOverloads constructor(
             }
         }
 
-        // --- Draggable triangles at band centers: ▼ = postGain (output level),
-        // ▲ = range (max gain reduction) ---
+        // Draggable triangles at band centers: ▼ = postGain (output level), ▲ = range (max gain reduction).
         val triPath = Path()
 
         for (i in 0 until bandCount) {
@@ -1157,8 +1030,7 @@ class EqGraphView @JvmOverloads constructor(
 
             val isSelected = (i == mbcSelectedBand)
             val isDraggingGain = (draggingMbcBand == i)
-            // RANGE FEATURE COMMENTED OUT
-            // val isDraggingRange = (draggingMbcRange == i)
+            // RANGE FEATURE COMMENTED OUT — parked code (in git history).
             val r = 28f // triangle radius
             val cornerRadius = 8f
 
@@ -1210,43 +1082,7 @@ class EqGraphView @JvmOverloads constructor(
                 canvas.drawPath(triPath, ringPaint)
             }
 
-            // RANGE FEATURE COMMENTED OUT — Range triangle drawing
-            // if (ranges != null && ranges.size > i) {
-            //     val rangeGainDb = (gains[i] + ranges[i]).coerceIn(minGain, maxGain)
-            //     val rangeDotY = vPad + graphHeight * (1f - (rangeGainDb - minGain) / (maxGain - minGain))
-            //
-            //     triPath.reset()
-            //     triPath.moveTo(dotX, rangeDotY)
-            //     triPath.lineTo(dotX - r * 0.866f, rangeDotY + r * 1.5f)
-            //     triPath.lineTo(dotX + r * 0.866f, rangeDotY + r * 1.5f)
-            //     triPath.close()
-            //
-            //     canvas.drawPath(triPath, roundedBgPaint)
-            //
-            //     val showRangeHalo = isDraggingRange || (mbcHaloAlpha > 0f && mbcHaloType == 2 && mbcHaloBand == i && draggingMbcRange < 0)
-            //     if (showRangeHalo) {
-            //         val rangeTriCenterY = rangeDotY + r * 1.0f
-            //         val haloDp = 24f * resources.displayMetrics.density
-            //         mbcTriTouchPaint.alpha = (mbcHaloAlpha * 0x38).toInt()
-            //         canvas.drawCircle(dotX, rangeTriCenterY, haloDp, mbcTriTouchPaint)
-            //     }
-            //
-            //     if (bandColor != null) {
-            //         val colorRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            //             color = bandColor; style = Paint.Style.STROKE; strokeWidth = if (isSelected) 2.5f else 2f
-            //             pathEffect = CornerPathEffect(cornerRadius)
-            //         }
-            //         canvas.drawPath(triPath, colorRingPaint)
-            //     } else if (isSelected) {
-            //         mbcRangeDotRingPaint.color = 0xFFAAAAAA.toInt()
-            //         mbcRangeDotRingPaint.strokeWidth = 2.5f
-            //     } else {
-            //         mbcRangeDotRingPaint.color = 0xFF666666.toInt()
-            //         mbcRangeDotRingPaint.strokeWidth = 2f
-            //     }
-            //     val rangeRingPaint = Paint(mbcRangeDotRingPaint).apply { pathEffect = CornerPathEffect(cornerRadius) }
-            //     canvas.drawPath(triPath, rangeRingPaint)
-            // }
+            // RANGE FEATURE COMMENTED OUT — Range triangle drawing (in git history).
         }
     }
 
@@ -1323,13 +1159,10 @@ class EqGraphView @JvmOverloads constructor(
         strokeWidth = 2f
     }
 
-    // Flips the dark-default paints for light mode. Must stay AFTER every paint
-    // declaration (Kotlin runs initializers in order — moving up touches null paints).
-    // One-shot is enough: setDefaultNightMode recreates the activity on theme change.
+    // Light-mode paint flip; must stay after every paint declaration (initializer order). One-shot: theme changes recreate the activity.
     init {
         if (isLightTheme()) {
-            // Each grey sits at the same luminance distance from the light bg
-            // (#E4E4E4) as its dark counterpart from #1E1E1E — same contrast relationships.
+            // Each grey keeps the same luminance distance from the light bg as its dark counterpart.
             gridPaint.color = 0xFFCFCFCF.toInt()              // dark #333333
             curvePaint.color = 0xFF585858.toInt()             // dark #AAAAAA
             pointBgPaint.color = 0xFFE4E4E4.toInt()           // graph bg
@@ -1357,6 +1190,16 @@ class EqGraphView @JvmOverloads constructor(
         }
     }
 
+    // Surfaces come from the theme (bg = colorSurfaceVariant, label = colorSurfaceContainer) so the AMOLED overlay carries through.
+    private var graphBgColor = 0xFF1E1E1E.toInt()
+    init {
+        graphBgColor = com.google.android.material.color.MaterialColors.getColor(
+            this, com.google.android.material.R.attr.colorSurfaceVariant, pointBgPaint.color)
+        pointBgPaint.color = graphBgColor
+        labelBgPaint.color = com.google.android.material.color.MaterialColors.getColor(
+            this, com.google.android.material.R.attr.colorSurfaceContainer, labelBgPaint.color)
+    }
+
     private fun isLightTheme(): Boolean =
         (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) !=
             android.content.res.Configuration.UI_MODE_NIGHT_YES
@@ -1371,9 +1214,7 @@ class EqGraphView @JvmOverloads constructor(
         val padV = 8f
         val cornerRadius = 12f * resources.displayMetrics.density
         val labelX = (width - labelWidth) / 2f
-        // Card sits flush near the graph top (rect.top = labelY - 24f = 6f); the
-        // device/preset chip in activity_main.xml stacks below — keep its
-        // layout_marginTop in sync with rect.bottom (labelY + padV = 38f).
+        // Card sits near the graph top (rect.top = 6f); the device/preset chip's layout_marginTop in activity_main.xml tracks rect.bottom (38f).
         val labelY = 30f
 
         val rect = android.graphics.RectF(
@@ -1461,15 +1302,13 @@ class EqGraphView @JvmOverloads constructor(
                 parent?.requestDisallowInterceptTouchEvent(true)
                 draggingCrossover = -1
                 draggingMbcBand = -1
-                // RANGE FEATURE COMMENTED OUT
-                // draggingMbcRange = -1
+                // RANGE FEATURE COMMENTED OUT — parked code (in git history).
 
                 // Find the closest dot (postGain) across all bands
                 var bestDist = hitRadius
                 var bestType = 0 // 0=none, 1=postGain
                 var bestBand = -1
-                // RANGE FEATURE COMMENTED OUT
-                // val ranges = mbcBandRanges
+                // RANGE FEATURE COMMENTED OUT — parked code (in git history).
 
                 for (i in 0 until bandCount) {
                     val leftFreq = if (i == 0) graphMinFreq else crossovers[i - 1]
@@ -1485,16 +1324,7 @@ class EqGraphView @JvmOverloads constructor(
                         bestDist = distGain; bestType = 1; bestBand = i
                     }
 
-                    // RANGE FEATURE COMMENTED OUT — range touch hit detection
-                    // if (ranges != null && i < ranges.size) {
-                    //     val rangeGainDb = (gains[i] + ranges[i]).coerceIn(minGain, maxGain)
-                    //     val rangeDotY = vPad + graphHeight * (1f - (rangeGainDb - minGain) / (maxGain - minGain))
-                    //     val rangeTriCenterY = rangeDotY + 28f * 0.75f
-                    //     val distRange = Math.sqrt(((event.x - dotX) * (event.x - dotX) + (event.y - rangeTriCenterY) * (event.y - rangeTriCenterY)).toDouble()).toFloat()
-                    //     if (distRange < bestDist) {
-                    //         bestDist = distRange; bestType = 2; bestBand = i
-                    //     }
-                    // }
+                    // RANGE FEATURE COMMENTED OUT — range touch hit detection (in git history).
                 }
 
                 if (bestBand >= 0 && bestType > 0) {
@@ -1514,8 +1344,7 @@ class EqGraphView @JvmOverloads constructor(
                     lastMbcTapBand = bestBand
 
                     if (bestType == 1) draggingMbcBand = bestBand
-                    // RANGE FEATURE COMMENTED OUT
-                    // else draggingMbcRange = bestBand
+                    // RANGE FEATURE COMMENTED OUT — parked code (in git history).
                     mbcSelectedBand = bestBand
                     mbcHaloType = bestType
                     mbcHaloBand = bestBand
@@ -1557,17 +1386,7 @@ class EqGraphView @JvmOverloads constructor(
                     invalidate()
                     return true
                 }
-                // RANGE FEATURE COMMENTED OUT — range drag handling
-                // if (draggingMbcRange >= 0) {
-                //     parent?.requestDisallowInterceptTouchEvent(true)
-                //     val ranges = mbcBandRanges ?: return true
-                //     val newAbsGain = yToGain(event.y, vPad, graphHeight)
-                //     val newRange = (newAbsGain - gains[draggingMbcRange]).coerceIn(-60f, 0f)
-                //     ranges[draggingMbcRange] = newRange
-                //     onMbcBandRangeChanged?.invoke(draggingMbcRange, newRange)
-                //     invalidate()
-                //     return true
-                // }
+                // RANGE FEATURE COMMENTED OUT — range drag handling (in git history).
                 if (draggingCrossover >= 0) {
                     parent?.requestDisallowInterceptTouchEvent(true)
                     val newFreq = xToFreq(event.x, graphWidth)
@@ -1727,8 +1546,7 @@ class EqGraphView @JvmOverloads constructor(
             val graphWidth = width.toFloat()
             val graphHeight = height - 2 * vPad
 
-            // Free X+Y drag in every mode; Graphic & Table controllers re-bind to
-            // the updated band on the next onBandChanged tick.
+            // Free X+Y drag in every mode; Graphic & Table controllers re-bind on the next onBandChanged tick.
             val newFreq = xToFreq(x, graphWidth)
             point.frequency = newFreq
 
