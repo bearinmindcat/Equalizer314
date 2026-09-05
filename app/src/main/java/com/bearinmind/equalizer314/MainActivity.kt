@@ -751,10 +751,21 @@ class  MainActivity : AppCompatActivity() {
         val customPresetsPrefs = getSharedPreferences("custom_presets", MODE_PRIVATE)
         val isRealPreset = activePresetName.isNotBlank() &&
             customPresetsPrefs.contains("preset_$activePresetName")
-        val presetDisplay = if (isRealPreset) activePresetName else "none"
+        val edited = isRealPreset && runCatching {
+            eqPrefs.isEditedFrom(activePresetName, eqPrefs.bandsToJson(stateManager.parametricEq), stateManager.preampGainDb)
+        }.getOrDefault(false)
+        val presetDisplay = when {
+            !isRealPreset -> "none"
+            edited -> "$activePresetName (edited)"
+            else -> activePresetName
+        }
         // Same three-piece logic as EqService.buildNotification's BigText, compacted to one chip line: Mode · Preset · Device.
         val appPreset = stateManager.eqService?.sessionEffects?.getCurrentDrivingPreset()
+        // Service statics keep the device after DP off; until the service has reported one, scan the outputs directly.
+        val guessed = if (EqService.staticLastDeviceKey == null)
+            com.bearinmind.equalizer314.audio.AudioRoutingMonitor(this).pickActiveOutput() else null
         val deviceKey = EqService.staticLastDeviceKey
+            ?: guessed?.let { com.bearinmind.equalizer314.audio.DeviceIdentity.keyOf(it) }
         val deviceBinding = deviceKey?.let { eqPrefs.getDeviceBinding(it) }
         val deviceDrivesPreset = routingMode != 1 &&
             deviceBinding != null &&
@@ -768,8 +779,8 @@ class  MainActivity : AppCompatActivity() {
             routingMode == 1 -> appPreset ?: "none"
             else -> presetDisplay
         }
-        // EqService's static cache keeps the device label after DP off — MainActivity unbinds in stopProcessing.
         val deviceLabel = EqService.staticLastDeviceLabel
+            ?: guessed?.let { com.bearinmind.equalizer314.audio.DeviceIdentity.labelOf(it) }
         devicePresetStatusText.text = buildString {
             append(mode).append(" · ").append(presetForDisplay)
             if (deviceLabel != null) append(" · ").append(deviceLabel)
@@ -841,6 +852,9 @@ class  MainActivity : AppCompatActivity() {
             com.bearinmind.equalizer314.remote.TvRemoteHub.onLocalEqChanged()
             presetAutosaveHandler.removeCallbacks(presetAutosaveRunnable)
             presetAutosaveHandler.postDelayed(presetAutosaveRunnable, 1500L)
+            // Chip "(edited)" marker follows band edits.
+            presetAutosaveHandler.removeCallbacks(deviceStatusRunnable)
+            presetAutosaveHandler.postDelayed(deviceStatusRunnable, 300L)
         }
         com.bearinmind.equalizer314.remote.TvRemoteHub.resetModeOnColdStart(this)
         com.bearinmind.equalizer314.remote.TvRemoteHub.onUiReady()
@@ -3121,6 +3135,7 @@ class  MainActivity : AppCompatActivity() {
 
     private val presetAutosaveHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val presetAutosaveRunnable = Runnable { autosaveLoadedPreset() }
+    private val deviceStatusRunnable = Runnable { updateDevicePresetStatus() }
 
     /** Writes edits back into the loaded pool preset so tweaks survive reconnects. */
     private fun autosaveLoadedPreset() {

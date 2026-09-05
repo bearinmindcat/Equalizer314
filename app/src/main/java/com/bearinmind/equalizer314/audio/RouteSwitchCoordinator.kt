@@ -9,7 +9,7 @@ import com.bearinmind.equalizer314.state.EqPreferencesManager
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Applies the device→preset binding on route change: Undo snapshot, load preset into live state + DP, broadcast. */
+/** Applies the device→preset binding on route change (snapshot the user's EQ, load preset into live state + DP, broadcast) and restores that snapshot when an unbound device routes in. */
 class RouteSwitchCoordinator(
     private val context: Context,
     private val eqPrefs: EqPreferencesManager,
@@ -26,8 +26,11 @@ class RouteSwitchCoordinator(
             return
         }
 
-        // "(none)" / never bound → leave the live DP as-is.
-        val binding = eqPrefs.getDeviceBindingSmart(change.key, change.label) ?: return
+        val binding = eqPrefs.getDeviceBindingSmart(change.key, change.label)
+        if (binding == null) {
+            restoreManualState(change.label)
+            return
+        }
         // "Disable EQ" detach is owned by EqService.handleDeviceRouteLifecycle — bail here.
         if (binding.presetName == EqPreferencesManager.DEVICE_PRESET_DISABLED) return
         val preset = loadCustomPreset(binding.presetName)
@@ -35,11 +38,55 @@ class RouteSwitchCoordinator(
             Log.w(TAG, "Binding for '${binding.label}' references missing preset '${binding.presetName}'")
             return
         }
+        // Same device with its preset still loaded (DP or service restart): keep the user's edits on top of it.
+        if (eqPrefs.getAppliedBindingKey() == change.key &&
+            eqPrefs.getAppliedBindingPreset() == binding.presetName &&
+            eqPrefs.getPresetName() == binding.presetName
+        ) {
+            Log.d(TAG, "'${binding.presetName}' already loaded for '${change.label}' — not re-applied")
+            return
+        }
 
+        // Snapshot only the user's own EQ, never a previous binding's preset, so an unbound device gets it back.
+        if (!liveStateIsDeviceDriven()) eqPrefs.saveLastManualState(eqPrefs.captureLiveEqState()?.toString())
+        applyPreset(preset, binding.presetName)
+        eqPrefs.saveAppliedBinding(change.key, binding.presetName)
+        Log.d(TAG, "Applied '${binding.presetName}' for device '${change.label}'")
+        broadcastApplied(change.label, binding.presetName)
+    }
+
+    /** Live EQ is still the preset a binding loaded — no manual preset change or band edits since. */
+    private fun liveStateIsDeviceDriven(): Boolean {
+        val applied = eqPrefs.getAppliedBindingPreset() ?: return false
+        return eqPrefs.getPresetName() == applied && !eqPrefs.isLiveStateEditedFrom(applied)
+    }
+
+    /** Unbound device routed in (or the binding was removed): put back the EQ the binding replaced, unless the user changed it since. */
+    private fun restoreManualState(label: String) {
+        if (eqPrefs.getAppliedBindingPreset() == null) return
+        val driven = liveStateIsDeviceDriven()
+        eqPrefs.saveAppliedBinding(null, null)
+        if (!driven) {
+            Log.d(TAG, "No binding for '$label' — keeping the user-edited EQ")
+            return
+        }
+        val snapshot = eqPrefs.getLastManualState()
+            ?.let { runCatching { JSONObject(it) }.getOrNull() }
+            ?.takeIf { it.has("bands") }
+        if (snapshot == null) {
+            Log.d(TAG, "No binding for '$label' — no manual-state snapshot to restore")
+            return
+        }
+        val name = snapshot.optString("presetName", "Custom")
+        applyPreset(snapshot, name)
+        eqPrefs.saveLastManualState(null)
+        Log.d(TAG, "No binding for '$label' — restored '$name'")
+        broadcastApplied(label, name)
+    }
+
+    /** Preset-shaped JSON → live prefs + running DP; [name] becomes the loaded preset name. */
+    private fun applyPreset(preset: JSONObject, name: String) {
         val livePrefs = context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE)
-        // Snapshot the current live state so MainActivity's Undo can revert.
-        eqPrefs.saveLastManualState(livePrefs.getString("bands", null))
-
         // CSE presets carry independent leftBands / rightBands — apply per-channel when present.
         val cseOn = preset.optBoolean("channelSideEqEnabled", false)
         val hasLeftRight = cseOn && preset.has("leftBands") && preset.has("rightBands")
@@ -105,14 +152,15 @@ class RouteSwitchCoordinator(
         com.bearinmind.equalizer314.state.PresetChainIo.applyChain(context, preset, eqPrefs, dynamicsManager)
 
         // Persist the preset name — notification "Preset:" line + dropdown read it.
-        eqPrefs.savePresetName(binding.presetName)
+        eqPrefs.savePresetName(name)
+    }
 
-        Log.d(TAG, "Applied '${binding.presetName}' for device '${change.label}'")
+    private fun broadcastApplied(label: String, presetName: String) {
         context.sendBroadcast(
             Intent(ACTION_ROUTE_PRESET_APPLIED)
                 .setPackage(context.packageName)
-                .putExtra(EXTRA_DEVICE_LABEL, change.label)
-                .putExtra(EXTRA_PRESET_NAME, binding.presetName)
+                .putExtra(EXTRA_DEVICE_LABEL, label)
+                .putExtra(EXTRA_PRESET_NAME, presetName)
         )
     }
 

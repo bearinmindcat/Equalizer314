@@ -188,6 +188,7 @@ class EqService : Service() {
                 ACTION_REAPPLY_DEVICE_BINDING -> {
                     // Re-run the coordinator for the routed device; non-routed edits no-op.
                     reapplyCurrentDeviceBinding()
+                    updateNotification()
                 }
                 ACTION_REAPPLY_APP_BINDING -> {
                     // Rebuild the edited package's per-session DPs; no-op outside Session mode.
@@ -522,6 +523,15 @@ class EqService : Service() {
         routingMonitor = monitor
         routeCoordinator = coordinator
         monitor.start()
+        // Seed the routed device from the priority scan so notification/chip have a label before the first emit.
+        if (lastDeviceKey == null) monitor.pickActiveOutput()?.let { d ->
+            DeviceIdentity.keyOf(d)?.let { k ->
+                lastDeviceKey = k
+                lastDeviceLabel = DeviceIdentity.labelOf(d)
+                staticLastDeviceKey = k
+                staticLastDeviceLabel = lastDeviceLabel
+            }
+        }
         startRouteSelectionWatcher()
         startLegacyRouteWatcher()
 
@@ -812,6 +822,10 @@ class EqService : Service() {
                             .setPackage(packageName)
                             .putExtra(EXTRA_SILENT_STOP, true),
                     )
+                    updateNotification()
+                } else {
+                    // Back to System-wide: the routed device's binding drives the preset again (prefs even while DP is off).
+                    reapplyCurrentDeviceBinding()
                     updateNotification()
                 }
                 // Handles both entering (attach) and leaving (release) Session-based reverb.
@@ -1114,7 +1128,11 @@ class EqService : Service() {
         val customPresetsPrefs = getSharedPreferences("custom_presets", Context.MODE_PRIVATE)
         val isRealPreset = activePresetName.isNotBlank() &&
             customPresetsPrefs.contains("preset_$activePresetName")
-        val presetDisplay = if (isRealPreset) activePresetName else "none"
+        val presetDisplay = when {
+            !isRealPreset -> "none"
+            prefs.isLiveStateEditedFrom(activePresetName) -> "$activePresetName (edited)"
+            else -> activePresetName
+        }
         // Three lines — Mode (Session/Device/System), Preset, Device.
         val appPreset = sessionEffects?.getCurrentDrivingPreset()
         val deviceBinding = lastDeviceKey?.let { prefs.getDeviceBinding(it) }

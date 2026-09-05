@@ -6,6 +6,7 @@ import com.bearinmind.equalizer314.dsp.BiquadFilter
 import com.bearinmind.equalizer314.dsp.ParametricEqualizer
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlin.math.abs
 
 class EqPreferencesManager(context: Context) {
 
@@ -92,8 +93,8 @@ class EqPreferencesManager(context: Context) {
 
     // ---- Per-channel EQ persistence (Channel Side EQ) ------------------
 
-    /** Bands → saveState JSON form; public entry points are saveLeftBands / saveRightBands. */
-    private fun serializeBands(eq: ParametricEqualizer, slots: List<Int>? = null): String {
+    /** Bands → saveState JSON form; also the live side of [isEditedFrom]. */
+    fun bandsToJson(eq: ParametricEqualizer, slots: List<Int>? = null): JSONArray {
         val bands = JSONArray()
         for (i in 0 until eq.getBandCount()) {
             val band = eq.getBand(i) ?: continue
@@ -107,8 +108,11 @@ class EqPreferencesManager(context: Context) {
                 if (slots != null && i < slots.size) put("slot", slots[i])
             })
         }
-        return bands.toString()
+        return bands
     }
+
+    private fun serializeBands(eq: ParametricEqualizer, slots: List<Int>? = null): String =
+        bandsToJson(eq, slots).toString()
 
     /** Load a JSON band array into [eq]. True when parsing succeeded (even if empty), false on malformed JSON. */
     private fun loadBands(
@@ -830,13 +834,69 @@ class EqPreferencesManager(context: Context) {
         return healed
     }
 
-    /** Live-EQ snapshot taken before an auto-switch preset apply — MainActivity's Undo. */
+    /** Snapshot of the user's own EQ taken before a device binding replaces it; restored when an unbound device routes in. */
     fun saveLastManualState(json: String?) {
         if (json == null) bindingsPrefs.edit().remove("lastManualState").apply()
         else bindingsPrefs.edit().putString("lastManualState", json).apply()
     }
 
     fun getLastManualState(): String? = bindingsPrefs.getString("lastManualState", null)
+
+    /** Live EQ as preset-shaped JSON plus presetName (the [saveLastManualState] payload); null without saved bands. */
+    fun captureLiveEqState(): JSONObject? {
+        val bands = prefs.getString("bands", null) ?: return null
+        return runCatching {
+            JSONObject().apply {
+                put("presetName", getPresetName())
+                put("bands", JSONArray(bands))
+                put("preamp", getPreampGain().toDouble())
+                val cse = getChannelSideEqEnabled()
+                put("channelSideEqEnabled", cse)
+                if (cse) {
+                    prefs.getString("leftBands", null)?.let { put("leftBands", JSONArray(it)) }
+                    prefs.getString("rightBands", null)?.let { put("rightBands", JSONArray(it)) }
+                    prefs.getString("sharedBands", null)?.let { put("sharedBands", JSONArray(it)) }
+                    put("preampLeft", getPreampLeft().toDouble())
+                    put("preampRight", getPreampRight().toDouble())
+                }
+            }
+        }.getOrNull()
+    }
+
+    /** Device binding the coordinator last loaded into the live EQ; cleared once the EQ is user-driven again. */
+    fun saveAppliedBinding(key: String?, presetName: String?) {
+        val e = bindingsPrefs.edit()
+        if (key == null || presetName == null) e.remove("appliedBindingKey").remove("appliedBindingPreset")
+        else e.putString("appliedBindingKey", key).putString("appliedBindingPreset", presetName)
+        e.apply()
+    }
+
+    fun getAppliedBindingKey(): String? = bindingsPrefs.getString("appliedBindingKey", null)
+
+    fun getAppliedBindingPreset(): String? = bindingsPrefs.getString("appliedBindingPreset", null)
+
+    /** True when the persisted bands/preamp no longer match pool preset [presetName]; false when it isn't a pool preset. */
+    fun isLiveStateEditedFrom(presetName: String): Boolean {
+        val live = prefs.getString("bands", null)?.let { runCatching { JSONArray(it) }.getOrNull() } ?: return false
+        return isEditedFrom(presetName, live, getPreampGain())
+    }
+
+    fun isEditedFrom(presetName: String, liveBands: JSONArray, livePreamp: Float): Boolean {
+        val preset = getCustomPresetJson(presetName)?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return false
+        val presetBands = preset.optJSONArray("bands") ?: return false
+        if (abs(preset.optDouble("preamp", 0.0) - livePreamp) > 0.01) return true
+        if (liveBands.length() != presetBands.length()) return true
+        for (i in 0 until liveBands.length()) {
+            val a = liveBands.optJSONObject(i) ?: return true
+            val b = presetBands.optJSONObject(i) ?: return true
+            if (abs(a.optDouble("frequency") - b.optDouble("frequency")) > 0.01) return true
+            if (abs(a.optDouble("gain") - b.optDouble("gain")) > 0.01) return true
+            if (abs(a.optDouble("q") - b.optDouble("q")) > 0.001) return true
+            if (a.optString("filterType", "BELL") != b.optString("filterType", "BELL")) return true
+            if (a.optBoolean("enabled", true) != b.optBoolean("enabled", true)) return true
+        }
+        return false
+    }
 
     /** Record a device from the routing callback for the Audio Output "devices seen" list. */
     fun rememberSeenDevice(key: String, label: String) {

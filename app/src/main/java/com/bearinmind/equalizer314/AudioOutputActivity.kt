@@ -355,9 +355,8 @@ class AudioOutputActivity : AppCompatActivity() {
                     // dangling — keep as-is
                 }
                 else -> {
+                    // The coordinator loads the pick and sets presetName; writing the name here first would poison its manual-state snapshot.
                     eqPrefs.saveDeviceBinding(EqPreferencesManager.Binding(key, label, pick))
-                    // This dropdown edits the active device, so the pick IS the preset driving audio.
-                    eqPrefs.savePresetName(pick)
                     notifyBindingChanged()
                     Toast.makeText(this, "Bound \"$pick\" to $label", Toast.LENGTH_SHORT).show()
                 }
@@ -552,10 +551,6 @@ class AudioOutputActivity : AppCompatActivity() {
                     }
                     else -> {
                         eqPrefs.saveDeviceBinding(EqPreferencesManager.Binding(key, label, pick))
-                        // If this row IS the active device, apply the pick to the preset name pref immediately — mirrors the top dropdown.
-                        if (key == activeKey) {
-                            eqPrefs.savePresetName(pick)
-                        }
                         notifyBindingChanged()
                         Toast.makeText(this@AudioOutputActivity, "Bound \"$pick\" to $label", Toast.LENGTH_SHORT).show()
                     }
