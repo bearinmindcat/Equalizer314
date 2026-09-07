@@ -1029,7 +1029,13 @@ class  MainActivity : AppCompatActivity() {
         presetDropdown.setText("Flat", false)
 
         val savedBandCount = eqPrefs.getDpBandCount().coerceIn(128, 1024)
-        ParametricToDpConverter.setNumBands(savedBandCount)
+        // Keep a running DP's negotiated count (compat 32 / fallback 127); overriding it rebuilt the DP on every open.
+        if (!EqService.isDpRunning) {
+            ParametricToDpConverter.setNumBands(
+                if (eqPrefs.getDpCompatMode()) com.bearinmind.equalizer314.audio.DynamicsProcessingManager.COMPAT_BAND_COUNT
+                else savedBandCount
+            )
+        }
         dpBandCountSlider.value = savedBandCount.toFloat()
         dpBandCountText.setText(savedBandCount.toString())
 

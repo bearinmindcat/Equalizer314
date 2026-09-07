@@ -721,6 +721,7 @@ class EqService : Service() {
                     if (dynamicsManager.isActive) {
                         p.savePowerState(true)
                         setDpRunning(true)
+                        dpOutputKey = lastDeviceKey
                         syncSystemSoundBypassFromCurrent()
                         applyPersistedMbcConfig()
                         reapplyCurrentDeviceBinding()
@@ -775,6 +776,7 @@ class EqService : Service() {
                     if (dynamicsManager.isActive) {
                         p.savePowerState(true)
                         setDpRunning(true)
+                        dpOutputKey = lastDeviceKey
                         syncSystemSoundBypassFromCurrent()
                         applyPersistedMbcConfig()
                         reapplyCurrentDeviceBinding()
@@ -826,6 +828,8 @@ class EqService : Service() {
             }
             ACTION_PLAYBACK_DETECTED -> {
                 if (!safeStartForeground()) return START_NOT_STICKY
+                // At boot the listener reaches us long before BOOT_COMPLETED does.
+                restoreDpIfPowerOn("Playback detected")
                 val bundle = intent.getBundleExtra(EXTRA_DETECTED_BUNDLE)
                 val detected = mutableMapOf<String, Set<Int>>()
                 var playingNow: Set<String> = emptySet()
@@ -876,13 +880,7 @@ class EqService : Service() {
 
         if (!safeStartForeground()) return START_NOT_STICKY
         // null intent = OS restarted the killed STICKY service — restore the DP if power was on.
-        if (intent == null && !dynamicsManager.isActive) {
-            val p = EqPreferencesManager(this)
-            if (p.getPowerState() && p.getAudioRoutingMode() != 1) {
-                Log.i(TAG, "STICKY restart with power on — restoring DP via AUTO_START")
-                startService(Intent(this, EqService::class.java).setAction(ACTION_AUTO_START))
-            }
-        }
+        if (intent == null) restoreDpIfPowerOn("STICKY restart")
         return START_STICKY
     }
 
@@ -892,6 +890,7 @@ class EqService : Service() {
         dynamicsManager.start(eq)
         val active = dynamicsManager.isActive
         setDpRunning(active)
+        if (active) dpOutputKey = lastDeviceKey
         if (active) {
             syncSystemSoundBypassFromCurrent()
             // Warm start: the monitor won't re-emit the same key — apply the binding explicitly.
@@ -911,6 +910,24 @@ class EqService : Service() {
         routeCoordinator?.onRouteChange(AudioRoutingMonitor.RouteChange(key, label))
         // Disable/recovery lifecycle only — no physical output changed here.
         handleDeviceRouteLifecycle(key, recreateOnActive = false)
+    }
+
+    /** Output key the live DP was created on; a route event for the same key must not rebuild it. */
+    @Volatile
+    private var dpOutputKey: String? = null
+
+    private var lastRestoreAttemptMs = 0L
+
+    /** Power on but no DP (early boot, process restart): restore via AUTO_START, at most every 30 s. */
+    private fun restoreDpIfPowerOn(reason: String) {
+        if (dynamicsManager.isActive || disabledByDevice) return
+        val p = EqPreferencesManager(this)
+        if (!p.getPowerState() || p.getAudioRoutingMode() == 1) return
+        val now = System.currentTimeMillis()
+        if (now - lastRestoreAttemptMs < 30_000L) return
+        lastRestoreAttemptMs = now
+        Log.i(TAG, "$reason with power on — restoring DP via AUTO_START")
+        startService(Intent(this, EqService::class.java).setAction(ACTION_AUTO_START))
     }
 
     /** True while DP is detached by a "Disable EQ" binding; powerOn stays true for auto-resume. */
@@ -959,8 +976,10 @@ class EqService : Service() {
             }
             dynamicsManager.isActive -> {
                 disabledByDevice = false
-                if (recreateOnActive) {
+                // Rebuild only on a real output change.
+                if (recreateOnActive && deviceKey != dpOutputKey) {
                     if (dynamicsManager.reattachActive()) {
+                        dpOutputKey = deviceKey
                         applyPersistedMbcConfig()
                         syncSystemSoundBypassFromCurrent()
                         updateNotification()
