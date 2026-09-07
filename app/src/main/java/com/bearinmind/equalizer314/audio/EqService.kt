@@ -513,6 +513,7 @@ class EqService : Service() {
         // Device auto-switching lives here so it works with MainActivity closed.
         val eqPrefs = EqPreferencesManager(this)
         eqPrefs.migrateSessionPowerState()
+        eqPrefs.migrateAutoGainDefault()
         val coordinator = RouteSwitchCoordinator(this, eqPrefs, dynamicsManager)
         // Per-app session attachment; created before the monitor so onRouteRebuild can reach it.
         sessionEffects = SessionEffectManager(this)

@@ -5,8 +5,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.bearinmind.equalizer314.state.EqPreferencesManager
 import com.google.android.material.materialswitch.MaterialSwitch
 
-/** Groups Channel Settings, Audio Effects Pipeline, and Gain Reduction.
- *  Switches save prefs only — MainActivity applies them on resume. */
+/** Groups Channel Settings, Audio Effects Pipeline, and Gain Reduction; switches save prefs only, MainActivity applies them on resume. */
 class AudioMiscSettingsActivity : AppCompatActivity() {
 
     private lateinit var eqPrefs: EqPreferencesManager

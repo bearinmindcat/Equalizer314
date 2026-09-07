@@ -177,7 +177,7 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Automatically reduces gain to prevent clipping"
+                            android:text="Lowers the whole mix by the largest boost so peaks can't clip. Leave off if your presets already use a negative preamp, or both apply"
                             android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                             android:textColor="?attr/colorOnSurfaceVariant"
                             android:paddingTop="4dp" />

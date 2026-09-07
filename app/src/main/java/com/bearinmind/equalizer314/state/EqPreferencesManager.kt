@@ -274,7 +274,15 @@ class EqPreferencesManager(context: Context) {
     // Auto-gain
     fun saveAutoGainEnabled(enabled: Boolean) { prefs.edit().putBoolean("autoGainEnabled", enabled).apply() }
     // Default ON: pulls EQ peak to ≤ 0 dB so boosts can't clip (issue #57).
-    fun getAutoGainEnabled(): Boolean = prefs.getBoolean("autoGainEnabled", true)
+    fun getAutoGainEnabled(): Boolean = prefs.getBoolean("autoGainEnabled", false)
+
+    /** Auto gain used to default on: installs that never touched the switch keep it on, fresh installs start off. */
+    fun migrateAutoGainDefault() {
+        if (prefs.getBoolean("autoGainDefaultMigrated", false)) return
+        val existingInstall = prefs.contains("bands") || prefs.contains("powerOn")
+        if (existingInstall && !prefs.contains("autoGainEnabled")) saveAutoGainEnabled(true)
+        prefs.edit().putBoolean("autoGainDefaultMigrated", true).apply()
+    }
 
     // Issue #58: hide the foreground notification while the EQ is off (default off).
     fun setHideNotificationWhenOff(enabled: Boolean) { prefs.edit().putBoolean("hideNotifWhenOff", enabled).apply() }

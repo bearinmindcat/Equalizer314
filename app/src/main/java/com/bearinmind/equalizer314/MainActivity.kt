@@ -813,6 +813,7 @@ class  MainActivity : AppCompatActivity() {
 
         eqPrefs = EqPreferencesManager(this)
         eqPrefs.migrateSessionPowerState()
+        eqPrefs.migrateAutoGainDefault()
         stateManager = EqStateManager(this, eqPrefs)
 
         // Fresh-launch DP power reconciliation — never blindly overwrite the powerOn pref with the live flag (issue #28).
