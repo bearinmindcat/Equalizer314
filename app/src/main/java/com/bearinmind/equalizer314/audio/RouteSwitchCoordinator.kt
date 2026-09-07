@@ -23,7 +23,8 @@ class RouteSwitchCoordinator(
 
     private var lastPlaying: Set<String> = emptySet()
 
-    fun onRouteChange(change: AudioRoutingMonitor.RouteChange) {
+    /** [force] (binding edit, mode switch) applies the binding even over a preset the user picked by hand. */
+    fun onRouteChange(change: AudioRoutingMonitor.RouteChange, force: Boolean = false) {
         // Remember the device even without a binding — feeds the "seen devices" list.
         eqPrefs.rememberSeenDevice(change.key, change.label)
 
@@ -56,6 +57,12 @@ class RouteSwitchCoordinator(
             eqPrefs.getPresetName() == binding.presetName
         ) {
             Log.d(TAG, "'${binding.presetName}' already loaded for '${change.label}' — not re-applied")
+            return
+        }
+        // A preset picked by hand on this same device sticks until the device changes.
+        val applied = eqPrefs.getAppliedBindingPreset()
+        if (!force && applied != null && eqPrefs.getAppliedBindingKey() == change.key && eqPrefs.getPresetName() != applied) {
+            Log.d(TAG, "'${eqPrefs.getPresetName()}' picked by hand on '${change.label}' — '${binding.presetName}' not re-applied")
             return
         }
 

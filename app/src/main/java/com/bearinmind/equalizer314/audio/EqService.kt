@@ -45,6 +45,8 @@ class EqService : Service() {
         /** Per-app binding edited — rebuild that package's active per-session DPs. */
         const val ACTION_REAPPLY_APP_BINDING = "com.bearinmind.equalizer314.REAPPLY_APP_BINDING"
         const val EXTRA_BINDING_KEY = "binding_key"
+        /** MainActivity fallback while its service binding is down: push the persisted EQ into the live DP. */
+        const val ACTION_APPLY_PERSISTED_EQ = "com.bearinmind.equalizer314.APPLY_PERSISTED_EQ"
         /** Session-mode power: arm/disarm per-app effects (no global DP); EXTRA_POWER_ON carries the state. */
         const val ACTION_SESSION_POWER = "com.bearinmind.equalizer314.SESSION_POWER"
         const val EXTRA_POWER_ON = "power_on"
@@ -190,9 +192,10 @@ class EqService : Service() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
                 ACTION_REAPPLY_DEVICE_BINDING -> {
-                    // Editing the routed device's own binding cancels a manual Disable-EQ override — the new choice applies as configured.
-                    if (intent.getStringExtra(EXTRA_BINDING_KEY) == lastDeviceKey) manualOverrideDeviceKey = null
-                    reapplyCurrentDeviceBinding()
+                    // Editing the routed device's own binding cancels manual overrides (Disable-EQ power-on, hand-picked preset) — the new choice applies.
+                    val ownBinding = intent.getStringExtra(EXTRA_BINDING_KEY) == lastDeviceKey
+                    if (ownBinding) manualOverrideDeviceKey = null
+                    reapplyCurrentDeviceBinding(force = ownBinding)
                     updateNotification()
                 }
                 ACTION_REAPPLY_APP_BINDING -> {
@@ -617,6 +620,15 @@ class EqService : Service() {
                 }
                 return START_NOT_STICKY
             }
+            ACTION_APPLY_PERSISTED_EQ -> {
+                if (dynamicsManager.isActive) {
+                    loadPersistedParametricEq()?.let { eq ->
+                        dynamicsManager.preampGainDb = EqPreferencesManager(this).getPreampGain()
+                        dynamicsManager.updateFromEqualizer(eq)
+                    }
+                }
+                return START_STICKY
+            }
             ACTION_RELOAD_PREFS -> {
                 val p = EqPreferencesManager(this)
                 p.sanitizeDspSettings()
@@ -880,7 +892,7 @@ class EqService : Service() {
                     updateNotification()
                 } else {
                     // Back to System-wide: the routed device's binding drives the preset again, and power on restarts the global DP.
-                    reapplyCurrentDeviceBinding()
+                    reapplyCurrentDeviceBinding(force = true)
                     routeCoordinator?.onPlayingAppsChanged(currentPlayingPackages, force = true)
                     if (prefs.getPowerState() && !dynamicsManager.isActive) {
                         startService(Intent(this, EqService::class.java).setAction(ACTION_AUTO_START))
@@ -922,10 +934,10 @@ class EqService : Service() {
     }
 
     /** Apply the routed device's binding after every DP start — the monitor's same-key short-circuit won't re-emit. */
-    private fun reapplyCurrentDeviceBinding() {
+    private fun reapplyCurrentDeviceBinding(force: Boolean = false) {
         val key = lastDeviceKey ?: return
         val label = lastDeviceLabel ?: ""
-        routeCoordinator?.onRouteChange(AudioRoutingMonitor.RouteChange(key, label))
+        routeCoordinator?.onRouteChange(AudioRoutingMonitor.RouteChange(key, label), force)
         // Disable/recovery lifecycle only — no physical output changed here.
         handleDeviceRouteLifecycle(key, recreateOnActive = false)
     }
