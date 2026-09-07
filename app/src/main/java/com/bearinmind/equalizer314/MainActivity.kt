@@ -759,8 +759,9 @@ class  MainActivity : AppCompatActivity() {
             edited -> "$activePresetName (edited)"
             else -> activePresetName
         }
-        // Same three-piece logic as EqService.buildNotification's BigText, compacted to one chip line: Mode · Preset · Device.
-        val appPreset = stateManager.eqService?.sessionEffects?.getCurrentDrivingPreset()
+        // Same Mode · Preset · Device logic as EqService.buildNotification; the static mirror covers Session mode, where MainActivity is usually unbound.
+        val appPreset = com.bearinmind.equalizer314.audio.SessionEffectManager.drivingPresetName
+            ?: stateManager.eqService?.sessionEffects?.getCurrentDrivingPreset()
         // Service statics keep the device after DP off; until the service has reported one, scan the outputs directly.
         val guessed = if (EqService.staticLastDeviceKey == null)
             com.bearinmind.equalizer314.audio.AudioRoutingMonitor(this).pickActiveOutput() else null
@@ -776,8 +777,9 @@ class  MainActivity : AppCompatActivity() {
             else -> "System"
         }
         val presetForDisplay = when {
-            routingMode == 1 -> appPreset ?: "none"
-            else -> presetDisplay
+            routingMode != 1 -> presetDisplay
+            appPreset == EqPreferencesManager.DEVICE_PRESET_DISABLED -> "EQ disabled"
+            else -> appPreset ?: "none"
         }
         val deviceLabel = EqService.staticLastDeviceLabel
             ?: guessed?.let { com.bearinmind.equalizer314.audio.DeviceIdentity.labelOf(it) }
@@ -801,6 +803,7 @@ class  MainActivity : AppCompatActivity() {
         }
 
         eqPrefs = EqPreferencesManager(this)
+        eqPrefs.migrateSessionPowerState()
         stateManager = EqStateManager(this, eqPrefs)
 
         // Fresh-launch DP power reconciliation — never blindly overwrite the powerOn pref with the live flag (issue #28).
@@ -1149,9 +1152,7 @@ class  MainActivity : AppCompatActivity() {
             startActivity(Intent(this, LimiterActivity::class.java))
             overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
         }
-        powerFab.setOnClickListener {
-            if (stateManager.isProcessing) stopProcessing() else startProcessing()
-        }
+        powerFab.setOnClickListener { onPowerTap() }
 
         // Visualizer toggle + Edit + Reset + Undo/Redo + Band points toggle + Save preset
         val vizToggle = findViewById<com.google.android.material.button.MaterialButton>(R.id.visualizerToggle)
@@ -2873,9 +2874,7 @@ class  MainActivity : AppCompatActivity() {
                 eqPrefs.saveSpectrumEnabled(true)
             }
         }
-        powerButton.setOnClickListener {
-            if (stateManager.isProcessing) stopProcessing() else startProcessing()
-        }
+        powerButton.setOnClickListener { onPowerTap() }
 
         // EQ toggle — both the text button and the graph-header icon drive the same toggle.
         eqToggleButton.setOnClickListener { toggleEq() }
@@ -4213,6 +4212,23 @@ class  MainActivity : AppCompatActivity() {
 
     // ---- Processing Control ----
 
+    /** Power tap: Session mode arms/disarms the per-app effects (no global DP); otherwise start/stop the global DP. */
+    private fun onPowerTap() {
+        if (eqPrefs.getAudioRoutingMode() == 1) {
+            val on = !eqPrefs.getPowerState()
+            showPowerSnackbar(on, "Per-app EQ")
+            animatePowerFab(on)
+            stateManager.isProcessing = on
+            val svc = Intent(this, EqService::class.java)
+                .setAction(EqService.ACTION_SESSION_POWER)
+                .putExtra(EqService.EXTRA_POWER_ON, on)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(svc) else startService(svc)
+            updateDevicePresetStatus()
+            return
+        }
+        if (stateManager.isProcessing) stopProcessing() else startProcessing()
+    }
+
     private fun startProcessing() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
             Toast.makeText(this, "DynamicsProcessing requires Android 9+", Toast.LENGTH_LONG).show()
@@ -4258,10 +4274,10 @@ class  MainActivity : AppCompatActivity() {
         }, 280)
     }
 
-    private fun showPowerSnackbar(on: Boolean) {
+    private fun showPowerSnackbar(on: Boolean, label: String = "DynamicsProcessing") {
         eqPrefs.savePowerState(on)
         com.bearinmind.equalizer314.ui.BottomNavHelper.updatePowerFab(this, on)
-        val message = if (on) "DynamicsProcessing Start" else "DynamicsProcessing Stop"
+        val message = if (on) "$label Start" else "$label Stop"
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 

@@ -43,11 +43,7 @@ import com.google.android.material.textfield.TextInputLayout
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * Detail screen of the "Channel Input" pipeline card — per-app EQ presets. When an app broadcasts
- * `OPEN_AUDIO_EFFECT_CONTROL_SESSION`, [com.bearinmind.equalizer314.audio.SessionEffectManager]
- * looks up the package's binding and applies the bound preset to its session.
- */
+/** "Channel Input" pipeline card detail: per-app EQ presets, applied by SessionEffectManager when an app opens an audio-effect session. */
 class ChannelInputActivity : AppCompatActivity() {
 
     private lateinit var eqPrefs: EqPreferencesManager
@@ -55,35 +51,29 @@ class ChannelInputActivity : AppCompatActivity() {
     private lateinit var emptyState: TextView
     private lateinit var appsAdapter: AppsAdapter
 
-    // "Now playing" panel — always visible. Shows both broadcast-attached
-    // and NLS-detected sessions.
+    // "Now playing" panel — always visible; broadcast-attached and NLS-detected sessions.
     private lateinit var currentSessionSection: LinearLayout
     private lateinit var currentSessionList: RecyclerView
     private lateinit var currentSessionEmpty: TextView
     private lateinit var sessionsAdapter: ActiveSessionsAdapter
 
-    // Collapsible "Apps" section — mirrors AudioOutputActivity's Devices section: clickable
-    // header, AutoTransition open/close, expanded state in this activity's local SharedPreferences.
+    // Collapsible "Apps" section (like AudioOutput's Devices): clickable header, animated open/close, expanded state in local prefs.
     private lateinit var appsHeader: LinearLayout
     private lateinit var appsBody: LinearLayout
     private lateinit var appsChevron: TextView
     private var appsExpanded = true
 
-    // Persistent "Session detection" toggle card. Switch reflects system Notification access;
-    // tapping routes to system Settings (the only place Android lets a third-party app flip the
-    // listener bind). Body text varies with state.
+    // "Session detection" card: switch mirrors system Notification access, taps go to system Settings (the only place it can be flipped).
     private lateinit var enableDetectionCard: MaterialCardView
     private lateinit var enableDetectionTitle: TextView
     private lateinit var enableDetectionBody: TextView
     private lateinit var enableDetectionSwitch: MaterialSwitch
 
-    // "Skip system sounds" toggle — gates EqService's global-DP bypass on notification/ringtone/
-    // alarm/call streams. Default ON; changes apply immediately via EqService.ACTION_APPLY_BYPASS_PREF.
+    // "Skip system sounds" toggle — gates the global-DP bypass for notification/ringtone/alarm/call streams; default on, applied live.
     private lateinit var bypassSystemSoundsCard: MaterialCardView
     private lateinit var bypassSystemSoundsSwitch: MaterialSwitch
 
-    // Bound EqService for the live attached-session set (SessionEffectManager.getActiveSessions).
-    // Null when not running — the empty card is correct then since no sessions are attached.
+    // Bound EqService for the live session set; null when not running (the empty card is then correct).
     private var eqService: EqService? = null
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
@@ -153,8 +143,7 @@ class ChannelInputActivity : AppCompatActivity() {
         currentSessionList.adapter = sessionsAdapter
         currentSessionList.isNestedScrollingEnabled = false
 
-        // Collapsible Apps section — header click animates the body via AutoTransition (same look
-        // as AudioOutput's Devices section); expanded state persists per-screen.
+        // Collapsible Apps section — header click animates the body; expanded state persists per-screen.
         appsHeader = findViewById(R.id.appsHeader)
         appsBody = findViewById(R.id.appsBody)
         appsChevron = findViewById(R.id.appsChevron)
@@ -171,9 +160,7 @@ class ChannelInputActivity : AppCompatActivity() {
         enableDetectionTitle = findViewById(R.id.enableDetectionTitle)
         enableDetectionBody = findViewById(R.id.enableDetectionBody)
         enableDetectionSwitch = findViewById(R.id.enableDetectionSwitch)
-        // OnClickListener (not OnCheckedChange) so programmatic isChecked updates don't recurse.
-        // Snap the tap-flipped switch back to the real NLS state, then route to system Settings —
-        // the only place BIND_NOTIFICATION_LISTENER_SERVICE can be flipped. onResume re-syncs on return.
+        // Click (not checked-change) listener: snap the switch back to the real NLS state, then open system Settings; onResume re-syncs.
         enableDetectionSwitch.setOnClickListener {
             enableDetectionSwitch.isChecked = isNotificationListenerGranted()
             try {
@@ -185,9 +172,7 @@ class ChannelInputActivity : AppCompatActivity() {
         // Tapping the card body (outside the switch) also goes to Settings — the whole card is the affordance
         enableDetectionCard.setOnClickListener { enableDetectionSwitch.performClick() }
 
-        // "Skip system sounds" toggle — safety default (on) protects against the 127-band FFT
-        // pre-EQ + limiter distorting short transient streams (notifications). Flipping fires
-        // ACTION_APPLY_BYPASS_PREF so it takes effect now, not on the next playback-config callback.
+        // "Skip system sounds" — default on so the pre-EQ + limiter don't distort short notification streams; ACTION_APPLY_BYPASS_PREF applies it now.
         bypassSystemSoundsCard = findViewById(R.id.bypassSystemSoundsCard)
         bypassSystemSoundsSwitch = findViewById(R.id.bypassSystemSoundsSwitch)
         bypassSystemSoundsSwitch.isChecked = eqPrefs.getBypassSystemSounds()
@@ -240,9 +225,7 @@ class ChannelInputActivity : AppCompatActivity() {
         refreshDetectionCtaVisibility()
     }
 
-    /** Compose-style expand/collapse for the Apps section (AppDrawer `AnimatedVisibility` feel):
-     *  ValueAnimator on the body's `layoutParams.height` — no Transition fade, no visibility blink.
-     *  Symmetric [EXPAND_DURATION_MS], FastOutSlowInInterpolator (Compose default); chevron rotates in lockstep. */
+    /** Expand/collapse the Apps section: height animation over [EXPAND_DURATION_MS] (FastOutSlowIn), chevron rotating in lockstep. */
     private fun applyAppsExpanded(animate: Boolean) {
         val targetRotation = if (appsExpanded) 90f else 0f
         if (!animate) {
@@ -259,8 +242,7 @@ class ChannelInputActivity : AppCompatActivity() {
             .start()
     }
 
-    /** Animate [body]'s height between 0 and its measured natural height (shared by every
-     *  collapsible section). After expanding, height restores to WRAP_CONTENT so the section adapts to content changes. */
+    /** Animate [body]'s height between 0 and its natural height; after expanding it returns to WRAP_CONTENT. */
     private fun animateCollapse(body: View, expand: Boolean) {
         val interp = androidx.interpolator.view.animation.FastOutSlowInInterpolator()
         if (expand) {
@@ -320,10 +302,11 @@ class ChannelInputActivity : AppCompatActivity() {
         val granted = isNotificationListenerGranted()
         enableDetectionCard.visibility = View.VISIBLE
         enableDetectionSwitch.isChecked = granted
-        // "Dump services" = reflected ServiceManager.getService("audio").dumpAsync path recovering
-        // session IDs from audioserver; if the OEM denies the dump, MediaSessionManager is the
-        // public-API fallback — same user-facing wording covers both ("lists apps playing audio").
-        enableDetectionBody.text = "Lists apps playing audio using dumpsys"
+        // Mechanism (audioserver dump, or MediaSessionManager when the OEM denies it) stays out of the copy.
+        enableDetectionBody.text = if (granted)
+            "Detects which apps are playing audio so app presets can follow them"
+        else
+            "Needs Notification access. Tap to open the Android setting"
     }
 
     override fun onStop() {
@@ -344,10 +327,7 @@ class ChannelInputActivity : AppCompatActivity() {
             currentSessionList.visibility = View.VISIBLE
             // Resolve icon + label on the fly — usually 1-2 active sessions, negligible cost, no stale cache
             val pm = packageManager
-            // Coalesce by package — apps like Nyx Music Player open two AudioTracks for gapless
-            // playback (two SessionEffectManager entries), but the user binds by package. Pick the
-            // most-informative session per package: BROADCAST beats DETECTED (authoritative), real
-            // positive sessionId beats synthetic negative, isPlaying = OR of the group.
+            // Coalesce by package (gapless players open two sessions): BROADCAST beats DETECTED, real id beats synthetic, isPlaying = any.
             val rows = sessions
                 .groupBy { it.packageName }
                 .map { (pkg, group) ->
@@ -379,8 +359,7 @@ class ChannelInputActivity : AppCompatActivity() {
         val chipGroup = findViewById<ChipGroup>(R.id.routingModeChips)
         val global = findViewById<Chip>(R.id.routingModeGlobal)
         val perApp = findViewById<Chip>(R.id.routingModePerApp)
-        // Map: 0 = System-wide, 1 = Session-based; legacy "2" (Both, from the old 3-mode setup)
-        // reads as System-wide so existing installs migrate.
+        // 0 = System-wide, 1 = Session-based; legacy "2" (Both) reads as System-wide.
         val mode = eqPrefs.getAudioRoutingMode()
         when (mode) {
             1 -> perApp.isChecked = true
@@ -426,19 +405,13 @@ class ChannelInputActivity : AppCompatActivity() {
     }
 
     private fun loadApps() {
-        // PackageManager.getApplicationLabel/Icon are synchronous IPC — several hundred ms on a
-        // 100+-app phone, enough to lag activity open. Enumerate on IO, hand results to the adapter on Main.
+        // Label/icon lookups are slow IPC on big app lists — enumerate on IO, hand results to the adapter on Main.
         startLoadingAnimation()
         lifecycleScope.launch {
             val rows = withContext(Dispatchers.IO) {
                 val pm = packageManager
 
-                // Two modes (appsFilterChips). FILTERED (default) — Wavelet/Poweramp heuristic,
-                // include if ANY of: (a) MEDIA_BUTTON broadcast receiver (Spotify, Poweramp, AIMP…),
-                // (b) MediaBrowserService (Android Auto contract), (c) audio/* MIME handler,
-                // (d) already seen broadcasting a session — plus every app with an existing binding.
-                // SHOW_ALL — every installed app, alphabetical (games etc. that declare none of the
-                // above but still produce audio: eFootball, GTA SA…).
+                // FILTERED (default): media-button receiver, MediaBrowserService, audio/* handler, seen or bound apps. SHOW_ALL: every installed app.
                 val showAll = eqPrefs.getAppListFilterMode() == 1
                 val mediaCandidates: Set<String>? = if (showAll) null else {
                     val mediaButtonApps = pm.queryBroadcastReceivers(
@@ -460,11 +433,7 @@ class ChannelInputActivity : AppCompatActivity() {
                         bindings.keys  // always show bound apps even if filters drop them
                 }
 
-                // Show All: restrict to packages with a launcher activity (ACTION_MAIN +
-                // CATEGORY_LAUNCHER) — getInstalledApplications otherwise returns every package,
-                // including system providers (com.android.providers.*), ad/privacy services
-                // (com.google.android.adservices.api), wallpaper services, and OEM daemons. Bound
-                // packages stay regardless so a stale binding to a non-launchable package is still removable.
+                // Show All: only launchable packages (drops providers/daemons); bound packages stay so stale bindings remain removable.
                 val launchablePackages: Set<String>? = if (showAll) {
                     val launchable = pm.queryIntentActivities(
                         Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0,
@@ -483,8 +452,7 @@ class ChannelInputActivity : AppCompatActivity() {
                             icon = runCatching { pm.getApplicationIcon(info) }.getOrNull(),
                         )
                     }
-                    // Pure alphabetical — no bound/seen-first sorting; the Now playing panel
-                    // already surfaces what's active, keeping the Apps list predictable.
+                    // Pure alphabetical — the Now playing panel already surfaces what's active.
                     .sortedBy { it.label.lowercase() }
             }
 
@@ -555,13 +523,10 @@ class ChannelInputActivity : AppCompatActivity() {
             val r = items[position]
             holder.icon.setImageDrawable(r.icon)
             holder.name.text = r.label
-            // Meta is just the package — source-tag/session-id are implementation detail; the
-            // preset dropdown below already communicates binding state.
+            // Meta is just the package; source/session id are implementation detail.
             holder.meta.text = r.packageName
 
-            // Speaker pulse: animated green when actively outputting, static dim cone when
-            // present-but-silent. Tint driven off the ImageView so the AnimationDrawable's
-            // per-frame tint metadata stays consistent across the loop.
+            // Speaker pulse: animated green while outputting, static dim cone when silent; tint set on the ImageView so frames stay consistent.
             val pulse = holder.pulse.drawable as? android.graphics.drawable.AnimationDrawable
             if (pulse != null) {
                 val tintColor = androidx.core.content.ContextCompat.getColor(
@@ -635,8 +600,7 @@ class ChannelInputActivity : AppCompatActivity() {
         }
     }
 
-    /** Wire a preset-binding dropdown for a row (shared by AppsAdapter and ActiveSessionsAdapter).
-     *  "(none)" removes the binding; a missing-preset row is a no-op. */
+    /** Wire a row's preset-binding dropdown (both adapters): "(none)" unbinds, "Disable EQ" binds the sentinel, a missing-preset row is a no-op. */
     @SuppressLint("ClickableViewAccessibility")
     private fun bindPresetDropdown(
         presetLayout: TextInputLayout,
@@ -648,8 +612,13 @@ class ChannelInputActivity : AppCompatActivity() {
     ) {
         val knownNames = listCustomPresetNames()
         val binding = eqPrefs.getAppBinding(packageName)
-        val currentSelection = binding?.presetName ?: "(none)"
-        val missing = binding != null && binding.presetName !in knownNames
+        val isDisable = binding?.presetName == EqPreferencesManager.DEVICE_PRESET_DISABLED
+        val currentSelection = when {
+            binding == null -> "(none)"
+            isDisable -> EqPreferencesManager.PRESET_DISABLED_LABEL
+            else -> binding.presetName
+        }
+        val missing = binding != null && !isDisable && binding.presetName !in knownNames
         val entries = buildPresetEntries(if (missing) binding!!.presetName else null)
 
         dropdown.setText(
@@ -676,6 +645,11 @@ class ChannelInputActivity : AppCompatActivity() {
                     notifyAppBindingChanged(packageName)
                     Toast.makeText(this, "Unbound $appLabel", Toast.LENGTH_SHORT).show()
                 }
+                pick == EqPreferencesManager.PRESET_DISABLED_LABEL -> {
+                    eqPrefs.saveAppBinding(EqPreferencesManager.AppBinding(packageName, EqPreferencesManager.DEVICE_PRESET_DISABLED))
+                    notifyAppBindingChanged(packageName)
+                    Toast.makeText(this, "EQ disabled for $appLabel", Toast.LENGTH_SHORT).show()
+                }
                 pick.endsWith(" (missing)") -> { /* dangling */ }
                 else -> {
                     eqPrefs.saveAppBinding(EqPreferencesManager.AppBinding(packageName, pick))
@@ -687,8 +661,7 @@ class ChannelInputActivity : AppCompatActivity() {
         }
     }
 
-    /** Rebuild any per-session DP for [audioAppPackage] so the binding edit takes effect on live
-     *  audio without restarting the audio app — mirrors AudioOutputActivity's notifyBindingChanged. */
+    /** Rebuild any per-session DP for [audioAppPackage] so a binding edit hits live audio (mirrors AudioOutputActivity.notifyBindingChanged). */
     private fun notifyAppBindingChanged(audioAppPackage: String) {
         sendBroadcast(
             Intent(com.bearinmind.equalizer314.audio.EqService.ACTION_REAPPLY_APP_BINDING)
@@ -721,6 +694,8 @@ class ChannelInputActivity : AppCompatActivity() {
     private fun buildPresetEntries(missingPresetName: String?): List<PresetDropdownAdapter.Entry> {
         val out = mutableListOf<PresetDropdownAdapter.Entry>()
         out.add(PresetDropdownAdapter.Entry("(none)", null))
+        // "Disable EQ" = no per-app DP while this app plays, mirroring the device dropdown.
+        out.add(PresetDropdownAdapter.Entry(EqPreferencesManager.PRESET_DISABLED_LABEL, null, isDisable = true))
         for (name in listCustomPresetNames()) {
             out.add(PresetDropdownAdapter.Entry(name, loadPresetJson(name)))
         }
@@ -730,8 +705,7 @@ class ChannelInputActivity : AppCompatActivity() {
         return out
     }
 
-    /** Same pattern as AudioOutputActivity — runtime-sized ripple foreground on the TextInputLayout
-     *  so the dropdown box's ripple stays exactly inside the outline rectangle. */
+    /** Runtime-sized ripple foreground on the TextInputLayout so it stays inside the outline (same as AudioOutputActivity). */
     private fun applyBoxOutlineRipple(layout: TextInputLayout, dropdown: android.view.View) {
         layout.viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
             override fun onPreDraw(): Boolean {
@@ -769,8 +743,7 @@ class ChannelInputActivity : AppCompatActivity() {
 
     companion object {
         private const val PREF_APPS_EXPANDED = "appsExpanded"
-        /** Apps section open/close duration — past Compose's 300 ms `AnimatedVisibility` default
-         *  toward Material's "Emphasized" ≈500 ms so the slide reads deliberate. */
+        /** Apps section open/close duration (Material "Emphasized" ≈500 ms). */
         private const val EXPAND_DURATION_MS = 500L
     }
 }

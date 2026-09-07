@@ -24,8 +24,9 @@ class EqPreferencesManager(context: Context) {
     data class Binding(val key: String, val label: String, val presetName: String)
 
     companion object {
-        /** Reserved presetName: detach DP entirely while this device is routed (distinct from "(none)"). */
+        /** Reserved presetName for device and app bindings: no EQ while that device/app is active (distinct from "(none)"). */
         const val DEVICE_PRESET_DISABLED = "__disable_eq__"
+        const val PRESET_DISABLED_LABEL = "Disable EQ"
 
         // Mirrors SimpleEqController.FREQUENCIES/.Q — change together.
         private val SIMPLE_FREQS = floatArrayOf(31f, 63f, 125f, 250f, 500f, 1000f, 2000f, 4000f, 8000f, 16000f)
@@ -505,6 +506,13 @@ class EqPreferencesManager(context: Context) {
     // Power state (for instant FAB sync across screens)
     fun savePowerState(on: Boolean) { prefs.edit().putBoolean("powerOn", on).apply() }
     fun getPowerState(): Boolean = prefs.getBoolean("powerOn", false)
+
+    /** One-time upgrade: Session mode used to force powerOn=false while per-app EQs still ran, so carry those installs over as "on". */
+    fun migrateSessionPowerState() {
+        if (prefs.getBoolean("sessionPowerMigrated", false)) return
+        if (getAudioRoutingMode() == 1) savePowerState(true)
+        prefs.edit().putBoolean("sessionPowerMigrated", true).apply()
+    }
 
     // Target
     fun saveSelectedTarget(file: String) { prefs.edit().putString("selectedTarget", file).apply() }

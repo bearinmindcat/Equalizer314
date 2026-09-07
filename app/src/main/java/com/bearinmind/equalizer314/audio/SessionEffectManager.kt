@@ -144,6 +144,8 @@ class SessionEffectManager(private val context: Context) {
 
         // Synthetic id = no real stream; skip attach.
         if (sessionId <= 0) return
+        // Power off: the master switch covers per-app effects too — track for the UI, attach nothing.
+        if (!eqPrefs.getPowerState()) return
 
         // Reverb is independent of the EQ binding — attach when the pipeline toggle is on.
         if (eqPrefs.isAudioEffectEnabled(EFFECT_REVERB_NAME)) {
@@ -152,6 +154,11 @@ class SessionEffectManager(private val context: Context) {
 
         if (binding == null) {
             Log.d(TAG, "No binding for $packageName — tracking only (session=$sessionId source=$source)")
+            return
+        }
+        if (binding.presetName == EqPreferencesManager.DEVICE_PRESET_DISABLED) {
+            sessions.remove(sessionId)?.let { try { it.release() } catch (_: Throwable) {} }
+            Log.d(TAG, "EQ disabled for $packageName — no DP on session $sessionId")
             return
         }
 
@@ -215,6 +222,21 @@ class SessionEffectManager(private val context: Context) {
             }
         }
         if (changed) notifySessionsChanged()
+    }
+
+    /** Session-mode power toggle: release per-session effects (tracking kept) or re-attach every tracked session. */
+    @Synchronized
+    fun setArmed(armed: Boolean) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
+        if (!armed) {
+            for ((_, dp) in sessions) { try { dp.release() } catch (_: Throwable) {} }
+            sessions.clear()
+            for ((_, r) in reverbs) { try { r.release() } catch (_: Throwable) {} }
+            reverbs.clear()
+            Log.d(TAG, "Per-app effects released (power off)")
+            return
+        }
+        for ((sid, info) in sessionInfo.toMap()) attach(sid, info.packageName, info.source)
     }
 
     /** Re-evaluate per-session DP attachment on a routing-mode change. */

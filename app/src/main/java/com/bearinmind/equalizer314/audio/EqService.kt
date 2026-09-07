@@ -44,6 +44,9 @@ class EqService : Service() {
         const val ACTION_REAPPLY_DEVICE_BINDING = "com.bearinmind.equalizer314.REAPPLY_DEVICE_BINDING"
         /** Per-app binding edited — rebuild that package's active per-session DPs. */
         const val ACTION_REAPPLY_APP_BINDING = "com.bearinmind.equalizer314.REAPPLY_APP_BINDING"
+        /** Session-mode power: arm/disarm per-app effects (no global DP); EXTRA_POWER_ON carries the state. */
+        const val ACTION_SESSION_POWER = "com.bearinmind.equalizer314.SESSION_POWER"
+        const val EXTRA_POWER_ON = "power_on"
         const val EXTRA_APP_PACKAGE = "app_package"
         const val ACTION_EQ_STOPPED = "com.bearinmind.equalizer314.EQ_STOPPED"
         const val EXTRA_SILENT_TOAST = "silentToast"
@@ -501,6 +504,7 @@ class EqService : Service() {
 
         // Device auto-switching lives here so it works with MainActivity closed.
         val eqPrefs = EqPreferencesManager(this)
+        eqPrefs.migrateSessionPowerState()
         val coordinator = RouteSwitchCoordinator(this, eqPrefs, dynamicsManager)
         // Per-app session attachment; created before the monitor so onRouteRebuild can reach it.
         sessionEffects = SessionEffectManager(this)
@@ -641,10 +645,20 @@ class EqService : Service() {
                 }
                 return START_NOT_STICKY
             }
+            ACTION_SESSION_POWER -> {
+                if (!safeStartForeground()) return START_NOT_STICKY
+                val on = intent.getBooleanExtra(EXTRA_POWER_ON, true)
+                EqPreferencesManager(this).savePowerState(on)
+                sessionEffects?.setArmed(on)
+                updateNotification()
+                return START_STICKY
+            }
             ACTION_STOP -> {
                 manualOverrideDeviceKey = null
                 dynamicsManager.stop()
-                sessionEffects?.releaseAll()
+                // Session mode: drop the per-app effects but keep the tracked sessions for the UI.
+                if (EqPreferencesManager(this).getAudioRoutingMode() == 1) sessionEffects?.setArmed(false)
+                else sessionEffects?.releaseAll()
                 // Persist power-off so tile/notification taps sync when MainActivity is gone.
                 EqPreferencesManager(this).savePowerState(false)
                 setDpRunning(false)
@@ -659,6 +673,18 @@ class EqService : Service() {
             ACTION_START_FROM_TILE -> {
                 Log.d(TAG, "ACTION_START_FROM_TILE — toggle requested, dynamicsManager.isActive=${dynamicsManager.isActive}")
                 if (!safeStartForeground()) return START_NOT_STICKY
+                EqPreferencesManager(this).let { p ->
+                    if (p.getAudioRoutingMode() == 1) {
+                        // Session mode: the tile toggles the per-app effects, never a global DP.
+                        val on = !p.getPowerState()
+                        p.savePowerState(on)
+                        sessionEffects?.setArmed(on)
+                        showDpStateToast(started = on)
+                        sendBroadcast(Intent(if (on) ACTION_EQ_STARTED else ACTION_EQ_STOPPED).setPackage(packageName))
+                        updateNotification()
+                        return START_STICKY
+                    }
+                }
                 if (dynamicsManager.isActive) {
                     // Tile tap while running — toggle off, service stays alive for Turn On.
                     manualOverrideDeviceKey = null
@@ -717,6 +743,16 @@ class EqService : Service() {
                 Log.d(TAG, "ACTION_AUTO_START — boot/cold-open restore, dynamicsManager.isActive=${dynamicsManager.isActive}")
                 if (!safeStartForeground()) return START_NOT_STICKY
                 if (dynamicsManager.isActive) return START_STICKY
+                EqPreferencesManager(this).let { p ->
+                    if (p.getAudioRoutingMode() == 1) {
+                        // Session mode has no global DP — "on" arms the per-app effects.
+                        p.savePowerState(true)
+                        sessionEffects?.setArmed(true)
+                        sendBroadcast(Intent(ACTION_EQ_STARTED).setPackage(packageName))
+                        updateNotification()
+                        return START_STICKY
+                    }
+                }
                 val eq = loadPersistedParametricEq()
                 if (eq != null) {
                     val p = EqPreferencesManager(this)
@@ -814,9 +850,7 @@ class EqService : Service() {
                 if (prefs.getAudioRoutingMode() == 1) {
                     dynamicsManager.stop()
                     setDpRunning(false)
-                    // Session mode has no global DP — power-off persists here, not in the silent-stop receiver (issue #91).
-                    prefs.savePowerState(false)
-                    // Silent stop — routing-mode flip, not a power tap.
+                    // Silent stop (mode flip, not a power tap); power state stays and arms the per-app effects below.
                     sendBroadcast(
                         Intent(ACTION_EQ_STOPPED)
                             .setPackage(packageName)
@@ -824,8 +858,11 @@ class EqService : Service() {
                     )
                     updateNotification()
                 } else {
-                    // Back to System-wide: the routed device's binding drives the preset again (prefs even while DP is off).
+                    // Back to System-wide: the routed device's binding drives the preset again, and power on restarts the global DP.
                     reapplyCurrentDeviceBinding()
+                    if (prefs.getPowerState() && !dynamicsManager.isActive) {
+                        startService(Intent(this, EqService::class.java).setAction(ACTION_AUTO_START))
+                    }
                     updateNotification()
                 }
                 // Handles both entering (attach) and leaving (release) Session-based reverb.
@@ -1088,8 +1125,9 @@ class EqService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Notification mirrors live DP state; service stays alive across the toggle.
-        val isOn = dynamicsManager.isActive
+        val prefs = EqPreferencesManager(this)
+        // Notification mirrors live DP state; in Session mode "on" means the per-app effects are armed.
+        val isOn = dynamicsManager.isActive || (prefs.getAudioRoutingMode() == 1 && prefs.getPowerState())
         val toggleIntent = Intent(this, EqService::class.java).apply {
             action = if (isOn) ACTION_STOP else ACTION_AUTO_START
         }
@@ -1121,7 +1159,6 @@ class EqService : Service() {
             .addAction(R.drawable.ic_nav_power, actionLabel, togglePending)
 
         // BigText body: preset + device on both Online and Offline.
-        val prefs = EqPreferencesManager(this)
         val routingMode = prefs.getAudioRoutingMode()
         val activePresetName = prefs.getPresetName()
         // Only names backed by custom_presets count — other labels display as "none".
@@ -1145,8 +1182,9 @@ class EqService : Service() {
             else -> "System"
         }
         val presetForDisplay = when {
-            routingMode == 1 -> appPreset ?: "none"
-            else -> presetDisplay
+            routingMode != 1 -> presetDisplay
+            appPreset == EqPreferencesManager.DEVICE_PRESET_DISABLED -> "EQ disabled"
+            else -> appPreset ?: "none"
         }
         val modeLine = "Mode: $mode"
         val presetLine = "Preset: $presetForDisplay"
