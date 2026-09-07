@@ -194,11 +194,16 @@ class EqService : Service() {
                     updateNotification()
                 }
                 ACTION_REAPPLY_APP_BINDING -> {
-                    // Rebuild the edited package's per-session DPs; no-op outside Session mode.
+                    // Session mode: rebuild the edited package's per-session DPs; System-wide: re-evaluate the playing set.
                     val pkg = intent.getStringExtra(EXTRA_APP_PACKAGE)
                     if (pkg != null) {
                         sessionEffects?.reapplyBindingFor(pkg)
                     }
+                    if (routeCoordinator?.onPlayingAppsChanged(currentPlayingPackages, force = true) == true) {
+                        reapplyCurrentDeviceBinding()
+                        applyDpEnabled()
+                    }
+                    updateNotification()
                 }
                 else -> {
                     intent?.getStringExtra(RouteSwitchCoordinator.EXTRA_DEVICE_LABEL)?.let {
@@ -237,7 +242,7 @@ class EqService : Service() {
         if (prefs.getAudioRoutingMode() == 1) return   // Session-based: no global DP
         if (!prefs.getPowerState()) return              // EQ powered off
         if (!dynamicsManager.isActive) return
-        if (!dynamicsManager.hasLostControl()) return
+        if (!dynamicsManager.hasLostControl(expectedDpEnabled())) return
         if (!dynamicsManager.reclaimCooldownElapsed()) return
         Log.w(TAG, "Watchdog: global DP lost control — reattaching")
         if (dynamicsManager.reattachActive()) {
@@ -268,6 +273,8 @@ class EqService : Service() {
 
     private val playbackSettleVerify = Runnable { verifyAndReclaimGlobalDp() }
     private var lastPlayingPackages: Set<String> = emptySet()
+    /** Latest playing set from the listener (every snapshot, empty included) — app-binding re-evaluation input. */
+    private var currentPlayingPackages: Set<String> = emptySet()
     private var lastForcedReattachMs = 0L
 
     /** A new playing app can strand the chain while health reads green — reattach unconditionally (issue #47). */
@@ -290,25 +297,24 @@ class EqService : Service() {
         }
     }
 
-    /** Drive the bypass from active playback usages — transition-driven, pref-gated. */
+    /** Drive the bypass flag from active playback usages (pref-gated), then re-derive the DP enable. */
     private fun applySystemSoundBypass(configs: List<AudioPlaybackConfiguration>) {
         val bypassEnabled = EqPreferencesManager(this).getBypassSystemSounds()
-        if (!bypassEnabled) {
-            if (systemSoundBypassActive) {
-                systemSoundBypassActive = false
-                if (dynamicsManager.isActive) dynamicsManager.setEnabled(true)
-                Log.d(TAG, "system-sound bypass disabled by user — DP re-enabled")
-            }
-            return
+        val anySystemSound = bypassEnabled && configs.any { c -> c.audioAttributes.usage in BYPASS_USAGES }
+        if (anySystemSound != systemSoundBypassActive) {
+            systemSoundBypassActive = anySystemSound
+            Log.d(TAG, "system sound ${if (anySystemSound) "started — DP bypassed" else "stopped — DP re-enabled"}")
         }
-        val anySystemSound = configs.any { c -> c.audioAttributes.usage in BYPASS_USAGES }
-        if (anySystemSound == systemSoundBypassActive) return
-        systemSoundBypassActive = anySystemSound
-        if (dynamicsManager.isActive) {
-            // Global DP only — per-session DPs never see notification audio.
-            dynamicsManager.setEnabled(!anySystemSound)
-            Log.d(TAG, "system sound ${if (anySystemSound) "started" else "stopped"} — DP ${if (anySystemSound) "bypassed" else "re-enabled"}")
-        }
+        applyDpEnabled()
+    }
+
+    /** Global DP enable = user EQ toggle AND no system-sound bypass AND no playing app bound to "Disable EQ". */
+    private fun expectedDpEnabled(): Boolean =
+        EqPreferencesManager(this).getEqEnabled() && !systemSoundBypassActive && routeCoordinator?.appDisableActive != true
+
+    private fun applyDpEnabled() {
+        if (!dynamicsManager.isActive) return
+        dynamicsManager.setEnabled(expectedDpEnabled())
     }
 
     /** One-shot bypass evaluation at DP start. */
@@ -845,6 +851,13 @@ class EqService : Service() {
                 }
                 sessionEffects?.observeDetectedPlayback(detected, playingNow)
                 onPlayingPackagesChanged(playingNow)
+                currentPlayingPackages = playingNow
+                // App bindings in System-wide mode: a playing bound app drives (or bypasses) the global DP.
+                if (routeCoordinator?.onPlayingAppsChanged(playingNow) == true) {
+                    reapplyCurrentDeviceBinding()
+                    applyDpEnabled()
+                    updateNotification()
+                }
                 return START_STICKY
             }
             ACTION_APPLY_ROUTING_MODE -> {
@@ -852,6 +865,7 @@ class EqService : Service() {
                 // Session-based never runs a parallel session-0 instance — stop the global DP.
                 val prefs = EqPreferencesManager(this)
                 if (prefs.getAudioRoutingMode() == 1) {
+                    routeCoordinator?.endAppOverride()
                     dynamicsManager.stop()
                     setDpRunning(false)
                     // Silent stop (mode flip, not a power tap); power state stays and arms the per-app effects below.
@@ -864,6 +878,7 @@ class EqService : Service() {
                 } else {
                     // Back to System-wide: the routed device's binding drives the preset again, and power on restarts the global DP.
                     reapplyCurrentDeviceBinding()
+                    routeCoordinator?.onPlayingAppsChanged(currentPlayingPackages, force = true)
                     if (prefs.getPowerState() && !dynamicsManager.isActive) {
                         startService(Intent(this, EqService::class.java).setAction(ACTION_AUTO_START))
                     }
@@ -1010,8 +1025,9 @@ class EqService : Service() {
         dynamicsManager.updateFromEqualizers(leftEq, rightEq)
     }
 
+    /** MainActivity's EQ toggle (pref already saved) — folded into the combined enable. */
     fun setEqEnabled(enabled: Boolean) {
-        dynamicsManager.setEnabled(enabled)
+        if (!enabled) dynamicsManager.setEnabled(false) else applyDpEnabled()
     }
 
     fun updateMbc(bands: List<DynamicsProcessingManager.MbcBandParams>, crossovers: FloatArray) {
@@ -1191,19 +1207,25 @@ class EqService : Service() {
         }
         // Three lines — Mode (Session/Device/System), Preset, Device.
         val appPreset = sessionEffects?.getCurrentDrivingPreset()
+        val appAttached = sessionEffects?.isDrivingPresetAttached() == true
+        val appliedApp = prefs.getAppliedAppPreset()
         val deviceBinding = lastDeviceKey?.let { prefs.getDeviceBinding(it) }
         val deviceDrivesPreset = routingMode != 1 &&
             deviceBinding != null &&
             deviceBinding.presetName == activePresetName
         val mode = when {
             routingMode == 1 -> "Session"
+            appliedApp != null -> "App"
             deviceDrivesPreset -> "Device"
             else -> "System"
         }
         val presetForDisplay = when {
+            routingMode != 1 && appliedApp == EqPreferencesManager.DEVICE_PRESET_DISABLED -> "EQ disabled"
             routingMode != 1 -> presetDisplay
             appPreset == EqPreferencesManager.DEVICE_PRESET_DISABLED -> "EQ disabled"
-            else -> appPreset ?: "none"
+            appPreset == null -> "none"
+            appAttached -> appPreset
+            else -> "$appPreset (not attached)"
         }
         val modeLine = "Mode: $mode"
         val presetLine = "Preset: $presetForDisplay"

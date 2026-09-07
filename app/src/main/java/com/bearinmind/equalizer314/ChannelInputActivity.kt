@@ -171,6 +171,13 @@ class ChannelInputActivity : AppCompatActivity() {
         }
         // Tapping the card body (outside the switch) also goes to Settings — the whole card is the affordance
         enableDetectionCard.setOnClickListener { enableDetectionSwitch.performClick() }
+        enableDetectionCard.setOnLongClickListener {
+            val cmd = "adb shell pm grant $packageName android.permission.DUMP"
+            (getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager)
+                ?.setPrimaryClip(android.content.ClipData.newPlainText("adb", cmd))
+            Toast.makeText(this, "adb command copied", Toast.LENGTH_SHORT).show()
+            true
+        }
 
         // "Skip system sounds" — default on so the pre-EQ + limiter don't distort short notification streams; ACTION_APPLY_BYPASS_PREF applies it now.
         bypassSystemSoundsCard = findViewById(R.id.bypassSystemSoundsCard)
@@ -302,11 +309,14 @@ class ChannelInputActivity : AppCompatActivity() {
         val granted = isNotificationListenerGranted()
         enableDetectionCard.visibility = View.VISIBLE
         enableDetectionSwitch.isChecked = granted
-        // Mechanism (audioserver dump, or MediaSessionManager when the OEM denies it) stays out of the copy.
-        enableDetectionBody.text = if (granted)
-            "Detects which apps are playing audio so app presets can follow them"
-        else
-            "Needs Notification access. Tap to open the Android setting"
+        // DUMP (adb-granted) unlocks session ids for apps that never announce one; long-press copies the command.
+        val dumpGranted = checkSelfPermission(android.Manifest.permission.DUMP) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        enableDetectionBody.text = when {
+            !granted -> "Needs Notification access. Tap to open the Android setting"
+            dumpGranted -> "Detects which apps are playing audio so app presets can follow them. Enhanced detection is on"
+            else -> "Detects which apps are playing audio so app presets can follow them. Long-press to copy the adb command for enhanced detection (session ids for every app)"
+        }
     }
 
     override fun onStop() {

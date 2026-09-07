@@ -883,6 +883,25 @@ class EqPreferencesManager(context: Context) {
 
     fun getAppliedBindingPreset(): String? = bindingsPrefs.getString("appliedBindingPreset", null)
 
+    /** App binding driving the global EQ while that app plays (System-wide), plus the pre-app snapshot it replaced. */
+    fun saveAppliedAppBinding(packageName: String?, presetName: String?) {
+        val e = bindingsPrefs.edit()
+        if (packageName == null || presetName == null) e.remove("appliedAppPackage").remove("appliedAppPreset")
+        else e.putString("appliedAppPackage", packageName).putString("appliedAppPreset", presetName)
+        e.apply()
+    }
+
+    fun getAppliedAppPackage(): String? = bindingsPrefs.getString("appliedAppPackage", null)
+
+    fun getAppliedAppPreset(): String? = bindingsPrefs.getString("appliedAppPreset", null)
+
+    fun saveAppOverrideSnapshot(json: String?) {
+        if (json == null) bindingsPrefs.edit().remove("appOverrideSnapshot").apply()
+        else bindingsPrefs.edit().putString("appOverrideSnapshot", json).apply()
+    }
+
+    fun getAppOverrideSnapshot(): String? = bindingsPrefs.getString("appOverrideSnapshot", null)
+
     /** True when the persisted bands/preamp no longer match pool preset [presetName]; false when it isn't a pool preset. */
     fun isLiveStateEditedFrom(presetName: String): Boolean {
         val live = prefs.getString("bands", null)?.let { runCatching { JSONArray(it) }.getOrNull() } ?: return false
@@ -893,18 +912,23 @@ class EqPreferencesManager(context: Context) {
         val preset = getCustomPresetJson(presetName)?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return false
         val presetBands = preset.optJSONArray("bands") ?: return false
         if (abs(preset.optDouble("preamp", 0.0) - livePreamp) > 0.01) return true
-        if (liveBands.length() != presetBands.length()) return true
-        for (i in 0 until liveBands.length()) {
-            val a = liveBands.optJSONObject(i) ?: return true
-            val b = presetBands.optJSONObject(i) ?: return true
+        // Bypassed bands (Table mode placeholder rows) shape nothing — compare the enabled ones only.
+        val live = enabledBands(liveBands)
+        val ref = enabledBands(presetBands)
+        if (live.size != ref.size) return true
+        for (i in live.indices) {
+            val a = live[i]
+            val b = ref[i]
             if (abs(a.optDouble("frequency") - b.optDouble("frequency")) > 0.01) return true
             if (abs(a.optDouble("gain") - b.optDouble("gain")) > 0.01) return true
             if (abs(a.optDouble("q") - b.optDouble("q")) > 0.001) return true
             if (a.optString("filterType", "BELL") != b.optString("filterType", "BELL")) return true
-            if (a.optBoolean("enabled", true) != b.optBoolean("enabled", true)) return true
         }
         return false
     }
+
+    private fun enabledBands(arr: JSONArray): List<JSONObject> =
+        (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }.filter { it.optBoolean("enabled", true) }
 
     /** Record a device from the routing callback for the Audio Output "devices seen" list. */
     fun rememberSeenDevice(key: String, label: String) {

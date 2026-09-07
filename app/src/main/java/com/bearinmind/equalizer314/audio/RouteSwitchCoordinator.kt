@@ -9,12 +9,19 @@ import com.bearinmind.equalizer314.state.EqPreferencesManager
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Applies the device→preset binding on route change (snapshot the user's EQ, load preset into live state + DP, broadcast) and restores that snapshot when an unbound device routes in. */
+/** Applies device→preset bindings on route change and app→preset bindings while a bound app plays (System-wide): snapshot the EQ being replaced, load the preset into live state + DP, broadcast, restore when the binding ends. */
 class RouteSwitchCoordinator(
     private val context: Context,
     private val eqPrefs: EqPreferencesManager,
     private val dynamicsManager: DynamicsProcessingManager,
 ) {
+
+    /** A playing app bound to "Disable EQ" (System-wide) — EqService bypasses the global DP while it lasts. */
+    @Volatile
+    var appDisableActive = false
+        private set
+
+    private var lastPlaying: Set<String> = emptySet()
 
     fun onRouteChange(change: AudioRoutingMonitor.RouteChange) {
         // Remember the device even without a binding — feeds the "seen devices" list.
@@ -23,6 +30,11 @@ class RouteSwitchCoordinator(
         // Auto-switch off: still populate seen-devices, never overwrite the loaded preset.
         if (!eqPrefs.getDeviceAutoSwitchEnabled()) {
             Log.d(TAG, "Auto-switch disabled — keeping current preset on route change to '${change.label}'")
+            return
+        }
+        // App wins while it plays; the device binding is re-run when the app override ends.
+        if (appPresetDriving()) {
+            Log.d(TAG, "App preset active — device binding for '${change.label}' deferred")
             return
         }
 
@@ -53,6 +65,78 @@ class RouteSwitchCoordinator(
         eqPrefs.saveAppliedBinding(change.key, binding.presetName)
         Log.d(TAG, "Applied '${binding.presetName}' for device '${change.label}'")
         broadcastApplied(change.label, binding.presetName)
+    }
+
+    private fun appPresetDriving(): Boolean =
+        eqPrefs.getAppliedAppPreset().let { it != null && it != EqPreferencesManager.DEVICE_PRESET_DISABLED }
+
+    /** Playing-set update (System-wide): the first playing bound app drives the EQ, "Disable EQ" bypasses it. Returns true when anything changed. */
+    fun onPlayingAppsChanged(playing: Set<String>, force: Boolean = false): Boolean {
+        if (eqPrefs.getAudioRoutingMode() == 1) return endAppOverride()
+        if (!force && playing == lastPlaying) return false
+        lastPlaying = playing
+        val prevPkg = eqPrefs.getAppliedAppPackage()
+        val prevPreset = eqPrefs.getAppliedAppPreset()
+        // Keep the current driver while it still plays; otherwise the first playing bound app.
+        val pick = (listOfNotNull(prevPkg) + playing.sorted())
+            .filter { it in playing }
+            .firstNotNullOfOrNull { pkg -> eqPrefs.getAppBinding(pkg)?.let { pkg to it.presetName } }
+        if (pick == null) return endAppOverride()
+        val (pkg, presetName) = pick
+        if (presetName == EqPreferencesManager.DEVICE_PRESET_DISABLED) {
+            if (prevPreset != null && prevPreset != EqPreferencesManager.DEVICE_PRESET_DISABLED) endAppOverride()
+            val changed = !appDisableActive || prevPkg != pkg
+            appDisableActive = true
+            eqPrefs.saveAppliedAppBinding(pkg, presetName)
+            if (changed) {
+                Log.d(TAG, "EQ disabled while '$pkg' plays")
+                broadcastApplied(null, eqPrefs.getPresetName())
+            }
+            return changed
+        }
+        appDisableActive = false
+        if (prevPkg == pkg && prevPreset == presetName && eqPrefs.getPresetName() == presetName) return false
+        val preset = loadCustomPreset(presetName)
+        if (preset == null) {
+            Log.w(TAG, "Binding for '$pkg' references missing preset '$presetName'")
+            return false
+        }
+        // Snapshot what the first app override replaces; a second app in a row keeps that snapshot.
+        if (prevPreset == null || prevPreset == EqPreferencesManager.DEVICE_PRESET_DISABLED) {
+            eqPrefs.saveAppOverrideSnapshot(eqPrefs.captureLiveEqState()?.toString())
+        }
+        applyPreset(preset, presetName)
+        eqPrefs.saveAppliedAppBinding(pkg, presetName)
+        Log.d(TAG, "Applied '$presetName' while '$pkg' plays")
+        broadcastApplied(null, presetName)
+        return true
+    }
+
+    /** Bound app stopped (or mode left System-wide): put back the EQ it replaced unless the user edited it since. */
+    fun endAppOverride(): Boolean {
+        val applied = eqPrefs.getAppliedAppPreset() ?: return false
+        appDisableActive = false
+        eqPrefs.saveAppliedAppBinding(null, null)
+        if (applied == EqPreferencesManager.DEVICE_PRESET_DISABLED) {
+            Log.d(TAG, "App disable ended")
+            broadcastApplied(null, eqPrefs.getPresetName())
+            return true
+        }
+        val snapshot = eqPrefs.getAppOverrideSnapshot()
+            ?.let { runCatching { JSONObject(it) }.getOrNull() }
+            ?.takeIf { it.has("bands") }
+        eqPrefs.saveAppOverrideSnapshot(null)
+        val stillLoaded = eqPrefs.getPresetName() == applied && !eqPrefs.isLiveStateEditedFrom(applied)
+        if (!stillLoaded || snapshot == null) {
+            Log.d(TAG, "App stopped — keeping the current EQ")
+            broadcastApplied(null, eqPrefs.getPresetName())
+            return true
+        }
+        val name = snapshot.optString("presetName", "Custom")
+        applyPreset(snapshot, name)
+        Log.d(TAG, "App stopped — restored '$name'")
+        broadcastApplied(null, name)
+        return true
     }
 
     /** Live EQ is still the preset a binding loaded — no manual preset change or band edits since. */
@@ -155,13 +239,13 @@ class RouteSwitchCoordinator(
         eqPrefs.savePresetName(name)
     }
 
-    private fun broadcastApplied(label: String, presetName: String) {
-        context.sendBroadcast(
-            Intent(ACTION_ROUTE_PRESET_APPLIED)
-                .setPackage(context.packageName)
-                .putExtra(EXTRA_DEVICE_LABEL, label)
-                .putExtra(EXTRA_PRESET_NAME, presetName)
-        )
+    /** [label] null for app-driven applies — EqService reads that extra as the device label. */
+    private fun broadcastApplied(label: String?, presetName: String) {
+        val intent = Intent(ACTION_ROUTE_PRESET_APPLIED)
+            .setPackage(context.packageName)
+            .putExtra(EXTRA_PRESET_NAME, presetName)
+        if (label != null) intent.putExtra(EXTRA_DEVICE_LABEL, label)
+        context.sendBroadcast(intent)
     }
 
     private fun loadCustomPreset(name: String): JSONObject? {

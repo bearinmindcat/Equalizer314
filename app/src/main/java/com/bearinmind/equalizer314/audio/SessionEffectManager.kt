@@ -97,8 +97,17 @@ class SessionEffectManager(private val context: Context) {
         }
     }
 
+    /** Whether the driving session actually carries a DP; false when it is only tracked (no usable session id). */
+    @Synchronized
+    fun isDrivingPresetAttached(): Boolean {
+        val s = sessionInfo.values
+            .firstOrNull { it.packageName in playingPackages && !it.presetName.isNullOrBlank() } ?: return false
+        return sessions.containsKey(s.sessionId)
+    }
+
     private fun notifySessionsChanged() {
         drivingPresetName = getCurrentDrivingPreset()
+        drivingPresetAttached = isDrivingPresetAttached()
         context.sendBroadcast(
             android.content.Intent(ACTION_SESSIONS_CHANGED)
                 .setPackage(context.packageName),
@@ -177,6 +186,7 @@ class SessionEffectManager(private val context: Context) {
             val dp = createSessionDp(sessionId, loaded)
             sessions[sessionId] = dp
             Log.d(TAG, "Attached DP session=$sessionId pkg=$packageName preset=${binding.presetName} preamp=${"%.1f".format(loaded.preampDb)}dB source=$source")
+            notifySessionsChanged()
         } catch (t: Throwable) {
             // Swallow construction failure — another EQ may own the session, or it closed.
             Log.w(TAG, "Could not attach DP to session $sessionId", t)
@@ -651,6 +661,10 @@ class SessionEffectManager(private val context: Context) {
         /** Binder-free mirror of [getCurrentDrivingPreset] for MainActivity's graph follow. */
         @Volatile
         var drivingPresetName: String? = null
+            private set
+        /** Mirror of [isDrivingPresetAttached] for the chip's "(not attached)" marker. */
+        @Volatile
+        var drivingPresetAttached: Boolean = false
             private set
         /** Package-targeted broadcast when the active session set changes (Channel Input listens). */
         const val ACTION_SESSIONS_CHANGED =

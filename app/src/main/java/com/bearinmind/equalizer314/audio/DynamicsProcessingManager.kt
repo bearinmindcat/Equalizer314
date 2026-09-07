@@ -279,12 +279,12 @@ class DynamicsProcessingManager {
         return isActive
     }
 
-    /** True when the live effect lost control or got disabled (a failed native read counts as lost). */
-    fun hasLostControl(): Boolean {
+    /** True when the live effect lost control, or got disabled while [expectEnabled] (a failed native read counts as lost). */
+    fun hasLostControl(expectEnabled: Boolean = true): Boolean {
         if (!isActive) return false
         val dp = dynamicsProcessing ?: return false
         return try {
-            !dp.hasControl() || !dp.enabled
+            !dp.hasControl() || (expectEnabled && !dp.enabled)
         } catch (e: Throwable) {
             Log.w(TAG, "hasLostControl read threw — treating as lost", e)
             true

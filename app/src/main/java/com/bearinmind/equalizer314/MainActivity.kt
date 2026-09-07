@@ -681,7 +681,10 @@ class  MainActivity : AppCompatActivity() {
 
     /** Refreshes the status line on route/preset broadcasts; a route-applied preset also reloads the graph. */
     private val sessionsChangedReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) { syncGraphToDrivingAppPreset() }
+        override fun onReceive(context: Context?, intent: Intent?) {
+            syncGraphToDrivingAppPreset()
+            updateDevicePresetStatus()
+        }
     }
 
     private fun parsePresetBands(arr: org.json.JSONArray): List<com.bearinmind.equalizer314.state.EqStateManager.BandSpec> {
@@ -771,15 +774,21 @@ class  MainActivity : AppCompatActivity() {
         val deviceDrivesPreset = routingMode != 1 &&
             deviceBinding != null &&
             deviceBinding.presetName == activePresetName
+        val appliedApp = eqPrefs.getAppliedAppPreset()
+        val appAttached = com.bearinmind.equalizer314.audio.SessionEffectManager.drivingPresetAttached
         val mode = when {
             routingMode == 1 -> "Session"
+            appliedApp != null -> "App"
             deviceDrivesPreset -> "Device"
             else -> "System"
         }
         val presetForDisplay = when {
+            routingMode != 1 && appliedApp == EqPreferencesManager.DEVICE_PRESET_DISABLED -> "EQ disabled"
             routingMode != 1 -> presetDisplay
             appPreset == EqPreferencesManager.DEVICE_PRESET_DISABLED -> "EQ disabled"
-            else -> appPreset ?: "none"
+            appPreset == null -> "none"
+            appAttached -> appPreset
+            else -> "$appPreset (not attached)"
         }
         val deviceLabel = EqService.staticLastDeviceLabel
             ?: guessed?.let { com.bearinmind.equalizer314.audio.DeviceIdentity.labelOf(it) }

@@ -9,21 +9,7 @@ import java.io.BufferedReader
 import java.io.FileReader
 import java.util.regex.Pattern
 
-/**
- * Recovers the **session ID** of every currently-playing media stream, including apps that never
- * broadcast `OPEN_AUDIO_EFFECT_CONTROL_SESSION` (YouTube, Netflix, Chrome). Public APIs expose
- * [android.media.AudioPlaybackConfiguration] but not the audio-session ID, which is required to
- * attach a per-session [android.media.audiofx.DynamicsProcessing] effect. Trick (from Wavelet/Poweramp):
- * reflect `ServiceManager.getService("audio")`, pipe its binder's `dumpAsync(fd, args)` into a
- * `BufferedReader`, and parse the `AudioPlaybackConfiguration` table.
- *
- * Format differs per Android version / OEM:
- * - Poweramp: lines start `  AudioPlaybackConfiguration ` with `u/pid:<UID>/<PID>`, `usage=USAGE_MEDIA`, `session:<N>`.
- * - Wavelet: simpler `Session ID: <N>; UID: <UID>`.
- * Poweramp parser first (richer), fall back to Wavelet if prefix never appears. On any failure
- * (DUMP denied, dump rejected, format unrecognised) returns empty map; caller falls back to
- * public-API-only path (package name, no session ID). Reflection confined here to keep the rest hidden-API-free.
- */
+/** Session ids of playing streams, even for apps that never broadcast OPEN_AUDIO_EFFECT_CONTROL_SESSION: dump the "audio" service via reflection and parse its AudioPlaybackConfiguration table (Poweramp-style lines first, Wavelet-style fallback); any failure returns an empty map. */
 object AudioPolicyDumpParser {
 
     private const val TAG = "AudioPolicyDumpParser"
@@ -36,21 +22,16 @@ object AudioPolicyDumpParser {
     private val POWERAMP_UID_PID: Pattern =
         Pattern.compile("u/pid:(\\d+)/(\\d+)")
 
-    /** Pulls `session ID: <N>` (capital ID, spaced), the form audioserver uses in `AudioPlaybackConfiguration.toString()`. */
+    /** Pulls the session id: `session ID: <N>` on older builds, `sessionId:<N>` on current ones. */
     private val POWERAMP_SESSION: Pattern =
-        Pattern.compile("session ID:\\s*(\\d+)")
+        Pattern.compile("(?i)session\\s?id:\\s*(\\d+)")
 
-    /** Dumps the audio service, returning playing apps grouped by package name. Each app may have
-     *  multiple concurrent sessions (e.g. ExoPlayer pre-buffering the next track).
-     *
-     *  @param timeoutMs hard ceiling on the blocking pipe read (dump normally completes in a few ms;
-     *         if audioserver stalls we abandon rather than block the caller's thread forever). */
+    /** Playing apps grouped by package (an app may own several sessions); [timeoutMs] caps the blocking pipe read. */
     fun dump(context: Context, timeoutMs: Long = 1500L): Map<String, Set<Int>> {
         return try {
             dumpInternal(context, timeoutMs)
         } catch (t: Throwable) {
-            // Failure modes (all same caller-facing result): SecurityException (DUMP denied),
-            // reflection SDK-blocklist hit on Android 14+, OOM on a huge dump, IO errors.
+            // DUMP denied, hidden-API blocklist, OOM or IO error — all land here.
             Log.w(TAG, "dump failed, falling back to public-API-only path", t)
             emptyMap()
         }
@@ -62,8 +43,7 @@ object AudioPolicyDumpParser {
         val readFd = pipe[0]
         val writeFd = pipe[1]
 
-        // audioserver closes its copy of the write-end when done. We must close OUR copy as soon
-        // as the binder has it, otherwise the reader never sees EOF.
+        // Close our write-end once the binder has it, or the reader never sees EOF.
         try {
             invokeDumpAsync(binder, writeFd.fileDescriptor)
         } finally {
@@ -103,8 +83,7 @@ object AudioPolicyDumpParser {
         return resolveUidsToPackages(context, uidToSessions)
     }
 
-    /** Tries the Poweramp prefix format. Returns true when the line contributed a UID + session pair
-     *  (or was a valid prefix line deliberately skipped, e.g. `SoundPool`). */
+    /** Poweramp prefix format; true when the line was consumed (pair added, or a prefix line skipped on purpose). */
     private fun tryParsePowerampLine(
         line: String,
         out: MutableMap<Int, MutableSet<Int>>,
@@ -148,11 +127,7 @@ object AudioPolicyDumpParser {
         return true
     }
 
-    /** Resolves a raw UID map to package names. Our own UID is dropped so the global session-0 DP
-     *  doesn't show up. Shared-UID handling: one UID may map to several packages (e.g.
-     *  `com.google.android.gms`); we pick index [0] (the documented "primary" package, as Poweramp's
-     *  `i0.java:925-928` does) — exploding to N rows for one session would add N misleading
-     *  "Now playing" entries. Wavelet avoids this via `MediaController.getPackageName()`, unavailable here. */
+    /** UID map → package names; our own UID is dropped and a shared UID resolves to its first (primary) package. */
     private fun resolveUidsToPackages(
         context: Context,
         uidToSessions: Map<Int, Set<Int>>,
@@ -175,16 +150,14 @@ object AudioPolicyDumpParser {
         cachedBinder?.takeIf { it.isBinderAlive }?.let { return it }
         val serviceManagerClass = Class.forName("android.os.ServiceManager")
         val getService = serviceManagerClass.getMethod("getService", String::class.java)
-        // "audio" is the AudioFlinger-side service emitting AudioPlaybackConfiguration rows;
-        // "media.audio_policy" works on some versions too, but "audio" has widest coverage.
+        // "audio" emits the AudioPlaybackConfiguration rows on the widest range of builds.
         val obj = getService.invoke(null, "audio")
         val binder = obj as? IBinder ?: return null
         cachedBinder = binder
         return binder
     }
 
-    /** IBinder.dumpAsync (public since API 24), signature `(FileDescriptor, String[])`. Called via
-     *  reflection so a stricter future hidden-API list can't break the rest of the parser. */
+    /** IBinder.dumpAsync(FileDescriptor, String[]) via reflection, so a stricter hidden-API list can't break the rest. */
     private fun invokeDumpAsync(binder: IBinder, writeFd: java.io.FileDescriptor) {
         val dumpAsync = binder.javaClass.getMethod(
             "dumpAsync",
