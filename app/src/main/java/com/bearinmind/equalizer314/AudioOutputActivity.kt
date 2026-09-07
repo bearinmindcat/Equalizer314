@@ -341,14 +341,14 @@ class AudioOutputActivity : AppCompatActivity() {
             when {
                 pick == "(none)" -> {
                     eqPrefs.removeDeviceBinding(key)
-                    notifyBindingChanged()
+                    notifyBindingChanged(key)
                     Toast.makeText(this, "Unbound $label", Toast.LENGTH_SHORT).show()
                 }
                 pick == DISABLE_LABEL -> {
                     eqPrefs.saveDeviceBinding(
                         EqPreferencesManager.Binding(key, label, EqPreferencesManager.DEVICE_PRESET_DISABLED)
                     )
-                    notifyBindingChanged()
+                    notifyBindingChanged(key)
                     Toast.makeText(this, "EQ disabled for $label", Toast.LENGTH_SHORT).show()
                 }
                 pick.endsWith(" (missing)") -> {
@@ -357,7 +357,7 @@ class AudioOutputActivity : AppCompatActivity() {
                 else -> {
                     // The coordinator loads the pick and sets presetName; writing the name here first would poison its manual-state snapshot.
                     eqPrefs.saveDeviceBinding(EqPreferencesManager.Binding(key, label, pick))
-                    notifyBindingChanged()
+                    notifyBindingChanged(key)
                     Toast.makeText(this, "Bound \"$pick\" to $label", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -536,14 +536,14 @@ class AudioOutputActivity : AppCompatActivity() {
                 when {
                     pick == "(none)" -> {
                         eqPrefs.removeDeviceBinding(key)
-                        notifyBindingChanged()
+                        notifyBindingChanged(key)
                         Toast.makeText(this@AudioOutputActivity, "Unbound $label", Toast.LENGTH_SHORT).show()
                     }
                     pick == DISABLE_LABEL -> {
                         eqPrefs.saveDeviceBinding(
                             EqPreferencesManager.Binding(key, label, EqPreferencesManager.DEVICE_PRESET_DISABLED)
                         )
-                        notifyBindingChanged()
+                        notifyBindingChanged(key)
                         Toast.makeText(this@AudioOutputActivity, "EQ disabled for $label", Toast.LENGTH_SHORT).show()
                     }
                     pick.endsWith(" (missing)") -> {
@@ -551,7 +551,7 @@ class AudioOutputActivity : AppCompatActivity() {
                     }
                     else -> {
                         eqPrefs.saveDeviceBinding(EqPreferencesManager.Binding(key, label, pick))
-                        notifyBindingChanged()
+                        notifyBindingChanged(key)
                         Toast.makeText(this@AudioOutputActivity, "Bound \"$pick\" to $label", Toast.LENGTH_SHORT).show()
                     }
                 }
@@ -565,7 +565,7 @@ class AudioOutputActivity : AppCompatActivity() {
                     eqPrefs.forgetSeenDevice(key)
                     eqPrefs.removeDeviceBinding(key)
                     eqPrefs.setDeviceHidden(key, false)
-                    notifyBindingChanged()
+                    notifyBindingChanged(key)
                     refreshActiveDevice()
                     refreshDevices()
                 }
@@ -586,7 +586,7 @@ class AudioOutputActivity : AppCompatActivity() {
                     setOnMenuItemClickListener {
                         eqPrefs.forgetSeenDevice(key)
                         eqPrefs.removeDeviceBinding(key)
-                        notifyBindingChanged()
+                        notifyBindingChanged(key)
                         refreshDevices()
                         true
                     }
@@ -698,11 +698,12 @@ class AudioOutputActivity : AppCompatActivity() {
         })
     }
 
-    /** Re-run EqService's route coordinator for the currently-routed device. */
-    private fun notifyBindingChanged() {
+    /** Re-run EqService's route coordinator; [key] lets the service drop a manual override when the routed device's own binding changed. */
+    private fun notifyBindingChanged(key: String) {
         sendBroadcast(
             Intent(com.bearinmind.equalizer314.audio.EqService.ACTION_REAPPLY_DEVICE_BINDING)
                 .setPackage(packageName)
+                .putExtra(com.bearinmind.equalizer314.audio.EqService.EXTRA_BINDING_KEY, key)
         )
     }
 

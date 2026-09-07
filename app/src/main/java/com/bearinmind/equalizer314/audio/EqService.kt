@@ -44,6 +44,7 @@ class EqService : Service() {
         const val ACTION_REAPPLY_DEVICE_BINDING = "com.bearinmind.equalizer314.REAPPLY_DEVICE_BINDING"
         /** Per-app binding edited — rebuild that package's active per-session DPs. */
         const val ACTION_REAPPLY_APP_BINDING = "com.bearinmind.equalizer314.REAPPLY_APP_BINDING"
+        const val EXTRA_BINDING_KEY = "binding_key"
         /** Session-mode power: arm/disarm per-app effects (no global DP); EXTRA_POWER_ON carries the state. */
         const val ACTION_SESSION_POWER = "com.bearinmind.equalizer314.SESSION_POWER"
         const val EXTRA_POWER_ON = "power_on"
@@ -189,7 +190,8 @@ class EqService : Service() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
                 ACTION_REAPPLY_DEVICE_BINDING -> {
-                    // Re-run the coordinator for the routed device; non-routed edits no-op.
+                    // Editing the routed device's own binding cancels a manual Disable-EQ override — the new choice applies as configured.
+                    if (intent.getStringExtra(EXTRA_BINDING_KEY) == lastDeviceKey) manualOverrideDeviceKey = null
                     reapplyCurrentDeviceBinding()
                     updateNotification()
                 }
