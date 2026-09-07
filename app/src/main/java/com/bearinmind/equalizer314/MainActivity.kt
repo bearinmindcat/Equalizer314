@@ -2495,22 +2495,19 @@ class  MainActivity : AppCompatActivity() {
             }
         }
 
-        // Bound the picker to the viewport below the graph so it scrolls internally instead of growing the page.
+        // Picker fills the page below the graph down to the column's bottom padding, so it scrolls internally; re-sized on every layout pass (insets settle late, graph can resize).
+        fun sizePresetPicker() {
+            val column = (pageEq as ScrollView).getChildAt(0) as? android.view.ViewGroup ?: return
+            val frame = presetPickerScroll.parent as? android.view.View ?: return
+            val avail = pageEq.height - frame.top - column.paddingBottom
+            val target = if (avail > 0) avail else android.view.ViewGroup.LayoutParams.MATCH_PARENT
+            val lp = presetPickerScroll.layoutParams
+            if (lp.height != target) { lp.height = target; presetPickerScroll.layoutParams = lp }
+        }
+        pageEq.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> if (presetPickerOpen) sizePresetPicker() }
         fun boundPresetPickerHeight() {
             pageEq.scrollTo(0, 0)
-            presetPickerScroll.post {
-                var t = 0
-                var v: android.view.View? = presetPickerScroll
-                while (v != null && v !== pageEq) {
-                    t += v.top
-                    v = v.parent as? android.view.View
-                }
-                val avail = pageEq.height - t
-                val lp = presetPickerScroll.layoutParams
-                lp.height = if (avail > 0) avail
-                            else android.view.ViewGroup.LayoutParams.MATCH_PARENT
-                presetPickerScroll.layoutParams = lp
-            }
+            presetPickerScroll.post { sizePresetPicker() }
         }
 
         saveBtn.setOnClickListener {
@@ -3353,11 +3350,19 @@ class  MainActivity : AppCompatActivity() {
             val graphLp = eqGraphView.layoutParams
             val graphCurrent = graphLp.height
             graphLp.height = graphDesiredPx
+            // An open preset picker is sized to whatever is left, so measure the column as if it took no space.
+            val picker = findViewById<View>(R.id.presetPickerScroll)
+            val pickerLp = picker.layoutParams
+            val pickerHeight = pickerLp.height
+            val pickerOpen = picker.visibility == View.VISIBLE
+            if (pickerOpen) pickerLp.height = 0
             val nonGraph = measureColumn() - graphDesiredPx
-            // Swap the current mode's controls container for the reference block + preamp.
+            if (pickerOpen) pickerLp.height = pickerHeight
+            // Swap the current mode's controls container for the reference block + preamp (a hidden container contributes nothing).
             val preampCard = findViewById<View>(R.id.preampCardBar)
             val preampBlock = preampCard.measuredHeight + ((preampCard.layoutParams as? android.view.ViewGroup.MarginLayoutParams)?.topMargin ?: 0)
-            val ref = nonGraph - eqControlsContainer.measuredHeight + refControls + preampBlock
+            val controlsH = if (eqControlsContainer.visibility == View.VISIBLE) eqControlsContainer.measuredHeight else 0
+            val ref = nonGraph - controlsH + refControls + preampBlock
             val graphMin = (130 * density).toInt()
             val graphTarget = (h - ref).coerceIn(graphMin, graphDesiredPx * 2)
             graphLp.height = graphTarget
