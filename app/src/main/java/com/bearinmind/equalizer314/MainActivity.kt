@@ -2486,9 +2486,11 @@ class  MainActivity : AppCompatActivity() {
                     renderAutoEqRows(s?.toString() ?: "")
                 }
             })
+            // A collapsed AutoEQ section makes the list short, so "near the bottom" would be true on every scroll — don't batch into a hidden body.
             presetPickerScroll.setOnScrollChangeListener { _, _, scrollY, _, _ ->
                 val content = presetPickerScroll.getChildAt(0)
-                if (content != null && renderedAutoEqCount < pendingAutoEqEntries.size &&
+                if (content != null && autoEqBody.visibility == View.VISIBLE &&
+                    renderedAutoEqCount < pendingAutoEqEntries.size &&
                     scrollY + presetPickerScroll.height >= content.height - (600 * density).toInt()) {
                     appendAutoEqBatch?.invoke()
                 }
