@@ -2935,8 +2935,9 @@ class  MainActivity : AppCompatActivity() {
 
         eqGraphView.onBandDragEndListener = {
             stateManager.flushEqUpdate()
-            // Sync the table to the dragged values now that the drag is done.
+            // Sync the table or graphic cards to the dragged values.
             if (stateManager.currentEqUiMode == EqUiMode.TABLE) tableController.buildTable()
+            if (stateManager.currentEqUiMode == EqUiMode.GRAPHIC) graphicController.buildSliders(graphicController.targetCardHeight)
         }
 
         eqGraphView.onLongPressListener = { showPresetsBottomSheet() }
