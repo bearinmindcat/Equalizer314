@@ -329,6 +329,10 @@ class EqPreferencesManager(context: Context) {
 
     fun saveGraphHeat(enabled: Boolean) { prefs.edit().putBoolean("graphHeat", enabled).apply() }
     fun getGraphHeat(): Boolean = prefs.getBoolean("graphHeat", false)
+    fun saveGraphBandPoints(enabled: Boolean) { prefs.edit().putBoolean("graphBandPoints", enabled).apply() }
+    fun getGraphBandPoints(): Boolean = prefs.getBoolean("graphBandPoints", true)
+    fun saveGraphBandCurves(enabled: Boolean) { prefs.edit().putBoolean("graphBandCurves", enabled).apply() }
+    fun getGraphBandCurves(): Boolean = prefs.getBoolean("graphBandCurves", false)
 
     // Compat Mode: cap DP at 32 bands for band-limited HALs; auto-on for Google/Pixel.
     fun saveDpCompatMode(enabled: Boolean) { prefs.edit().putBoolean("dpCompatMode", enabled).apply() }

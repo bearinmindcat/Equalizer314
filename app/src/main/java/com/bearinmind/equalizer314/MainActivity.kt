@@ -2541,8 +2541,8 @@ class  MainActivity : AppCompatActivity() {
             }
         }
         // Eye button: opens the view-options popout (ON/OFF visibility + per-band fill toggles).
-        var bandPointsVisible = true
-        var bandCurvesVisible = false
+        var bandPointsVisible = eqPrefs.getGraphBandPoints()
+        var bandCurvesVisible = eqPrefs.getGraphBandCurves()
         var viewOptionsOpen = false
         val onOffBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.bandPointsOnOffBtn)
         val fillBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.bandFillToggle)
@@ -2563,12 +2563,14 @@ class  MainActivity : AppCompatActivity() {
                 btn.iconTint = android.content.res.ColorStateList.valueOf(graphBtnDimContent)
             }
         }
-        // Initial state: eye dim (popout closed), points on.
+        // Initial state: eye dim (popout closed); the three options restore from prefs.
         paintLit(bandPtsBtn, false)
         bandPtsBtn.iconTint = android.content.res.ColorStateList.valueOf(graphBtnLitContent)
-        onOffBtn.text = "ON"
-        paintLit(onOffBtn, true)
-        paintLit(fillBtn, false)
+        eqGraphView.showBandPoints = bandPointsVisible
+        eqGraphView.showBandCurves = bandCurvesVisible
+        onOffBtn.text = if (bandPointsVisible) "ON" else "OFF"
+        paintLit(onOffBtn, bandPointsVisible)
+        paintLit(fillBtn, bandCurvesVisible)
         eqGraphView.showGainHeat = eqPrefs.getGraphHeat()
         paintLit(heatBtn, eqGraphView.showGainHeat)
         closeViewOptionsPopoutInstant = {
@@ -2623,6 +2625,7 @@ class  MainActivity : AppCompatActivity() {
             bandPointsVisible = !bandPointsVisible
             eqGraphView.showBandPoints = bandPointsVisible
             eqGraphView.invalidate()
+            eqPrefs.saveGraphBandPoints(bandPointsVisible)
             onOffBtn.text = if (bandPointsVisible) "ON" else "OFF"
             paintLit(onOffBtn, bandPointsVisible)
         }
@@ -2631,6 +2634,7 @@ class  MainActivity : AppCompatActivity() {
         fillBtn.setOnClickListener {
             bandCurvesVisible = !bandCurvesVisible
             eqGraphView.showBandCurves = bandCurvesVisible
+            eqPrefs.saveGraphBandCurves(bandCurvesVisible)
             paintLit(fillBtn, bandCurvesVisible)
         }
 
@@ -5045,6 +5049,7 @@ class  MainActivity : AppCompatActivity() {
         if (requestCode == 200 && grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
             visualizerHelper.start(eqGraphView)
             eqGraphView.spectrumRenderer = visualizerHelper.renderer
+            eqPrefs.saveSpectrumEnabled(true)
             val vizBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.visualizerToggle)
             val d = resources.displayMetrics.density
             vizBtn.alpha = 1.0f
