@@ -85,11 +85,21 @@ class GraphicEqController(
         val eq = state.parametricEq
         isUpdating = true
         for (pos in sliderRefs.indices) {
-            val bandIndex = sortedIndices.getOrNull(pos) ?: continue
-            val gain = eq.getBand(bandIndex)?.gain?.coerceIn(-20f, 20f) ?: 0f
-            sliderRefs[pos].value = gain
+            val band = sortedIndices.getOrNull(pos)?.let { eq.getBand(it) } ?: continue
+            val slider = sliderRefs[pos]
+            // Gainless cards hold Q, not gain.
+            val value = if (isGainless(band.filterType)) band.q.toFloat() else band.gain
+            slider.value = value.coerceIn(slider.valueFrom, slider.valueTo)
         }
         isUpdating = false
+    }
+
+    private fun isGainless(type: BiquadFilter.FilterType): Boolean = when (type) {
+        BiquadFilter.FilterType.LOW_PASS, BiquadFilter.FilterType.HIGH_PASS,
+        BiquadFilter.FilterType.LOW_PASS_1, BiquadFilter.FilterType.HIGH_PASS_1,
+        BiquadFilter.FilterType.BAND_PASS, BiquadFilter.FilterType.NOTCH,
+        BiquadFilter.FilterType.ALL_PASS -> true
+        else -> false
     }
 
     fun insertCard(insertPos: Int) {
@@ -152,14 +162,7 @@ class GraphicEqController(
         val eq = state.parametricEq
         val band = eq.getBand(bandIndex)!!
         // Gainless filters drive Q with the slider instead of gain (same rule as Parametric mode).
-        val isGainless = when (band.filterType) {
-            BiquadFilter.FilterType.LOW_PASS, BiquadFilter.FilterType.HIGH_PASS,
-            BiquadFilter.FilterType.LOW_PASS_1, BiquadFilter.FilterType.HIGH_PASS_1,
-            BiquadFilter.FilterType.BAND_PASS, BiquadFilter.FilterType.NOTCH,
-            BiquadFilter.FilterType.ALL_PASS -> true
-            else -> false
-        }
-        val isLpHp = isGainless   // legacy local name, kept for minimal churn below
+        val isLpHp = isGainless(band.filterType)
         val density = activity.resources.displayMetrics.density
         val sliderVisualHeight = (130 * density).toInt()
         val btnMargin = 2
@@ -447,7 +450,7 @@ class GraphicEqController(
     private fun showBandEditDialog(bandIndex: Int, hzLabel: TextView, dbLabel: TextView, qLabel: TextView) {
         val eq = state.parametricEq
         val band = eq.getBand(bandIndex) ?: return
-        val isLpHp = band.filterType == BiquadFilter.FilterType.LOW_PASS || band.filterType == BiquadFilter.FilterType.HIGH_PASS
+        val isLpHp = isGainless(band.filterType)
         val density = activity.resources.displayMetrics.density
         val slotLabel = if (bandIndex < state.bandSlots.size) state.bandSlots[bandIndex] + 1 else bandIndex + 1
 
