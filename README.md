@@ -6,9 +6,7 @@
 
 <img src="https://img.shields.io/badge/Requires-Android%209.0%2B%20(API%2028)-3DDC84?logo=android&logoColor=white" alt="Requires Android 9.0+ (API 28)">
 
-⚠️ PSA; shit will go wrong while using this app, there will be features missing that you wish I added; but this app is in **BETA** and in the very early stages of testing and development, so I'll try to make note of your issues, run through them myself and fix them as quick as possible. My goal is to get this app to a clean smooth state, but in order to do that, people like you can help test and present issues & features that come up. I will do my best to fix everything in a timely manner while incorperating **YOUR** feature wishlist in a way that I think will work for everyone :)
-
-⚠️ Another PSA; these stores below are in the pipeline. As my apps get approved on each of them I'll move them up to the section right underneath the title section of the readme. As of now these links take you nowhere. With that being said, you may wait for the app to be uploaded to a trusted store, and I'll continue developing and making changes for those of you who download it the "raw" way. Thanks again.
+Though the app is still in beta, a lot of crash issues and inconsistences are fixed. As of now the app is also released on google play and currently going through the walk of shame. Still in early stages of testing and development, so I'll try my best to make note of your issues, run them myself and fix them as quick as possible.
 
 <a href="https://accrescent.app/app/com.bearinmind.launcher314"><img alt="Get it on Accrescent" src="https://accrescent.app/badges/get-it-on.png" height="60"></a> <a href="https://play.google.com/store/apps/details?id=com.bearinmind.launcher314"><img alt="Get it on Google Play" src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" height="60"></a> <a href="https://apt.izzysoft.de/packages/com.bearinmind.launcher314"><img src="https://gitlab.com/IzzyOnDroid/repo/-/raw/master/assets/IzzyOnDroid.png" alt="Get it on IzzyOnDroid" height="60"></a>
 
