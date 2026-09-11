@@ -5,14 +5,14 @@ plugins {
 
 android {
     namespace = "com.bearinmind.equalizer314"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.bearinmind.equalizer314"
         minSdk = 24
-        targetSdk = 35
-        versionCode = 22
-        versionName = "0.0.19-beta"
+        targetSdk = 36
+        versionCode = 24
+        versionName = "0.0.19-beta_hotfix1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

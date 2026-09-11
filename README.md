@@ -3,13 +3,11 @@
 <a href="https://github.com/bearinmindcat/Equalizer314/releases/latest"><img src="https://raw.githubusercontent.com/NeoApplications/Neo-Backup/034b226cea5c1b30eb4f6a6f313e4dadcbb0ece4/badge_github.png" alt="Get it on GitHub" height="70"></a>
 <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/{%22id%22:%22com.bearinmind.equalizer314%22,%22url%22:%22https://github.com/bearinmindcat/Equalizer314%22,%22author%22:%22bearinmindcat%22,%22name%22:%22Equalizer314%22}"><img src="https://raw.githubusercontent.com/ImranR98/Obtainium/b1c8ac6f2ab08497189721a788a5763e28ff64cd/assets/graphics/badge_obtainium.png" alt="Get it on Obtainium" height="70"></a>
 <a href="https://f-droid.org/packages/com.bearinmind.equalizer314/"><img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" alt="Get it on F-Droid" height="70"></a>
+<a href="https://play.google.com/store/apps/details?id=com.bearinmind.equalizer314"><img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="70"></a>
 
 <img src="https://img.shields.io/badge/Requires-Android%209.0%2B%20(API%2028)-3DDC84?logo=android&logoColor=white" alt="Requires Android 9.0+ (API 28)">
 
 Though the app is still in beta, a lot of crash issues and inconsistences are fixed. As of now the app is also released on google play and currently going through the walk of shame. Still in early stages of testing and development, so I'll try my best to make note of your issues, run them myself and fix them as quick as possible.
-
-<a href="https://accrescent.app/app/com.bearinmind.launcher314"><img alt="Get it on Accrescent" src="https://accrescent.app/badges/get-it-on.png" height="60"></a> <a href="https://play.google.com/store/apps/details?id=com.bearinmind.launcher314"><img alt="Get it on Google Play" src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" height="60"></a> <a href="https://apt.izzysoft.de/packages/com.bearinmind.launcher314"><img src="https://gitlab.com/IzzyOnDroid/repo/-/raw/master/assets/IzzyOnDroid.png" alt="Get it on IzzyOnDroid" height="60"></a>
-
 
 ## About
 
