@@ -302,20 +302,26 @@ class EqService : Service() {
         }
     }
 
-    /** Drive the bypass flag from active playback usages (pref-gated), then re-derive the DP enable. */
+    /** Drive the bypass flag from active playback usages (pref-gated), then re-derive the curve state. */
     private fun applySystemSoundBypass(configs: List<AudioPlaybackConfiguration>) {
         val bypassEnabled = EqPreferencesManager(this).getBypassSystemSounds()
         val anySystemSound = bypassEnabled && configs.any { c -> c.audioAttributes.usage in BYPASS_USAGES }
         if (anySystemSound != systemSoundBypassActive) {
             systemSoundBypassActive = anySystemSound
-            Log.d(TAG, "system sound ${if (anySystemSound) "started — DP bypassed" else "stopped — DP re-enabled"}")
+            Log.d(TAG, "system sound ${if (anySystemSound) "started — curve flattened" else "stopped — curve restored"}")
         }
+        applyCurveState()
         applyDpEnabled()
     }
 
-    /** Global DP enable = no system-sound bypass AND no playing app bound to "Disable EQ"; the user EQ toggle is a level-matched flat curve instead. */
-    private fun expectedDpEnabled(): Boolean =
-        !systemSoundBypassActive && routeCoordinator?.appDisableActive != true
+    /** Global DP enable = no playing app bound to "Disable EQ"; the EQ toggle and system-sound skip flatten the curve at the same level instead. */
+    private fun expectedDpEnabled(): Boolean = routeCoordinator?.appDisableActive != true
+
+    /** Flat curve with the preamp kept whenever the user EQ is off or a system sound is playing. */
+    private fun applyCurveState() {
+        if (!dynamicsManager.isActive) return
+        dynamicsManager.applyCurveBypass(!EqPreferencesManager(this).getEqEnabled() || systemSoundBypassActive)
+    }
 
     private fun applyDpEnabled() {
         if (!dynamicsManager.isActive) return
@@ -1047,7 +1053,7 @@ class EqService : Service() {
 
     /** EQ toggle (pref already saved): flat curve at the same level, DP stays enabled so the preamp never drops out. */
     fun setEqEnabled(enabled: Boolean) {
-        dynamicsManager.applyCurveBypass(!enabled)
+        dynamicsManager.applyCurveBypass(!enabled || systemSoundBypassActive)
         applyDpEnabled()
     }
 
