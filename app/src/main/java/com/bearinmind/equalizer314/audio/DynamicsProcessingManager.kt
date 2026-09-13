@@ -64,6 +64,12 @@ class DynamicsProcessingManager {
         /** Inaudible passthrough band for an MBC stage that must exist but stay off. */
         fun mbcPassthroughBand(): DynamicsProcessing.MbcBand =
             DynamicsProcessing.MbcBand(false, 20000f, 1f, 100f, 1f, 0f, 0f, -120f, 1f, 0f, 0f)
+
+        /** Passthrough on every allocated MBC band, both channels. */
+        fun writePassthroughBands(dp: DynamicsProcessing, count: Int) {
+            val b = mbcPassthroughBand()
+            for (i in 0 until count) { dp.setMbcBandByChannelIndex(0, i, b); dp.setMbcBandByChannelIndex(1, i, b) }
+        }
     }
 
     private var dynamicsProcessing: DynamicsProcessing? = null
@@ -94,6 +100,11 @@ class DynamicsProcessingManager {
     // MBC
     var mbcEnabled: Boolean = false
     var mbcBandCount: Int = 3
+    /** MBC bands allocated in the live DP; only a change here needs a rebuild. */
+    @Volatile var liveMbcBandCount = 0
+        private set
+    /** EQ "off": flat curve at the same level (preamp + held auto-gain) instead of a full bypass that jumps the volume. */
+    @Volatile var curveBypassed = false
     // Volume compensation: dB shift (≤ 0) on MBC thresholds/gates so compression tracks the pre-volume signal.
     @Volatile var mbcThresholdOffsetDb: Float = 0f
 
@@ -163,7 +174,7 @@ class DynamicsProcessingManager {
         Log.d(TAG, "DP variant=FREQUENCY bands=$bandCount frame=${effectiveFrameMs}ms interleave=$useInterleave compat=$compatMode")
 
         // MBC stage always allocated (≥ 1 passthrough band when off) — Wavelet's pattern.
-        val mbcStageBandCount = if (mbcEnabled) mbcBandCount else 1
+        val mbcStageBandCount = mbcBandCount.coerceAtLeast(1)
         val configBuilder = DynamicsProcessing.Config.Builder(
             variant,
             2,                  // channel count (stereo)
@@ -192,12 +203,8 @@ class DynamicsProcessingManager {
                 setLimiterByChannelIndex(1, limiter)
                 Log.d(TAG, "Limiter config: enabled=$limiterEnabled thresh=$limiterThresholdDb ratio=$limiterRatio attack=$limiterAttackMs release=$limiterReleaseMs postGain=$limiterPostGainDb")
 
-                // Passthrough MBC band when MBC is off.
-                if (!mbcEnabled) {
-                    val dummyMbc = mbcPassthroughBand()
-                    setMbcBandByChannelIndex(0, 0, dummyMbc)
-                    setMbcBandByChannelIndex(1, 0, dummyMbc)
-                }
+                // MBC off: every allocated band is a passthrough, so a later toggle is a live write, not a rebuild.
+                if (!mbcEnabled) writePassthroughBands(this, mbcStageBandCount)
 
                 // Apply response, then enable — drain blocks until the band write lands.
                 applyParametricResponse(this, eq)
@@ -219,6 +226,7 @@ class DynamicsProcessingManager {
                 })
             }
             currentBandCount = bandCount
+            liveMbcBandCount = mbcStageBandCount
             isActive = true
             Log.d(TAG, "DynamicsProcessing started with $bandCount bands (interleave=$useInterleave)")
             // Diagnostic readback: engine-accepted vs requested (catches OEM clamping).
@@ -379,7 +387,7 @@ class DynamicsProcessingManager {
 
         // Auto-gain: flat shift bringing the loudest band to ≤ 0 dB.
         if (autoGainEnabled) {
-            if (!gainHold) {
+            if (!gainHold && !curveBypassed) {
                 var peak = Float.NEGATIVE_INFINITY
                 if (useInterleave && leftPostGains != null && rightPostGains != null) {
                     // Split-half: the true peak is ~2× a single stage's gain.
@@ -400,6 +408,12 @@ class DynamicsProcessingManager {
             }
         } else {
             lastAutoGainOffset = 0f
+        }
+
+        // Bypassed: flat curve carrying the held auto-gain offset, so on/off is level-matched.
+        if (curveBypassed) {
+            leftGains.fill(lastAutoGainOffset); rightGains.fill(lastAutoGainOffset)
+            leftPostGains?.fill(0f); rightPostGains?.fill(0f)
         }
 
         // Channel offsets + preamp go on the input-gain stage, not into band gains.
@@ -554,6 +568,20 @@ class DynamicsProcessingManager {
     }
 
     /** Apply MBC bands + crossovers (bands.size - 1) to the live DP. */
+    /** MBC off without a rebuild: neutral bands on the live stage. */
+    fun writeMbcPassthrough() {
+        val dp = dynamicsProcessing ?: return
+        try { writePassthroughBands(dp, liveMbcBandCount) } catch (e: Exception) { Log.e(TAG, "MBC passthrough write failed", e) }
+    }
+
+    /** Flip the EQ curve on/off live; DP stays enabled so the preamp never drops out. */
+    fun applyCurveBypass(bypassed: Boolean) {
+        if (curveBypassed == bypassed) return
+        curveBypassed = bypassed
+        val l = lastEq ?: return
+        updateFromEqualizers(l, lastRightEq ?: l)
+    }
+
     fun applyMbcBands(
         bands: List<MbcBandParams>,
         crossovers: FloatArray
@@ -625,6 +653,7 @@ class DynamicsProcessingManager {
         }
         dynamicsProcessing = null
         currentBandCount = 0
+        liveMbcBandCount = 0
         isActive = false
         Log.d(TAG, "DynamicsProcessing stopped")
     }

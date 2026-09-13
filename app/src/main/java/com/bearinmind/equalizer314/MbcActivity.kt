@@ -380,8 +380,7 @@ class MbcActivity : AppCompatActivity() {
                         if (cnt > 0 && sumPow > 0) (10.0 * Math.log10(sumPow / cnt)).toFloat().coerceAtLeast(-80f) else -80f
                     }
 
-                    // Calibrate to absolute dBFS for the compressor math
-                    // This makes the GR computation match the threshold values
+                    // Calibrate to absolute dBFS so the GR computation matches the threshold values.
                     val calibrationOffset = visualizerHelper.normToAbsoluteOffset
                     val calibratedSpecDb = FloatArray(specDb.size) { specDb[it] + calibrationOffset }
 
@@ -622,8 +621,7 @@ class MbcActivity : AppCompatActivity() {
             if (svc.dynamicsManager.isActive) {
                 svc.dynamicsManager.stop()
             } else {
-                // Promote to started foreground service — a bind-only service is destroyed
-                // when MbcActivity exits, tearing DP down with it.
+                // Promote to started foreground service — a bind-only service is destroyed when MbcActivity exits, tearing DP down with it.
                 com.bearinmind.equalizer314.audio.EqService.start(this)
                 val tempEq = com.bearinmind.equalizer314.dsp.ParametricEqualizer()
                 eqPrefs.restoreState(tempEq)
@@ -1363,16 +1361,18 @@ class MbcActivity : AppCompatActivity() {
         val isEnabled = masterSwitch.isChecked
         android.util.Log.d("MbcActivity", "pushMbcToService: isEnabled=$isEnabled, dm.isActive=${dm.isActive}, dm.mbcEnabled=${dm.mbcEnabled}")
 
-        // If MBC enable state or band count changed, need to recreate DP — but only if DP is already running
-        if (!dm.isActive) return  // Don't start DP from MBC settings — only power button should start it
-        if (dm.mbcEnabled != isEnabled || (isEnabled && dm.mbcBandCount != bandCount)) {
-            dm.mbcEnabled = isEnabled
-            dm.mbcBandCount = bandCount
+        if (!dm.isActive) return  // Only the power button starts DP.
+        // Only a band-count change rebuilds DP; on/off is a live band write so the output never drops out.
+        val needRebuild = isEnabled && dm.liveMbcBandCount != bandCount
+        dm.mbcEnabled = isEnabled
+        dm.mbcBandCount = bandCount
+        if (needRebuild) {
             val tempEq = com.bearinmind.equalizer314.dsp.ParametricEqualizer()
-            val eqState = com.bearinmind.equalizer314.state.EqPreferencesManager(this)
-            eqState.restoreState(tempEq)
+            com.bearinmind.equalizer314.state.EqPreferencesManager(this).restoreState(tempEq)
             dm.start(tempEq)
-            android.util.Log.d("MbcActivity", "Recreated DynamicsProcessing with MBC enabled=$isEnabled, bandCount=$bandCount")
+            android.util.Log.d("MbcActivity", "Recreated DynamicsProcessing for MBC bandCount=$bandCount")
+        } else if (!isEnabled) {
+            dm.writeMbcPassthrough()
         }
 
         if (!isEnabled) return
@@ -1463,8 +1463,7 @@ class MbcActivity : AppCompatActivity() {
         // Add new band with defaults
         bands.add(MbcBandData(cutoff = DEFAULT_CUTOFFS.getOrElse(bandCount - 1) { 10000f }))
 
-        // Recompute crossovers BEFORE saveBand: syncMbcParamsToGraph reads crossoverFreqs at
-        // the new bands.size — an old-size array throws ArrayIndexOutOfBoundsException.
+        // Recompute crossovers BEFORE saveBand: syncMbcParamsToGraph reads crossoverFreqs at the new bands.size — an old-size array throws ArrayIndexOutOfBoundsException.
         val defaults = DEFAULT_CROSSOVERS_BY_COUNT[bandCount] ?: logSpacedCrossovers(bandCount)
         crossoverFreqs = FloatArray(bandCount - 1) { i ->
             if (i < oldBandCount - 1) crossoverFreqs.getOrElse(i) { defaults[i] }

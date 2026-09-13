@@ -313,9 +313,9 @@ class EqService : Service() {
         applyDpEnabled()
     }
 
-    /** Global DP enable = user EQ toggle AND no system-sound bypass AND no playing app bound to "Disable EQ". */
+    /** Global DP enable = no system-sound bypass AND no playing app bound to "Disable EQ"; the user EQ toggle is a level-matched flat curve instead. */
     private fun expectedDpEnabled(): Boolean =
-        EqPreferencesManager(this).getEqEnabled() && !systemSoundBypassActive && routeCoordinator?.appDisableActive != true
+        !systemSoundBypassActive && routeCoordinator?.appDisableActive != true
 
     private fun applyDpEnabled() {
         if (!dynamicsManager.isActive) return
@@ -606,15 +606,17 @@ class EqService : Service() {
                 }
                 val newMbcEnabled = p.getMbcEnabled()
                 val newMbcCount = p.getMbcBandCount()
-                val mbcStructureChanged = newMbcEnabled != dynamicsManager.mbcEnabled ||
-                    newMbcCount != dynamicsManager.mbcBandCount
+                // Only a band-count change rebuilds; on/off is a live write.
+                val countChanged = newMbcEnabled && newMbcCount != dynamicsManager.liveMbcBandCount
                 dynamicsManager.mbcEnabled = newMbcEnabled
                 dynamicsManager.mbcBandCount = newMbcCount
-                if (mbcStructureChanged && dynamicsManager.isActive) {
+                if (countChanged && dynamicsManager.isActive) {
                     if (dynamicsManager.reattachActive()) {
                         applyPersistedMbcConfig()
                         syncSystemSoundBypassFromCurrent()
                     }
+                } else if (!newMbcEnabled) {
+                    dynamicsManager.writeMbcPassthrough()
                 } else {
                     applyPersistedMbcConfig()
                 }
@@ -737,6 +739,7 @@ class EqService : Service() {
                         limiterPostGainDb = p.getLimiterPostGain()
                         mbcEnabled = p.getMbcEnabled()
                         mbcBandCount = p.getMbcBandCount()
+                        curveBypassed = !p.getEqEnabled()
                     }
                     dynamicsManager.start(eq)
                     if (dynamicsManager.isActive) {
@@ -792,6 +795,7 @@ class EqService : Service() {
                         limiterPostGainDb = p.getLimiterPostGain()
                         mbcEnabled = p.getMbcEnabled()
                         mbcBandCount = p.getMbcBandCount()
+                        curveBypassed = !p.getEqEnabled()
                     }
                     dynamicsManager.start(eq)
                     if (dynamicsManager.isActive) {
@@ -917,6 +921,7 @@ class EqService : Service() {
     fun startEq(eq: ParametricEqualizer): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return false
         manualOverrideDeviceKey = lastDeviceKey ?: overridePending
+        dynamicsManager.curveBypassed = !EqPreferencesManager(this).getEqEnabled()
         dynamicsManager.start(eq)
         val active = dynamicsManager.isActive
         setDpRunning(active)
@@ -1040,9 +1045,10 @@ class EqService : Service() {
         dynamicsManager.updateFromEqualizers(leftEq, rightEq)
     }
 
-    /** MainActivity's EQ toggle (pref already saved) — folded into the combined enable. */
+    /** EQ toggle (pref already saved): flat curve at the same level, DP stays enabled so the preamp never drops out. */
     fun setEqEnabled(enabled: Boolean) {
-        if (!enabled) dynamicsManager.setEnabled(false) else applyDpEnabled()
+        dynamicsManager.applyCurveBypass(!enabled)
+        applyDpEnabled()
     }
 
     fun updateMbc(bands: List<DynamicsProcessingManager.MbcBandParams>, crossovers: FloatArray) {

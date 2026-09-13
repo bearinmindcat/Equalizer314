@@ -345,14 +345,14 @@ class EqPreferencesManager(context: Context) {
     // Limiter
     fun saveLimiterEnabled(enabled: Boolean) { prefs.edit().putBoolean("limiterEnabled", enabled).apply() }
     fun getLimiterEnabled(): Boolean = prefs.getBoolean("limiterEnabled", false)
-    fun saveLimiterAttack(ms: Float) { prefs.edit().putFloat("limiterAttack", ms.saneOr(0.01f, 0.01f, 100f)).apply() }
-    fun getLimiterAttack(): Float = prefs.getFloat("limiterAttack", 0.01f)
-    fun saveLimiterRelease(ms: Float) { prefs.edit().putFloat("limiterRelease", ms.saneOr(1f, 1f, 500f)).apply() }
-    fun getLimiterRelease(): Float = prefs.getFloat("limiterRelease", 1f)
-    fun saveLimiterRatio(ratio: Float) { prefs.edit().putFloat("limiterRatio", ratio.saneOr(2f, 1f, 50f)).apply() }
-    fun getLimiterRatio(): Float = prefs.getFloat("limiterRatio", 2f)
-    fun saveLimiterThreshold(db: Float) { prefs.edit().putFloat("limiterThreshold", db.saneOr(0f, -30f, 0f)).apply() }
-    fun getLimiterThreshold(): Float = prefs.getFloat("limiterThreshold", 0f)
+    fun saveLimiterAttack(ms: Float) { prefs.edit().putFloat("limiterAttack", ms.saneOr(1f, 0.01f, 100f)).apply() }
+    fun getLimiterAttack(): Float = prefs.getFloat("limiterAttack", 1f)
+    fun saveLimiterRelease(ms: Float) { prefs.edit().putFloat("limiterRelease", ms.saneOr(60f, 1f, 500f)).apply() }
+    fun getLimiterRelease(): Float = prefs.getFloat("limiterRelease", 60f)
+    fun saveLimiterRatio(ratio: Float) { prefs.edit().putFloat("limiterRatio", ratio.saneOr(10f, 1f, 50f)).apply() }
+    fun getLimiterRatio(): Float = prefs.getFloat("limiterRatio", 10f)
+    fun saveLimiterThreshold(db: Float) { prefs.edit().putFloat("limiterThreshold", db.saneOr(-2f, -30f, 0f)).apply() }
+    fun getLimiterThreshold(): Float = prefs.getFloat("limiterThreshold", -2f)
     fun saveLimiterPostGain(db: Float) { prefs.edit().putFloat("limiterPostGain", db.saneOr(0f, -12f, 12f)).apply() }
     fun getLimiterPostGain(): Float = prefs.getFloat("limiterPostGain", 0f)
 
@@ -667,8 +667,8 @@ class EqPreferencesManager(context: Context) {
         f("preampGain", 0f, -20f, 20f); f("preampLeftDb", 0f, -20f, 20f); f("preampRightDb", 0f, -20f, 20f)
         i("channelBalancePercent", -100, 100)
         f("leftChannelGainDb", 0f, -12f, 12f); f("rightChannelGainDb", 0f, -12f, 12f)
-        f("limiterAttack", 0.01f, 0.01f, 100f); f("limiterRelease", 1f, 1f, 500f); f("limiterRatio", 2f, 1f, 50f)
-        f("limiterThreshold", 0f, -30f, 0f); f("limiterPostGain", 0f, -12f, 12f)
+        f("limiterAttack", 1f, 0.01f, 100f); f("limiterRelease", 60f, 1f, 500f); f("limiterRatio", 10f, 1f, 50f)
+        f("limiterThreshold", -2f, -30f, 0f); f("limiterPostGain", 0f, -12f, 12f)
         i("mbcBandCount", 1, 8)
         for (b in 0 until 8) {
             f("mbc_${b}_cutoff", 1000f, 20f, 20000f); f("mbc_${b}_attack", 1f, 0.01f, 500f)

@@ -57,8 +57,7 @@ class LimiterActivity : AppCompatActivity() {
             serviceBound = true
             // Check DP state BEFORE pushToService (which only updates if DP is already running)
             val wasActive = eqService?.dynamicsManager?.isActive == true
-            // Don't pushToService on screen entry — causes audio dropout from DP recreation
-            // Settings are already applied from when DP was started
+            // Don't pushToService on screen entry: it recreates DP (audio dropout), and the settings were already applied when DP started.
             com.bearinmind.equalizer314.ui.BottomNavHelper.setPowerFabInstant(this@LimiterActivity, wasActive)
         }
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -245,18 +244,18 @@ class LimiterActivity : AppCompatActivity() {
             cancelBtn.setOnClickListener { dialog.dismiss() }
             resetDialogBtn.setOnClickListener {
                 isUpdating = true
-                eqPrefs.saveLimiterThreshold(0f)
-                eqPrefs.saveLimiterRatio(2f)
-                eqPrefs.saveLimiterAttack(0.01f)
-                eqPrefs.saveLimiterRelease(1f)
+                eqPrefs.saveLimiterThreshold(-2f)
+                eqPrefs.saveLimiterRatio(10f)
+                eqPrefs.saveLimiterAttack(1f)
+                eqPrefs.saveLimiterRelease(60f)
                 eqPrefs.saveLimiterPostGain(0f)
-                thresholdSlider.value = 0f; thresholdText.setText("0.0")
-                ratioSlider.value = 2f; ratioText.setText("2.0")
-                attackSlider.value = 0.01f; attackText.setText("0.01")
-                releaseSlider.value = 1f; releaseText.setText("1")
+                thresholdSlider.value = -2f; thresholdText.setText("-2.0")
+                ratioSlider.value = 10f; ratioText.setText("10.0")
+                attackSlider.value = 1f; attackText.setText("1.00")
+                releaseSlider.value = 60f; releaseText.setText("60")
                 postGainSlider.value = 0f; postGainText.setText("0.0")
-                waveformView.ceilingDb = 0f
-                ceilingView.ceilingDb = 0f
+                waveformView.ceilingDb = -2f
+                ceilingView.ceilingDb = -2f
                 isUpdating = false
                 pushToService()
                 android.widget.Toast.makeText(this, "Limiter reset to defaults", android.widget.Toast.LENGTH_SHORT).show()
