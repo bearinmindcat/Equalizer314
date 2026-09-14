@@ -475,13 +475,13 @@ class MbcActivity : AppCompatActivity() {
                 setPadding((24 * density).toInt(), (20 * density).toInt(), (24 * density).toInt(), (16 * density).toInt())
             }
             val titleTv = android.widget.TextView(this).apply {
-                text = "Reset"
+                text = getString(R.string.reset)
                 setTextColor(0xFFE2E2E2.toInt())
                 textSize = 20f
                 setPadding(0, 0, 0, (12 * density).toInt())
             }
             val messageTv = android.widget.TextView(this).apply {
-                text = "Reset all values in this screen to their defaults?"
+                text = getString(R.string.reset_screen_confirm)
                 setTextColor(0xFFAAAAAA.toInt())
                 textSize = 14f
                 setPadding(0, 0, 0, (16 * density).toInt())
@@ -500,7 +500,7 @@ class MbcActivity : AppCompatActivity() {
                     android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
             }
             val resetDialogBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-                text = "Reset"
+                text = getString(R.string.reset)
                 layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                     marginEnd = (3 * density).toInt()
                 }
@@ -512,7 +512,7 @@ class MbcActivity : AppCompatActivity() {
                 insetTop = 0; insetBottom = 0
             }
             val cancelBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-                text = "Cancel"
+                text = getString(R.string.cancel)
                 layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                     marginStart = (3 * density).toInt()
                 }
@@ -551,7 +551,7 @@ class MbcActivity : AppCompatActivity() {
                 graphView.invalidate()
                 loadBandToUI()
                 pushMbcToService()
-                android.widget.Toast.makeText(this, "MBC reset to defaults", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.mbc_reset_to_defaults), android.widget.Toast.LENGTH_SHORT).show()
                 dialog.dismiss()
             }
             dialog.show()
@@ -632,7 +632,7 @@ class MbcActivity : AppCompatActivity() {
             }
             val on = svc.dynamicsManager.isActive
             com.bearinmind.equalizer314.ui.BottomNavHelper.setPowerState(this, eqPrefs, on)
-            android.widget.Toast.makeText(this, if (on) "DynamicsProcessing Start" else "DynamicsProcessing Stop", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(this, getString(if (on) R.string.dp_start else R.string.dp_stop), android.widget.Toast.LENGTH_SHORT).show()
         }
 
         // Graph with MBC band visualization
@@ -900,7 +900,7 @@ class MbcActivity : AppCompatActivity() {
     private fun loadBandToUI() {
         isUpdating = true
         val b = bands[selectedBand]
-        bandTitle.text = "Band ${selectedBand + 1}"
+        bandTitle.text = getString(R.string.band_n, selectedBand + 1)
         updateMbcColorBox()
         bandSwitch.isChecked = b.enabled
         // Cutoff reads from crossoverFreqs, log-mapped slider
@@ -1703,7 +1703,7 @@ class MbcActivity : AppCompatActivity() {
         }
 
         val title = TextView(this).apply {
-            text = "Band Color"
+            text = getString(R.string.band_color)
             textSize = 16f
             setTextColor(0xFFE2E2E2.toInt())
             setPadding(0, 0, 0, (12 * density).toInt())

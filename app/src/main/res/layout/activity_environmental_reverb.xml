@@ -24,14 +24,14 @@
             android:layout_height="48dp"
             android:src="@drawable/ic_arrow_back"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Back"
+            android:contentDescription="@string/back"
             app:tint="?attr/colorOnSurface" />
 
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Environmental Reverb"
+            android:text="@string/environmental_reverb"
             android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
             android:textColor="?attr/colorOnSurface"
             android:paddingStart="8dp" />
@@ -77,7 +77,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Room Level"
+                        android:text="@string/room_level"
                         android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                         android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -181,7 +181,7 @@
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="Reverb Parameters"
+                            android:text="@string/reverb_parameters"
                             android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
                             android:textColor="#FFCCCCCC" />
 
@@ -191,7 +191,7 @@
                             android:layout_height="20dp"
                             android:src="@drawable/ic_chevron_right"
                             android:rotation="90"
-                            android:contentDescription="Expand reverb parameters"
+                            android:contentDescription="@string/expand_reverb_parameters"
                             app:tint="#FFCCCCCC" />
                     </LinearLayout>
 
@@ -210,7 +210,7 @@
                         <LinearLayout android:id="@+id/reverbReflectDelayRow" android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="4dp">
                             <TextView android:layout_width="120dp" android:layout_height="wrap_content"
-                                android:text="Pre-delay (ms)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                                android:text="@string/pre_delay_ms" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                                 android:textColor="#FFAAAAAA" />
                             <com.google.android.material.slider.Slider android:id="@+id/reverbReflectDelaySlider"
                                 android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
@@ -237,7 +237,7 @@
                         <LinearLayout android:id="@+id/reverbReflectLevelRow" android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="4dp">
                             <TextView android:layout_width="120dp" android:layout_height="wrap_content"
-                                android:text="Early Reflect. Level (dB)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                                android:text="@string/early_reflect_level_db" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                                 android:textColor="#FFAAAAAA" />
                             <com.google.android.material.slider.Slider android:id="@+id/reverbReflectLevelSlider"
                                 android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
@@ -260,7 +260,7 @@
                         <LinearLayout android:id="@+id/reverbDelayRow" android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="4dp">
                             <TextView android:layout_width="120dp" android:layout_height="wrap_content"
-                                android:text="Reverb Delay (ms)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                                android:text="@string/reverb_delay_ms" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                                 android:textColor="#FFAAAAAA" />
                             <com.google.android.material.slider.Slider android:id="@+id/reverbDelaySlider"
                                 android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
@@ -284,7 +284,7 @@
                         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:orientation="horizontal" android:gravity="center_vertical">
                             <TextView android:layout_width="120dp" android:layout_height="wrap_content"
-                                android:text="Reverb Decay (ms)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                                android:text="@string/reverb_decay_ms" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                                 android:textColor="#FFAAAAAA" />
                             <com.google.android.material.slider.Slider android:id="@+id/reverbDecayTimeSlider"
                                 android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
@@ -311,7 +311,7 @@
                         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="4dp">
                             <TextView android:layout_width="120dp" android:layout_height="wrap_content"
-                                android:text="Reverb Level (dB)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                                android:text="@string/reverb_level_db" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                                 android:textColor="#FFAAAAAA" />
                             <com.google.android.material.slider.Slider android:id="@+id/reverbLevelSlider"
                                 android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
@@ -341,7 +341,7 @@
                         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="4dp">
                             <TextView android:layout_width="120dp" android:layout_height="wrap_content"
-                                android:text="HF Level (dB)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                                android:text="@string/hf_level_db" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                                 android:textColor="#FFAAAAAA" />
                             <com.google.android.material.slider.Slider android:id="@+id/reverbRoomHFLevelSlider"
                                 android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
@@ -363,7 +363,7 @@
                         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:orientation="horizontal" android:gravity="center_vertical">
                             <TextView android:layout_width="120dp" android:layout_height="wrap_content"
-                                android:text="HF Damping" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                                android:text="@string/hf_damping" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                                 android:textColor="#FFAAAAAA" />
                             <com.google.android.material.slider.Slider android:id="@+id/reverbDecayHfSlider"
                                 android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
@@ -386,7 +386,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="10dp"
-                            android:text="Pre-delay, Early Reflect. Level and Reverb Delay are greyed out: this device's reverb engine accepts them but never applies them, so they would change the graph without changing the sound."
+                            android:text="@string/pre_delay_early_reflect_level_and"
                             android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
                             android:textColor="#FF888888"
                             android:visibility="gone" />

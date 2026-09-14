@@ -24,14 +24,14 @@
             android:layout_height="48dp"
             android:src="@drawable/ic_arrow_back"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Back"
+            android:contentDescription="@string/back"
             app:tint="?attr/colorOnSurface" />
 
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Channel Input"
+            android:text="@string/channel_input"
             android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
             android:textColor="?attr/colorOnSurface"
             android:paddingStart="8dp" />
@@ -69,7 +69,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:padding="14dp"
-                    android:text="Bind a saved EQ preset to a specific app. When that app starts playing audio and broadcasts a session open (Spotify, Poweramp, AIMP, and many others do), its preset is applied automatically to its audio session — without affecting other apps."
+                    android:text="@string/bind_a_saved_eq_preset_to_2"
                     android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                     android:textColor="?attr/colorOnSurfaceVariant" />
             </com.google.android.material.card.MaterialCardView>
@@ -91,7 +91,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Routing mode"
+                android:text="@string/routing_mode"
                 android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                 android:textColor="?attr/colorOnSurfaceVariant"
                 android:paddingStart="4dp"
@@ -111,7 +111,7 @@
                     style="@style/Widget.Material3.Chip.Filter"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="System-wide"
+                    android:text="@string/system_wide"
                     android:textSize="14sp"
                     app:chipMinHeight="44dp"
                     app:chipStartPadding="14dp"
@@ -123,7 +123,7 @@
                     style="@style/Widget.Material3.Chip.Filter"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Session-based"
+                    android:text="@string/session_based"
                     android:textSize="14sp"
                     app:chipMinHeight="44dp"
                     app:chipStartPadding="14dp"
@@ -148,7 +148,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Now playing"
+                    android:text="@string/now_playing"
                     android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                     android:textColor="?attr/colorOnSurfaceVariant"
                     android:paddingStart="4dp"
@@ -171,7 +171,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:padding="14dp"
-                    android:text="No sessions detected"
+                    android:text="@string/no_sessions_detected"
                     android:gravity="center"
                     android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                     android:textColor="?attr/colorOnSurfaceVariant" />
@@ -197,7 +197,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Apps"
+                    android:text="@string/apps"
                     android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                     android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -237,7 +237,7 @@
                     style="@style/Widget.Material3.Chip.Filter"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Filtered"
+                    android:text="@string/filtered"
                     android:textSize="14sp"
                     app:chipMinHeight="44dp"
                     app:chipStartPadding="14dp"
@@ -249,7 +249,7 @@
                     style="@style/Widget.Material3.Chip.Filter"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Show All"
+                    android:text="@string/show_all"
                     android:textSize="14sp"
                     app:chipMinHeight="44dp"
                     app:chipStartPadding="14dp"
@@ -275,7 +275,7 @@
                 android:id="@+id/appsEmptyState"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Loading apps…"
+                android:text="@string/loading_apps"
                 android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
                 android:textColor="?attr/colorOnSurfaceVariant"
                 android:gravity="center"

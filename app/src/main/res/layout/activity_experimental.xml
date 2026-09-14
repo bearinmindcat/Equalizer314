@@ -24,14 +24,14 @@
             android:layout_height="48dp"
             android:src="@drawable/ic_arrow_back"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Back"
+            android:contentDescription="@string/back"
             app:tint="?attr/colorOnSurface" />
 
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Experimental"
+            android:text="@string/experimental"
             android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
             android:textColor="?attr/colorOnSurface"
             android:paddingStart="8dp" />
@@ -78,14 +78,14 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="DP Band Count"
+                        android:text="@string/dp_band_count"
                         android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                         android:textColor="?attr/colorOnSurface" />
 
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Fixed — the system EQ always uses the full band table"
+                        android:text="@string/fixed_the_system_eq_always_uses"
                         android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                         android:textColor="?attr/colorOnSurfaceVariant"
                         android:paddingTop="4dp" />
@@ -96,7 +96,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="16dp"
-                    android:text="127"
+                    android:text="@string/s_127"
                     android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
                     android:textColor="?attr/colorOnSurface" />
             </LinearLayout>
@@ -124,14 +124,14 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="DP Latency Window"
+                    android:text="@string/dp_latency_window"
                     android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                     android:textColor="?attr/colorOnSurface" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Higher latency renders the DP closer to the calculated eq curve. Applies when you release the slider. Ignored while Pixel Compatibility Mode is on (compat forces a 10 ms window)."
+                    android:text="@string/higher_latency_renders_the_dp_closer"
                     android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                     android:textColor="?attr/colorOnSurfaceVariant"
                     android:paddingTop="4dp" />
@@ -161,7 +161,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:gravity="start"
-                        android:text="43 ms"
+                        android:text="@string/s_43_ms"
                         android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                         android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -170,7 +170,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="2"
                         android:gravity="center"
-                        android:text="85 ms"
+                        android:text="@string/s_85_ms"
                         android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                         android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -179,7 +179,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="2"
                         android:gravity="center"
-                        android:text="171 ms"
+                        android:text="@string/s_171_ms"
                         android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                         android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -188,7 +188,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:gravity="end"
-                        android:text="341 ms"
+                        android:text="@string/s_341_ms"
                         android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                         android:textColor="?attr/colorOnSurfaceVariant" />
                 </LinearLayout>
@@ -222,14 +222,14 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Pre/Post EQ Interleave"
+                        android:text="@string/pre_post_eq_interleave"
                         android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                         android:textColor="?attr/colorOnSurface" />
 
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Renders EQ across both Pre &amp; Post creating a finer curve without sharp stairs."
+                        android:text="@string/renders_eq_across_both_pre_and"
                         android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                         android:textColor="?attr/colorOnSurfaceVariant"
                         android:paddingTop="4dp" />
@@ -269,14 +269,14 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Pixel Compatibility Mode"
+                        android:text="@string/pixel_compatibility_mode"
                         android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                         android:textColor="?attr/colorOnSurface" />
 
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Caps DP bands to 32, 10 ms latency &amp; disables post eq"
+                        android:text="@string/caps_dp_bands_to_32_10"
                         android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                         android:textColor="?attr/colorOnSurfaceVariant"
                         android:paddingTop="4dp" />
@@ -317,14 +317,14 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Add more EQ bands"
+                        android:text="@string/add_more_eq_bands"
                         android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                         android:textColor="?attr/colorOnSurface" />
 
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Allows up to 64 eq filters to toggle"
+                        android:text="@string/allows_up_to_64_eq_filters"
                         android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                         android:textColor="?attr/colorOnSurfaceVariant"
                         android:paddingTop="4dp" />
@@ -364,14 +364,14 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="MBC Volume Tether"
+                        android:text="@string/mbc_volume_tether"
                         android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                         android:textColor="?attr/colorOnSurface" />
 
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="MBC thresholds follow media volume so MBC stays consistent"
+                        android:text="@string/mbc_thresholds_follow_media_volume_so"
                         android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                         android:textColor="?attr/colorOnSurfaceVariant"
                         android:paddingTop="4dp" />
@@ -411,14 +411,14 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Auto-save presets"
+                        android:text="@string/auto_save_presets"
                         android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                         android:textColor="?attr/colorOnSurface" />
 
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Saves preset changes without having to overwrite"
+                        android:text="@string/saves_preset_changes_without_having_to"
                         android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                         android:textColor="?attr/colorOnSurfaceVariant"
                         android:paddingTop="4dp" />
@@ -458,14 +458,14 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Black AMOLED"
+                        android:text="@string/black_amoled"
                         android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                         android:textColor="?attr/colorOnSurface" />
 
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Changes dark theme for AMOLED screens"
+                        android:text="@string/changes_dark_theme_for_amoled_screens"
                         android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                         android:textColor="?attr/colorOnSurfaceVariant"
                         android:paddingTop="4dp" />
@@ -498,14 +498,14 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Remote EQ Mode"
+                    android:text="@string/remote_eq_mode"
                     android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                     android:textColor="?attr/colorOnSurface" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Control this app from another device on network."
+                    android:text="@string/control_this_app_from_another_device"
                     android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                     android:textColor="?attr/colorOnSurfaceVariant"
                     android:paddingTop="4dp" />
@@ -524,7 +524,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Off" />
+                        android:text="@string/off" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/expTvModeServer"
@@ -532,7 +532,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="TV" />
+                        android:text="@string/tv" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/expTvModeClient"
@@ -540,7 +540,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Remote" />
+                        android:text="@string/remote" />
                 </com.google.android.material.button.MaterialButtonToggleGroup>
 
                 <TextView
@@ -581,14 +581,14 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Experimental DP Engine"
+                        android:text="@string/experimental_dp_engine"
                         android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                         android:textColor="?attr/colorOnSurface" />
 
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="32 bands + time-resolution FFT (vs. legacy 128 bands + frequency-resolution). Aimed at fixing bass boom &amp; thin treble. Toggle restarts the audio engine."
+                        android:text="@string/s_32_bands_time_resolution_fft_vs"
                         android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                         android:textColor="?attr/colorOnSurfaceVariant"
                         android:paddingTop="4dp" />

@@ -27,7 +27,7 @@
             android:layout_height="48dp"
             android:src="@drawable/ic_arrow_back"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Back"
+            android:contentDescription="@string/back"
             app:tint="?attr/colorOnSurface" />
         -->
 
@@ -35,7 +35,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Multiband Compression"
+            android:text="@string/multiband_compression"
             android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
             android:textColor="?attr/colorOnSurface" />
 
@@ -100,7 +100,7 @@
                     app:shapeAppearanceOverlay="@style/ShapeAppearance.MbcEqButton"
                     app:strokeColor="#FF444444"
                     app:strokeWidth="1dp"
-                    android:contentDescription="Frequency view" />
+                    android:contentDescription="@string/frequency_view" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/mbcGraphModeTime"
@@ -121,7 +121,7 @@
                     app:shapeAppearanceOverlay="@style/ShapeAppearance.MbcGrButton"
                     app:strokeColor="#FF444444"
                     app:strokeWidth="1dp"
-                    android:contentDescription="GR trace view" />
+                    android:contentDescription="@string/gr_trace_view" />
             </LinearLayout>
 
             <com.google.android.material.button.MaterialButton
@@ -143,7 +143,7 @@
                 app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
                 app:strokeColor="#FF444444"
                 app:strokeWidth="1dp"
-                android:contentDescription="Reset to defaults" />
+                android:contentDescription="@string/reset_to_defaults" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/mbcVisualizerToggle"
@@ -163,7 +163,7 @@
                 app:shapeAppearanceOverlay="@style/ShapeAppearance.SpectrumButton"
                 app:strokeColor="#FF444444"
                 app:strokeWidth="1dp"
-                android:contentDescription="Toggle visualizer" />
+                android:contentDescription="@string/toggle_visualizer" />
         </FrameLayout>
     </com.google.android.material.card.MaterialCardView>
 
@@ -219,7 +219,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_gravity="start|center_vertical"
-                            android:text="Band 1"
+                            android:text="@string/band_1"
                             android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                             android:textColor="?attr/colorOnSurface" />
 
@@ -229,7 +229,7 @@
                             android:layout_height="24dp"
                             android:layout_gravity="center"
                             android:gravity="center"
-                            android:text="\u2014"
+                            android:text="@string/u2014"
                             android:textSize="12sp"
                             android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -251,7 +251,7 @@
                         <TextView
                             android:layout_width="96dp"
                             android:layout_height="wrap_content"
-                            android:text="Cutoff (Hz)"
+                            android:text="@string/cutoff_hz"
                             android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                             android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -281,7 +281,7 @@
                                 android:layout_height="wrap_content"
                                 android:inputType="number"
                                 android:textSize="12sp"
-                                android:text="1000"
+                                android:text="@string/s_1000"
                                 android:gravity="center"
                                 android:imeOptions="actionDone" />
                         </com.google.android.material.textfield.TextInputLayout>
@@ -298,7 +298,7 @@
                         <TextView
                             android:layout_width="96dp"
                             android:layout_height="wrap_content"
-                            android:text="Pre-Gain (dB)"
+                            android:text="@string/pre_gain_db"
                             android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                             android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -328,7 +328,7 @@
                                 android:layout_height="wrap_content"
                                 android:inputType="numberDecimal|numberSigned"
                                 android:textSize="12sp"
-                                android:text="0.0"
+                                android:text="@string/s_0_0"
                                 android:gravity="center"
                                 android:imeOptions="actionDone" />
                         </com.google.android.material.textfield.TextInputLayout>
@@ -344,7 +344,7 @@
                         <TextView
                             android:layout_width="96dp"
                             android:layout_height="wrap_content"
-                            android:text="Post-Gain (dB)"
+                            android:text="@string/post_gain_db_2"
                             android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                             android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -374,7 +374,7 @@
                                 android:layout_height="wrap_content"
                                 android:inputType="numberDecimal|numberSigned"
                                 android:textSize="12sp"
-                                android:text="0.0"
+                                android:text="@string/s_0_0"
                                 android:gravity="center"
                                 android:imeOptions="actionDone" />
                         </com.google.android.material.textfield.TextInputLayout>
@@ -404,7 +404,7 @@
                             <TextView
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:text="Range (dB)"
+                                android:text="@string/range_db"
                                 android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                                 android:textColor="?attr/colorOnSurfaceVariant"
                                 android:paddingStart="4dp"
@@ -438,7 +438,7 @@
                                 android:layout_height="wrap_content"
                                 android:inputType="numberDecimal|numberSigned"
                                 android:textSize="12sp"
-                                android:text="-12.0"
+                                android:text="@string/s_12_0"
                                 android:gravity="center"
                                 android:imeOptions="actionDone" />
                         </com.google.android.material.textfield.TextInputLayout>
@@ -473,7 +473,7 @@
                                 android:id="@+id/mbcRangeHint"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:text="Range (visual only)\nTo achieve this range, set threshold and ratio accordingly"
+                                android:text="@string/range_visual_only_nto_achieve_this"
                                 android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                                 android:textColor="?attr/colorOnSurfaceVariant"
                                 android:padding="10dp" />
@@ -532,7 +532,7 @@
                         <TextView
                             android:layout_width="96dp"
                             android:layout_height="wrap_content"
-                            android:text="Thresh (dB)"
+                            android:text="@string/thresh_db"
                             android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                             android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -562,7 +562,7 @@
                                 android:layout_height="wrap_content"
                                 android:inputType="numberDecimal|numberSigned"
                                 android:textSize="12sp"
-                                android:text="-2.0"
+                                android:text="@string/s_2_0"
                                 android:gravity="center"
                                 android:imeOptions="actionDone" />
                         </com.google.android.material.textfield.TextInputLayout>
@@ -579,7 +579,7 @@
                         <TextView
                             android:layout_width="96dp"
                             android:layout_height="wrap_content"
-                            android:text="Ratio (X:1)"
+                            android:text="@string/ratio_x_1"
                             android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                             android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -609,7 +609,7 @@
                                 android:layout_height="wrap_content"
                                 android:inputType="numberDecimal"
                                 android:textSize="12sp"
-                                android:text="10"
+                                android:text="@string/s_10"
                                 android:gravity="center"
                                 android:imeOptions="actionDone" />
                         </com.google.android.material.textfield.TextInputLayout>
@@ -626,7 +626,7 @@
                         <TextView
                             android:layout_width="96dp"
                             android:layout_height="wrap_content"
-                            android:text="Knee (dB)"
+                            android:text="@string/knee_db"
                             android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                             android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -656,7 +656,7 @@
                                 android:layout_height="wrap_content"
                                 android:inputType="numberDecimal"
                                 android:textSize="12sp"
-                                android:text="3.5"
+                                android:text="@string/s_3_5"
                                 android:gravity="center"
                                 android:imeOptions="actionDone" />
                         </com.google.android.material.textfield.TextInputLayout>
@@ -673,7 +673,7 @@
                         <TextView
                             android:layout_width="96dp"
                             android:layout_height="wrap_content"
-                            android:text="Attack (ms)"
+                            android:text="@string/attack_ms"
                             android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                             android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -703,7 +703,7 @@
                                 android:layout_height="wrap_content"
                                 android:inputType="numberDecimal"
                                 android:textSize="12sp"
-                                android:text="1.0"
+                                android:text="@string/s_1_0"
                                 android:gravity="center"
                                 android:imeOptions="actionDone" />
                         </com.google.android.material.textfield.TextInputLayout>
@@ -720,7 +720,7 @@
                         <TextView
                             android:layout_width="96dp"
                             android:layout_height="wrap_content"
-                            android:text="Release (ms)"
+                            android:text="@string/release_ms"
                             android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                             android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -750,7 +750,7 @@
                                 android:layout_height="wrap_content"
                                 android:inputType="numberDecimal"
                                 android:textSize="12sp"
-                                android:text="60"
+                                android:text="@string/s_60"
                                 android:gravity="center"
                                 android:imeOptions="actionDone" />
                         </com.google.android.material.textfield.TextInputLayout>
@@ -826,7 +826,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginEnd="4dp"
-                                android:text="Gate Thresh (dB)"
+                                android:text="@string/gate_thresh_db"
                                 android:maxLines="1"
                                 android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                                 android:textColor="?attr/colorOnSurfaceVariant" />
@@ -857,7 +857,7 @@
                                     android:layout_height="wrap_content"
                                     android:inputType="numberDecimal|numberSigned"
                                     android:textSize="12sp"
-                                    android:text="-90"
+                                    android:text="@string/s_90"
                                     android:gravity="center"
                                     android:imeOptions="actionDone" />
                             </com.google.android.material.textfield.TextInputLayout>
@@ -874,7 +874,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginEnd="4dp"
-                                android:text="Gate Ratio (X:1)"
+                                android:text="@string/gate_ratio_x_1"
                                 android:maxLines="1"
                                 android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                                 android:textColor="?attr/colorOnSurfaceVariant" />
@@ -905,7 +905,7 @@
                                     android:layout_height="wrap_content"
                                     android:inputType="numberDecimal"
                                     android:textSize="12sp"
-                                    android:text="1.0"
+                                    android:text="@string/s_1_0"
                                     android:gravity="center"
                                     android:imeOptions="actionDone" />
                             </com.google.android.material.textfield.TextInputLayout>

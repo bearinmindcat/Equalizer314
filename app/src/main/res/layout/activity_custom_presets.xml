@@ -26,13 +26,13 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:scaleType="centerInside"
             app:tint="?attr/colorOnSurface"
-            android:contentDescription="Back" />
+            android:contentDescription="@string/back" />
 
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Custom Presets"
+            android:text="@string/custom_presets"
             android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
             android:textColor="?attr/colorOnSurface"
             android:paddingStart="8dp" />
@@ -54,7 +54,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="No custom presets saved yet.\nTap the save icon on the EQ screen to save your current settings."
+                android:text="@string/no_custom_presets_saved_yet_ntap"
                 android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
                 android:textColor="?attr/colorOnSurfaceVariant"
                 android:gravity="center"

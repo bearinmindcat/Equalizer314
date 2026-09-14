@@ -75,11 +75,11 @@ class PresetsConversionsActivity : AppCompatActivity() {
         val name = eqPrefs.getAutoEqName()
         if (!name.isNullOrBlank()) {
             val source = eqPrefs.getAutoEqSource() ?: ""
-            statusText.text = "$name by $source"
+            statusText.text = getString(R.string.name_by_source, name, source)
             statusText.setTextColor(MaterialColors.getColor(
                 statusText, com.google.android.material.R.attr.colorPrimary, 0xFFBB86FC.toInt()))
         } else {
-            statusText.text = "Select or import a preset"
+            statusText.text = getString(R.string.select_or_import_a_preset)
             statusText.setTextColor(MaterialColors.getColor(
                 statusText, com.google.android.material.R.attr.colorOnSurfaceVariant, 0xFF888888.toInt()))
         }
@@ -94,7 +94,7 @@ class PresetsConversionsActivity : AppCompatActivity() {
             statusText.setTextColor(MaterialColors.getColor(
                 statusText, com.google.android.material.R.attr.colorPrimary, 0xFFBB86FC.toInt()))
         } else {
-            statusText.text = "Import a measurement and match to a specific target"
+            statusText.text = getString(R.string.import_measurement_blurb)
             statusText.setTextColor(MaterialColors.getColor(
                 statusText, com.google.android.material.R.attr.colorOnSurfaceVariant, 0xFF888888.toInt()))
         }

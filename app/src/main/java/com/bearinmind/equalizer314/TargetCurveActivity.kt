@@ -48,9 +48,9 @@ class TargetCurveActivity : AppCompatActivity() {
             try {
                 val apoText = resultText.text.toString().trim()
                 contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(apoText) }
-                Toast.makeText(this, "Exported successfully", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.exported_successfully), Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
-                Toast.makeText(this, "Export failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.export_failed, e.message), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -137,7 +137,7 @@ class TargetCurveActivity : AppCompatActivity() {
                 )
             )
         } else {
-            measurementStatus.text = "No measurement selected"
+            measurementStatus.text = getString(R.string.no_measurement_selected)
             measurementStatus.setTextColor(0xFF888888.toInt())
         }
     }
@@ -153,7 +153,7 @@ class TargetCurveActivity : AppCompatActivity() {
                 )
             )
         } else {
-            targetSelectStatus.text = "No target selected"
+            targetSelectStatus.text = getString(R.string.no_target_selected)
             targetSelectStatus.setTextColor(0xFF888888.toInt())
         }
     }
@@ -187,7 +187,7 @@ class TargetCurveActivity : AppCompatActivity() {
         val measText = eqPrefs.getImportedMeasurementText(measName)
         val meas = if (measText != null) FreqResponseParser.parse(measText) else null
         if (meas == null) {
-            Toast.makeText(this, "Failed to load measurement", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.failed_to_load_measurement), Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -204,7 +204,7 @@ class TargetCurveActivity : AppCompatActivity() {
         }
 
         if (target == null) {
-            Toast.makeText(this, "Failed to load target curve", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.failed_to_load_target_curve), Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -217,7 +217,7 @@ class TargetCurveActivity : AppCompatActivity() {
         val dotRunnable = object : Runnable {
             override fun run() {
                 dotCount = (dotCount + 1) % 4
-                computeButton.text = "Generating" + ".".repeat(dotCount)
+                computeButton.text = getString(R.string.generating) + ".".repeat(dotCount)
                 dotHandler.postDelayed(this, 400)
             }
         }
@@ -267,16 +267,16 @@ class TargetCurveActivity : AppCompatActivity() {
                 resultGraphContainer.addView(resultEqView)
 
                 dotHandler.removeCallbacks(dotRunnable)
-                computeButton.text = "Generate EQ"
+                computeButton.text = getString(R.string.generate_eq)
                 computeButton.isEnabled = true
                 setResult(Activity.RESULT_OK)
             }
             } catch (e: Exception) {
                 runOnUiThread {
                     dotHandler.removeCallbacks(dotRunnable)
-                    computeButton.text = "Generate EQ"
+                    computeButton.text = getString(R.string.generate_eq)
                     computeButton.isEnabled = true
-                    android.widget.Toast.makeText(this, "EQ generation failed: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(this, getString(R.string.eq_generation_failed, e.message), android.widget.Toast.LENGTH_LONG).show()
                 }
             }
         }.start()
@@ -302,7 +302,7 @@ class TargetCurveActivity : AppCompatActivity() {
             setPadding(0, 0, 0, (12 * density).toInt())
         }
         val title = android.widget.TextView(this).apply {
-            text = "Edit Generated EQ"
+            text = getString(R.string.edit_generated_eq)
             setTextColor(0xFFE2E2E2.toInt()); textSize = 20f
             layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
@@ -364,7 +364,7 @@ class TargetCurveActivity : AppCompatActivity() {
                 android.widget.LinearLayout.LayoutParams.MATCH_PARENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
         }
         val resetDlgBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-            text = "Reset"
+            text = getString(R.string.reset)
             layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginEnd = (3 * density).toInt()
             }
@@ -373,7 +373,7 @@ class TargetCurveActivity : AppCompatActivity() {
             insetTop = 0; insetBottom = 0
         }
         val saveBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-            text = "Save"
+            text = getString(R.string.save)
             layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginStart = (3 * density).toInt()
             }
@@ -439,7 +439,7 @@ class TargetCurveActivity : AppCompatActivity() {
     private fun showAddToPresetsDialog() {
         val apoText = resultText.text.toString().trim()
         if (apoText.isEmpty()) {
-            Toast.makeText(this, "Generate an EQ first", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.generate_an_eq_first), Toast.LENGTH_SHORT).show()
             return
         }
         val density = resources.displayMetrics.density
@@ -452,7 +452,7 @@ class TargetCurveActivity : AppCompatActivity() {
             setPadding((24 * density).toInt(), (20 * density).toInt(), (24 * density).toInt(), (16 * density).toInt())
         }
         val titleTv = android.widget.TextView(this).apply {
-            text = "Save Custom Preset"
+            text = getString(R.string.save_custom_preset)
             setTextColor(0xFFE2E2E2.toInt()); textSize = 20f
             setPadding(0, 0, 0, (12 * density).toInt())
         }
@@ -499,7 +499,7 @@ class TargetCurveActivity : AppCompatActivity() {
         val cancelBtn = com.google.android.material.button.MaterialButton(
             this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle
         ).apply {
-            text = "Cancel"
+            text = getString(R.string.cancel)
             layoutParams = android.widget.LinearLayout.LayoutParams(
                 0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f
             ).apply { marginEnd = (3 * density).toInt() }
@@ -513,7 +513,7 @@ class TargetCurveActivity : AppCompatActivity() {
         val addBtn = com.google.android.material.button.MaterialButton(
             this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle
         ).apply {
-            text = "OK"
+            text = getString(R.string.ok)
             layoutParams = android.widget.LinearLayout.LayoutParams(
                 0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f
             ).apply { marginStart = (3 * density).toInt() }
@@ -541,7 +541,7 @@ class TargetCurveActivity : AppCompatActivity() {
             // apps/devices. Use the computed profile if available, else re-parse the APO.
             val profile = lastComputedProfile ?: AutoEqParser.parse(apoText)
             if (profile == null) {
-                Toast.makeText(this, "Couldn't parse the generated EQ", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.could_not_parse_generated_eq), Toast.LENGTH_SHORT).show()
                 dialog.dismiss()
                 return@setOnClickListener
             }
@@ -567,7 +567,7 @@ class TargetCurveActivity : AppCompatActivity() {
                 .putString("preset_$name", json.toString())
                 .putStringSet("preset_names", existing.toMutableSet() + name)
                 .apply()
-            Toast.makeText(this, "Saved \"$name\" to your presets", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.saved_to_your_presets, name), Toast.LENGTH_SHORT).show()
             dialog.dismiss()
         }
         dialog.show()

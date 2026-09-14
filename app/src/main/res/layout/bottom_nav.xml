@@ -33,14 +33,14 @@
                     android:layout_height="28dp"
                     android:src="@drawable/ic_nav_equalizer"
                     android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="EQ"
+                    android:contentDescription="@string/eq"
                     android:scaleType="centerInside"
                     app:tint="?attr/colorOnSurface" />
                 <TextView
                     android:id="@+id/navEqStatus"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="ON"
+                    android:text="@string/on"
                     android:textSize="8sp"
                     android:textColor="#FF888888" />
             </LinearLayout>
@@ -56,14 +56,14 @@
                     android:layout_height="28dp"
                     android:src="@drawable/ic_nav_compress"
                     android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="Multiband Compression"
+                    android:contentDescription="@string/multiband_compression"
                     android:scaleType="centerInside"
                     app:tint="?attr/colorOnSurface" />
                 <TextView
                     android:id="@+id/navMbcStatus"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="OFF"
+                    android:text="@string/off_2"
                     android:textSize="8sp"
                     android:textColor="#FF888888" />
             </LinearLayout>
@@ -77,7 +77,7 @@
             android:src="@drawable/ic_nav_power"
             android:scaleType="centerInside"
             android:background="@drawable/bg_power_button_ripple"
-            android:contentDescription="Power"
+            android:contentDescription="@string/power"
             android:focusable="true" />
 
         <!-- Right group: Limiter + Settings -->
@@ -100,14 +100,14 @@
                     android:layout_height="28dp"
                     android:src="@drawable/ic_nav_limiter"
                     android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="Limiter"
+                    android:contentDescription="@string/limiter"
                     android:scaleType="centerInside"
                     app:tint="?attr/colorOnSurface" />
                 <TextView
                     android:id="@+id/navLimiterStatus"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="ON"
+                    android:text="@string/on"
                     android:textSize="8sp"
                     android:textColor="#FF888888" />
             </LinearLayout>
@@ -123,7 +123,7 @@
                     android:layout_height="28dp"
                     android:src="@drawable/ic_nav_settings"
                     android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="Settings"
+                    android:contentDescription="@string/settings"
                     android:scaleType="centerInside"
                     app:tint="?attr/colorOnSurface" />
             </LinearLayout>

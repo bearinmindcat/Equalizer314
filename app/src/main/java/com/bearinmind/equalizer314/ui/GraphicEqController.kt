@@ -511,9 +511,9 @@ class GraphicEqController(
         container.addView(qRow)
 
         com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
-            .setTitle("Band $slotLabel")
+            .setTitle(activity.getString(R.string.band_label, slotLabel))
             .setView(container)
-            .setPositiveButton("OK") { _, _ ->
+            .setPositiveButton(activity.getString(R.string.ok)) { _, _ ->
                 val hz = hzInput.text.toString().replace(',', '.').toFloatOrNull()?.coerceIn(10f, 20000f) ?: band.frequency
                 val db = if (isLpHp) band.gain else dbInput.text.toString().replace(',', '.').toFloatOrNull()?.coerceIn(-20f, 20f) ?: band.gain
                 val q = qInput.text.toString().replace(',', '.').toDoubleOrNull()?.coerceIn(0.1, 12.0) ?: band.q
@@ -531,7 +531,7 @@ class GraphicEqController(
                 graphView.setParametricEqualizer(eq)
                 onEqChanged()
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(activity.getString(R.string.cancel), null)
             .show()
     }
 
@@ -554,7 +554,7 @@ class GraphicEqController(
         }
 
         val title = TextView(activity).apply {
-            text = "Band Color"
+            text = activity.getString(R.string.band_color)
             textSize = 16f
             setTextColor(0xFFE2E2E2.toInt())
             setPadding(0, 0, 0, (12 * density).toInt())

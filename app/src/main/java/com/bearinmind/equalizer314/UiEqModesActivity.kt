@@ -136,7 +136,7 @@ class UiEqModesActivity : AppCompatActivity() {
                     val pad = (6 * density).toInt()
                     setPadding(pad, pad, pad, pad)
                     isClickable = true
-                    contentDescription = "Drag handle"
+                    contentDescription = getString(R.string.drag_handle)
                 }
                 val label = android.widget.TextView(this@UiEqModesActivity).apply {
                     setTextColor(0xFFDDDDDD.toInt())
@@ -327,7 +327,7 @@ class UiEqModesActivity : AppCompatActivity() {
                     val pad = (6 * density).toInt()
                     setPadding(pad, pad, pad, pad)
                     isClickable = true
-                    contentDescription = "Drag handle"
+                    contentDescription = getString(R.string.drag_handle)
                 }
                 val label = android.widget.TextView(this@UiEqModesActivity).apply {
                     setTextColor(0xFFDDDDDD.toInt())
@@ -411,7 +411,7 @@ class UiEqModesActivity : AppCompatActivity() {
             ).apply { bottomMargin = (12 * density).toInt() }
         }
         hideRow.addView(android.widget.TextView(this).apply {
-            text = "Hide notification"
+            text = getString(R.string.hide_notification)
             setTextColor(0xFFDDDDDD.toInt())
             textSize = 15f
             layoutParams = android.widget.LinearLayout.LayoutParams(

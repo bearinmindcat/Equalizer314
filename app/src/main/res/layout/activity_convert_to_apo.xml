@@ -24,14 +24,14 @@
             android:layout_height="48dp"
             android:src="@drawable/ic_arrow_back"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Back"
+            android:contentDescription="@string/back"
             app:tint="?attr/colorOnSurface" />
 
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Convert to APO format"
+            android:text="@string/convert_to_apo_format"
             android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
             android:textColor="?attr/colorOnSurface"
             android:paddingStart="8dp" />
@@ -72,7 +72,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Import Poweramp EQ .json"
+                        android:text="@string/import_poweramp_eq_json"
                         android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                         android:textColor="?attr/colorOnSurface" />
 
@@ -80,7 +80,7 @@
                         android:id="@+id/powerampStatus"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="No file selected"
+                        android:text="@string/no_file_selected"
                         android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                         android:textColor="?attr/colorOnSurfaceVariant"
                         android:paddingTop="4dp" />
@@ -110,7 +110,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Import Wavelet .txt"
+                        android:text="@string/import_wavelet_txt"
                         android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                         android:textColor="?attr/colorOnSurface" />
 
@@ -118,7 +118,7 @@
                         android:id="@+id/waveletStatus"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="No file selected"
+                        android:text="@string/no_file_selected"
                         android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                         android:textColor="?attr/colorOnSurfaceVariant"
                         android:paddingTop="4dp" />
@@ -131,7 +131,7 @@
                 android:id="@+id/convertButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Convert to APO format"
+                android:text="@string/convert_to_apo_format"
                 android:enabled="false" />
 
             <!-- Result card (hidden until conversion succeeds) -->
@@ -168,7 +168,7 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Converted EQ"
+                                android:text="@string/converted_eq"
                                 android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                                 android:textColor="?attr/colorOnSurface" />
 
@@ -238,7 +238,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:text="Add to AutoEQ &amp; Presets"
+                android:text="@string/add_to_autoeq_and_presets"
                 android:visibility="gone" />
 
             <com.google.android.material.button.MaterialButton
@@ -247,7 +247,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:text="Export as APO"
+                android:text="@string/export_as_apo"
                 android:visibility="gone" />
 
         </LinearLayout>

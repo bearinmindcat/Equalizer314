@@ -58,9 +58,9 @@ class ConvertToApoActivity : AppCompatActivity() {
         val uri = result.data?.data ?: return@registerForActivityResult
         try {
             contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(resultText.text.toString()) }
-            Toast.makeText(this, "Exported", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.exported), Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
-            Toast.makeText(this, "Export failed: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.export_failed, e.message), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -106,7 +106,7 @@ class ConvertToApoActivity : AppCompatActivity() {
             val apoText = resultText.text.toString().trim()
             if (apoText.isEmpty()) return@setOnClickListener
             eqPrefs.addImportedPreset(lastSourceName, apoText)
-            Toast.makeText(this, "Added \"$lastSourceName\" to AutoEQ & Presets", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.added_to_autoeq_presets, lastSourceName), Toast.LENGTH_SHORT).show()
         }
         exportButton.setOnClickListener {
             val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
@@ -135,14 +135,14 @@ class ConvertToApoActivity : AppCompatActivity() {
             // other so it's obvious which input is current.
             if (fromPoweramp) {
                 powerampStatus.text = fileName
-                waveletStatus.text = "No file selected"
+                waveletStatus.text = getString(R.string.no_file_selected)
             } else {
                 waveletStatus.text = fileName
-                powerampStatus.text = "No file selected"
+                powerampStatus.text = getString(R.string.no_file_selected)
             }
             convertButton.isEnabled = text.isNotBlank()
         } catch (e: Exception) {
-            Toast.makeText(this, "Error reading file: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.error_reading_file, e.message), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -169,7 +169,7 @@ class ConvertToApoActivity : AppCompatActivity() {
 
         val profile = AutoEqParser.parse(apoText)
         val filterCount = profile?.filters?.size ?: 0
-        resultFilterCount.text = "$filterCount filters"
+        resultFilterCount.text = getString(R.string.n_filters, filterCount)
 
         resultGraphContainer.removeAllViews()
         if (profile != null) {

@@ -24,14 +24,14 @@
             android:layout_height="48dp"
             android:src="@drawable/ic_arrow_back"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Back"
+            android:contentDescription="@string/back"
             app:tint="?attr/colorOnSurface" />
 
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="EQ Modes &amp; UI"
+            android:text="@string/eq_modes_and_ui"
             android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
             android:textColor="?attr/colorOnSurface"
             android:paddingStart="8dp" />
@@ -72,7 +72,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Change EQ Modes"
+                        android:text="@string/change_eq_modes"
                         android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                         android:textColor="?attr/colorOnSurface"
                         android:paddingBottom="4dp" />
@@ -80,7 +80,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Swap out eq modes shown"
+                        android:text="@string/swap_out_eq_modes_shown"
                         android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                         android:textColor="?attr/colorOnSurfaceVariant" />
                 </LinearLayout>
@@ -109,14 +109,14 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Notification Settings"
+                    android:text="@string/notification_settings"
                     android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                     android:textColor="?attr/colorOnSurface" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Personalize the notification"
+                    android:text="@string/personalize_the_notification"
                     android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                     android:textColor="?attr/colorOnSurfaceVariant"
                     android:paddingTop="4dp" />
@@ -145,7 +145,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Spectrum Control"
+                        android:text="@string/spectrum_control"
                         android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                         android:textColor="?attr/colorOnSurface"
                         android:paddingBottom="4dp" />
@@ -153,7 +153,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Control FFT smoothness &amp; other misc spectrum settings"
+                        android:text="@string/control_fft_smoothness_and_other_misc"
                         android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                         android:textColor="?attr/colorOnSurfaceVariant" />
                 </LinearLayout>
@@ -186,14 +186,14 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Light Theme"
+                            android:text="@string/light_theme"
                             android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                             android:textColor="?attr/colorOnSurface" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Switch between light &amp; dark mode"
+                            android:text="@string/switch_between_light_and_dark_mode"
                             android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                             android:textColor="?attr/colorOnSurfaceVariant"
                             android:paddingTop="4dp" />

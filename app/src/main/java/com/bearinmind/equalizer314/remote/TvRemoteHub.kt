@@ -1,5 +1,6 @@
 package com.bearinmind.equalizer314.remote
 
+import com.bearinmind.equalizer314.R
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
@@ -139,7 +140,7 @@ object TvRemoteHub {
         val token = if (pin == null) getClientToken(appContext, name) else null
         val c = TvRemoteClient(object : TvRemoteClient.Listener {
             override fun onConnected(serverName: String, initialState: JSONObject?) {
-                status("Connected to $serverName")
+                status(appContext.getString(R.string.remote_connected_to, serverName))
                 initialState?.let { applyRemoteState(it) }
             }
             override fun onPaired(serverName: String, token: String) {
@@ -149,14 +150,14 @@ object TvRemoteHub {
                 applyRemoteState(state)
             }
             override fun onError(message: String) {
-                status("Connection failed: $message")
+                status(appContext.getString(R.string.remote_connection_failed, message))
             }
             override fun onDisconnected() {
-                status("Disconnected from TV")
+                status(appContext.getString(R.string.remote_disconnected_from_tv))
             }
         })
         client = c
-        status("Connecting to $name…")
+        status(appContext.getString(R.string.remote_connecting_to, name))
         c.connect(name, host, port, token, pin)
     }
 

@@ -57,10 +57,10 @@ class MeasurementSelectActivity : AppCompatActivity() {
                 updateActiveCard()
                 setResult(Activity.RESULT_OK)
             } else {
-                Toast.makeText(this, "Could not parse — need at least 10 frequency,dB pairs", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, getString(R.string.could_not_parse_measurement), Toast.LENGTH_LONG).show()
             }
         } catch (e: Exception) {
-            Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.error_with_message, e.message), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -141,14 +141,14 @@ class MeasurementSelectActivity : AppCompatActivity() {
             allMeasurements.filter { it.name.lowercase().contains(q) }
         }
         adapter.submitList(results)
-        resultCount.text = "${results.size} measurements"
+        resultCount.text = getString(R.string.n_measurements, results.size)
     }
 
     private fun onMeasSelected(entry: MeasEntry) {
         eqPrefs.saveSelectedMeasurement(entry.name)
         eqPrefs.saveSelectedMeasurementInfo(entry.info)
         setResult(Activity.RESULT_OK)
-        Toast.makeText(this, "Measurement: ${entry.name}", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, getString(R.string.measurement_named, entry.name), Toast.LENGTH_SHORT).show()
         updateActiveCard()
     }
 
@@ -207,12 +207,12 @@ class MeasurementSelectActivity : AppCompatActivity() {
             setPadding((24 * density).toInt(), (20 * density).toInt(), (24 * density).toInt(), (16 * density).toInt())
         }
         val title = android.widget.TextView(this).apply {
-            text = "Delete"
+            text = getString(R.string.delete)
             setTextColor(0xFFE2E2E2.toInt()); textSize = 20f
             setPadding(0, 0, 0, (12 * density).toInt())
         }
         val message = android.widget.TextView(this).apply {
-            text = "Delete \"$name\"?"
+            text = getString(R.string.delete_quoted_confirm, name)
             setTextColor(0xFFAAAAAA.toInt()); textSize = 14f
             setPadding(0, 0, 0, (16 * density).toInt())
         }
@@ -229,13 +229,13 @@ class MeasurementSelectActivity : AppCompatActivity() {
                 android.widget.LinearLayout.LayoutParams.MATCH_PARENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
         }
         val deleteBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-            text = "Delete"; layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = (3 * density).toInt() }
+            text = getString(R.string.delete); layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = (3 * density).toInt() }
             cornerRadius = (12 * density).toInt(); setTextColor(0xFFEF9A9A.toInt())
             strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt()); strokeWidth = (1 * density).toInt()
             setBackgroundColor(0x00000000); insetTop = 0; insetBottom = 0
         }
         val cancelBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-            text = "Cancel"; layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = (3 * density).toInt() }
+            text = getString(R.string.cancel); layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = (3 * density).toInt() }
             cornerRadius = (12 * density).toInt(); setTextColor(0xFFDDDDDD.toInt())
             setBackgroundColor(0x00000000); strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt()); strokeWidth = (1 * density).toInt()
             insetTop = 0; insetBottom = 0
@@ -332,7 +332,7 @@ class MeasurementSelectActivity : AppCompatActivity() {
                 }
                 isClickable = true
                 isFocusable = true
-                contentDescription = "Remove"
+                contentDescription = context.getString(R.string.remove)
             }
             row.addView(deleteBtn)
 

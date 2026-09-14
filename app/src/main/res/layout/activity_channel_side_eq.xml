@@ -41,14 +41,14 @@
             android:layout_height="48dp"
             android:src="@drawable/ic_arrow_back"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Back"
+            android:contentDescription="@string/back"
             app:tint="?attr/colorOnSurface" />
 
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Channel Settings"
+            android:text="@string/channel_settings"
             android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
             android:textColor="?attr/colorOnSurface"
             android:paddingStart="8dp" />
@@ -91,7 +91,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Balance"
+                        android:text="@string/balance"
                         android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                         android:textColor="?attr/colorOnSurface"
                         android:paddingBottom="8dp" />
@@ -111,7 +111,7 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="L"
+                                android:text="@string/l"
                                 android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                                 android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -119,7 +119,7 @@
                                 android:id="@+id/leftPctText"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="50%"
+                                android:text="@string/s_50"
                                 android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
                                 android:textColor="?attr/colorOnSurfaceVariant"
                                 android:paddingTop="2dp" />
@@ -152,7 +152,7 @@
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:layout_gravity="start|top"
-                                    android:text="0%"
+                                    android:text="@string/s_0"
                                     android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
                                     android:textColor="?attr/colorOnSurfaceVariant" />
                             </FrameLayout>
@@ -167,7 +167,7 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="R"
+                                android:text="@string/r"
                                 android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                                 android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -175,7 +175,7 @@
                                 android:id="@+id/rightPctText"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="50%"
+                                android:text="@string/s_50"
                                 android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
                                 android:textColor="?attr/colorOnSurfaceVariant"
                                 android:paddingTop="2dp" />
@@ -204,7 +204,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Channel Preamp"
+                        android:text="@string/channel_preamp"
                         android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                         android:textColor="?attr/colorOnSurface"
                         android:paddingBottom="8dp" />
@@ -219,7 +219,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Preamp (L)"
+                            android:text="@string/preamp_l"
                             android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                             android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -267,7 +267,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Preamp (R)"
+                            android:text="@string/preamp_r"
                             android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                             android:textColor="?attr/colorOnSurfaceVariant" />
 

@@ -32,7 +32,7 @@
                 android:id="@+id/bypassSystemSoundsTitle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Skip system sounds"
+                android:text="@string/skip_system_sounds"
                 android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                 android:textColor="?attr/colorOnSurface" />
 
@@ -40,7 +40,7 @@
                 android:id="@+id/bypassSystemSoundsBody"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Turns processing off for system sounds"
+                android:text="@string/turns_processing_off_for_system_sounds"
                 android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                 android:textColor="?attr/colorOnSurfaceVariant"
                 android:paddingTop="4dp" />

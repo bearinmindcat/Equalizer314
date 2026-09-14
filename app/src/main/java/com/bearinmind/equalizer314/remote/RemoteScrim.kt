@@ -1,5 +1,6 @@
 package com.bearinmind.equalizer314.remote
 
+import com.bearinmind.equalizer314.R
 import android.app.Activity
 import android.app.Application
 import android.graphics.drawable.GradientDrawable
@@ -74,7 +75,7 @@ object RemoteScrim {
             isClickable = true
             isFocusable = true
             addView(TextView(activity).apply {
-                text = "Remote Controlled"
+                text = activity.getString(R.string.remote_controlled)
                 setTextColor(0xFFE2E2E2.toInt())
                 textSize = 15f
                 gravity = Gravity.CENTER

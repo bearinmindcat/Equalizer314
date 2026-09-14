@@ -24,14 +24,14 @@
             android:layout_height="48dp"
             android:src="@drawable/ic_arrow_back"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Back"
+            android:contentDescription="@string/back"
             app:tint="?attr/colorOnSurface" />
 
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Spectrum Control"
+            android:text="@string/spectrum_control"
             android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
             android:textColor="?attr/colorOnSurface"
             android:paddingStart="8dp" />
@@ -88,7 +88,7 @@
                         app:shapeAppearanceOverlay="@style/ShapeAppearance.SpectrumButton"
                         app:strokeColor="#FF444444"
                         app:strokeWidth="1dp"
-                        android:contentDescription="Toggle visualizer" />
+                        android:contentDescription="@string/toggle_visualizer" />
                 </FrameLayout>
             </com.google.android.material.card.MaterialCardView>
 
@@ -127,14 +127,14 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="PPO Smoothing"
+                                android:text="@string/ppo_smoothing"
                                 android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                                 android:textColor="?attr/colorOnSurface" />
 
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Uses raw FFT data by default when turned off; turning this on will give you control over the smoothing of the spectrum"
+                                android:text="@string/uses_raw_fft_data_by_default"
                                 android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                                 android:textColor="?attr/colorOnSurfaceVariant" />
                         </LinearLayout>
@@ -200,14 +200,14 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Spectrum Release"
+                        android:text="@string/spectrum_release"
                         android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                         android:textColor="?attr/colorOnSurface" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Controls how fast the spectrum falls after a peak. Lower = slower, smoother falloff"
+                        android:text="@string/controls_how_fast_the_spectrum_falls"
                         android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                         android:textColor="?attr/colorOnSurfaceVariant"
                         android:paddingBottom="8dp" />
@@ -233,7 +233,7 @@
                             android:id="@+id/releaseLabel"
                             android:layout_width="48dp"
                             android:layout_height="wrap_content"
-                            android:text="0.22"
+                            android:text="@string/s_0_22"
                             android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                             android:textColor="?attr/colorOnSurface"
                             android:gravity="center"
@@ -261,7 +261,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Spectrum Color"
+                        android:text="@string/spectrum_color"
                         android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                         android:textColor="?attr/colorOnSurface"
                         android:paddingBottom="8dp" />

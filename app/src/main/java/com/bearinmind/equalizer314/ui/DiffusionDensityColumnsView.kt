@@ -1,5 +1,6 @@
 package com.bearinmind.equalizer314.ui
 
+import com.bearinmind.equalizer314.R
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -133,8 +134,8 @@ class DiffusionDensityColumnsView @JvmOverloads constructor(
             )
         }
 
-        canvas.drawText("Diff", (diffLeft + diffRight) / 2f, 32f, titlePaint)
-        canvas.drawText("Dens", (densLeft + densRight) / 2f, 32f, titlePaint)
+        canvas.drawText(context.getString(R.string.dd_diff), (diffLeft + diffRight) / 2f, 32f, titlePaint)
+        canvas.drawText(context.getString(R.string.dd_dens), (densLeft + densRight) / 2f, 32f, titlePaint)
 
         canvas.drawText(
             String.format("%.0f", diffusionPct),

@@ -1,5 +1,6 @@
 package com.bearinmind.equalizer314.ui
 
+import com.bearinmind.equalizer314.R
 import android.content.Context
 import android.graphics.*
 import android.util.AttributeSet
@@ -281,8 +282,8 @@ class LimiterCeilingView @JvmOverloads constructor(
         canvas.restore()
 
         // ── Titles ──
-        canvas.drawText("Ceiling", (ceilingLeft + ceilingRight) / 2f, 32f, titlePaint)
-        canvas.drawText("GR", (grLeft + grRight) / 2f, 32f, titlePaint)
+        canvas.drawText(context.getString(R.string.lim_ceiling), (ceilingLeft + ceilingRight) / 2f, 32f, titlePaint)
+        canvas.drawText(context.getString(R.string.lim_gr), (grLeft + grRight) / 2f, 32f, titlePaint)
 
         // ── Values at bottom ──
         canvas.drawText(String.format("%.1f dB", ceilingDb), (ceilingLeft + ceilingRight) / 2f, h - 10f, valuePaint)

@@ -1,5 +1,6 @@
 package com.bearinmind.equalizer314.ui
 
+import com.bearinmind.equalizer314.R
 import android.app.Activity
 import android.view.View
 import android.widget.EditText
@@ -300,7 +301,7 @@ class TableEqController(
         }
 
         val title = TextView(activity).apply {
-            text = "Band Color"
+            text = activity.getString(R.string.band_color)
             textSize = 16f
             // Theme-aware for light mode (issue #66).
             setTextColor(com.google.android.material.color.MaterialColors.getColor(

@@ -1,5 +1,6 @@
 package com.bearinmind.equalizer314.ui
 
+import com.bearinmind.equalizer314.R
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -597,7 +598,7 @@ class ReverbVisualizerView @JvmOverloads constructor(
 
         // "HF Level" label, top-centred above the trackline.
         val labelBaselineY = top + 4f * density - controlLabelPaint.ascent()
-        c.drawText("HF Level", (left + right) / 2f, labelBaselineY, controlLabelPaint)
+        c.drawText(context.getString(R.string.rv_hf_level), (left + right) / 2f, labelBaselineY, controlLabelPaint)
 
         // Trackline tick-to-tick (full zone width, like Reverb Delay).
         val cy = (top + bottom) / 2f
@@ -627,7 +628,7 @@ class ReverbVisualizerView @JvmOverloads constructor(
 
         // Label "HF Damping" inside the sub-box, top-centred.
         val labelBaselineY = top + 4f * density - controlLabelPaint.ascent()
-        c.drawText("HF Damping", (left + right) / 2f, labelBaselineY, controlLabelPaint)
+        c.drawText(context.getString(R.string.rv_hf_damping), (left + right) / 2f, labelBaselineY, controlLabelPaint)
 
         val r = 5.5f * density
         val b = hfDotInnerBounds()
@@ -762,9 +763,9 @@ class ReverbVisualizerView @JvmOverloads constructor(
         // zone's ticks, pinned to the band top. Early Reflections = zones 0-1;
         // Reverb Delay = zone 2; Reverb Tail = zone 3.
         val labelY = controlBandTop + 4f * density - controlLabelPaint.ascent()
-        c.drawText("Early Reflections", (zoneStart(0) + zoneEnd(1)) / 2f, labelY, controlLabelPaint)
-        c.drawText("Reverb Delay", (zoneStart(2) + zoneEnd(2)) / 2f, labelY, controlLabelPaint)
-        c.drawText("Reverb Tail", (zoneStart(3) + zoneEnd(3)) / 2f, labelY, controlLabelPaint)
+        c.drawText(context.getString(R.string.rv_early_reflections), (zoneStart(0) + zoneEnd(1)) / 2f, labelY, controlLabelPaint)
+        c.drawText(context.getString(R.string.rv_reverb_delay), (zoneStart(2) + zoneEnd(2)) / 2f, labelY, controlLabelPaint)
+        c.drawText(context.getString(R.string.rv_reverb_tail), (zoneStart(3) + zoneEnd(3)) / 2f, labelY, controlLabelPaint)
     }
 
     private fun trackLineY(): Float {
@@ -822,7 +823,7 @@ class ReverbVisualizerView @JvmOverloads constructor(
             c.save()
             c.rotate(-90f, cx, cy)
             val baselineOffset = -(directLabelPaint.ascent() + directLabelPaint.descent()) / 2f
-            c.drawText("Direct Sound", cx, cy + baselineOffset, directLabelPaint)
+            c.drawText(context.getString(R.string.rv_direct_sound), cx, cy + baselineOffset, directLabelPaint)
             c.restore()
         }
 
@@ -945,9 +946,9 @@ class ReverbVisualizerView @JvmOverloads constructor(
         val preCenter = (plotL + preEnd) / 2f
         val earlyCenter = (preEnd + earlyEnd) / 2f
         val decayCenter = (earlyEnd + plotR) / 2f
-        c.drawText("Pre-delay", preCenter, labelY, labelPaint)
-        c.drawText("Early Reflections", earlyCenter, labelY, labelPaint)
-        c.drawText("Decay", decayCenter, labelY, labelPaint)
+        c.drawText(context.getString(R.string.rv_pre_delay), preCenter, labelY, labelPaint)
+        c.drawText(context.getString(R.string.rv_early_reflections), earlyCenter, labelY, labelPaint)
+        c.drawText(context.getString(R.string.rv_decay), decayCenter, labelY, labelPaint)
     }
 
     private fun drawAmplitudeLabel(c: Canvas) {
@@ -956,7 +957,7 @@ class ReverbVisualizerView @JvmOverloads constructor(
         val cy = (plotT + plotB) / 2f
         c.rotate(-90f, cx, cy)
         amplitudeLabelPaint.textAlign = Paint.Align.CENTER
-        c.drawText("amplitude", cx, cy + 4f * density, amplitudeLabelPaint)
+        c.drawText(context.getString(R.string.rv_amplitude), cx, cy + 4f * density, amplitudeLabelPaint)
         c.restore()
     }
 
@@ -965,7 +966,7 @@ class ReverbVisualizerView @JvmOverloads constructor(
         // mirrors the "amplitude" Y-axis label on the left.
         val savedAlign = amplitudeLabelPaint.textAlign
         amplitudeLabelPaint.textAlign = Paint.Align.RIGHT
-        c.drawText("Time (ms)", plotR, plotB + 24f * density, amplitudeLabelPaint)
+        c.drawText(context.getString(R.string.rv_time_ms), plotR, plotB + 24f * density, amplitudeLabelPaint)
         amplitudeLabelPaint.textAlign = savedAlign
     }
 

@@ -699,7 +699,7 @@ class EqStateManager(
 
     fun startProcessing(doStartEq: () -> Unit, animatePower: (Boolean) -> Unit) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
-            Toast.makeText(context, "DynamicsProcessing requires Android 9+", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, context.getString(R.string.requires_android_9), Toast.LENGTH_LONG).show()
             return
         }
 
@@ -754,7 +754,7 @@ class EqStateManager(
         isProcessing = started
         if (!started) {
             animatePower(false)
-            Toast.makeText(context, "Failed to start DynamicsProcessing", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.failed_to_start_dp), Toast.LENGTH_SHORT).show()
             return
         }
         // Push saved MBC band params + crossovers to the live DP, else MBC reads "on" while every band sits at DP defaults until a slider is touched.

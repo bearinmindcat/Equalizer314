@@ -37,7 +37,7 @@
             android:background="@drawable/handle_ripple"
             android:clickable="true"
             android:focusable="true"
-            android:contentDescription="Drag handle" />
+            android:contentDescription="@string/drag_handle" />
 
         <LinearLayout
             android:layout_width="0dp"
@@ -73,7 +73,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
-                android:hint="Preset"
+                android:hint="@string/preset"
                 android:clickable="true"
                 android:focusable="true"
                 android:textColorHint="?attr/colorOnSurfaceVariant"
@@ -126,7 +126,7 @@
                 app:iconTint="#FFEF9A9A"
                 app:iconPadding="0dp"
                 app:iconGravity="textStart"
-                android:contentDescription="Remove device" />
+                android:contentDescription="@string/remove_device" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/deviceRowHideButton"
@@ -146,7 +146,7 @@
                 app:iconSize="14dp"
                 app:iconPadding="0dp"
                 app:iconGravity="textStart"
-                android:contentDescription="Toggle visibility" />
+                android:contentDescription="@string/toggle_visibility" />
         </LinearLayout>
     </LinearLayout>
 </com.bearinmind.equalizer314.ui.NotchedDeviceCardView>

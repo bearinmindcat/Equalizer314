@@ -24,14 +24,14 @@
             android:layout_height="48dp"
             android:src="@drawable/ic_arrow_back"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Back"
+            android:contentDescription="@string/back"
             app:tint="?attr/colorOnSurface" />
 
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Presets &amp; Conversions"
+            android:text="@string/presets_and_conversions"
             android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
             android:textColor="?attr/colorOnSurface"
             android:paddingStart="8dp" />
@@ -72,7 +72,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="AutoEQ &amp; Presets"
+                        android:text="@string/autoeq_and_presets"
                         android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                         android:textColor="?attr/colorOnSurface" />
 
@@ -80,7 +80,7 @@
                         android:id="@+id/autoEqStatusText"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Select or import a preset"
+                        android:text="@string/select_or_import_a_preset"
                         android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                         android:textColor="?attr/colorOnSurfaceVariant"
                         android:paddingTop="4dp" />
@@ -109,7 +109,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Generate Custom EQ"
+                        android:text="@string/generate_custom_eq"
                         android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                         android:textColor="?attr/colorOnSurface" />
 
@@ -117,7 +117,7 @@
                         android:id="@+id/targetStatusText"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Import a measurement and match to a specific target"
+                        android:text="@string/import_a_measurement_and_match_to"
                         android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                         android:textColor="?attr/colorOnSurfaceVariant"
                         android:paddingTop="4dp" />
@@ -146,14 +146,14 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Convert to APO format"
+                        android:text="@string/convert_to_apo_format"
                         android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                         android:textColor="?attr/colorOnSurface" />
 
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Convert wavelet &amp; poweramp eq exports to APO format"
+                        android:text="@string/convert_wavelet_and_poweramp_eq_exports"
                         android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                         android:textColor="?attr/colorOnSurfaceVariant"
                         android:paddingTop="4dp" />

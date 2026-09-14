@@ -1,5 +1,6 @@
 package com.bearinmind.equalizer314.remote
 
+import com.bearinmind.equalizer314.R
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
@@ -70,10 +71,10 @@ class TvRemoteServer(
     private var lastApplyToastAt = 0L
 
     private fun onRemoteConnected() {
-        status("Remote connected — controlling this device")
+        status(appContext.getString(R.string.remote_connected_controlling))
         main.post {
             android.widget.Toast.makeText(
-                appContext, "Remote connected", android.widget.Toast.LENGTH_SHORT
+                appContext, appContext.getString(R.string.remote_connected), android.widget.Toast.LENGTH_SHORT
             ).show()
             onClientsChanged(connectedRemotes())
         }
@@ -148,7 +149,7 @@ class TvRemoteServer(
             clients.remove(c)
             c.closeQuietly()
             if (running && c.authed) {
-                status("Remote disconnected")
+                status(appContext.getString(R.string.remote_disconnected))
                 main.post { onClientsChanged(connectedRemotes()) }
             }
         }
@@ -195,7 +196,7 @@ class TvRemoteServer(
                     lastApplyToastAt = now
                     main.post {
                         android.widget.Toast.makeText(
-                            appContext, "Settings changed by remote", android.widget.Toast.LENGTH_SHORT
+                            appContext, appContext.getString(R.string.settings_changed_by_remote), android.widget.Toast.LENGTH_SHORT
                         ).show()
                     }
                 }
@@ -236,7 +237,7 @@ class TvRemoteServer(
                     Log.i(TAG, "NSD registered as ${i.serviceName}")
                 }
                 override fun onRegistrationFailed(i: NsdServiceInfo, code: Int) {
-                    status("Discovery ad failed ($code)")
+                    status(appContext.getString(R.string.discovery_ad_failed, code))
                 }
                 override fun onServiceUnregistered(i: NsdServiceInfo) {}
                 override fun onUnregistrationFailed(i: NsdServiceInfo, code: Int) {}

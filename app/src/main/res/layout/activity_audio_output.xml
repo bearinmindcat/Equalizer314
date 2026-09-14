@@ -24,14 +24,14 @@
             android:layout_height="48dp"
             android:src="@drawable/ic_arrow_back"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Back"
+            android:contentDescription="@string/back"
             app:tint="?attr/colorOnSurface" />
 
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Audio Output"
+            android:text="@string/audio_output"
             android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
             android:textColor="?attr/colorOnSurface"
             android:paddingStart="8dp" />
@@ -69,7 +69,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:padding="14dp"
-                    android:text="Bind a saved EQ preset to a specific output device. When that device becomes the active output (Bluetooth headphones, USB DAC, wired phones, speaker), its preset is applied automatically."
+                    android:text="@string/bind_a_saved_eq_preset_to"
                     android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                     android:textColor="?attr/colorOnSurfaceVariant" />
             </com.google.android.material.card.MaterialCardView>
@@ -85,7 +85,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Current Device"
+                android:text="@string/current_device"
                 android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                 android:textColor="?attr/colorOnSurfaceVariant"
                 android:layout_marginBottom="6dp"
@@ -114,7 +114,7 @@
                         android:id="@+id/activeDeviceLabel"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="No active device"
+                        android:text="@string/no_active_device"
                         android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                         android:textColor="?attr/colorOnSurface" />
 
@@ -134,7 +134,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
-                        android:hint="Preset"
+                        android:hint="@string/preset"
                         android:clickable="true"
                         android:focusable="true"
                         android:textColorHint="?attr/colorOnSurfaceVariant"
@@ -181,7 +181,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Devices"
+                    android:text="@string/devices"
                     android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                     android:textColor="?attr/colorOnSurfaceVariant" />
 
@@ -216,7 +216,7 @@
                     android:id="@+id/devicesEmptyState"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="No devices seen yet. Connect a device to start binding."
+                    android:text="@string/no_devices_seen_yet_connect_a"
                     android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
                     android:textColor="?attr/colorOnSurfaceVariant"
                     android:gravity="center"
@@ -251,7 +251,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Hidden devices"
+                        android:text="@string/hidden_devices"
                         android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                         android:textColor="?attr/colorOnSurfaceVariant" />
 

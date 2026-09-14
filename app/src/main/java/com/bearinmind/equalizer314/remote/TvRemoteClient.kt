@@ -1,5 +1,6 @@
 package com.bearinmind.equalizer314.remote
 
+import com.bearinmind.equalizer314.R
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
@@ -218,7 +219,7 @@ class TvRemoteDiscovery(
             override fun onServiceLost(info: NsdServiceInfo) {}
             override fun onDiscoveryStopped(serviceType: String) {}
             override fun onStartDiscoveryFailed(serviceType: String, code: Int) {
-                main.post { onStatus("Discovery failed to start ($code)") }
+                main.post { onStatus(appContext.getString(R.string.discovery_failed_to_start, code)) }
             }
             override fun onStopDiscoveryFailed(serviceType: String, code: Int) {}
         }

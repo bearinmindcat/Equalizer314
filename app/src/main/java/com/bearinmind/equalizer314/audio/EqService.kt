@@ -472,7 +472,7 @@ class EqService : Service() {
 
     /** Shown when a start was immediately detached by the current device's Disable-EQ binding. */
     private fun showDisabledByDeviceToast() {
-        Toast.makeText(this, "EQ disabled for ${lastDeviceLabel ?: "this device"} (device binding)", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, getString(R.string.eq_disabled_for_device_binding, lastDeviceLabel ?: getString(R.string.this_device)), Toast.LENGTH_LONG).show()
     }
 
     override fun onCreate() {
@@ -1205,10 +1205,10 @@ class EqService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "System EQ",
+                getString(R.string.notif_channel_name),
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Shows when system-wide EQ is active"
+                description = getString(R.string.notif_channel_desc)
                 setShowBadge(false)
             }
             val nm = getSystemService(NotificationManager::class.java)
@@ -1243,12 +1243,12 @@ class EqService : Service() {
         val volumePercent = if (maxVol > 0) (currentVol * 100 / maxVol) else 0
 
         val title = when (com.bearinmind.equalizer314.remote.TvRemoteHub.getMode(this)) {
-            com.bearinmind.equalizer314.remote.TvRemoteHub.MODE_SERVER -> "Equalizer314: Remote Controlled"
-            com.bearinmind.equalizer314.remote.TvRemoteHub.MODE_CLIENT -> "Equalizer314: Remote"
-            else -> if (isOn) "Equalizer314: Online" else "Equalizer314: Offline"
+            com.bearinmind.equalizer314.remote.TvRemoteHub.MODE_SERVER -> getString(R.string.notif_title_remote_controlled)
+            com.bearinmind.equalizer314.remote.TvRemoteHub.MODE_CLIENT -> getString(R.string.notif_title_remote)
+            else -> getString(if (isOn) R.string.notif_title_online else R.string.notif_title_offline)
         }
-        val actionLabel = if (isOn) "Turn Off" else "Turn On"
-        val volumeLine = "Volume: $volumePercent%"
+        val actionLabel = getString(if (isOn) R.string.turn_off else R.string.turn_on)
+        val volumeLine = getString(R.string.notif_volume, volumePercent)
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_nav_equalizer)
@@ -1266,8 +1266,8 @@ class EqService : Service() {
         val isRealPreset = activePresetName.isNotBlank() &&
             customPresetsPrefs.contains("preset_$activePresetName")
         val presetDisplay = when {
-            !isRealPreset -> "none"
-            prefs.isLiveStateEditedFrom(activePresetName) -> "$activePresetName (edited)"
+            !isRealPreset -> getString(R.string.notif_none)
+            prefs.isLiveStateEditedFrom(activePresetName) -> getString(R.string.notif_edited, activePresetName)
             else -> activePresetName
         }
         // Three lines — Mode (Session/Device/System), Preset, Device.
@@ -1279,22 +1279,22 @@ class EqService : Service() {
             deviceBinding != null &&
             deviceBinding.presetName == activePresetName
         val mode = when {
-            routingMode == 1 -> "Session"
-            appliedApp != null -> "App"
-            deviceDrivesPreset -> "Device"
-            else -> "System"
+            routingMode == 1 -> getString(R.string.notif_mode_session)
+            appliedApp != null -> getString(R.string.notif_mode_app)
+            deviceDrivesPreset -> getString(R.string.notif_mode_device)
+            else -> getString(R.string.notif_mode_system)
         }
         val presetForDisplay = when {
-            routingMode != 1 && appliedApp == EqPreferencesManager.DEVICE_PRESET_DISABLED -> "EQ disabled"
+            routingMode != 1 && appliedApp == EqPreferencesManager.DEVICE_PRESET_DISABLED -> getString(R.string.notif_eq_disabled)
             routingMode != 1 -> presetDisplay
-            appPreset == EqPreferencesManager.DEVICE_PRESET_DISABLED -> "EQ disabled"
-            appPreset == null -> "none"
+            appPreset == EqPreferencesManager.DEVICE_PRESET_DISABLED -> getString(R.string.notif_eq_disabled)
+            appPreset == null -> getString(R.string.notif_none)
             appAttached -> appPreset
-            else -> "$appPreset (not attached)"
+            else -> getString(R.string.notif_not_attached, appPreset)
         }
-        val modeLine = "Mode: $mode"
-        val presetLine = "Preset: $presetForDisplay"
-        val deviceLine = lastDeviceLabel?.let { "Device: $it" } ?: "Device: —"
+        val modeLine = getString(R.string.notif_mode_line, mode)
+        val presetLine = getString(R.string.notif_preset_line, presetForDisplay)
+        val deviceLine = getString(R.string.notif_device_line, lastDeviceLabel ?: "—")
         // User-selected info lines, in the user's order (issue #65).
         val lines = mutableListOf<String>()
         for (key in prefs.getNotifLineOrder()) when (key) {

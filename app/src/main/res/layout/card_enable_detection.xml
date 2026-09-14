@@ -34,7 +34,7 @@
                 android:id="@+id/enableDetectionTitle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Session detection"
+                android:text="@string/session_detection"
                 android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                 android:textColor="?attr/colorOnSurface" />
 
@@ -42,7 +42,7 @@
                 android:id="@+id/enableDetectionBody"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Lists every app currently playing audio"
+                android:text="@string/lists_every_app_currently_playing_audio"
                 android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                 android:textColor="?attr/colorOnSurfaceVariant"
                 android:paddingTop="4dp" />

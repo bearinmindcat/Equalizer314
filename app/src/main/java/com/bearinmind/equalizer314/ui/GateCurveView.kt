@@ -1,5 +1,6 @@
 package com.bearinmind.equalizer314.ui
 
+import com.bearinmind.equalizer314.R
 import android.content.Context
 import android.graphics.*
 import android.util.AttributeSet
@@ -125,7 +126,7 @@ class GateCurveView @JvmOverloads constructor(
             color = 0xFF888888.toInt(); textSize = 24f; textAlign = Paint.Align.CENTER
         }
         val titleY = (dbToY(10f) + dbToY(20f)) / 2f + 8f
-        canvas.drawText("Gate (below threshold)", w / 2f, titleY, titlePaint)
+        canvas.drawText(context.getString(R.string.gate_below_threshold), w / 2f, titleY, titlePaint)
 
         // Grid every 10 dB (labels drawn at end of onDraw)
         for (db in minDb.toInt()..maxDb.toInt() step 10) {

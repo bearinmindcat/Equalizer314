@@ -24,14 +24,14 @@
             android:layout_height="48dp"
             android:src="@drawable/ic_arrow_back"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Back"
+            android:contentDescription="@string/back"
             app:tint="?attr/colorOnSurface" />
 
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Audio Effects &amp; Misc Settings"
+            android:text="@string/audio_effects_and_misc_settings"
             android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
             android:textColor="?attr/colorOnSurface"
             android:paddingStart="8dp" />
@@ -79,14 +79,14 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Channel Settings"
+                            android:text="@string/channel_settings"
                             android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                             android:textColor="?attr/colorOnSurface" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Balance, per-channel EQ, and channel swap"
+                            android:text="@string/balance_per_channel_eq_and_channel"
                             android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                             android:textColor="?attr/colorOnSurfaceVariant"
                             android:paddingTop="4dp" />
@@ -129,14 +129,14 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Audio Effects Pipeline"
+                            android:text="@string/audio_effects_pipeline"
                             android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                             android:textColor="?attr/colorOnSurface" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Configure audio pipeline and presets"
+                            android:text="@string/configure_audio_pipeline_and_presets"
                             android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                             android:textColor="?attr/colorOnSurfaceVariant"
                             android:paddingTop="4dp" />
@@ -170,14 +170,14 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Gain Reduction"
+                            android:text="@string/gain_reduction"
                             android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                             android:textColor="?attr/colorOnSurface" />
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Lowers the whole mix by the largest boost so peaks can't clip. Leave off if your presets already use a negative preamp, or both apply"
+                            android:text="@string/lowers_the_whole_mix_by_the"
                             android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                             android:textColor="?attr/colorOnSurfaceVariant"
                             android:paddingTop="4dp" />

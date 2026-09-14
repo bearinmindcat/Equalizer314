@@ -424,7 +424,7 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
                 setPadding(pad, pad, pad, pad)
                 isClickable = true
                 isFocusable = true
-                contentDescription = "Drag handle"
+                contentDescription = context.getString(R.string.drag_handle)
             }
             row.addView(handle)
 
@@ -478,7 +478,7 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
                 setPadding(pp, pp, pp, pp)
                 isClickable = true
                 isFocusable = true
-                contentDescription = "Toggle effect"
+                contentDescription = context.getString(R.string.toggle_effect)
             }
             row.addView(power)
 

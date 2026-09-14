@@ -58,9 +58,9 @@ class  MainActivity : AppCompatActivity() {
             val text = pendingExportText ?: return@registerForActivityResult
             try {
                 contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(text) }
-                android.widget.Toast.makeText(this, "Exported successfully", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.exported_successfully), android.widget.Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
-                android.widget.Toast.makeText(this, "Export failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.export_failed, e.message), android.widget.Toast.LENGTH_SHORT).show()
             }
             pendingExportText = null
         }
@@ -99,9 +99,9 @@ class  MainActivity : AppCompatActivity() {
             presetJson.remove("presetName")
             com.bearinmind.equalizer314.state.PresetFileIo.saveUserPreset(this, name, presetJson)
             refreshPresetPicker?.invoke()
-            android.widget.Toast.makeText(this, "Imported \"$name\"", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(this, getString(R.string.imported_quoted, name), android.widget.Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
-            android.widget.Toast.makeText(this, "Import failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(this, getString(R.string.import_failed, e.message), android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -159,12 +159,12 @@ class  MainActivity : AppCompatActivity() {
             setPadding((24 * density).toInt(), (20 * density).toInt(), (24 * density).toInt(), (16 * density).toInt())
         }
         dialogView.addView(android.widget.TextView(this).apply {
-            text = "Export \"$name\""
+            text = getString(R.string.export_quoted, name)
             setTextColor(0xFFE2E2E2.toInt()); textSize = 20f
             setPadding(0, 0, 0, (8 * density).toInt())
         })
         dialogView.addView(android.widget.TextView(this).apply {
-            text = "EqualizerAPO (.txt)\nEqualizer314 (.json)"
+            text = getString(R.string.export_format_choices)
             setTextColor(0xFFAAAAAA.toInt()); textSize = 13f
             setPadding(0, 0, 0, (16 * density).toInt())
         })
@@ -219,12 +219,12 @@ class  MainActivity : AppCompatActivity() {
             setPadding((24 * density).toInt(), (20 * density).toInt(), (24 * density).toInt(), (16 * density).toInt())
         }
         dialogView.addView(android.widget.TextView(this).apply {
-            text = "Delete"
+            text = getString(R.string.delete)
             setTextColor(0xFFE2E2E2.toInt()); textSize = 20f
             setPadding(0, 0, 0, (12 * density).toInt())
         })
         dialogView.addView(android.widget.TextView(this).apply {
-            text = "Delete \"$name\"?"
+            text = getString(R.string.delete_quoted_confirm, name)
             setTextColor(0xFFAAAAAA.toInt()); textSize = 14f
             setPadding(0, 0, 0, (16 * density).toInt())
         })
@@ -275,9 +275,9 @@ class  MainActivity : AppCompatActivity() {
             try {
                 val json = BackupManager.exportAll(this)
                 contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(json) }
-                android.widget.Toast.makeText(this, "Backup saved", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.backup_saved), android.widget.Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
-                android.widget.Toast.makeText(this, "Backup failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.backup_failed, e.message), android.widget.Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -289,7 +289,7 @@ class  MainActivity : AppCompatActivity() {
         try {
             val text = contentResolver.openInputStream(uri)?.bufferedReader()?.readText()
             if (text != null && BackupManager.importAll(this, text)) {
-                android.widget.Toast.makeText(this, "Backup restored", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.backup_restored), android.widget.Toast.LENGTH_SHORT).show()
                 // Rebuild the live DSP from the restored settings before the UI reloads.
                 startService(Intent(this, EqService::class.java).setAction(EqService.ACTION_RELOAD_PREFS))
                 // Re-apply the restored theme choice, then recreate so all screens, presets, and bindings reload from the new prefs.
@@ -300,10 +300,10 @@ class  MainActivity : AppCompatActivity() {
                 )
                 recreate()
             } else {
-                android.widget.Toast.makeText(this, "Not a valid Equalizer314 backup", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.not_a_valid_backup), android.widget.Toast.LENGTH_SHORT).show()
             }
         } catch (e: Exception) {
-            android.widget.Toast.makeText(this, "Restore failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(this, getString(R.string.restore_failed, e.message), android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -323,12 +323,12 @@ class  MainActivity : AppCompatActivity() {
             setPadding((24 * density).toInt(), (20 * density).toInt(), (24 * density).toInt(), (16 * density).toInt())
         }
         val title = android.widget.TextView(this).apply {
-            text = "Backup & Restore"
+            text = getString(R.string.backup_and_restore)
             setTextColor(0xFFE2E2E2.toInt()); textSize = 20f
             setPadding(0, 0, 0, (8 * density).toInt())
         }
         val msg = android.widget.TextView(this).apply {
-            text = "Export or import settings, presets & bindings to a .json ; importing will override all current settings in the app"
+            text = getString(R.string.backup_restore_blurb)
             setTextColor(0xFFAAAAAA.toInt()); textSize = 13f
             setPadding(0, 0, 0, (16 * density).toInt())
         }
@@ -436,12 +436,12 @@ class  MainActivity : AppCompatActivity() {
             val text = contentResolver.openInputStream(uri)?.bufferedReader()?.readText() ?: return@registerForActivityResult
             val profile = com.bearinmind.equalizer314.autoeq.AutoEqParser.parse(text)
             if (profile == null || profile.filters.isEmpty()) {
-                android.widget.Toast.makeText(this, "Could not parse APO preset", android.widget.Toast.LENGTH_LONG).show()
+                android.widget.Toast.makeText(this, getString(R.string.could_not_parse_apo_preset), android.widget.Toast.LENGTH_LONG).show()
                 return@registerForActivityResult
             }
             applyParsedProfile(profile, "APO Import", "", "")
         } catch (e: Exception) {
-            android.widget.Toast.makeText(this, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(this, getString(R.string.error_with_message, e.message), android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -529,10 +529,10 @@ class  MainActivity : AppCompatActivity() {
                         svc.updateEqPerChannel(lEq, rEq)
                     }
                 }
-                android.widget.Toast.makeText(this, "Applied ${profile.filters.size} filters", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.applied_n_filters, profile.filters.size), android.widget.Toast.LENGTH_SHORT).show()
             }
         } catch (e: Exception) {
-            android.widget.Toast.makeText(this, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(this, getString(R.string.error_with_message, e.message), android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -1567,7 +1567,7 @@ class  MainActivity : AppCompatActivity() {
                     setPadding((24 * density).toInt(), (20 * density).toInt(), (24 * density).toInt(), (16 * density).toInt())
                 }
                 val title = android.widget.TextView(this).apply {
-                    text = "Save Custom Preset"
+                    text = getString(R.string.save_custom_preset)
                     setTextColor(0xFFE2E2E2.toInt())
                     textSize = 20f
                     setPadding(0, 0, 0, (12 * density).toInt())
@@ -1603,7 +1603,7 @@ class  MainActivity : AppCompatActivity() {
                         android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
                 }
                 val cancelBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-                    text = "Cancel"
+                    text = getString(R.string.cancel)
                     layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                         marginEnd = (3 * density).toInt()
                     }
@@ -1615,7 +1615,7 @@ class  MainActivity : AppCompatActivity() {
                     insetTop = 0; insetBottom = 0
                 }
                 val saveDialogBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-                    text = "OK"
+                    text = getString(R.string.ok)
                     layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                         marginStart = (3 * density).toInt()
                     }
@@ -1652,7 +1652,7 @@ class  MainActivity : AppCompatActivity() {
                             .putStringSet("preset_names", (presetNames.toMutableSet() + name))
                             .apply()
                         populatePresetPicker()
-                        android.widget.Toast.makeText(this, "Saved \"$name\"", android.widget.Toast.LENGTH_SHORT).show()
+                        android.widget.Toast.makeText(this, getString(R.string.saved_quoted, name), android.widget.Toast.LENGTH_SHORT).show()
                     }
                     dialog.dismiss()
                 }
@@ -1944,7 +1944,7 @@ class  MainActivity : AppCompatActivity() {
                     }
                 }
                 val filtersText = android.widget.TextView(this).apply {
-                    text = "$bandCount filters"
+                    text = getString(R.string.n_filters, bandCount)
                     setTextColor(0xFF888888.toInt())
                     textSize = 10f
                     gravity = android.view.Gravity.CENTER
@@ -1975,13 +1975,13 @@ class  MainActivity : AppCompatActivity() {
                         setPadding((24 * d).toInt(), (20 * d).toInt(), (24 * d).toInt(), (16 * d).toInt())
                     }
                     val dlgTitle = android.widget.TextView(this).apply {
-                        text = "Delete"
+                        text = getString(R.string.delete)
                         setTextColor(0xFFE2E2E2.toInt())
                         textSize = 20f
                         setPadding(0, 0, 0, (12 * d).toInt())
                     }
                     val dlgMsg = android.widget.TextView(this).apply {
-                        text = "Delete preset \"$name\"?"
+                        text = getString(R.string.delete_preset_confirm, name)
                         setTextColor(0xFFAAAAAA.toInt())
                         textSize = 14f
                         setPadding(0, 0, 0, (16 * d).toInt())
@@ -2000,7 +2000,7 @@ class  MainActivity : AppCompatActivity() {
                             android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
                     }
                     val dlgDeleteBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-                        text = "Delete"
+                        text = getString(R.string.delete)
                         layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                             marginEnd = (3 * d).toInt()
                         }
@@ -2012,7 +2012,7 @@ class  MainActivity : AppCompatActivity() {
                         insetTop = 0; insetBottom = 0
                     }
                     val dlgCancelBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-                        text = "Cancel"
+                        text = getString(R.string.cancel)
                         layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                             marginStart = (3 * d).toInt()
                         }
@@ -2093,7 +2093,7 @@ class  MainActivity : AppCompatActivity() {
                         setPadding((24 * d).toInt(), (20 * d).toInt(), (24 * d).toInt(), (16 * d).toInt())
                     }
                     val dlgTitle = android.widget.TextView(this).apply {
-                        text = "Overwrite Custom Preset"
+                        text = getString(R.string.overwrite_custom_preset)
                         setTextColor(0xFFE2E2E2.toInt()); textSize = 20f
                         setPadding(0, 0, 0, (12 * d).toInt())
                     }
@@ -2134,7 +2134,7 @@ class  MainActivity : AppCompatActivity() {
                             android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
                     }
                     val dlgCancelBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-                        text = "Cancel"
+                        text = getString(R.string.cancel)
                         layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                             marginEnd = (3 * d).toInt()
                         }
@@ -2146,7 +2146,7 @@ class  MainActivity : AppCompatActivity() {
                         insetTop = 0; insetBottom = 0
                     }
                     val dlgOkBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-                        text = "Overwrite"
+                        text = getString(R.string.overwrite)
                         layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                             marginStart = (3 * d).toInt()
                         }
@@ -2174,7 +2174,7 @@ class  MainActivity : AppCompatActivity() {
                             .putStringSet("preset_names", (presetNames.toMutableSet() + newName))
                             .apply()
                         populatePresetPicker()
-                        android.widget.Toast.makeText(this, "Updated \"$newName\"", android.widget.Toast.LENGTH_SHORT).show()
+                        android.widget.Toast.makeText(this, getString(R.string.updated_quoted, newName), android.widget.Toast.LENGTH_SHORT).show()
                         dlg.dismiss()
                     }
                     dlg.show()
@@ -2270,7 +2270,7 @@ class  MainActivity : AppCompatActivity() {
                     saveBtn.setBackgroundColor(graphBtnDimBg)
                     saveBtn.strokeColor = android.content.res.ColorStateList.valueOf(graphBtnDimStroke)
                     saveBtn.iconTint = android.content.res.ColorStateList.valueOf(graphBtnDimContent)
-                    android.widget.Toast.makeText(this, "Loaded \"$name\"", android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(this, getString(R.string.loaded_quoted, name), android.widget.Toast.LENGTH_SHORT).show()
                 }
                 userPresetsBody.addView(presetRow)
             }
@@ -2289,7 +2289,7 @@ class  MainActivity : AppCompatActivity() {
             presetPickerContainer.addView(autoEqBody)
 
             val autoEqSearch = android.widget.EditText(this).apply {
-                hint = "Search AutoEQ..."
+                hint = getString(R.string.search_autoeq)
                 setTextColor(if (isLightUi) 0xFF202020.toInt() else 0xFFFFFFFF.toInt())
                 setHintTextColor(0xFF888888.toInt())
                 textSize = 14f
@@ -2406,7 +2406,7 @@ class  MainActivity : AppCompatActivity() {
                         setProfile(entryProfile)
                     })
                     rightCol.addView(android.widget.TextView(this).apply {
-                        text = "${entryProfile?.filters?.size ?: "?"} filters"
+                        text = getString(R.string.n_filters_text, entryProfile?.filters?.size?.toString() ?: "?")
                         setTextColor(0xFF888888.toInt())
                         textSize = 10f
                         gravity = android.view.Gravity.CENTER
@@ -2428,7 +2428,7 @@ class  MainActivity : AppCompatActivity() {
                                 cornerRadius = 10 * density
                             }
                             isClickable = true; isFocusable = true
-                            contentDescription = "Remove"
+                            contentDescription = getString(R.string.remove)
                             setOnClickListener {
                                 showPickerDeleteDialog(entry.name) {
                                     eqPrefs.removeImportedPreset(entry.name)
@@ -2449,7 +2449,7 @@ class  MainActivity : AppCompatActivity() {
                         scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
                         val pad = (4 * density).toInt()
                         setPadding(pad, pad, pad, pad)
-                        contentDescription = "Favorite"
+                        contentDescription = getString(R.string.favorite)
                         imageTintList = null
                         setImageResource(
                             if (eqPrefs.isFavoritePreset(entry.name, entry.source)) R.drawable.ic_star_filled
@@ -2467,7 +2467,7 @@ class  MainActivity : AppCompatActivity() {
                     row.setOnClickListener {
                         if (entryProfile == null ||
                             (entryProfile.filters.isEmpty() && entryProfile.leftFilters.isEmpty())) {
-                            android.widget.Toast.makeText(this, "Failed to load profile", android.widget.Toast.LENGTH_SHORT).show()
+                            android.widget.Toast.makeText(this, getString(R.string.failed_to_load_profile), android.widget.Toast.LENGTH_SHORT).show()
                         } else {
                             applyParsedProfile(entryProfile, entry.name, entry.name, entry.source)
                         }
@@ -2652,13 +2652,13 @@ class  MainActivity : AppCompatActivity() {
                 setPadding((24 * density).toInt(), (20 * density).toInt(), (24 * density).toInt(), (16 * density).toInt())
             }
             val title = android.widget.TextView(this).apply {
-                text = "Reset"
+                text = getString(R.string.reset)
                 setTextColor(0xFFE2E2E2.toInt())
                 textSize = 20f
                 setPadding(0, 0, 0, (12 * density).toInt())
             }
             val message = android.widget.TextView(this).apply {
-                text = "Reset all values in this screen to their defaults?"
+                text = getString(R.string.reset_screen_confirm)
                 setTextColor(0xFFAAAAAA.toInt())
                 textSize = 14f
                 setPadding(0, 0, 0, (16 * density).toInt())
@@ -2677,7 +2677,7 @@ class  MainActivity : AppCompatActivity() {
                     android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
             }
             val resetDialogBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-                text = "Reset"
+                text = getString(R.string.reset)
                 layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                     marginEnd = (3 * density).toInt()
                 }
@@ -2689,7 +2689,7 @@ class  MainActivity : AppCompatActivity() {
                 insetTop = 0; insetBottom = 0
             }
             val cancelBtn = com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-                text = "Cancel"
+                text = getString(R.string.cancel)
                 layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                     marginStart = (3 * density).toInt()
                 }
@@ -2730,7 +2730,7 @@ class  MainActivity : AppCompatActivity() {
                         svc.dynamicsManager.start(eq)
                     }
                 }
-                android.widget.Toast.makeText(this, "EQ reset to defaults", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.eq_reset_to_defaults), android.widget.Toast.LENGTH_SHORT).show()
                 dialog.dismiss()
             }
             dialog.show()
@@ -3210,11 +3210,11 @@ class  MainActivity : AppCompatActivity() {
         val name = eqPrefs.getAutoEqName()
         if (!name.isNullOrBlank()) {
             val source = eqPrefs.getAutoEqSource() ?: ""
-            statusText.text = "$name by $source"
+            statusText.text = getString(R.string.name_by_source, name, source)
             statusText.setTextColor(com.google.android.material.color.MaterialColors.getColor(
                 statusText, com.google.android.material.R.attr.colorPrimary, 0xFFBB86FC.toInt()))
         } else {
-            statusText.text = "Select or import a preset"
+            statusText.text = getString(R.string.select_or_import_a_preset)
             statusText.setTextColor(com.google.android.material.color.MaterialColors.getColor(
                 statusText, com.google.android.material.R.attr.colorOnSurfaceVariant, 0xFF888888.toInt()))
         }
@@ -3229,7 +3229,7 @@ class  MainActivity : AppCompatActivity() {
             statusText.setTextColor(com.google.android.material.color.MaterialColors.getColor(
                 statusText, com.google.android.material.R.attr.colorPrimary, 0xFFBB86FC.toInt()))
         } else {
-            statusText.text = "Import a measurement and match to a specific target"
+            statusText.text = getString(R.string.import_measurement_blurb)
             statusText.setTextColor(com.google.android.material.color.MaterialColors.getColor(
                 statusText, com.google.android.material.R.attr.colorOnSurfaceVariant, 0xFF888888.toInt()))
         }
@@ -4244,7 +4244,7 @@ class  MainActivity : AppCompatActivity() {
     private fun onPowerTap() {
         if (eqPrefs.getAudioRoutingMode() == 1) {
             val on = !eqPrefs.getPowerState()
-            showPowerSnackbar(on, "Per-app EQ")
+            showPowerSnackbar(on, getString(R.string.per_app_eq))
             animatePowerFab(on)
             stateManager.isProcessing = on
             val svc = Intent(this, EqService::class.java)
@@ -4259,7 +4259,7 @@ class  MainActivity : AppCompatActivity() {
 
     private fun startProcessing() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
-            Toast.makeText(this, "DynamicsProcessing requires Android 9+", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, getString(R.string.requires_android_9), Toast.LENGTH_LONG).show()
             return
         }
 
@@ -4302,10 +4302,10 @@ class  MainActivity : AppCompatActivity() {
         }, 280)
     }
 
-    private fun showPowerSnackbar(on: Boolean, label: String = "DynamicsProcessing") {
+    private fun showPowerSnackbar(on: Boolean, label: String = getString(R.string.dynamics_processing)) {
         eqPrefs.savePowerState(on)
         com.bearinmind.equalizer314.ui.BottomNavHelper.updatePowerFab(this, on)
-        val message = if (on) "$label Start" else "$label Stop"
+        val message = getString(if (on) R.string.x_start else R.string.x_stop, label)
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 
@@ -4315,7 +4315,7 @@ class  MainActivity : AppCompatActivity() {
 
     private fun animatePowerFab(on: Boolean) {
         // BottomNavHelper.updatePowerFab handles the animation — just update the text label.
-        powerButton.text = if (on) "ON" else "OFF"
+        powerButton.text = getString(if (on) R.string.on else R.string.power_off)
     }
 
     private fun blendColor(from: Int, to: Int, ratio: Float): Int {

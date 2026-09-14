@@ -103,7 +103,7 @@ class ChannelInputActivity : AppCompatActivity() {
                 2 -> " . ."
                 else -> " . . ."
             }
-            emptyState.text = "Loading apps$dots"
+            emptyState.text = getString(R.string.loading_apps_base) + dots
             loadingFrame++
             loadingHandler.postDelayed(this, 400)
         }
@@ -166,7 +166,7 @@ class ChannelInputActivity : AppCompatActivity() {
             try {
                 startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
             } catch (_: Throwable) {
-                Toast.makeText(this, "Could not open Notification access settings", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.could_not_open_notification_access), Toast.LENGTH_SHORT).show()
             }
         }
         // Tapping the card body (outside the switch) also goes to Settings — the whole card is the affordance
@@ -175,7 +175,7 @@ class ChannelInputActivity : AppCompatActivity() {
             val cmd = "adb shell pm grant $packageName android.permission.DUMP"
             (getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager)
                 ?.setPrimaryClip(android.content.ClipData.newPlainText("adb", cmd))
-            Toast.makeText(this, "adb command copied", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.adb_command_copied), Toast.LENGTH_SHORT).show()
             true
         }
 
@@ -468,7 +468,7 @@ class ChannelInputActivity : AppCompatActivity() {
 
             stopLoadingAnimation()
             if (rows.isEmpty()) {
-                emptyState.text = "No apps detected yet."
+                emptyState.text = getString(R.string.no_apps_detected_yet)
                 emptyState.visibility = View.VISIBLE
                 appsAdapter.setItems(emptyList())
             } else {
@@ -610,7 +610,7 @@ class ChannelInputActivity : AppCompatActivity() {
         }
     }
 
-    /** Wire a row's preset-binding dropdown (both adapters): "(none)" unbinds, "Disable EQ" binds the sentinel, a missing-preset row is a no-op. */
+    /** Wire a row's preset-binding dropdown (both adapters): getString(R.string.preset_none) unbinds, "Disable EQ" binds the sentinel, a missing-preset row is a no-op. */
     @SuppressLint("ClickableViewAccessibility")
     private fun bindPresetDropdown(
         presetLayout: TextInputLayout,
@@ -624,8 +624,8 @@ class ChannelInputActivity : AppCompatActivity() {
         val binding = eqPrefs.getAppBinding(packageName)
         val isDisable = binding?.presetName == EqPreferencesManager.DEVICE_PRESET_DISABLED
         val currentSelection = when {
-            binding == null -> "(none)"
-            isDisable -> EqPreferencesManager.PRESET_DISABLED_LABEL
+            binding == null -> getString(R.string.preset_none)
+            isDisable -> getString(R.string.disable_eq)
             else -> binding.presetName
         }
         val missing = binding != null && !isDisable && binding.presetName !in knownNames
@@ -650,21 +650,21 @@ class ChannelInputActivity : AppCompatActivity() {
         dropdown.setOnItemClickListener { _, _, pos, _ ->
             val pick = entries[pos].displayName
             when {
-                pick == "(none)" -> {
+                pick == getString(R.string.preset_none) -> {
                     eqPrefs.removeAppBinding(packageName)
                     notifyAppBindingChanged(packageName)
-                    Toast.makeText(this, "Unbound $appLabel", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.unbound_x, appLabel), Toast.LENGTH_SHORT).show()
                 }
-                pick == EqPreferencesManager.PRESET_DISABLED_LABEL -> {
+                pick == getString(R.string.disable_eq) -> {
                     eqPrefs.saveAppBinding(EqPreferencesManager.AppBinding(packageName, EqPreferencesManager.DEVICE_PRESET_DISABLED))
                     notifyAppBindingChanged(packageName)
-                    Toast.makeText(this, "EQ disabled for $appLabel", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.eq_disabled_for, appLabel), Toast.LENGTH_SHORT).show()
                 }
                 pick.endsWith(" (missing)") -> { /* dangling */ }
                 else -> {
                     eqPrefs.saveAppBinding(EqPreferencesManager.AppBinding(packageName, pick))
                     notifyAppBindingChanged(packageName)
-                    Toast.makeText(this, "Bound \"$pick\" to $appLabel", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.bound_x_to_y, pick, appLabel), Toast.LENGTH_SHORT).show()
                 }
             }
             dropdown.clearFocus()
@@ -703,9 +703,9 @@ class ChannelInputActivity : AppCompatActivity() {
 
     private fun buildPresetEntries(missingPresetName: String?): List<PresetDropdownAdapter.Entry> {
         val out = mutableListOf<PresetDropdownAdapter.Entry>()
-        out.add(PresetDropdownAdapter.Entry("(none)", null))
+        out.add(PresetDropdownAdapter.Entry(getString(R.string.preset_none), null))
         // "Disable EQ" = no per-app DP while this app plays, mirroring the device dropdown.
-        out.add(PresetDropdownAdapter.Entry(EqPreferencesManager.PRESET_DISABLED_LABEL, null, isDisable = true))
+        out.add(PresetDropdownAdapter.Entry(getString(R.string.disable_eq), null, isDisable = true))
         for (name in listCustomPresetNames()) {
             out.add(PresetDropdownAdapter.Entry(name, loadPresetJson(name)))
         }

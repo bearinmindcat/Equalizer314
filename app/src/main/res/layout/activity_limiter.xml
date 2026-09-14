@@ -27,7 +27,7 @@
             android:layout_height="48dp"
             android:src="@drawable/ic_arrow_back"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Back"
+            android:contentDescription="@string/back"
             app:tint="?attr/colorOnSurface" />
         -->
 
@@ -35,7 +35,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Limiter"
+            android:text="@string/limiter"
             android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
             android:textColor="?attr/colorOnSurface" />
 
@@ -107,7 +107,7 @@
                             app:shapeAppearanceOverlay="@style/ShapeAppearance.ResetButton"
                             app:strokeColor="?attr/colorOutline"
                             app:strokeWidth="1dp"
-                            android:contentDescription="Reset to defaults" />
+                            android:contentDescription="@string/reset_to_defaults" />
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/limiterVisualizerToggle"
@@ -127,7 +127,7 @@
                             app:shapeAppearanceOverlay="@style/ShapeAppearance.SpectrumButton"
                             app:strokeColor="?attr/colorOutline"
                             app:strokeWidth="1dp"
-                            android:contentDescription="Toggle visualizer" />
+                            android:contentDescription="@string/toggle_visualizer" />
                     </FrameLayout>
                 </com.google.android.material.card.MaterialCardView>
 
@@ -171,7 +171,7 @@
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="4dp">
                         <TextView android:layout_width="96dp" android:layout_height="wrap_content"
-                            android:text="Thresh (dB)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                            android:text="@string/thresh_db" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                             android:textColor="?attr/colorOnSurfaceVariant" />
                         <com.google.android.material.slider.Slider android:id="@+id/limiterThresholdSlider"
                             android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
@@ -192,7 +192,7 @@
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="4dp">
                         <TextView android:layout_width="96dp" android:layout_height="wrap_content"
-                            android:text="Ratio (X:1)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                            android:text="@string/ratio_x_1" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                             android:textColor="?attr/colorOnSurfaceVariant" />
                         <com.google.android.material.slider.Slider android:id="@+id/limiterRatioSlider"
                             android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
@@ -213,7 +213,7 @@
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="4dp">
                         <TextView android:layout_width="96dp" android:layout_height="wrap_content"
-                            android:text="Attack (ms)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                            android:text="@string/attack_ms" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                             android:textColor="?attr/colorOnSurfaceVariant" />
                         <com.google.android.material.slider.Slider android:id="@+id/limiterAttackSlider"
                             android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
@@ -234,7 +234,7 @@
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="4dp">
                         <TextView android:layout_width="96dp" android:layout_height="wrap_content"
-                            android:text="Release (ms)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                            android:text="@string/release_ms" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                             android:textColor="?attr/colorOnSurfaceVariant" />
                         <com.google.android.material.slider.Slider android:id="@+id/limiterReleaseSlider"
                             android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
@@ -255,7 +255,7 @@
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:orientation="horizontal" android:gravity="center_vertical">
                         <TextView android:layout_width="96dp" android:layout_height="wrap_content"
-                            android:text="Post Gain (dB)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                            android:text="@string/post_gain_db" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                             android:textColor="?attr/colorOnSurfaceVariant" />
                         <com.google.android.material.slider.Slider android:id="@+id/limiterPostGainSlider"
                             android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"

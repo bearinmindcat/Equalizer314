@@ -237,7 +237,7 @@ class SimpleEqController(
 
         // Reset button — red text, left side
         val reset = MaterialButton(activity, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-            text = "RESET"
+            text = activity.getString(R.string.reset_caps)
             textSize = 12f
             setTextColor(0xFFEF9A9A.toInt())
             cornerRadius = (12 * density).toInt()
@@ -453,7 +453,7 @@ class SimpleEqController(
             setPadding((24 * density).toInt(), (20 * density).toInt(), (24 * density).toInt(), (16 * density).toInt())
         }
         val title = TextView(activity).apply {
-            text = "Save Simple EQ Preset"
+            text = activity.getString(R.string.save_simple_eq_preset)
             setTextColor(0xFFE2E2E2.toInt())
             textSize = 20f
             setPadding(0, 0, 0, (12 * density).toInt())
@@ -499,7 +499,7 @@ class SimpleEqController(
             )
         }
         val cancelBtn = MaterialButton(activity, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-            text = "Cancel"
+            text = activity.getString(R.string.cancel)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginEnd = (3 * density).toInt()
             }
@@ -511,7 +511,7 @@ class SimpleEqController(
             insetTop = 0; insetBottom = 0
         }
         val okBtn = MaterialButton(activity, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-            text = "OK"
+            text = activity.getString(R.string.ok)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginStart = (3 * density).toInt()
             }
@@ -537,7 +537,7 @@ class SimpleEqController(
             val name = input.text.toString().trim().ifEmpty { defaultName }
             eqPrefs.saveSimpleEqPreset(name, getCurrentGains(), state.preampGainDb)
             populatePresetPicker()
-            android.widget.Toast.makeText(activity, "Saved \"$name\"", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(activity, activity.getString(R.string.saved_quoted, name), android.widget.Toast.LENGTH_SHORT).show()
             dialog.dismiss()
         }
         dialog.show()
@@ -680,7 +680,7 @@ class SimpleEqController(
         }
 
         val filtersText = TextView(activity).apply {
-            text = "$bandCount filters"
+            text = activity.getString(R.string.n_filters, bandCount)
             setTextColor(0xFF888888.toInt())
             textSize = 10f
             gravity = Gravity.CENTER
@@ -752,7 +752,7 @@ class SimpleEqController(
             restoreSnapshot(presetGains)
             saveSnapshot()
             closePresetPicker()
-            android.widget.Toast.makeText(activity, "Loaded \"$name\"", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(activity, activity.getString(R.string.loaded_quoted, name), android.widget.Toast.LENGTH_SHORT).show()
         }
 
         return row
@@ -810,13 +810,13 @@ class SimpleEqController(
             setPadding((24 * density).toInt(), (20 * density).toInt(), (24 * density).toInt(), (16 * density).toInt())
         }
         val dlgTitle = TextView(activity).apply {
-            text = "Delete"
+            text = activity.getString(R.string.delete)
             setTextColor(0xFFE2E2E2.toInt())
             textSize = 20f
             setPadding(0, 0, 0, (12 * density).toInt())
         }
         val dlgMsg = TextView(activity).apply {
-            text = "Delete preset \"$name\"?"
+            text = activity.getString(R.string.delete_preset_confirm, name)
             setTextColor(0xFFAAAAAA.toInt())
             textSize = 14f
             setPadding(0, 0, 0, (16 * density).toInt())
@@ -837,7 +837,7 @@ class SimpleEqController(
             )
         }
         val dlgDeleteBtn = MaterialButton(activity, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-            text = "Delete"
+            text = activity.getString(R.string.delete)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginEnd = (3 * density).toInt()
             }
@@ -849,7 +849,7 @@ class SimpleEqController(
             insetTop = 0; insetBottom = 0
         }
         val dlgCancelBtn = MaterialButton(activity, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-            text = "Cancel"
+            text = activity.getString(R.string.cancel)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginStart = (3 * density).toInt()
             }

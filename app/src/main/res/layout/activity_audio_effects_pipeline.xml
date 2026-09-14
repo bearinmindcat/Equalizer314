@@ -24,14 +24,14 @@
             android:layout_height="48dp"
             android:src="@drawable/ic_arrow_back"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Back"
+            android:contentDescription="@string/back"
             app:tint="?attr/colorOnSurface" />
 
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Audio Effects Pipeline"
+            android:text="@string/audio_effects_pipeline"
             android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
             android:textColor="?attr/colorOnSurface"
             android:paddingStart="8dp" />
@@ -47,7 +47,7 @@
             android:layout_height="48dp"
             android:src="@drawable/ic_info_outline"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Pipeline info"
+            android:contentDescription="@string/pipeline_info"
             app:tint="?attr/colorOnSurfaceVariant" />
     </LinearLayout>
 
@@ -73,7 +73,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:padding="14dp"
-            android:text="Drag the handle on the left of each effects card to re-order the order of the processing effects chain. The audio stream begins from Channel Input and ends at the Audio Output. DynamicsProcessing is the main EQ, MBC, Limiting that is exposed in the app, the other audio effects that can attach to the channel input can be clicked on and edited right here in a new screen."
+            android:text="@string/drag_the_handle_on_the_left"
             android:textAppearance="@style/TextAppearance.Material3.BodySmall"
             android:textColor="?attr/colorOnSurfaceVariant" />
     </com.google.android.material.card.MaterialCardView>

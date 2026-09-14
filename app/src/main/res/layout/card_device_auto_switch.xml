@@ -34,7 +34,7 @@
                 android:id="@+id/deviceAutoSwitchTitle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Device auto-switch"
+                android:text="@string/device_auto_switch"
                 android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                 android:textColor="?attr/colorOnSurface" />
 
@@ -42,7 +42,7 @@
                 android:id="@+id/deviceAutoSwitchBody"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Uses selected preset for current output"
+                android:text="@string/uses_selected_preset_for_current_output"
                 android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                 android:textColor="?attr/colorOnSurfaceVariant"
                 android:paddingTop="4dp" />

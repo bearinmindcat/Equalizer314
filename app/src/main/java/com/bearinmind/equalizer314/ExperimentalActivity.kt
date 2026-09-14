@@ -228,7 +228,7 @@ class ExperimentalActivity : AppCompatActivity() {
     private val tvScanTimeout = Runnable {
         if (foundTvs.isEmpty() && tvDiscovery != null) {
             tvScanTimeoutHandler.removeCallbacks(tvSearchAnim)
-            tvPickerPlaceholder?.text = "No devices found"
+            tvPickerPlaceholder?.text = getString(R.string.no_devices_found)
         }
     }
 
@@ -237,7 +237,7 @@ class ExperimentalActivity : AppCompatActivity() {
     private val tvSearchAnim: Runnable = object : Runnable {
         override fun run() {
             val ph = tvPickerPlaceholder ?: return
-            ph.text = "Searching" + ".".repeat(tvSearchDots)
+            ph.text = getString(R.string.searching) + ".".repeat(tvSearchDots)
             tvSearchDots = (tvSearchDots + 1) % 4
             tvScanTimeoutHandler.postDelayed(this, 400L)
         }
@@ -349,7 +349,7 @@ class ExperimentalActivity : AppCompatActivity() {
             setPadding(0, (4 * density).toInt(), 0, (10 * density).toInt())
         })
         root.addView(android.widget.TextView(this).apply {
-            text = "Enter this PIN on the remote device"
+            text = getString(R.string.enter_pin_on_remote_device)
             setTextColor(0xFF888888.toInt())
             textSize = 13f
             gravity = android.view.Gravity.CENTER
@@ -389,7 +389,7 @@ class ExperimentalActivity : AppCompatActivity() {
             orientation = android.widget.LinearLayout.VERTICAL
         }
         val placeholder = android.widget.TextView(this).apply {
-            text = "Searching"
+            text = getString(R.string.searching)
             setTextColor(0xFF888888.toInt())
             textSize = 13f
             gravity = android.view.Gravity.CENTER
@@ -437,7 +437,7 @@ class ExperimentalActivity : AppCompatActivity() {
         }
         refreshBtn.setOnClickListener {
             list.removeAllViews()
-            placeholder.text = "Searching"
+            placeholder.text = getString(R.string.searching)
             list.addView(placeholder)
             startTvDiscovery()
             startTvSearchAnim()
@@ -496,7 +496,7 @@ class ExperimentalActivity : AppCompatActivity() {
             }
         }
         val input = android.widget.EditText(this).apply {
-            hint = "PIN shown on the device"
+            hint = getString(R.string.pin_shown_on_device)
             setTextColor(0xFFFFFFFF.toInt())
             setHintTextColor(0xFF888888.toInt())
             inputType = android.text.InputType.TYPE_CLASS_NUMBER

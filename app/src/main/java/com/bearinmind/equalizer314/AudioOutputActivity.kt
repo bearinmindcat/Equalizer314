@@ -294,7 +294,7 @@ class AudioOutputActivity : AppCompatActivity() {
         if (active == null) {
             activeKey = null
             activeLabel = null
-            activeDeviceLabel.text = "No current device"
+            activeDeviceLabel.text = getString(R.string.no_current_device)
             activeDeviceKey.text = ""
             activeDeviceKey.visibility = View.GONE
             currentDeviceDropdownLayout.visibility = View.GONE
@@ -324,8 +324,8 @@ class AudioOutputActivity : AppCompatActivity() {
         val knownNames = listCustomPresetNames()
         val isDisable = binding?.presetName == EqPreferencesManager.DEVICE_PRESET_DISABLED
         val currentSelection = when {
-            binding == null -> "(none)"
-            isDisable -> DISABLE_LABEL
+            binding == null -> getString(R.string.preset_none)
+            isDisable -> getString(R.string.disable_eq)
             else -> binding.presetName
         }
         val missing = binding != null && !isDisable && binding.presetName !in knownNames
@@ -339,17 +339,17 @@ class AudioOutputActivity : AppCompatActivity() {
             val pick = entries[position].displayName
             val label = activeLabel ?: ""
             when {
-                pick == "(none)" -> {
+                pick == getString(R.string.preset_none) -> {
                     eqPrefs.removeDeviceBinding(key)
                     notifyBindingChanged(key)
-                    Toast.makeText(this, "Unbound $label", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.unbound_x, label), Toast.LENGTH_SHORT).show()
                 }
-                pick == DISABLE_LABEL -> {
+                pick == getString(R.string.disable_eq) -> {
                     eqPrefs.saveDeviceBinding(
                         EqPreferencesManager.Binding(key, label, EqPreferencesManager.DEVICE_PRESET_DISABLED)
                     )
                     notifyBindingChanged(key)
-                    Toast.makeText(this, "EQ disabled for $label", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.eq_disabled_for, label), Toast.LENGTH_SHORT).show()
                 }
                 pick.endsWith(" (missing)") -> {
                     // dangling — keep as-is
@@ -358,7 +358,7 @@ class AudioOutputActivity : AppCompatActivity() {
                     // The coordinator loads the pick and sets presetName; writing the name here first would poison its manual-state snapshot.
                     eqPrefs.saveDeviceBinding(EqPreferencesManager.Binding(key, label, pick))
                     notifyBindingChanged(key)
-                    Toast.makeText(this, "Bound \"$pick\" to $label", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.bound_x_to_y, pick, label), Toast.LENGTH_SHORT).show()
                 }
             }
             // Drop focus so the TextInputLayout returns to its idle outline color
@@ -403,12 +403,12 @@ class AudioOutputActivity : AppCompatActivity() {
             setPadding((24 * density).toInt(), (20 * density).toInt(), (24 * density).toInt(), (16 * density).toInt())
         }
         dialogView.addView(TextView(this).apply {
-            text = "Remove device"
+            text = getString(R.string.remove_device)
             setTextColor(0xFFE2E2E2.toInt()); textSize = 20f
             setPadding(0, 0, 0, (12 * density).toInt())
         })
         dialogView.addView(TextView(this).apply {
-            text = "Remove \"$label\" and its preset binding? Reappears next time device connects."
+            text = getString(R.string.remove_device_confirm, label)
             setTextColor(0xFFAAAAAA.toInt()); textSize = 14f
             setPadding(0, 0, 0, (16 * density).toInt())
         })
@@ -504,8 +504,8 @@ class AudioOutputActivity : AppCompatActivity() {
             val binding = eqPrefs.getDeviceBinding(key)
             val isDisable = binding?.presetName == EqPreferencesManager.DEVICE_PRESET_DISABLED
             val currentSelection = when {
-                binding == null -> "(none)"
-                isDisable -> DISABLE_LABEL
+                binding == null -> getString(R.string.preset_none)
+                isDisable -> getString(R.string.disable_eq)
                 else -> binding.presetName
             }
             val missing = binding != null && !isDisable && binding.presetName !in knownNames
@@ -534,17 +534,17 @@ class AudioOutputActivity : AppCompatActivity() {
             dropdown.setOnItemClickListener { _, _, pos, _ ->
                 val pick = entries[pos].displayName
                 when {
-                    pick == "(none)" -> {
+                    pick == getString(R.string.preset_none) -> {
                         eqPrefs.removeDeviceBinding(key)
                         notifyBindingChanged(key)
-                        Toast.makeText(this@AudioOutputActivity, "Unbound $label", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@AudioOutputActivity, getString(R.string.unbound_x, label), Toast.LENGTH_SHORT).show()
                     }
-                    pick == DISABLE_LABEL -> {
+                    pick == getString(R.string.disable_eq) -> {
                         eqPrefs.saveDeviceBinding(
                             EqPreferencesManager.Binding(key, label, EqPreferencesManager.DEVICE_PRESET_DISABLED)
                         )
                         notifyBindingChanged(key)
-                        Toast.makeText(this@AudioOutputActivity, "EQ disabled for $label", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@AudioOutputActivity, getString(R.string.eq_disabled_for, label), Toast.LENGTH_SHORT).show()
                     }
                     pick.endsWith(" (missing)") -> {
                         // Picked the dangling entry — keep the binding as-is.
@@ -552,7 +552,7 @@ class AudioOutputActivity : AppCompatActivity() {
                     else -> {
                         eqPrefs.saveDeviceBinding(EqPreferencesManager.Binding(key, label, pick))
                         notifyBindingChanged(key)
-                        Toast.makeText(this@AudioOutputActivity, "Bound \"$pick\" to $label", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@AudioOutputActivity, getString(R.string.bound_x_to_y, pick, label), Toast.LENGTH_SHORT).show()
                     }
                 }
                 dropdown.clearFocus()
@@ -727,9 +727,9 @@ class AudioOutputActivity : AppCompatActivity() {
     /** Entries for every preset dropdown on this screen. */
     private fun buildPresetEntries(missingPresetName: String?): List<PresetDropdownAdapter.Entry> {
         val out = mutableListOf<PresetDropdownAdapter.Entry>()
-        out.add(PresetDropdownAdapter.Entry("(none)", null))
-        // "Disable EQ" fully detaches our DP while this device is active (vs "(none)" which keeps the current preset).
-        out.add(PresetDropdownAdapter.Entry(DISABLE_LABEL, null, isDisable = true))
+        out.add(PresetDropdownAdapter.Entry(getString(R.string.preset_none), null))
+        // "Disable EQ" fully detaches our DP while this device is active (vs getString(R.string.preset_none) which keeps the current preset).
+        out.add(PresetDropdownAdapter.Entry(getString(R.string.disable_eq), null, isDisable = true))
         for (name in listCustomPresetNames()) {
             out.add(PresetDropdownAdapter.Entry(name, loadPresetJson(name)))
         }
@@ -836,8 +836,6 @@ class AudioOutputActivity : AppCompatActivity() {
 
     companion object {
         private const val REQ_BT_CONNECT = 300
-        /** Display label for the "fully detach DP for this device" dropdown choice. */
-        private const val DISABLE_LABEL = "Disable EQ"
         private const val PREF_DEVICES_EXPANDED = "devicesExpanded"
         /** Section open/close duration — ~500 ms so the slide reads deliberate. */
         private const val EXPAND_DURATION_MS = 500L

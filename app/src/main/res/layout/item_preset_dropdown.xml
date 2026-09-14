@@ -49,7 +49,7 @@
         android:layout_height="28dp"
         android:layout_marginStart="12dp"
         android:gravity="center"
-        android:text="N/A"
+        android:text="@string/n_a"
         android:textColor="#FFEF9A9A"
         android:textSize="12sp"
         android:visibility="gone" />
