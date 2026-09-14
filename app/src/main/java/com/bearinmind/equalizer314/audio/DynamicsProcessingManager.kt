@@ -575,7 +575,9 @@ class DynamicsProcessingManager {
         try {
             writePassthroughBands(dp, liveMbcBandCount)
             val rb = dp.getMbcBandByChannelIndex(0, 0)
-            Log.d(TAG, "MBC passthrough: band 0 preGain=${rb.preGain} postGain=${rb.postGain} threshold=${rb.threshold} (${liveMbcBandCount} bands)")
+            val lim = dp.getLimiterByChannelIndex(0)
+            Log.d(TAG, "MBC passthrough: band 0 preGain=${rb.preGain} postGain=${rb.postGain} threshold=${rb.threshold} (${liveMbcBandCount} bands)" +
+                " | limiter now: enabled=${lim.isEnabled} thresh=${lim.threshold} ratio=${lim.ratio} postGain=${lim.postGain}")
         } catch (e: Exception) { Log.e(TAG, "MBC passthrough write failed", e) }
     }
 

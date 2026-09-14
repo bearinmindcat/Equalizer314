@@ -319,16 +319,10 @@ class EqService : Service() {
             systemSoundBypassActive ||
             routeCoordinator?.appDisableActive == true
 
-    /** MBC neutralised for a system sound; only a flip rewrites bands. */
-    @Volatile private var mbcSkipApplied = false
-
-    /** Re-derive all "off" states; DP stays enabled and level-matched. */
+    /** Re-derive all "off" states; DP stays enabled and level-matched. MBC/limiter keep running: session 0 is the whole mix, so pausing them stripped the music too. */
     private fun applyProcessingState() {
         if (!dynamicsManager.isActive) return
         dynamicsManager.applyCurveBypass(curveBypassNeeded())
-        // System-sound skip pauses MBC too; the EQ toggle does not.
-        val skip = systemSoundBypassActive && dynamicsManager.mbcEnabled
-        if (skip != mbcSkipApplied) applyPersistedMbcConfig()
         dynamicsManager.setEnabled(true)
     }
 
@@ -1088,9 +1082,6 @@ class EqService : Service() {
     fun applyPersistedMbcConfig() {
         if (!dynamicsManager.isActive) return
         if (!dynamicsManager.mbcEnabled) return
-        // Active system sound wins: neutral bands now, real ones when it ends.
-        mbcSkipApplied = systemSoundBypassActive
-        if (systemSoundBypassActive) { dynamicsManager.writeMbcPassthrough(); return }
         val p = EqPreferencesManager(this)
         // Volume compensation: thresholds track the media volume when enabled.
         dynamicsManager.mbcThresholdOffsetDb =
