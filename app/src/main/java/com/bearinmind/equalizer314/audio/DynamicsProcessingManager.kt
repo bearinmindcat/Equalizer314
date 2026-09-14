@@ -572,7 +572,11 @@ class DynamicsProcessingManager {
     /** MBC off without a rebuild: neutral bands on the live stage. */
     fun writeMbcPassthrough() {
         val dp = dynamicsProcessing ?: return
-        try { writePassthroughBands(dp, liveMbcBandCount) } catch (e: Exception) { Log.e(TAG, "MBC passthrough write failed", e) }
+        try {
+            writePassthroughBands(dp, liveMbcBandCount)
+            val rb = dp.getMbcBandByChannelIndex(0, 0)
+            Log.d(TAG, "MBC passthrough: band 0 preGain=${rb.preGain} postGain=${rb.postGain} threshold=${rb.threshold} (${liveMbcBandCount} bands)")
+        } catch (e: Exception) { Log.e(TAG, "MBC passthrough write failed", e) }
     }
 
     /** Flip the EQ curve on/off live; DP stays enabled so the preamp never drops out. */

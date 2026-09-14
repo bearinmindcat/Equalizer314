@@ -206,7 +206,7 @@ class EqService : Service() {
                     }
                     if (routeCoordinator?.onPlayingAppsChanged(currentPlayingPackages, force = true) == true) {
                         reapplyCurrentDeviceBinding()
-                        applyDpEnabled()
+                        applyProcessingState()
                     }
                     updateNotification()
                 }
@@ -247,7 +247,7 @@ class EqService : Service() {
         if (prefs.getAudioRoutingMode() == 1) return   // Session-based: no global DP
         if (!prefs.getPowerState()) return              // EQ powered off
         if (!dynamicsManager.isActive) return
-        if (!dynamicsManager.hasLostControl(expectedDpEnabled())) return
+        if (!dynamicsManager.hasLostControl()) return
         if (!dynamicsManager.reclaimCooldownElapsed()) return
         Log.w(TAG, "Watchdog: global DP lost control — reattaching")
         if (dynamicsManager.reattachActive()) {
@@ -310,22 +310,26 @@ class EqService : Service() {
             systemSoundBypassActive = anySystemSound
             Log.d(TAG, "system sound ${if (anySystemSound) "started — curve flattened" else "stopped — curve restored"}")
         }
-        applyCurveState()
-        applyDpEnabled()
+        applyProcessingState()
     }
 
-    /** DP enable = no app bound to "Disable EQ"; the EQ toggle and system-sound skip flatten the curve instead. */
-    private fun expectedDpEnabled(): Boolean = routeCoordinator?.appDisableActive != true
+    /** Flat curve (preamp kept) when EQ is off, a system sound plays, or a bound app has "Disable EQ". */
+    private fun curveBypassNeeded(): Boolean =
+        !EqPreferencesManager(this).getEqEnabled() ||
+            systemSoundBypassActive ||
+            routeCoordinator?.appDisableActive == true
 
-    /** Flat curve with the preamp kept whenever the user EQ is off or a system sound is playing. */
-    private fun applyCurveState() {
-        if (!dynamicsManager.isActive) return
-        dynamicsManager.applyCurveBypass(!EqPreferencesManager(this).getEqEnabled() || systemSoundBypassActive)
-    }
+    /** MBC neutralised for a system sound; only a flip rewrites bands. */
+    @Volatile private var mbcSkipApplied = false
 
-    private fun applyDpEnabled() {
+    /** Re-derive all "off" states; DP stays enabled and level-matched. */
+    private fun applyProcessingState() {
         if (!dynamicsManager.isActive) return
-        dynamicsManager.setEnabled(expectedDpEnabled())
+        dynamicsManager.applyCurveBypass(curveBypassNeeded())
+        // System-sound skip pauses MBC too; the EQ toggle does not.
+        val skip = systemSoundBypassActive && dynamicsManager.mbcEnabled
+        if (skip != mbcSkipApplied) applyPersistedMbcConfig()
+        dynamicsManager.setEnabled(true)
     }
 
     /** One-shot bypass evaluation at DP start. */
@@ -896,7 +900,7 @@ class EqService : Service() {
                 // App bindings in System-wide mode: a playing bound app drives (or bypasses) the global DP.
                 if (routeCoordinator?.onPlayingAppsChanged(playingNow) == true) {
                     reapplyCurrentDeviceBinding()
-                    applyDpEnabled()
+                    applyProcessingState()
                     updateNotification()
                 }
                 return START_STICKY
@@ -1067,11 +1071,8 @@ class EqService : Service() {
         dynamicsManager.updateFromEqualizers(leftEq, rightEq)
     }
 
-    /** EQ toggle: flat curve at the same level; DP stays enabled so the preamp never drops out. */
-    fun setEqEnabled(enabled: Boolean) {
-        dynamicsManager.applyCurveBypass(!enabled || systemSoundBypassActive)
-        applyDpEnabled()
-    }
+    /** EQ toggle (pref already saved). */
+    fun setEqEnabled(enabled: Boolean) = applyProcessingState()
 
     fun updateMbc(bands: List<DynamicsProcessingManager.MbcBandParams>, crossovers: FloatArray) {
         dynamicsManager.applyMbcBands(bands, crossovers)
@@ -1081,6 +1082,9 @@ class EqService : Service() {
     fun applyPersistedMbcConfig() {
         if (!dynamicsManager.isActive) return
         if (!dynamicsManager.mbcEnabled) return
+        // Active system sound wins: neutral bands now, real ones when it ends.
+        mbcSkipApplied = systemSoundBypassActive
+        if (systemSoundBypassActive) { dynamicsManager.writeMbcPassthrough(); return }
         val p = EqPreferencesManager(this)
         // Volume compensation: thresholds track the media volume when enabled.
         dynamicsManager.mbcThresholdOffsetDb =
