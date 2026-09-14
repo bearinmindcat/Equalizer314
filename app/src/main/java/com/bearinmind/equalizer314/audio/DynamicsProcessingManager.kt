@@ -387,7 +387,9 @@ class DynamicsProcessingManager {
 
         // Auto-gain: flat shift bringing the loudest band to ≤ 0 dB.
         if (autoGainEnabled) {
-            if (!gainHold && !curveBypassed) {
+            // Recompute even while bypassed: the gains here are still the real curve, so the flat
+            // fill below lands on the same offset the live curve uses and on/off stays level-matched.
+            if (!gainHold) {
                 var peak = Float.NEGATIVE_INFINITY
                 if (useInterleave && leftPostGains != null && rightPostGains != null) {
                     // Split-half: the true peak is ~2× a single stage's gain.
