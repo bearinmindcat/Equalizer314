@@ -344,6 +344,8 @@ class EqStateManager(
     fun setChannelSideEqEnabled(enabled: Boolean) {
         // Persist first — the gear's paint and the L/R tap guards read this pref.
         eqPrefs.saveChannelSideEqEnabled(enabled)
+        // Both view ends with either toggle, else bandSlots stays on the shared layer (issue #104).
+        bothViewActive = false
         if (enabled) {
             // Prefer prior L/R divergence when prefs carry it (CSE flipped off + back on); fork from the current active EQ when either pref is absent (first enable / fresh install).
             val lOk = eqPrefs.restoreLeftBands(leftEq)
