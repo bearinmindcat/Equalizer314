@@ -103,7 +103,7 @@ class DynamicsProcessingManager {
     /** MBC bands allocated in the live DP; only a change here needs a rebuild. */
     @Volatile var liveMbcBandCount = 0
         private set
-    /** EQ "off": flat curve at the same level (preamp + held auto-gain) instead of a full bypass that jumps the volume. */
+    /** EQ off = flat curve at the same level, not a full bypass that jumps the volume. */
     @Volatile var curveBypassed = false
     // Volume compensation: dB shift (≤ 0) on MBC thresholds/gates so compression tracks the pre-volume signal.
     @Volatile var mbcThresholdOffsetDb: Float = 0f
@@ -203,7 +203,7 @@ class DynamicsProcessingManager {
                 setLimiterByChannelIndex(1, limiter)
                 Log.d(TAG, "Limiter config: enabled=$limiterEnabled thresh=$limiterThresholdDb ratio=$limiterRatio attack=$limiterAttackMs release=$limiterReleaseMs postGain=$limiterPostGainDb")
 
-                // MBC off: every allocated band is a passthrough, so a later toggle is a live write, not a rebuild.
+                // MBC off: all allocated bands passthrough, so a later toggle is a live write.
                 if (!mbcEnabled) writePassthroughBands(this, mbcStageBandCount)
 
                 // Apply response, then enable — drain blocks until the band write lands.
@@ -387,8 +387,7 @@ class DynamicsProcessingManager {
 
         // Auto-gain: flat shift bringing the loudest band to ≤ 0 dB.
         if (autoGainEnabled) {
-            // Recompute even while bypassed: the gains here are still the real curve, so the flat
-            // fill below lands on the same offset the live curve uses and on/off stays level-matched.
+            // Recompute even while bypassed so the flat fill below lands on the live curve's offset (level-matched on/off).
             if (!gainHold) {
                 var peak = Float.NEGATIVE_INFINITY
                 if (useInterleave && leftPostGains != null && rightPostGains != null) {

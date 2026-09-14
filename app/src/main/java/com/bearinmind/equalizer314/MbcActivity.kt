@@ -1362,7 +1362,7 @@ class MbcActivity : AppCompatActivity() {
         android.util.Log.d("MbcActivity", "pushMbcToService: isEnabled=$isEnabled, dm.isActive=${dm.isActive}, dm.mbcEnabled=${dm.mbcEnabled}")
 
         if (!dm.isActive) return  // Only the power button starts DP.
-        // Only a band-count change rebuilds DP; on/off is a live band write so the output never drops out.
+        // Only a band-count change rebuilds DP; on/off is a live write.
         val needRebuild = isEnabled && dm.liveMbcBandCount != bandCount
         dm.mbcEnabled = isEnabled
         dm.mbcBandCount = bandCount

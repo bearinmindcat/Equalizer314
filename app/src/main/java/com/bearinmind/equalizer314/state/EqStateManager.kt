@@ -203,8 +203,10 @@ class EqStateManager(
         bandColors.putAll(eqPrefs.getBandColors())
         graphView.setBandColors(bandColors)
 
-        // Restore preamp & auto-gain
+        // Restore preamp & auto-gain, including the per-side preamps for Channel Side EQ.
         preampGainDb = eqPrefs.getPreampGain()
+        preampLeftDb = eqPrefs.getPreampLeft()
+        preampRightDb = eqPrefs.getPreampRight()
         autoGainEnabled = eqPrefs.getAutoGainEnabled()
 
         // Restore channel side options

@@ -314,7 +314,7 @@ class EqService : Service() {
         applyDpEnabled()
     }
 
-    /** Global DP enable = no playing app bound to "Disable EQ"; the EQ toggle and system-sound skip flatten the curve at the same level instead. */
+    /** DP enable = no app bound to "Disable EQ"; the EQ toggle and system-sound skip flatten the curve instead. */
     private fun expectedDpEnabled(): Boolean = routeCoordinator?.appDisableActive != true
 
     /** Flat curve with the preamp kept whenever the user EQ is off or a system sound is playing. */
@@ -737,6 +737,12 @@ class EqService : Service() {
                         channelBalancePercent = p.getChannelBalancePercent()
                         leftChannelGainDb = p.getLeftChannelGainDb()
                         rightChannelGainDb = p.getRightChannelGainDb()
+                        if (p.getChannelSideEqEnabled()) {
+                            // Channel Side EQ: the preamp lives per side on the channel gains, not the shared stage.
+                            preampGainDb = 0f
+                            leftChannelGainDb += p.getPreampLeft()
+                            rightChannelGainDb += p.getPreampRight()
+                        }
                         limiterEnabled = p.getLimiterEnabled()
                         limiterAttackMs = p.getLimiterAttack()
                         limiterReleaseMs = p.getLimiterRelease()
@@ -747,8 +753,10 @@ class EqService : Service() {
                         mbcBandCount = p.getMbcBandCount()
                         curveBypassed = !p.getEqEnabled()
                     }
-                    dynamicsManager.start(eq)
+                    val cse = loadChannelSideEqs(p)
+                    dynamicsManager.start(cse?.first ?: eq)
                     if (dynamicsManager.isActive) {
+                        cse?.let { (l, r) -> dynamicsManager.updateFromEqualizers(l, r) }
                         p.savePowerState(true)
                         setDpRunning(true)
                         dpOutputKey = lastDeviceKey
@@ -793,6 +801,12 @@ class EqService : Service() {
                         channelBalancePercent = p.getChannelBalancePercent()
                         leftChannelGainDb = p.getLeftChannelGainDb()
                         rightChannelGainDb = p.getRightChannelGainDb()
+                        if (p.getChannelSideEqEnabled()) {
+                            // Channel Side EQ: the preamp lives per side on the channel gains, not the shared stage.
+                            preampGainDb = 0f
+                            leftChannelGainDb += p.getPreampLeft()
+                            rightChannelGainDb += p.getPreampRight()
+                        }
                         limiterEnabled = p.getLimiterEnabled()
                         limiterAttackMs = p.getLimiterAttack()
                         limiterReleaseMs = p.getLimiterRelease()
@@ -803,8 +817,10 @@ class EqService : Service() {
                         mbcBandCount = p.getMbcBandCount()
                         curveBypassed = !p.getEqEnabled()
                     }
-                    dynamicsManager.start(eq)
+                    val cse = loadChannelSideEqs(p)
+                    dynamicsManager.start(cse?.first ?: eq)
                     if (dynamicsManager.isActive) {
+                        cse?.let { (l, r) -> dynamicsManager.updateFromEqualizers(l, r) }
                         p.savePowerState(true)
                         setDpRunning(true)
                         dpOutputKey = lastDeviceKey
@@ -1051,7 +1067,7 @@ class EqService : Service() {
         dynamicsManager.updateFromEqualizers(leftEq, rightEq)
     }
 
-    /** EQ toggle (pref already saved): flat curve at the same level, DP stays enabled so the preamp never drops out. */
+    /** EQ toggle: flat curve at the same level; DP stays enabled so the preamp never drops out. */
     fun setEqEnabled(enabled: Boolean) {
         dynamicsManager.applyCurveBypass(!enabled || systemSoundBypassActive)
         applyDpEnabled()
@@ -1091,6 +1107,18 @@ class EqService : Service() {
     }
 
     /** ParametricEqualizer from the persisted bands JSON; null when unusable. */
+    /** Saved L/R curves + shared overlay for a Channel Side EQ service start; null when off or unsaved. */
+    private fun loadChannelSideEqs(p: EqPreferencesManager): Pair<ParametricEqualizer, ParametricEqualizer>? {
+        if (!p.getChannelSideEqEnabled()) { com.bearinmind.equalizer314.dsp.ParametricToDpConverter.overlayEq = null; return null }
+        val left = ParametricEqualizer().also { it.isEnabled = true }
+        val right = ParametricEqualizer().also { it.isEnabled = true }
+        if (!p.restoreLeftBands(left) || !p.restoreRightBands(right)) return null
+        val shared = ParametricEqualizer().also { it.isEnabled = true }
+        com.bearinmind.equalizer314.dsp.ParametricToDpConverter.overlayEq =
+            if (p.restoreSharedBands(shared) && shared.getBandCount() > 0) shared else null
+        return Pair(left, right)
+    }
+
     private fun loadPersistedParametricEq(): ParametricEqualizer? {
         val prefs = getSharedPreferences("eq_settings", Context.MODE_PRIVATE)
         val str = runCatching { prefs.getString("bands", null) }.getOrNull() ?: return null
