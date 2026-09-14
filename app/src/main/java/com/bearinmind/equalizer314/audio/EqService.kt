@@ -332,6 +332,12 @@ class EqService : Service() {
         dynamicsManager.setEnabled(true)
     }
 
+    /** Drop the per-session effects but keep a toggled-on reverb: it runs independently of the EQ's power state. */
+    private fun releaseSessionEffectsKeepingReverb() {
+        sessionEffects?.releaseAll()
+        sessionEffects?.applyReverbParamsToAll()
+    }
+
     /** One-shot bypass evaluation at DP start. */
     private fun syncSystemSoundBypassFromCurrent() {
         val am = getSystemService(AudioManager::class.java) ?: return
@@ -649,7 +655,7 @@ class EqService : Service() {
                 DynamicsProcessingManager.compatMode = p.getDpCompatMode()
                 if (dynamicsManager.isActive) {
                     dynamicsManager.stop()
-                    sessionEffects?.releaseAll()
+                    releaseSessionEffectsKeepingReverb()
                     setDpRunning(false)
                 }
                 if (p.getPowerState() && p.getAudioRoutingMode() != 1) {
@@ -691,7 +697,7 @@ class EqService : Service() {
                 dynamicsManager.stop()
                 // Session mode: drop the per-app effects but keep the tracked sessions for the UI.
                 if (EqPreferencesManager(this).getAudioRoutingMode() == 1) sessionEffects?.setArmed(false)
-                else sessionEffects?.releaseAll()
+                else releaseSessionEffectsKeepingReverb()
                 // Persist power-off so tile/notification taps sync when MainActivity is gone.
                 EqPreferencesManager(this).savePowerState(false)
                 setDpRunning(false)
@@ -722,7 +728,7 @@ class EqService : Service() {
                     // Tile tap while running — toggle off, service stays alive for Turn On.
                     manualOverrideDeviceKey = null
                     dynamicsManager.stop()
-                    sessionEffects?.releaseAll()
+                    releaseSessionEffectsKeepingReverb()
                     EqPreferencesManager(this).savePowerState(false)
                     setDpRunning(false)
                     showDpStateToast(started = false)

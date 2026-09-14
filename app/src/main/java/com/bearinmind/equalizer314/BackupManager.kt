@@ -13,6 +13,8 @@ object BackupManager {
         "device_bindings",  // per-output-device preset bindings
         "app_bindings",     // per-app session bindings
     )
+    // Probed from the running device's audio engine — never carry it to another phone in a backup.
+    private val DEVICE_LOCAL_KEYS = setOf("reverbExtraParamsSupported")
 
     fun exportAll(context: Context): String {
         val root = JSONObject()
@@ -22,6 +24,7 @@ object BackupManager {
             val prefs = context.getSharedPreferences(file, Context.MODE_PRIVATE)
             val fileObj = JSONObject()
             for ((key, value) in prefs.all) {
+                if (key in DEVICE_LOCAL_KEYS) continue
                 val entry = JSONObject()
                 when (value) {
                     is String -> { entry.put("t", "s"); entry.put("v", value) }

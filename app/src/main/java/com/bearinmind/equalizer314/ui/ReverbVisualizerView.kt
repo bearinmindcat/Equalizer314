@@ -381,6 +381,10 @@ class ReverbVisualizerView @JvmOverloads constructor(
         SOURCE_CIRCLE, PREDELAY_CIRCLE, EARLY_CIRCLE, DECAY_CIRCLE,
         REVDELAY_CIRCLE, HF_DAMPING_CIRCLE, HF_LEVEL_CIRCLE,
     }
+    /** False when the device's reverb ignores pre-delay / early reflections / reverb delay: their handles stop grabbing. */
+    var extraParamsEnabled: Boolean = true
+        set(v) { field = v; invalidate() }
+
     private data class HandlePos(val x: Float, val y: Float)
     private val handlePos = HashMap<Handle, HandlePos>()
     private var grabbed: Handle? = null
@@ -1084,12 +1088,13 @@ class ReverbVisualizerView @JvmOverloads constructor(
     }
 
     private fun nearestHandle(x: Float, y: Float): Handle? {
-        // Only the top-row circles are user-touchable right now; ignore
-        // any leftover curve-anchor handle positions.
-        val touchable = setOf(
+        // Only the top-row circles are touchable; leftover curve-anchor positions are ignored.
+        val touchable = if (extraParamsEnabled) setOf(
             Handle.EARLY_CIRCLE,
             Handle.REVDELAY_CIRCLE, Handle.DECAY_CIRCLE,
             Handle.HF_DAMPING_CIRCLE, Handle.HF_LEVEL_CIRCLE,
+        ) else setOf(
+            Handle.DECAY_CIRCLE, Handle.HF_DAMPING_CIRCLE, Handle.HF_LEVEL_CIRCLE,
         )
         var best: Handle? = null
         var bestDist = hitRadiusPx
@@ -1136,7 +1141,7 @@ class ReverbVisualizerView @JvmOverloads constructor(
                 val tailStartMs = reflectionsDelayMs + max(decayTimeMs * 0.18f, 80f)
                 val effective = (tEnd - tailStartMs).coerceAtLeast(50f)
                 val newDecay = (effective / decayHfRatio.coerceAtLeast(0.1f))
-                    .coerceIn(100f, 20000f)
+                    .coerceIn(decayMinMs, decayMaxMs)
                 decayTimeMs = newDecay
                 cb?.invoke(Param.DECAY_TIME, newDecay)
             }
@@ -1170,8 +1175,7 @@ class ReverbVisualizerView @JvmOverloads constructor(
                 cb?.invoke(Param.REVERB_DELAY, newDelay)
             }
             Handle.DECAY_CIRCLE -> {
-                // X → decayTimeMs [100, 20 000] ms; Y → reverbLevelDb [-90, +20] dB
-                // (top = louder). The Reverb (dB) slider tracks the dot live.
+                // X -> decayTimeMs [100, 7000] ms; Y -> reverbLevelDb [-90, +20] dB; the slider tracks the dot live.
                 val newDecay = xToDecay(x)
                 decayTimeMs = newDecay
                 cb?.invoke(Param.DECAY_TIME, newDecay)

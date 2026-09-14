@@ -88,7 +88,7 @@
                         android:layout_weight="1"
                         android:valueFrom="-90"
                         android:valueTo="0"
-                        android:value="-10"
+                        android:value="-6"
                         app:tickVisible="false"
                         app:labelBehavior="gone" />
 
@@ -207,7 +207,7 @@
                         android:visibility="gone">
 
                         <!-- Pre-delay (Reflections Delay) -->
-                        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        <LinearLayout android:id="@+id/reverbReflectDelayRow" android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="4dp">
                             <TextView android:layout_width="120dp" android:layout_height="wrap_content"
                                 android:text="Pre-delay (ms)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
@@ -234,7 +234,7 @@
                              was removed because Android's EnvironmentalReverb
                              has no API for it (the IR cluster width is now a
                              fixed visualization-only constant). -->
-                        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        <LinearLayout android:id="@+id/reverbReflectLevelRow" android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="4dp">
                             <TextView android:layout_width="120dp" android:layout_height="wrap_content"
                                 android:text="Early Reflect. Level (dB)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
@@ -257,7 +257,7 @@
                         </LinearLayout>
 
                         <!-- Reverb Delay -->
-                        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        <LinearLayout android:id="@+id/reverbDelayRow" android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="4dp">
                             <TextView android:layout_width="120dp" android:layout_height="wrap_content"
                                 android:text="Reverb Delay (ms)" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
@@ -288,7 +288,7 @@
                                 android:textColor="#FFAAAAAA" />
                             <com.google.android.material.slider.Slider android:id="@+id/reverbDecayTimeSlider"
                                 android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-                                android:valueFrom="100" android:valueTo="20000" android:value="1490" app:labelBehavior="gone" />
+                                android:valueFrom="100" android:valueTo="7000" android:value="1490" app:labelBehavior="gone" />
                             <LinearLayout android:layout_width="64dp" android:layout_height="wrap_content"
                                 android:layout_gravity="bottom"
                                 android:layout_marginStart="4dp" android:orientation="vertical">
@@ -315,7 +315,7 @@
                                 android:textColor="#FFAAAAAA" />
                             <com.google.android.material.slider.Slider android:id="@+id/reverbLevelSlider"
                                 android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-                                android:valueFrom="-90" android:valueTo="20" android:value="-26"
+                                android:valueFrom="-90" android:valueTo="20" android:value="16"
                                 app:labelBehavior="gone" />
                             <LinearLayout android:layout_width="64dp" android:layout_height="wrap_content"
                                 android:layout_gravity="top"
@@ -380,6 +380,16 @@
                                     android:gravity="center" android:imeOptions="actionDone" />
                             </com.google.android.material.textfield.TextInputLayout>
                         </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/reverbUnsupportedNote"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:text="Pre-delay, Early Reflect. Level and Reverb Delay are greyed out: this device's reverb engine accepts them but never applies them, so they would change the graph without changing the sound."
+                            android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
+                            android:textColor="#FF888888"
+                            android:visibility="gone" />
                     </LinearLayout>
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>

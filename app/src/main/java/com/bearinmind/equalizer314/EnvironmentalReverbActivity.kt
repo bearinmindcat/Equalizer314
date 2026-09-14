@@ -174,6 +174,8 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
             schedulePushReverbParams()
         }
 
+        applyExtraParamSupport()
+
         // Click-to-expand "Graph parameters" panel. TransitionManager animates the
         // dropdown height and the cards below shifting so the screen slides as one.
         val scrollContent = findViewById<LinearLayout>(R.id.reverbScrollContent)
@@ -192,6 +194,23 @@ class EnvironmentalReverbActivity : AppCompatActivity() {
                 .setDuration(220L)
                 .start()
         }
+    }
+
+    /**
+     * AOSP's reverb accepts pre-delay / early-reflection level / reverb delay and then discards them.
+     * The service probes the live effect, so grey those rows out rather than let them move a silent graph.
+     */
+    private fun applyExtraParamSupport() {
+        if (eqPrefs.getReverbExtraParamsSupported()) return
+        visualizer.extraParamsEnabled = false
+        findViewById<View>(R.id.reverbUnsupportedNote).visibility = View.VISIBLE
+        for (id in intArrayOf(R.id.reverbReflectDelayRow, R.id.reverbReflectLevelRow, R.id.reverbDelayRow)) {
+            findViewById<LinearLayout>(id).alpha = 0.38f
+        }
+        for (v in arrayOf<View>(
+            reflectDelaySlider, reflectLevelSlider, revDelaySlider,
+            reflectDelayText, reflectLevelText, revDelayText,
+        )) v.isEnabled = false
     }
 
     private fun applyVisualizerChange(

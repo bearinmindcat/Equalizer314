@@ -1,6 +1,7 @@
 package com.bearinmind.equalizer314.audio
 
 import android.content.Context
+import android.media.AudioManager
 import android.media.audiofx.AudioEffect
 import android.media.audiofx.DynamicsProcessing
 import android.media.audiofx.EnvironmentalReverb
@@ -56,6 +57,8 @@ class SessionEffectManager(private val context: Context) {
             null
         }
     }
+    // The engine's capabilities never change mid-process, so the throwaway probe effect is built once.
+    @Volatile private var reverbEngineProbed = false
     private val sessionInfo = mutableMapOf<Int, ActiveSession>()
     /** Detected (package, sessionId) pairs — diffed so attach/detach fires only on transitions. */
     private val detectedKeys = mutableSetOf<Pair<String, Int>>()
@@ -319,6 +322,7 @@ class SessionEffectManager(private val context: Context) {
             val fx = ctor.newInstance(
                 EFFECT_TYPE_NULL_UUID, INSERT_ENV_REVERB_UUID, Integer.MAX_VALUE, sessionId,
             ) as AudioEffect
+            probeReverbEngine()
             configureReverb(fx)
             fx.enabled = true
             reverbs[sessionId] = fx
@@ -326,6 +330,41 @@ class SessionEffectManager(private val context: Context) {
         } catch (t: Throwable) {
             Log.w(TAG, "Could not attach reverb to session $sessionId", t)
         }
+    }
+
+    /**
+     * AOSP's reverb takes reflectionsLevel/reflectionsDelay/reverbDelay and then discards them, and
+     * hidden-API rules block reading our own insert effect back. Probe a throwaway EnvironmentalReverb
+     * on an unused session instead: same engine, public getters, nothing in the output path.
+     */
+    private fun probeReverbEngine() {
+        if (reverbEngineProbed) return
+        reverbEngineProbed = true
+        val supported = try {
+            val sid = context.getSystemService(AudioManager::class.java)?.generateAudioSessionId()
+                ?: AudioManager.ERROR
+            if (sid == AudioManager.ERROR) return
+            val probe = EnvironmentalReverb(0, sid)
+            try {
+                probe.reflectionsDelay = PROBE_DELAY_MS
+                val kept = probe.reflectionsDelay == PROBE_DELAY_MS
+                probe.roomLevel = (eqPrefs.getReverbRoomLevelDb() * 100f).coerceIn(-9000f, 0f).toInt().toShort()
+                probe.reverbLevel = (eqPrefs.getReverbReverbLevelDb() * 100f).coerceIn(-9000f, 2000f).toInt().toShort()
+                // Wet mix the engine derives from the pair: (room + reverb - 2000) mB mapped onto 0..100.
+                Log.d(
+                    TAG,
+                    "Reverb engine check: accepts roomLevel=${probe.roomLevel} reverbLevel=${probe.reverbLevel} mB, " +
+                        "wet=${wetPercent(probe.roomLevel.toInt(), probe.reverbLevel.toInt())}%, reflections kept=$kept",
+                )
+                kept
+            } finally {
+                try { probe.release() } catch (_: Throwable) {}
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "Reverb engine probe failed: ${(t.cause ?: t).message}")
+            return
+        }
+        eqPrefs.saveReverbExtraParamsSupported(supported)
     }
 
     /** Push persisted reverb prefs into [r], clamped to the documented ranges. */
@@ -360,8 +399,9 @@ class SessionEffectManager(private val context: Context) {
             (eqPrefs.getReverbReflectionsLevelDb() * 100f).coerceIn(-9000f, 1000f).toInt().toShort())
         setI("reflectionsDelay", EnvironmentalReverb.PARAM_REFLECTIONS_DELAY,
             eqPrefs.getReverbReflectionsDelayMs().coerceIn(0f, 300f).toInt())
+        // reverbLevel's documented ceiling is +2000 mB; clamping it at 0 capped the wet mix at 10%.
         setS("reverbLevel", EnvironmentalReverb.PARAM_REVERB_LEVEL,
-            (eqPrefs.getReverbReverbLevelDb() * 100f).coerceIn(-9000f, 0f).toInt().toShort())
+            (eqPrefs.getReverbReverbLevelDb() * 100f).coerceIn(-9000f, 2000f).toInt().toShort())
         setI("reverbDelay", EnvironmentalReverb.PARAM_REVERB_DELAY,
             eqPrefs.getReverbDelayMs().coerceIn(0f, 100f).toInt())
         setS("diffusion", EnvironmentalReverb.PARAM_DIFFUSION,
@@ -671,6 +711,25 @@ class SessionEffectManager(private val context: Context) {
             "com.bearinmind.equalizer314.SESSIONS_CHANGED"
         /** Pipeline EffectId.name for the reverb card — keep in sync with AudioEffectsPipelineActivity. */
         const val EFFECT_REVERB_NAME = "ENVIRONMENTAL_REVERB"
+        /** Sentinel written then read back to see whether the engine stores the reflections params. */
+        private const val PROBE_DELAY_MS = 25
+        /** AOSP's ReverbConvertLevel table: combined millibels → 0..100 wet mix. */
+        private val LEVEL_TABLE = intArrayOf(
+            -12000, -4000, -3398, -3046, -2796, -2603, -2444, -2310, -2194, -2092, -2000, -1918,
+            -1842, -1773, -1708, -1648, -1592, -1540, -1490, -1443, -1398, -1356, -1316, -1277,
+            -1240, -1205, -1171, -1138, -1106, -1076, -1046, -1018, -990, -963, -938, -912,
+            -888, -864, -841, -818, -796, -775, -754, -734, -714, -694, -675, -656,
+            -638, -620, -603, -585, -568, -552, -536, -520, -504, -489, -474, -459,
+            -444, -430, -416, -402, -388, -375, -361, -348, -335, -323, -310, -298,
+            -286, -274, -262, -250, -239, -228, -216, -205, -194, -184, -173, -162,
+            -152, -142, -132, -121, -112, -102, -92, -82, -73, -64, -54, -45,
+            -36, -27, -18, -9, 0,
+        )
+        private fun wetPercent(roomLevelMb: Int, reverbLevelMb: Int): Int {
+            val combined = roomLevelMb + reverbLevelMb - 2000
+            val i = LEVEL_TABLE.indexOfFirst { combined <= it }
+            return if (i < 0) 100 else i
+        }
         /** Session 0 = global output mix — where System-wide reverb attaches. */
         const val GLOBAL_REVERB_SESSION = 0
         /** Insert Environmental Reverb impl UUID — the auxiliary variant the SDK ctor picks is silent system-wide. */

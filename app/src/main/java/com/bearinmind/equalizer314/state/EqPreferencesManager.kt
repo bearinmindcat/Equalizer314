@@ -440,13 +440,15 @@ class EqPreferencesManager(context: Context) {
 
     // ---- Environmental Reverb: UI units are dB/per-mille; API wants mB (×100 on attach) ----
     fun saveReverbDecayTimeMs(v: Float) { prefs.edit().putFloat("reverbDecayTimeMs", v).apply() }
-    fun getReverbDecayTimeMs(): Float = prefs.getFloat("reverbDecayTimeMs", 1490f)
+    // Clamped on read: the engine's ceiling is 7 s, so older saves above it would show a value it never used.
+    fun getReverbDecayTimeMs(): Float = prefs.getFloat("reverbDecayTimeMs", 1490f).coerceIn(100f, 7000f)
     fun saveReverbDecayHfRatio(v: Float) { prefs.edit().putFloat("reverbDecayHfRatio", v).apply() }
     fun getReverbDecayHfRatio(): Float = prefs.getFloat("reverbDecayHfRatio", 0.83f)
+    // Wet mix = room + reverb - 2000 mB mapped 0..100, so these two defaults land on ~32% wet.
     fun saveReverbReverbLevelDb(v: Float) { prefs.edit().putFloat("reverbReverbLevelDb", v).apply() }
-    fun getReverbReverbLevelDb(): Float = prefs.getFloat("reverbReverbLevelDb", -4f)
+    fun getReverbReverbLevelDb(): Float = prefs.getFloat("reverbReverbLevelDb", 16f)
     fun saveReverbRoomLevelDb(v: Float) { prefs.edit().putFloat("reverbRoomLevelDb", v).apply() }
-    fun getReverbRoomLevelDb(): Float = prefs.getFloat("reverbRoomLevelDb", -4f)
+    fun getReverbRoomLevelDb(): Float = prefs.getFloat("reverbRoomLevelDb", -6f)
     fun saveReverbReflectionsDelayMs(v: Float) { prefs.edit().putFloat("reverbReflectionsDelayMs", v).apply() }
     fun getReverbReflectionsDelayMs(): Float = prefs.getFloat("reverbReflectionsDelayMs", 7f)
     fun saveReverbReflectionsLevelDb(v: Float) { prefs.edit().putFloat("reverbReflectionsLevelDb", v).apply() }
@@ -459,6 +461,9 @@ class EqPreferencesManager(context: Context) {
     fun getReverbDiffusionPct(): Float = prefs.getFloat("reverbDiffusionPct", 100f)
     fun saveReverbDensityPct(v: Float) { prefs.edit().putFloat("reverbDensityPct", v).apply() }
     fun getReverbDensityPct(): Float = prefs.getFloat("reverbDensityPct", 100f)
+    // Probed at attach: false when the device's engine discards pre-delay / early reflections / reverb delay.
+    fun saveReverbExtraParamsSupported(v: Boolean) { prefs.edit().putBoolean("reverbExtraParamsSupported", v).apply() }
+    fun getReverbExtraParamsSupported(): Boolean = prefs.getBoolean("reverbExtraParamsSupported", true)
 
     // Imported targets (stored as JSON array of names)
     fun addImportedTarget(name: String, rawText: String = "") {
