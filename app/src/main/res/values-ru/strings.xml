@@ -349,4 +349,12 @@
     <string name="remote_connection_failed">Ошибка подключения: %1$s</string>
     <string name="remote_disconnected_from_tv">Отключено от ТВ</string>
     <string name="remote_connecting_to">Подключение к %1$s…</string>
+    <string name="device_bluetooth">Bluetooth</string>
+    <string name="device_wired_headphones">Проводные наушники</string>
+    <string name="device_usb_audio">USB-аудио</string>
+    <string name="device_phone_speaker">Динамик телефона</string>
+    <string name="device_unknown_output">Неизвестный выход</string>
+    <string name="device_key_usb">USB</string>
+    <string name="device_key_wired">Проводной</string>
+    <string name="device_key_speaker">Динамик</string>
 </resources>

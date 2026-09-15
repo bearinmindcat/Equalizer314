@@ -349,4 +349,12 @@
     <string name="remote_connection_failed">Помилка підключення: %1$s</string>
     <string name="remote_disconnected_from_tv">Відключено від ТБ</string>
     <string name="remote_connecting_to">Підключення до %1$s…</string>
+    <string name="device_bluetooth">Bluetooth</string>
+    <string name="device_wired_headphones">Дротові навушники</string>
+    <string name="device_usb_audio">USB-аудіо</string>
+    <string name="device_phone_speaker">Динамік телефона</string>
+    <string name="device_unknown_output">Невідомий вихід</string>
+    <string name="device_key_usb">USB</string>
+    <string name="device_key_wired">Дротовий</string>
+    <string name="device_key_speaker">Динамік</string>
 </resources>
