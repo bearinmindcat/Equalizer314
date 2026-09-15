@@ -250,7 +250,7 @@ class AudioOutputActivity : AppCompatActivity() {
         for (d in am.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)) {
             if (!d.isSink) continue
             val key = DeviceIdentity.keyOf(d) ?: continue
-            eqPrefs.rememberSeenDevice(key, DeviceIdentity.labelOf(d))
+            eqPrefs.rememberSeenDevice(key, DeviceIdentity.labelOf(this, d))
         }
     }
 
@@ -301,10 +301,10 @@ class AudioOutputActivity : AppCompatActivity() {
             return
         }
         activeKey = DeviceIdentity.keyOf(active)
-        activeLabel = DeviceIdentity.labelOf(active)
+        activeLabel = DeviceIdentity.labelOf(this, active)
         activeDeviceLabel.text = activeLabel ?: "Current output"
         // Second line via DeviceIdentity.displayKey — type for USB/wired/speaker, MAC for Bluetooth.
-        val keyDisplay = activeKey?.let { DeviceIdentity.displayKey(it) }.orEmpty()
+        val keyDisplay = activeKey?.let { DeviceIdentity.displayKey(this, it) }.orEmpty()
         if (keyDisplay.isNotEmpty()) {
             activeDeviceKey.text = keyDisplay
             activeDeviceKey.visibility = View.VISIBLE
@@ -490,7 +490,7 @@ class AudioOutputActivity : AppCompatActivity() {
             val (key, label) = items[position]
 
             // Name on top, key below via DeviceIdentity.displayKey: USB/wired/speaker show "USB"/"Wired"/"Speaker".
-            val keyDisplay = DeviceIdentity.displayKey(key)
+            val keyDisplay = DeviceIdentity.displayKey(this@AudioOutputActivity, key)
             holder.name.text = label
             if (keyDisplay.isNotEmpty()) {
                 holder.keyText.text = keyDisplay

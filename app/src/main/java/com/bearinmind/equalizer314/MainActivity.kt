@@ -758,8 +758,8 @@ class  MainActivity : AppCompatActivity() {
             eqPrefs.isEditedFrom(activePresetName, eqPrefs.bandsToJson(stateManager.parametricEq), stateManager.preampGainDb)
         }.getOrDefault(false)
         val presetDisplay = when {
-            !isRealPreset -> "none"
-            edited -> "$activePresetName (edited)"
+            !isRealPreset -> getString(R.string.notif_none)
+            edited -> getString(R.string.notif_edited, activePresetName)
             else -> activePresetName
         }
         // Same Mode · Preset · Device logic as EqService.buildNotification; the static mirror covers Session mode, where MainActivity is usually unbound.
@@ -777,21 +777,21 @@ class  MainActivity : AppCompatActivity() {
         val appliedApp = eqPrefs.getAppliedAppPreset()
         val appAttached = com.bearinmind.equalizer314.audio.SessionEffectManager.drivingPresetAttached
         val mode = when {
-            routingMode == 1 -> "Session"
-            appliedApp != null -> "App"
-            deviceDrivesPreset -> "Device"
-            else -> "System"
+            routingMode == 1 -> getString(R.string.notif_mode_session)
+            appliedApp != null -> getString(R.string.notif_mode_app)
+            deviceDrivesPreset -> getString(R.string.notif_mode_device)
+            else -> getString(R.string.notif_mode_system)
         }
         val presetForDisplay = when {
-            routingMode != 1 && appliedApp == EqPreferencesManager.DEVICE_PRESET_DISABLED -> "EQ disabled"
+            routingMode != 1 && appliedApp == EqPreferencesManager.DEVICE_PRESET_DISABLED -> getString(R.string.notif_eq_disabled)
             routingMode != 1 -> presetDisplay
-            appPreset == EqPreferencesManager.DEVICE_PRESET_DISABLED -> "EQ disabled"
-            appPreset == null -> "none"
+            appPreset == EqPreferencesManager.DEVICE_PRESET_DISABLED -> getString(R.string.notif_eq_disabled)
+            appPreset == null -> getString(R.string.notif_none)
             appAttached -> appPreset
-            else -> "$appPreset (not attached)"
+            else -> getString(R.string.notif_not_attached, appPreset)
         }
         val deviceLabel = EqService.staticLastDeviceLabel
-            ?: guessed?.let { com.bearinmind.equalizer314.audio.DeviceIdentity.labelOf(it) }
+            ?: guessed?.let { com.bearinmind.equalizer314.audio.DeviceIdentity.labelOf(this, it) }
         devicePresetStatusText.text = buildString {
             append(mode).append(" · ").append(presetForDisplay)
             if (deviceLabel != null) append(" · ").append(deviceLabel)

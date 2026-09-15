@@ -1,5 +1,7 @@
 package com.bearinmind.equalizer314.audio
 
+import android.content.Context
+import com.bearinmind.equalizer314.R
 import android.media.AudioDeviceInfo
 
 /** Maps an [AudioDeviceInfo] to a stable identity key + label; SCO/HFP, HDMI, cast etc. are untracked. */
@@ -67,17 +69,17 @@ object DeviceIdentity {
     }
 
     /** Friendly UI label; type-derived fallback when productName is empty or junk. */
-    fun labelOf(info: AudioDeviceInfo): String {
+    fun labelOf(context: Context, info: AudioDeviceInfo): String {
         val product = cleanProductName(info.productName)
         if (product != null && bucket(info.type) !in setOf(Bucket.WIRED, Bucket.SPEAKER)) {
             return product
         }
         return when (bucket(info.type)) {
-            Bucket.BLUETOOTH -> product ?: "Bluetooth"
-            Bucket.WIRED -> "Wired headphones"
-            Bucket.USB -> product ?: "USB audio"
-            Bucket.SPEAKER -> "Phone speaker"
-            null -> product ?: "Unknown output"
+            Bucket.BLUETOOTH -> product ?: context.getString(R.string.device_bluetooth)
+            Bucket.WIRED -> context.getString(R.string.device_wired_headphones)
+            Bucket.USB -> product ?: context.getString(R.string.device_usb_audio)
+            Bucket.SPEAKER -> context.getString(R.string.device_phone_speaker)
+            null -> product ?: context.getString(R.string.device_unknown_output)
         }
     }
 
@@ -91,12 +93,12 @@ object DeviceIdentity {
     }
 
     /** Second-line display for a stored key — BT shows the MAC, others the connection type. */
-    fun displayKey(key: String): String = when {
+    fun displayKey(context: Context, key: String): String = when {
         key.startsWith("BT:") -> key.removePrefix("BT:")
-        key.startsWith("BT-NAME:") -> "Bluetooth"
-        key.startsWith("USB:") -> "USB"
-        key.startsWith("WIRED:") -> "Wired"
-        key.startsWith("SPEAKER:") -> "Speaker"
+        key.startsWith("BT-NAME:") -> context.getString(R.string.device_bluetooth)
+        key.startsWith("USB:") -> context.getString(R.string.device_key_usb)
+        key.startsWith("WIRED:") -> context.getString(R.string.device_key_wired)
+        key.startsWith("SPEAKER:") -> context.getString(R.string.device_key_speaker)
         else -> key.trimEnd(':')
     }
 }

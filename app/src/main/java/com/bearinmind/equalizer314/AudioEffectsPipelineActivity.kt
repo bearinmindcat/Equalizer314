@@ -17,20 +17,14 @@ import androidx.recyclerview.widget.RecyclerView
 import com.bearinmind.equalizer314.state.EqPreferencesManager
 import com.google.android.material.card.MaterialCardView
 
-/**
- * Drag-reorder screen for the audio-effects pipeline: visual order = intended processing order.
- * Each effect is an [EffectId]; the order persists in EqPreferencesManager for the chain executor
- * in EqService to read back. Left drag handle starts a drag; card body opens the effect's detail
- * screen (Environmental Reverb wiring: issue #4).
- */
+/** Drag-reorder screen for the audio-effects pipeline: visual order = processing order, persisted for EqService. Handle drags, card body opens the effect's screen (issue #4). */
 class AudioEffectsPipelineActivity : AppCompatActivity() {
 
     enum class EffectId(
         val title: String,
         val description: String,
         val isFixed: Boolean = false,
-        /** Supports the right-side on/off toggle. Channel Input / Audio Output are fixed bookends;
-         *  DynamicsProcessing is the always-on main chain (controlled by the global Power FAB). */
+        /** Supports the right-side on/off toggle; Channel Input / Audio Output are fixed bookends, DynamicsProcessing the always-on main chain. */
         val canToggle: Boolean = true,
     ) {
         AUDIO_INPUT(
@@ -245,8 +239,7 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
         }
     }
 
-    /** Info button tint: bright when the card is shown (`colorOnSurface`), dim when hidden
-     *  (`colorOnSurfaceVariant` — the app's secondary-glyph color, reads as "off" at a glance). */
+    /** Info button tint: bright when the card is shown, dim secondary-glyph colour when hidden. */
     private fun updateInfoButtonTint(button: ImageButton, lit: Boolean) {
         val attr = if (lit)
             com.google.android.material.R.attr.colorOnSurface
@@ -256,8 +249,7 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
         button.imageTintList = android.content.res.ColorStateList.valueOf(tint)
     }
 
-    /** Height-based show/hide for the info card — same feel as the Apps/Devices collapsibles:
-     *  500 ms FastOutSlowInInterpolator on `layoutParams.height` (deliberate slide, not a pop). */
+    /** Height-based show/hide for the info card: 500 ms FastOutSlowInInterpolator, same feel as the Apps/Devices collapsibles. */
     private fun toggleInfoCard(card: View) {
         val expand = card.visibility != View.VISIBLE
         val interp = androidx.interpolator.view.animation.FastOutSlowInInterpolator()
@@ -305,18 +297,14 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
         }
     }
 
-    /** User-facing label for the Channel Input card from the routing-mode pref (0 = System-wide,
-     *  1 = Session-based); stays in sync with ChannelInputActivity's chips. */
+    /** User-facing Channel Input label from the routing-mode pref (0 = System-wide, 1 = Session-based); matches ChannelInputActivity's chips. */
     private fun currentChannelInputDescription(): String =
         when (eqPrefs.getAudioRoutingMode()) {
             1 -> "Session-based"
             else -> "System-wide"
         }
 
-    /** Which scope drives the audio, for the priority pill. Hierarchy: 1. Session-based routing →
-     *  Channel Input (per-app DPs handle audio); 2. System-wide + auto-switch ON → Audio Output
-     *  (overwrites the global preset on route changes); 3. System-wide + auto-switch OFF →
-     *  Channel Input (global session-0 mix is the only active scope). Null for every other effect → pill hidden. */
+    /** Which scope drives the audio, for the priority pill: Session-based and System-wide-without-auto-switch point at Channel Input, System-wide with auto-switch at Audio Output; null hides the pill. */
     private fun currentPriorityFor(effect: EffectId): CardPriority? {
         val sessionBased = eqPrefs.getAudioRoutingMode() == 1
         val autoSwitch = eqPrefs.getDeviceAutoSwitchEnabled()
@@ -332,9 +320,7 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
         }
     }
 
-    /** Currently routed output via the Audio Output screen's priority rules
-     *  (`DeviceIdentity.priority`), as "<device label> · <display key>". Null when no tracked
-     *  output is connected — caller falls back to the static enum description. */
+    /** Currently routed output by the Audio Output priority rules; null when nothing tracked is connected. */
     private fun currentAudioOutputDescription(): String? {
         val am = getSystemService(android.media.AudioManager::class.java) ?: return null
         var best: android.media.AudioDeviceInfo? = null
@@ -349,16 +335,15 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
             }
         }
         val active = best ?: return null
-        val label = com.bearinmind.equalizer314.audio.DeviceIdentity.labelOf(active)
+        val label = com.bearinmind.equalizer314.audio.DeviceIdentity.labelOf(this, active)
         val key = com.bearinmind.equalizer314.audio.DeviceIdentity.keyOf(active) ?: return label
-        val keyDisplay = com.bearinmind.equalizer314.audio.DeviceIdentity.displayKey(key)
+        val keyDisplay = com.bearinmind.equalizer314.audio.DeviceIdentity.displayKey(this, key)
         return if (keyDisplay.isNotEmpty()) "$label · $keyDisplay" else label
     }
 
     // ---- Adapter --------------------------------------------------------
 
-    /** Which card is driving the audio. Only Channel Input and Audio Output participate; every
-     *  other effect returns null from [PipelineAdapter.priorityFor] (no indicator). */
+    /** Which card drives the audio; only Channel Input and Audio Output participate, everything else returns null. */
     private enum class CardPriority { PRIORITY, NOT_PRIORITY }
 
     private class PipelineAdapter(
@@ -367,11 +352,9 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
         private val onToggle: (EffectId) -> Unit,
         private val onHandleTouch: (RecyclerView.ViewHolder) -> Unit,
         private val onCardClick: (EffectId) -> Unit,
-        /** Description override — Audio Output shows current device name + connection type instead
-         *  of the static enum fallback. Defaults to the enum's `description`. */
+        /** Description override: Audio Output shows the live device name and connection type instead of the enum default. */
         private val descriptionFor: (EffectId) -> String = { it.description },
-        /** Priority indicator for the Channel Input / Audio Output cards (null elsewhere = no
-         *  indicator); resolved by the activity from routing-mode + auto-switch. */
+        /** Priority indicator for the Channel Input / Audio Output cards, null elsewhere; resolved from routing-mode + auto-switch. */
         private val priorityFor: (EffectId) -> CardPriority? = { null },
     ) : RecyclerView.Adapter<PipelineAdapter.ViewHolder>() {
 
@@ -544,12 +527,7 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
             paintPriority(holder, priorityFor(effect))
         }
 
-        /** Renders the priority affordance on a card. The card stroke
-         *  and left-edge stripe were considered earlier; both got
-         *  pulled in favor of just the outline-only pill, which carries
-         *  the same signal at a fraction of the visual noise. Cards
-         *  that don't participate (every effect except Channel Input /
-         *  Audio Output) pass [priority] = null and the pill collapses. */
+        /** Renders the priority pill; outline-only beat the stroke and edge-stripe for the same signal with less noise. Null [priority] collapses it. */
         private fun paintPriority(holder: ViewHolder, priority: CardPriority?) {
             val ctx = holder.itemView.context
             val density = ctx.resources.displayMetrics.density
@@ -616,11 +594,7 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
         ) : RecyclerView.ViewHolder(view)
     }
 
-    /** Draws a flexible wire in the gap between consecutive cards. The
-     *  wire bows laterally in proportion to the dragged card's vertical
-     *  velocity (with exponential decay) so it lags the card's motion
-     *  and springs back when the drag stops — same idea as a real cable
-     *  swinging through the air. Anti-aliased cubic Bezier path. */
+    /** Flexible wire between consecutive cards: bows laterally with the dragged card's velocity (exponential decay) so it lags and springs back. Anti-aliased cubic Bezier. */
     private class ConnectorDecoration(context: android.content.Context) :
         RecyclerView.ItemDecoration() {
 

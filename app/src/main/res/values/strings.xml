@@ -349,4 +349,12 @@
     <string name="remote_connection_failed">Connection failed: %1$s</string>
     <string name="remote_disconnected_from_tv">Disconnected from TV</string>
     <string name="remote_connecting_to">Connecting to %1$s…</string>
+    <string name="device_bluetooth">Bluetooth</string>
+    <string name="device_wired_headphones">Wired headphones</string>
+    <string name="device_usb_audio">USB audio</string>
+    <string name="device_phone_speaker">Phone speaker</string>
+    <string name="device_unknown_output">Unknown output</string>
+    <string name="device_key_usb">USB</string>
+    <string name="device_key_wired">Wired</string>
+    <string name="device_key_speaker">Speaker</string>
 </resources>

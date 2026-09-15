@@ -553,7 +553,7 @@ class EqService : Service() {
         if (lastDeviceKey == null) monitor.pickActiveOutput()?.let { d ->
             DeviceIdentity.keyOf(d)?.let { k ->
                 lastDeviceKey = k
-                lastDeviceLabel = DeviceIdentity.labelOf(d)
+                lastDeviceLabel = DeviceIdentity.labelOf(this, d)
                 staticLastDeviceKey = k
                 staticLastDeviceLabel = lastDeviceLabel
             }

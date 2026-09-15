@@ -45,7 +45,7 @@ class AudioRoutingMonitor(
         val key = DeviceIdentity.keyOf(info) ?: return
         if (key == observedKey) return
         observedKey = key
-        observedLabel = DeviceIdentity.labelOf(info)
+        observedLabel = DeviceIdentity.labelOf(context, info)
         schedule()
     }
 
@@ -71,7 +71,7 @@ class AudioRoutingMonitor(
     private fun reportSeen(info: AudioDeviceInfo) {
         if (!info.isSink) return
         val key = DeviceIdentity.keyOf(info) ?: return
-        val label = DeviceIdentity.labelOf(info)
+        val label = DeviceIdentity.labelOf(context, info)
         onDeviceSeen?.invoke(key, label)
     }
 
@@ -123,7 +123,7 @@ class AudioRoutingMonitor(
         } else {
             val active = pickActiveOutput() ?: return
             key = DeviceIdentity.keyOf(active) ?: return
-            label = DeviceIdentity.labelOf(active)
+            label = DeviceIdentity.labelOf(context, active)
         }
         if (key == lastEmittedKey) return
         lastEmittedKey = key
