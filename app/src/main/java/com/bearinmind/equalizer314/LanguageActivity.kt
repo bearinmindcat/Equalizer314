@@ -23,6 +23,8 @@ class LanguageActivity : AppCompatActivity() {
     /** Tag, own name, English name. One line per values-XX folder. */
     private val catalogue = listOf(
         Triple("en", "English", "English"),
+        Triple("es", "Español", "Spanish"),
+        Triple("pt", "Português", "Portuguese"),
         Triple("ru", "Русский", "Russian"),
         Triple("uk", "Українська", "Ukrainian"),
     )
