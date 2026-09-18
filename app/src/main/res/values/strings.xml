@@ -357,4 +357,14 @@
     <string name="device_key_usb">USB</string>
     <string name="device_key_wired">Wired</string>
     <string name="device_key_speaker">Speaker</string>
+    <string name="language">Language</string>
+    <string name="change_language_and_translations_here">Change language &amp; translations here</string>
+    <string name="system_default">System default</string>
+    <string name="no_languages_match">No languages match</string>
+    <plurals name="n_languages">
+        <item quantity="one">%1$d language</item>
+        <item quantity="other">%1$d languages</item>
+    </plurals>
+    <string name="switch_language_confirm">Switch the app to %1$s?</string>
+    <string name="switch_label">Switch</string>
 </resources>

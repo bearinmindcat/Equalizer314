@@ -3459,6 +3459,8 @@ class  MainActivity : AppCompatActivity() {
             overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
         }
 
+        setupLanguagePicker()
+
         // Spectrum Control
         setupSpectrumControl()
 
@@ -4307,6 +4309,25 @@ class  MainActivity : AppCompatActivity() {
         com.bearinmind.equalizer314.ui.BottomNavHelper.updatePowerFab(this, on)
         val message = getString(if (on) R.string.x_start else R.string.x_stop, label)
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    }
+
+    /** Tag to the language's own name. One line per values-XX folder; absent ones are filtered out below. */
+    private val appLanguages = listOf(
+        "en" to "English",
+        "ru" to "\u0420\u0443\u0441\u0441\u043a\u0438\u0439",
+        "uk" to "\u0423\u043a\u0440\u0430\u0457\u043d\u0441\u044c\u043a\u0430",
+    )
+
+    private fun setupLanguagePicker() {
+        val valueText = findViewById<TextView>(R.id.languageValueText)
+        val tag = androidx.appcompat.app.AppCompatDelegate.getApplicationLocales()
+            .toLanguageTags().substringBefore('-')
+        valueText.text = appLanguages.firstOrNull { it.first == tag }?.second
+            ?: getString(R.string.system_default)
+        findViewById<View>(R.id.languageCard).setOnClickListener {
+            startActivity(Intent(this, LanguageActivity::class.java))
+            overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+        }
     }
 
     // ---- UI Updates ----
