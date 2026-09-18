@@ -135,7 +135,8 @@ class DynamicsProcessingManager {
     @Volatile private var controlRetryPending = false
     @Volatile private var controlRetryCount = 0
 
-    fun start(eq: ParametricEqualizer) {
+    /** [rightEq] null puts [eq] on both channels; pass it to keep a rebuild per-channel. */
+    fun start(eq: ParametricEqualizer, rightEq: ParametricEqualizer? = null) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
             Log.e(TAG, "DynamicsProcessing requires API 28+")
             return
@@ -152,7 +153,7 @@ class DynamicsProcessingManager {
         val bandLadder = if (compatMode) intArrayOf(COMPAT_BAND_COUNT) else intArrayOf(128, 127)
         for (tryBands in bandLadder) {
             ParametricToDpConverter.setNumBands(tryBands)
-            if (startWithBandCount(eq, ParametricToDpConverter.numBands)) return
+            if (startWithBandCount(eq, rightEq, ParametricToDpConverter.numBands)) return
             Log.w(TAG, "DP creation failed with ${ParametricToDpConverter.numBands} bands")
         }
         // Fallback: an OEM may reject the Post-EQ stage — retry single-stage.
@@ -161,14 +162,14 @@ class DynamicsProcessingManager {
             interleaveEnabled = false
             for (tryBands in bandLadder) {
                 ParametricToDpConverter.setNumBands(tryBands)
-                if (startWithBandCount(eq, ParametricToDpConverter.numBands)) return
+                if (startWithBandCount(eq, rightEq, ParametricToDpConverter.numBands)) return
                 Log.w(TAG, "DP creation failed with ${ParametricToDpConverter.numBands} bands")
             }
         }
         Log.e(TAG, "DynamicsProcessing could not be started with any band count")
     }
 
-    private fun startWithBandCount(eq: ParametricEqualizer, bandCount: Int): Boolean {
+    private fun startWithBandCount(eq: ParametricEqualizer, rightEq: ParametricEqualizer?, bandCount: Int): Boolean {
         val variant = DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION
         val useInterleave = effectiveInterleave
         Log.d(TAG, "DP variant=FREQUENCY bands=$bandCount frame=${effectiveFrameMs}ms interleave=$useInterleave compat=$compatMode")
@@ -192,6 +193,7 @@ class DynamicsProcessingManager {
 
         try {
             lastEq = eq
+            lastRightEq = if (rightEq !== eq) rightEq else null
             // Set BEFORE the band write below — it picks the conversion path from currentInterleave.
             currentInterleave = useInterleave
             dynamicsProcessing = DynamicsProcessing(Int.MAX_VALUE, 0, config).apply {
@@ -207,7 +209,7 @@ class DynamicsProcessingManager {
                 if (!mbcEnabled) writePassthroughBands(this, mbcStageBandCount)
 
                 // Apply response, then enable — drain blocks until the band write lands.
-                applyParametricResponse(this, eq)
+                applyParametricResponse(this, eq, rightEq ?: eq)
                 drainPendingApply()
                 enabled = true
 
@@ -273,7 +275,7 @@ class DynamicsProcessingManager {
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
             if (isActive && lastEq != null) {
                 Log.d(TAG, "Reclaiming DynamicsProcessing")
-                start(lastEq!!)
+                start(lastEq!!, lastRightEq)
             }
         }, 100)
     }
@@ -282,8 +284,9 @@ class DynamicsProcessingManager {
     fun reattachActive(): Boolean {
         if (!isActive) return false
         val eq = lastEq ?: return false
+        val rEq = lastRightEq
         stop()
-        start(eq)
+        start(eq, rEq)
         return isActive
     }
 
@@ -318,8 +321,7 @@ class DynamicsProcessingManager {
         // If band count changed, must recreate the DP instance
         if (ParametricToDpConverter.numBands != currentBandCount) {
             Log.d(TAG, "Band count changed ($currentBandCount -> ${ParametricToDpConverter.numBands}), recreating DP")
-            lastRightEq = if (leftEq !== rightEq) rightEq else null
-            start(leftEq)
+            start(leftEq, if (leftEq !== rightEq) rightEq else null)
             return
         }
 

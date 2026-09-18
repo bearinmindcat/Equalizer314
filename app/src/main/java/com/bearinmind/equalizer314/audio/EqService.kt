@@ -635,8 +635,19 @@ class EqService : Service() {
             ACTION_APPLY_PERSISTED_EQ -> {
                 if (dynamicsManager.isActive) {
                     loadPersistedParametricEq()?.let { eq ->
-                        dynamicsManager.preampGainDb = EqPreferencesManager(this).getPreampGain()
-                        dynamicsManager.updateFromEqualizer(eq)
+                        val p = EqPreferencesManager(this)
+                        // "bands" holds the selected channel — never push it to both while CSE is on.
+                        val cse = loadChannelSideEqs(p)
+                        if (cse != null) {
+                            // CSE keeps the preamp per side on the channel gains, not the shared stage.
+                            dynamicsManager.preampGainDb = 0f
+                            dynamicsManager.leftChannelGainDb = p.getLeftChannelGainDb() + p.getPreampLeft()
+                            dynamicsManager.rightChannelGainDb = p.getRightChannelGainDb() + p.getPreampRight()
+                            dynamicsManager.updateFromEqualizers(cse.first, cse.second)
+                        } else {
+                            dynamicsManager.preampGainDb = p.getPreampGain()
+                            dynamicsManager.updateFromEqualizer(eq)
+                        }
                     }
                 }
                 return START_STICKY
@@ -742,7 +753,7 @@ class EqService : Service() {
                         leftChannelGainDb = p.getLeftChannelGainDb()
                         rightChannelGainDb = p.getRightChannelGainDb()
                         if (p.getChannelSideEqEnabled()) {
-                            // Channel Side EQ: the preamp lives per side on the channel gains, not the shared stage.
+                            // CSE keeps the preamp per side on the channel gains, not the shared stage.
                             preampGainDb = 0f
                             leftChannelGainDb += p.getPreampLeft()
                             rightChannelGainDb += p.getPreampRight()
@@ -758,7 +769,7 @@ class EqService : Service() {
                         curveBypassed = !p.getEqEnabled()
                     }
                     val cse = loadChannelSideEqs(p)
-                    dynamicsManager.start(cse?.first ?: eq)
+                    dynamicsManager.start(cse?.first ?: eq, cse?.second)
                     if (dynamicsManager.isActive) {
                         cse?.let { (l, r) -> dynamicsManager.updateFromEqualizers(l, r) }
                         p.savePowerState(true)
@@ -806,7 +817,7 @@ class EqService : Service() {
                         leftChannelGainDb = p.getLeftChannelGainDb()
                         rightChannelGainDb = p.getRightChannelGainDb()
                         if (p.getChannelSideEqEnabled()) {
-                            // Channel Side EQ: the preamp lives per side on the channel gains, not the shared stage.
+                            // CSE keeps the preamp per side on the channel gains, not the shared stage.
                             preampGainDb = 0f
                             leftChannelGainDb += p.getPreampLeft()
                             rightChannelGainDb += p.getPreampRight()
@@ -822,7 +833,7 @@ class EqService : Service() {
                         curveBypassed = !p.getEqEnabled()
                     }
                     val cse = loadChannelSideEqs(p)
-                    dynamicsManager.start(cse?.first ?: eq)
+                    dynamicsManager.start(cse?.first ?: eq, cse?.second)
                     if (dynamicsManager.isActive) {
                         cse?.let { (l, r) -> dynamicsManager.updateFromEqualizers(l, r) }
                         p.savePowerState(true)
