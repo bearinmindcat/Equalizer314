@@ -52,10 +52,8 @@ class LanguageActivity : AppCompatActivity() {
 
         findViewById<ImageButton>(R.id.languageBackButton).setOnClickListener { finish() }
 
-        // "System default · English" reads on one line.
         systemFallback = systemFallbackName()
-        val systemLabel = getString(R.string.system_default) + " · " + systemFallback
-        val systemRow = Triple("", systemLabel, systemLabel)
+        val systemRow = Triple("", getString(R.string.system_default), systemFallback)
         val translations = catalogue.filter { hasTranslation(it.first) }
         available = listOf(systemRow) + translations
         // System default is a choice, not a language, so it is not counted.
@@ -115,14 +113,12 @@ class LanguageActivity : AppCompatActivity() {
     /** Header card naming the pick, like the AutoEQ active-profile card. */
     private fun showActive(tag: String) {
         val picked = available.firstOrNull { it.first == tag }
-        // System default carries its resolved language inline, as its row does.
         val name = picked?.second.orEmpty()
-        val sub = if (tag.isEmpty()) "" else picked?.third.orEmpty()
+        val sub = picked?.third.orEmpty()
         findViewById<TextView>(R.id.languageActiveName).text = name
         findViewById<TextView>(R.id.languageActiveSub).apply {
             text = sub
-            // Matching names need only one line.
-            visibility = if (sub.isBlank() || sub.equals(name, ignoreCase = true)) View.GONE else View.VISIBLE
+            visibility = if (sub.isBlank()) View.GONE else View.VISIBLE
         }
     }
 
@@ -167,7 +163,7 @@ class LanguageActivity : AppCompatActivity() {
                 setBackgroundColor(0x00000000); insetTop = 0; insetBottom = 0
             }
         val okBtn = dlgBtn(getString(R.string.switch_label), 0xFFDDDDDD.toInt(), endMargin = true)
-        val cancelBtn = dlgBtn(getString(R.string.cancel), 0xFFDDDDDD.toInt(), endMargin = false)
+        val cancelBtn = dlgBtn(getString(R.string.cancel), 0xFFEF9A9A.toInt(), endMargin = false)
         btnRow.addView(okBtn); btnRow.addView(cancelBtn)
         view.addView(btnRow)
         val dialog = android.app.AlertDialog.Builder(this, R.style.Theme_Equalizer314_Dialog)
@@ -213,8 +209,8 @@ class LanguageActivity : AppCompatActivity() {
             textSize = 16f
             setTextColor(onSurface)
         })
-        // A second line only earns its place when the names differ.
-        if (!lang.third.equals(lang.second, ignoreCase = true)) {
+        // Every row carries its English name underneath, English and System default included.
+        if (lang.third.isNotBlank()) {
             labels.addView(TextView(this).apply {
                 text = lang.third
                 textSize = 12f
