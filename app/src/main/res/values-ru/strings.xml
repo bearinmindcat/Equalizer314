@@ -357,4 +357,15 @@
     <string name="device_key_usb">USB</string>
     <string name="device_key_wired">Проводной</string>
     <string name="device_key_speaker">Динамик</string>
+    <string name="language">Язык</string>
+    <string name="system_default">Системный по умолчанию</string>
+    <string name="no_languages_match">Нет подходящих языков</string>
+    <plurals name="n_languages">
+        <item quantity="one">%1$d язык</item>
+        <item quantity="few">%1$d языка</item>
+        <item quantity="many">%1$d языков</item>
+        <item quantity="other">%1$d языков</item>
+    </plurals>
+    <string name="switch_language_confirm">Переключить приложение на %1$s?</string>
+    <string name="switch_label">Переключить</string>
 </resources>

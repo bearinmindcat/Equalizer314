@@ -357,4 +357,15 @@
     <string name="device_key_usb">USB</string>
     <string name="device_key_wired">Дротовий</string>
     <string name="device_key_speaker">Динамік</string>
+    <string name="language">Мова</string>
+    <string name="system_default">Системна за замовчуванням</string>
+    <string name="no_languages_match">Немає відповідних мов</string>
+    <plurals name="n_languages">
+        <item quantity="one">%1$d мова</item>
+        <item quantity="few">%1$d мови</item>
+        <item quantity="many">%1$d мов</item>
+        <item quantity="other">%1$d мов</item>
+    </plurals>
+    <string name="switch_language_confirm">Змінити мову в застосуноку на таку: %1$s?</string>
+    <string name="switch_label">Змінити</string>
 </resources>
