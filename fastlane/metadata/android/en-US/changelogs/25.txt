@@ -1,0 +1,8 @@
+- The app speaks five languages now: English, Русский and Українська (translated by reallystates), plus Português and Español. Pick one under Settings > Language, or leave it on System default and it follows your phone.
+- Volume spikes are gone (issue #106): switching presets no longer tears the audio engine down and back up, so a preset with a negative preamp stays level through the change, and a notification arriving mid-song no longer jumps the music to full volume.
+- Channel Side EQ survives device switching: connecting headphones used to collapse a two-sided preset onto one side until you touched the EQ. Left and right now stay independent through every engine rebuild.
+- "Skip system sounds" only flattens the EQ curve now — MBC, limiter and preamp keep running, so notifications no longer lurch the mix.
+- Environmental Reverb works (issue #102): the wet level was clamped far too low, the defaults were nearly inaudible, and the parameters this device's engine silently ignores are greyed out instead of pretending to work.
+- Band colours stay put after turning Channel Settings off (issue #104).
+- Simple EQ presets can be overwritten from the picker (issue #111) — tap the save icon on a preset row instead of retyping its name.
+- Fixes: per-app "Disable EQ" volume spike, MBC and EQ on/off spikes, limiter defaults, and an auto-gain edge case.
