@@ -249,6 +249,10 @@ class EqService : Service() {
         if (!dynamicsManager.isActive) return
         if (!dynamicsManager.hasLostControl()) return
         if (!dynamicsManager.reclaimCooldownElapsed()) return
+        if (dynamicsManager.reEnableInPlace()) {
+            Log.d(TAG, "Watchdog: effect was switched off — re-enabled in place")
+            return
+        }
         Log.w(TAG, "Watchdog: global DP lost control — reattaching")
         if (dynamicsManager.reattachActive()) {
             applyPersistedMbcConfig()
@@ -277,6 +281,7 @@ class EqService : Service() {
     }
 
     private val playbackSettleVerify = Runnable { verifyAndReclaimGlobalDp() }
+
     private var lastPlayingPackages: Set<String> = emptySet()
     /** Latest playing set from the listener (every snapshot, empty included) — app-binding re-evaluation input. */
     private var currentPlayingPackages: Set<String> = emptySet()
@@ -348,10 +353,12 @@ class EqService : Service() {
     private fun feedRoutedDeviceFromPlayback() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
         val configs = getSystemService(AudioManager::class.java)?.activePlaybackConfigurations ?: return
-        val routed = configs
+        // A tone naming the routed device reads as a route change, and that rebuild drops the preamp (issue #106).
+        val musical = configs.filter { it.audioAttributes.usage !in BYPASS_USAGES }
+        val routed = musical
             .filter { it.audioAttributes.usage == android.media.AudioAttributes.USAGE_MEDIA }
             .firstNotNullOfOrNull { it.audioDeviceInfo }
-            ?: configs.firstNotNullOfOrNull { it.audioDeviceInfo }
+            ?: musical.firstNotNullOfOrNull { it.audioDeviceInfo }
         routingMonitor?.reportRoutedDevice(routed)
     }
 

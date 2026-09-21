@@ -274,10 +274,25 @@ class DynamicsProcessingManager {
         Log.w(TAG, "DynamicsProcessing overridden by another app — reclaiming")
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
             if (isActive && lastEq != null) {
+                if (reEnableInPlace()) {
+                    Log.d(TAG, "Effect was switched off — re-enabled in place, no rebuild")
+                    return@postDelayed
+                }
                 Log.d(TAG, "Reclaiming DynamicsProcessing")
                 start(lastEq!!, lastRightEq)
             }
         }, 100)
+    }
+
+    /** Still ours, just switched off: flip it on in place; a rebuild would drop the preamp too (issue #106). */
+    fun reEnableInPlace(): Boolean {
+        val dp = dynamicsProcessing ?: return false
+        return try {
+            if (!dp.hasControl()) false else { dp.enabled = true; dp.enabled }
+        } catch (e: Throwable) {
+            Log.w(TAG, "in-place re-enable failed", e)
+            false
+        }
     }
 
     /** Power-cycle-equivalent recreate on the current output with the last EQ; caller re-applies MBC / bypass. */

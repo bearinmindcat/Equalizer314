@@ -420,14 +420,8 @@ class  MainActivity : AppCompatActivity() {
         stateManager.selectedBandIndex = 0
         reloadEqFromPrefs()
         rebindActiveEq()
-        if (stateManager.isProcessing) {
-            val (lEq, rEq) = stateManager.getChannelEqs()
-            stateManager.eqService?.let { svc ->
-                svc.dynamicsManager.stop()
-                svc.dynamicsManager.start(stateManager.parametricEq)
-                svc.updateEqPerChannel(lEq, rEq)
-            }
-        }
+        // One write, never a teardown: stopping the effect dropped the preamp too (issue #106).
+        if (stateManager.isProcessing) stateManager.pushEqUpdate()
     }
 
     private val apoImportLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -490,14 +484,7 @@ class  MainActivity : AppCompatActivity() {
                 // Persist L as the main "bands" state + L/R under their own keys so the divergence survives a process restart.
                 eqPrefs.saveState(stateManager.parametricEq, (0 until stateManager.parametricEq.getBandCount()).toList())
                 stateManager.persistLeftRightIfCse()
-                if (stateManager.isProcessing) {
-                    val (lEq, rEq) = stateManager.getChannelEqs()
-                    stateManager.eqService?.let { svc ->
-                        svc.dynamicsManager.stop()
-                        svc.dynamicsManager.start(stateManager.parametricEq)
-                        svc.updateEqPerChannel(lEq, rEq)
-                    }
-                }
+                if (stateManager.isProcessing) stateManager.pushEqUpdate()
                 reloadEqFromPrefs()
                 rebindActiveEq()
                 refreshChannelPopoutDim()
@@ -521,14 +508,7 @@ class  MainActivity : AppCompatActivity() {
                 // Full rebind so graph/toggles/inputs retarget bothEq when CSE was previously on (otherwise UI stays on the old leftEq).
                 rebindActiveEq()
                 // If DP is running, push the new bothEq to both channels so audio matches the display.
-                if (stateManager.isProcessing) {
-                    val (lEq, rEq) = stateManager.getChannelEqs()
-                    stateManager.eqService?.let { svc ->
-                        svc.dynamicsManager.stop()
-                        svc.dynamicsManager.start(stateManager.parametricEq)
-                        svc.updateEqPerChannel(lEq, rEq)
-                    }
-                }
+                if (stateManager.isProcessing) stateManager.pushEqUpdate()
                 android.widget.Toast.makeText(this, getString(R.string.applied_n_filters, profile.filters.size), android.widget.Toast.LENGTH_SHORT).show()
             }
         } catch (e: Exception) {
@@ -2249,14 +2229,8 @@ class  MainActivity : AppCompatActivity() {
                         Intent(com.bearinmind.equalizer314.audio.EqService.ACTION_NOTIFICATION_REFRESH)
                             .setPackage(packageName)
                     )
-                    if (stateManager.isProcessing) {
-                        stateManager.eqService?.let { svc ->
-                            svc.dynamicsManager.stop()
-                            svc.dynamicsManager.start(stateManager.parametricEq)
-                        }
-                        // Propagate preamp (+ balance / channel gains) into DP's input-gain stage.
-                        stateManager.pushEqUpdate()
-                    }
+                    // Bands and preamp in one write; the old stop/start left audio unprocessed meanwhile (issue #106).
+                    if (stateManager.isProcessing) stateManager.pushEqUpdate()
                     refreshChannelPopoutDim()
                     // Close picker with animation
                     presetPickerOpen = false
@@ -2724,12 +2698,7 @@ class  MainActivity : AppCompatActivity() {
                 stateManager.eqPrefs.clearLeftRightBands()
                 stateManager.initBandSlots()
                 bandToggleManager.setupToggles()
-                if (stateManager.isProcessing) {
-                    stateManager.eqService?.let { svc ->
-                        svc.dynamicsManager.stop()
-                        svc.dynamicsManager.start(eq)
-                    }
-                }
+                if (stateManager.isProcessing) stateManager.pushEqUpdate()
                 android.widget.Toast.makeText(this, getString(R.string.eq_reset_to_defaults), android.widget.Toast.LENGTH_SHORT).show()
                 dialog.dismiss()
             }
@@ -2829,9 +2798,7 @@ class  MainActivity : AppCompatActivity() {
             stateManager.persistLeftRightIfCse()
             stateManager.initBandSlots()
             bandToggleManager.setupToggles()
-            if (stateManager.isProcessing) {
-                stateManager.eqService?.let { svc -> svc.dynamicsManager.stop(); svc.dynamicsManager.start(eq) }
-            }
+            if (stateManager.isProcessing) stateManager.pushEqUpdate()
         }
         // Save initial state
         saveEqState()
