@@ -437,7 +437,8 @@ class SimpleEqController(
         }
     }
 
-    private fun showSaveDialog() {
+    /** [existingName] null saves a new preset, else overwrites that one in place (issue #111). */
+    private fun showSaveDialog(existingName: String? = null) {
         val density = activity.resources.displayMetrics.density
         val presetNames = eqPrefs.getSimpleEqPresetNames()
 
@@ -453,7 +454,8 @@ class SimpleEqController(
             setPadding((24 * density).toInt(), (20 * density).toInt(), (24 * density).toInt(), (16 * density).toInt())
         }
         val title = TextView(activity).apply {
-            text = activity.getString(R.string.save_simple_eq_preset)
+            text = activity.getString(
+                if (existingName == null) R.string.save_simple_eq_preset else R.string.overwrite_custom_preset)
             setTextColor(0xFFE2E2E2.toInt())
             textSize = 20f
             setPadding(0, 0, 0, (12 * density).toInt())
@@ -471,9 +473,10 @@ class SimpleEqController(
                 cornerRadius = 12 * density
             }
         }
-        val defaultName = "Custom #$nextNum"
+        val defaultName = existingName ?: "Custom #$nextNum"
         val input = android.widget.EditText(activity).apply {
             hint = defaultName
+            if (existingName != null) setText(existingName)
             setTextColor(0xFFFFFFFF.toInt())
             setHintTextColor(0xFF888888.toInt())
             inputType = android.text.InputType.TYPE_CLASS_TEXT
@@ -511,7 +514,7 @@ class SimpleEqController(
             insetTop = 0; insetBottom = 0
         }
         val okBtn = MaterialButton(activity, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-            text = activity.getString(R.string.ok)
+            text = activity.getString(if (existingName == null) R.string.ok else R.string.overwrite)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginStart = (3 * density).toInt()
             }
@@ -537,7 +540,9 @@ class SimpleEqController(
             val name = input.text.toString().trim().ifEmpty { defaultName }
             eqPrefs.saveSimpleEqPreset(name, getCurrentGains(), state.preampGainDb)
             populatePresetPicker()
-            android.widget.Toast.makeText(activity, activity.getString(R.string.saved_quoted, name), android.widget.Toast.LENGTH_SHORT).show()
+            // Renaming here saves under the new name, as the advanced picker does.
+            val msg = if (existingName == null) R.string.saved_quoted else R.string.updated_quoted
+            android.widget.Toast.makeText(activity, activity.getString(msg, name), android.widget.Toast.LENGTH_SHORT).show()
             dialog.dismiss()
         }
         dialog.show()
@@ -720,6 +725,28 @@ class SimpleEqController(
             setOnClickListener { exportPresetApo(name) }
         }
 
+        // Overwrite: re-saves the current bars into this preset, no retyping (issue #111).
+        val overwriteBtn = MaterialButton(activity, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                (36 * density).toInt(), (36 * density).toInt()
+            ).apply {
+                marginStart = (8 * density).toInt()
+            }
+            cornerRadius = (12 * density).toInt()
+            setPadding(0, 0, 0, 0)
+            insetTop = 0; insetBottom = 0
+            minWidth = 0; minimumWidth = 0; minHeight = 0; minimumHeight = 0
+            setBackgroundColor(0x00000000)
+            icon = activity.resources.getDrawable(R.drawable.ic_save, activity.theme)
+            iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
+            iconPadding = 0
+            iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
+            iconSize = (18 * density).toInt()
+            strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+            strokeWidth = (1 * density).toInt()
+            setOnClickListener { showSaveDialog(name) }
+        }
+
         // Delete button
         val deleteBtn = MaterialButton(activity, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
             text = "×"
@@ -744,6 +771,7 @@ class SimpleEqController(
         row.addView(nameCol)
         row.addView(rightCol)
         row.addView(exportBtn)
+        row.addView(overwriteBtn)
         row.addView(deleteBtn)
 
         // Tap row to load preset (sampled down to the 10 Simple bars)
