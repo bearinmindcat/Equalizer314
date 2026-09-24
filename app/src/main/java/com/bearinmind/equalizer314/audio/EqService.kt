@@ -378,6 +378,7 @@ class EqService : Service() {
             val ccb = object : android.media.MediaRouter2.ControllerCallback() {
                 override fun onControllerUpdated(controller: android.media.MediaRouter2.RoutingController) {
                     // Poll now and after the route settles — playback configs lag the selection.
+                    routingMonitor?.refresh()
                     feedRoutedDeviceFromPlayback()
                     watchdogHandler.postDelayed({ feedRoutedDeviceFromPlayback() }, 350)
                 }

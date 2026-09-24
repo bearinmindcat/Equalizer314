@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.media.AudioAttributes
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
@@ -12,7 +13,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 
-/** Watches the active audio output and emits a debounced RouteChange; BT > USB > wired > speaker priority guess unless a routed device was observed. */
+/** Emits a debounced RouteChange for the active output: Android's media routing (13+), else the device last seen playing, else a BT > USB > wired > speaker guess. */
 class AudioRoutingMonitor(
     private val context: Context,
 ) {
@@ -35,7 +36,7 @@ class AudioRoutingMonitor(
     private var lastEmittedKey: String? = null
     private var registered = false
 
-    // Actual routed device from AudioPlaybackConfiguration (API 33+); overrides the priority guess.
+    // Device last seen playing (API 33+); fallback when the routing query finds nothing tracked.
     private var observedKey: String? = null
     private var observedLabel: String? = null
 
@@ -53,6 +54,11 @@ class AudioRoutingMonitor(
         override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
             // Remember every tracked output on appearance, not just when routed to.
             addedDevices?.forEach { reportSeen(it) }
+            // A new output makes the last-seen one stale: Android re-routes on connect, not on first sound.
+            if (addedDevices?.any { it.isSink && DeviceIdentity.keyOf(it) != null } == true) {
+                observedKey = null
+                observedLabel = null
+            }
             schedule()
         }
 
@@ -104,6 +110,9 @@ class AudioRoutingMonitor(
         registered = false
     }
 
+    /** Recompute on demand; output-switcher moves fire no device callback. */
+    fun refresh() = schedule()
+
     private fun schedule() {
         handler.removeCallbacks(debounceRunnable)
         handler.postDelayed(debounceRunnable, DEBOUNCE_MS)
@@ -113,22 +122,38 @@ class AudioRoutingMonitor(
         // Rebuild listeners fire even when the active-sink key is unchanged.
         onRouteRebuild?.invoke()
 
-        // Observed routed device beats the priority guess.
+        // Android's own media routing first, so a device counts from connect, not from its first sound.
+        val routed = policyRoutedDevice()
         val key: String
         val label: String
         val obs = observedKey
-        if (obs != null) {
-            key = obs
-            label = observedLabel ?: ""
-        } else {
-            val active = pickActiveOutput() ?: return
-            key = DeviceIdentity.keyOf(active) ?: return
-            label = DeviceIdentity.labelOf(context, active)
+        when {
+            routed != null -> {
+                key = DeviceIdentity.keyOf(routed) ?: return
+                label = DeviceIdentity.labelOf(context, routed)
+            }
+            obs != null -> {
+                key = obs
+                label = observedLabel ?: ""
+            }
+            else -> {
+                val active = pickActiveOutput() ?: return
+                key = DeviceIdentity.keyOf(active) ?: return
+                label = DeviceIdentity.labelOf(context, active)
+            }
         }
         if (key == lastEmittedKey) return
         lastEmittedKey = key
         Log.d(TAG, "Active output → $key ($label)")
         onRouteChange?.invoke(RouteChange(key, label))
+    }
+
+    /** Where media would play right now per Android's routing policy (API 33+); needs no active playback. */
+    private fun policyRoutedDevice(): AudioDeviceInfo? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return null
+        val media = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).build()
+        return runCatching { audioManager.getAudioDevicesForAttributes(media) }.getOrNull()
+            ?.firstOrNull { it.isSink && DeviceIdentity.keyOf(it) != null }
     }
 
     /** Highest-priority connected sink [DeviceIdentity] tracks; null when none. */
