@@ -48,7 +48,8 @@ class MeasurementSelectActivity : AppCompatActivity() {
                 val fileName = contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
                     if (cursor.moveToFirst()) cursor.getString(0) else null
                 } ?: uri.lastPathSegment?.substringAfterLast("/") ?: "Measurement"
-                val info = "${fr.frequencies.size} points (${fr.frequencies.first().toInt()}Hz - ${fr.frequencies.last().toInt()}Hz)"
+                val info = resources.getQuantityString(R.plurals.n_points_range, fr.frequencies.size,
+            fr.frequencies.size, fr.frequencies.first().toInt(), fr.frequencies.last().toInt())
                 eqPrefs.addImportedMeasurement(fileName, text)
                 eqPrefs.saveSelectedMeasurement(fileName)
                 eqPrefs.saveSelectedMeasurementInfo(info)
@@ -128,7 +129,8 @@ class MeasurementSelectActivity : AppCompatActivity() {
         for (name in imported) {
             val text = eqPrefs.getImportedMeasurementText(name)
             val fr = if (text != null) FreqResponseParser.parse(text) else null
-            val info = if (fr != null) "${fr.frequencies.size} points" else "Imported"
+            val info = if (fr != null) resources.getQuantityString(R.plurals.n_points, fr.frequencies.size, fr.frequencies.size)
+            else getString(R.string.imported_label)
             allMeasurements.add(MeasEntry(name, info))
         }
     }

@@ -367,4 +367,75 @@
     </plurals>
     <string name="switch_language_confirm">Switch the app to %1$s?</string>
     <string name="switch_label">Switch</string>
+    <string name="new_preset">New Preset</string>
+    <string name="import_preset">Import Preset</string>
+    <string name="user_presets_header">USER PRESETS</string>
+    <string name="autoeq_presets_header">AUTOEQ PRESETS</string>
+    <plurals name="n_presets">
+        <item quantity="one">%1$d preset</item>
+        <item quantity="other">%1$d presets</item>
+    </plurals>
+    <string name="close">Close</string>
+    <string name="at_least_one_mode">At least one mode must stay on</string>
+    <string name="notif_row_volume">Volume</string>
+    <string name="notif_row_mode">Mode</string>
+    <string name="notif_row_preset">Preset</string>
+    <string name="notif_row_device">Device</string>
+    <string name="notif_volume_line">Volume: %1$d%%</string>
+    <string name="preset_flat">Flat</string>
+    <string name="preset_bass_boost">Bass Boost</string>
+    <string name="preset_treble_boost">Treble Boost</string>
+    <string name="preset_vocal_enhance">Vocal Enhance</string>
+    <string name="pipeline_input_desc">System audio at session 0 — input to the effects chain</string>
+    <string name="dynamics_processing_card">Dynamics Processing</string>
+    <string name="pipeline_dp_desc">Main audio processing chain for EQ, MBC &amp; Limiting</string>
+    <string name="pipeline_output_desc">Speakers, headphones, or other connected output</string>
+    <string name="priority">Priority</string>
+    <string name="not_priority">Not Priority</string>
+    <string name="current_output">Current output</string>
+    <string name="forget_device">Forget device</string>
+    <string name="preset_missing">%1$s (missing)</string>
+    <string name="bt_name_only_warning">Bluetooth identification will use device name only — two of the same model collide.</string>
+    <string name="needs_notification_access">Needs Notification access. Tap to open the Android setting</string>
+    <string name="detection_enhanced_on">Detects which apps are playing audio so app presets can follow them. Enhanced detection is on</string>
+    <string name="detection_long_press_hint">Detects which apps are playing audio so app presets can follow them. Long-press to copy the adb command for enhanced detection (session ids for every app)</string>
+    <string name="converted_preset">Converted preset</string>
+    <string name="imported_label">Imported</string>
+    <string name="diffusion">Diffusion</string>
+    <string name="density">Density</string>
+    <string name="dp_power_cycled">DP Power Cycled</string>
+    <string name="devices_on_network">Devices on your network</string>
+    <string name="refresh">Refresh</string>
+    <string name="pair">Pair</string>
+    <string name="color_caps">COLOR</string>
+    <string name="export_label">Export</string>
+    <string name="cse_on">Channel Side EQ on</string>
+    <string name="cse_off">Channel Side EQ off</string>
+    <string name="auto_gain_offset">Offset: %1$.1f dB</string>
+    <string name="generated_on">Generated %1$s</string>
+    <string name="applied_lr_filters">Applied L:%1$d R:%2$d Both:%3$d filters</string>
+    <string name="notifications_disabled_warning">Notifications disabled — EQ will run without the Turn Off notification.</string>
+    <string name="apo_err_empty">File is empty</string>
+    <string name="apo_fmt_autoeq_graphiceq">AutoEQ GraphicEQ</string>
+    <string name="apo_fmt_passthrough">Wavelet / APO (passthrough)</string>
+    <string name="apo_fmt_wrapped_json">EQ preset (wrapped JSON)</string>
+    <string name="apo_fmt_poweramp_parametric">Poweramp parametric EQ</string>
+    <string name="apo_fmt_poweramp_graphic">Poweramp graphic EQ</string>
+    <string name="apo_fmt_wavelet_json">Wavelet preset (JSON)</string>
+    <string name="apo_err_unknown_json">JSON didn\'t match any known Wavelet / Poweramp shape</string>
+    <string name="apo_err_malformed_json">Malformed JSON: %1$s</string>
+    <string name="apo_fmt_poweramp_settings">Poweramp graphic EQ (settings string)</string>
+    <string name="apo_err_unrecognised">Unrecognised file format</string>
+    <plurals name="n_points">
+        <item quantity="one">%1$d point</item>
+        <item quantity="other">%1$d points</item>
+    </plurals>
+    <plurals name="n_points_range">
+        <item quantity="one">%1$d point (%2$dHz - %3$dHz)</item>
+        <item quantity="other">%1$d points (%2$dHz - %3$dHz)</item>
+    </plurals>
+    <plurals name="n_targets">
+        <item quantity="one">%1$d target</item>
+        <item quantity="other">%1$d targets</item>
+    </plurals>
 </resources>

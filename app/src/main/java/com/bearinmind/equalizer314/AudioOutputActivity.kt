@@ -302,7 +302,7 @@ class AudioOutputActivity : AppCompatActivity() {
         }
         activeKey = DeviceIdentity.keyOf(active)
         activeLabel = DeviceIdentity.labelOf(this, active)
-        activeDeviceLabel.text = activeLabel ?: "Current output"
+        activeDeviceLabel.text = activeLabel ?: getString(R.string.current_output)
         // Second line via DeviceIdentity.displayKey — type for USB/wired/speaker, MAC for Bluetooth.
         val keyDisplay = activeKey?.let { DeviceIdentity.displayKey(this, it) }.orEmpty()
         if (keyDisplay.isNotEmpty()) {
@@ -331,7 +331,7 @@ class AudioOutputActivity : AppCompatActivity() {
         val missing = binding != null && !isDisable && binding.presetName !in knownNames
         val entries = buildPresetEntries(if (missing) binding!!.presetName else null)
         currentDeviceDropdown.setText(
-            if (missing) "${binding!!.presetName} (missing)" else currentSelection,
+            if (missing) getString(R.string.preset_missing, binding!!.presetName) else currentSelection,
             false,
         )
         currentDeviceDropdown.setAdapter(PresetDropdownAdapter(this, entries))
@@ -433,8 +433,8 @@ class AudioOutputActivity : AppCompatActivity() {
                 strokeWidth = (1 * density).toInt()
                 setBackgroundColor(0x00000000); insetTop = 0; insetBottom = 0
             }
-        val removeBtn = dlgBtn("Remove", 0xFFEF9A9A.toInt(), endMargin = true)
-        val cancelBtn = dlgBtn("Cancel", 0xFFDDDDDD.toInt(), endMargin = false)
+        val removeBtn = dlgBtn(getString(R.string.remove), 0xFFEF9A9A.toInt(), endMargin = true)
+        val cancelBtn = dlgBtn(getString(R.string.cancel), 0xFFDDDDDD.toInt(), endMargin = false)
         btnRow.addView(removeBtn); btnRow.addView(cancelBtn)
         dialogView.addView(btnRow)
         val dialog = android.app.AlertDialog.Builder(this, R.style.Theme_Equalizer314_Dialog)
@@ -513,7 +513,7 @@ class AudioOutputActivity : AppCompatActivity() {
 
             val dropdown = holder.dropdown
             dropdown.setText(
-                if (missing) "${binding!!.presetName} (missing)" else currentSelection,
+                if (missing) getString(R.string.preset_missing, binding!!.presetName) else currentSelection,
                 false,
             )
             dropdown.setAdapter(PresetDropdownAdapter(this@AudioOutputActivity, entries))
@@ -582,7 +582,7 @@ class AudioOutputActivity : AppCompatActivity() {
             // Long-press the card → "Forget device" option.
             holder.card.setOnLongClickListener {
                 PopupMenu(this@AudioOutputActivity, holder.card).apply {
-                    menu.add("Forget device")
+                    menu.add(getString(R.string.forget_device))
                     setOnMenuItemClickListener {
                         eqPrefs.forgetSeenDevice(key)
                         eqPrefs.removeDeviceBinding(key)
@@ -640,7 +640,7 @@ class AudioOutputActivity : AppCompatActivity() {
                     setColor(android.graphics.Color.WHITE)
                 }
                 // Bump mask above the outline at the "Preset" label.
-                val labelText = (layout.hint ?: "Preset").toString()
+                val labelText = (layout.hint ?: getString(R.string.preset)).toString()
                 val labelTextSizePx = 12f * resources.displayMetrics.scaledDensity
                 // Same typeface + letter spacing as the dropdown so the measurement matches Material's label.
                 val labelMeasuredWidth = android.graphics.Paint().apply {
@@ -760,7 +760,7 @@ class AudioOutputActivity : AppCompatActivity() {
             ) {
                 Toast.makeText(
                     this,
-                    "Bluetooth identification will use device name only — two of the same model collide.",
+                    getString(R.string.bt_name_only_warning),
                     Toast.LENGTH_LONG,
                 ).show()
             }

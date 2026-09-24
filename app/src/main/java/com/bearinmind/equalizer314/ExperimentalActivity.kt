@@ -339,7 +339,7 @@ class ExperimentalActivity : AppCompatActivity() {
         if (pin.isNullOrEmpty() || isFinishing) return
         val density = resources.displayMetrics.density
         val root = styledDialogRoot()
-        root.addView(styledDialogTitle("Remote EQ Mode"))
+        root.addView(styledDialogTitle(getString(R.string.remote_eq_mode)))
         root.addView(android.widget.TextView(this).apply {
             text = pin
             setTextColor(0xFFFFFFFF.toInt())
@@ -356,7 +356,7 @@ class ExperimentalActivity : AppCompatActivity() {
             setPadding(0, 0, 0, (16 * density).toInt())
         })
         root.addView(styledDialogDivider())
-        val cancelBtn = styledDialogButton("Cancel", isCancel = true).apply {
+        val cancelBtn = styledDialogButton(getString(R.string.cancel), isCancel = true).apply {
             layoutParams = android.widget.LinearLayout.LayoutParams(
                 android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
                 android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
@@ -383,7 +383,7 @@ class ExperimentalActivity : AppCompatActivity() {
         val density = resources.displayMetrics.density
 
         val root = styledDialogRoot()
-        root.addView(styledDialogTitle("Devices on your network"))
+        root.addView(styledDialogTitle(getString(R.string.devices_on_network)))
 
         val list = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
@@ -405,13 +405,13 @@ class ExperimentalActivity : AppCompatActivity() {
                 android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
                 android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
         }
-        val cancelBtn = styledDialogButton("Cancel", isCancel = true).apply {
+        val cancelBtn = styledDialogButton(getString(R.string.cancel), isCancel = true).apply {
             layoutParams = android.widget.LinearLayout.LayoutParams(0,
                 android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginEnd = (3 * density).toInt()
             }
         }
-        val refreshBtn = styledDialogButton("Refresh", isCancel = false).apply {
+        val refreshBtn = styledDialogButton(getString(R.string.refresh), isCancel = false).apply {
             layoutParams = android.widget.LinearLayout.LayoutParams(0,
                 android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginStart = (3 * density).toInt()
@@ -515,13 +515,13 @@ class ExperimentalActivity : AppCompatActivity() {
                 android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
                 android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
         }
-        val cancelBtn = styledDialogButton("Cancel", isCancel = true).apply {
+        val cancelBtn = styledDialogButton(getString(R.string.cancel), isCancel = true).apply {
             layoutParams = android.widget.LinearLayout.LayoutParams(0,
                 android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginEnd = (3 * density).toInt()
             }
         }
-        val pairBtn = styledDialogButton("Pair", isCancel = false).apply {
+        val pairBtn = styledDialogButton(getString(R.string.pair), isCancel = false).apply {
             layoutParams = android.widget.LinearLayout.LayoutParams(0,
                 android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginStart = (3 * density).toInt()

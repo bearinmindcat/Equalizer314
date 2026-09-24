@@ -185,8 +185,8 @@ class DiffusionDensityView @JvmOverloads constructor(
         // Pill centres sit 40 dp from the left (Density) / bottom (Diffusion)
         // edge so each pill's gap to its axis-number row is identical.
         val pillEdgeOffset = 40f * density
-        drawAxisPill(canvas, "Diffusion", (plotL + plotR) / 2f, plotB - pillEdgeOffset, rotated = false)
-        drawAxisPill(canvas, "Density", plotL + pillEdgeOffset, (plotT + plotB) / 2f, rotated = true)
+        drawAxisPill(canvas, context.getString(com.bearinmind.equalizer314.R.string.diffusion), (plotL + plotR) / 2f, plotB - pillEdgeOffset, rotated = false)
+        drawAxisPill(canvas, context.getString(com.bearinmind.equalizer314.R.string.density), plotL + pillEdgeOffset, (plotT + plotB) / 2f, rotated = true)
     }
 
     /** Mini-dot pattern inside the X/Y dot. Density → count 4..30 (latest dot

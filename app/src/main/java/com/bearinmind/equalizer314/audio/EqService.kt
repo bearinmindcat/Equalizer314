@@ -467,7 +467,7 @@ class EqService : Service() {
 
     /** Start/Stop toast from the service so it shows with MainActivity closed. */
     private fun showDpStateToast(started: Boolean) {
-        val message = if (started) "DynamicsProcessing Start" else "DynamicsProcessing Stop"
+        val message = getString(if (started) R.string.dp_start else R.string.dp_stop)
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 
@@ -689,7 +689,7 @@ class EqService : Service() {
                     updateNotification()
                     Log.d(TAG, "DP recycled on request (settings change)")
                     android.widget.Toast.makeText(
-                        this, "DP Power Cycled", android.widget.Toast.LENGTH_SHORT
+                        this, getString(R.string.dp_power_cycled), android.widget.Toast.LENGTH_SHORT
                     ).show()
                     // Let MainActivity echo the off→on cycle on the power FAB.
                     sendBroadcast(Intent(ACTION_DP_RECYCLED).setPackage(packageName))

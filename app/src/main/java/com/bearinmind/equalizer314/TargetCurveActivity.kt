@@ -239,7 +239,7 @@ class TargetCurveActivity : AppCompatActivity() {
                 val slots = (0 until eq.getBandCount()).toList()
                 eqPrefs.saveState(eq, slots)
                 eqPrefs.savePreampGain(profile.preampDb)
-                eqPrefs.savePresetName("Generate Custom EQ")
+                eqPrefs.savePresetName(getString(R.string.generate_custom_eq))
                 eqPrefs.saveAutoEqName("")
                 eqPrefs.saveAutoEqSource("")
                 // Generated curves are single-channel — disable Channel Side EQ so
@@ -445,7 +445,8 @@ class TargetCurveActivity : AppCompatActivity() {
         val density = resources.displayMetrics.density
         val measName = eqPrefs.getSelectedMeasurement()
         val defaultName = if (!measName.isNullOrBlank()) measName
-            else "Generated " + java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
+            else getString(R.string.generated_on,
+                java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date()))
 
         val dialogView = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL

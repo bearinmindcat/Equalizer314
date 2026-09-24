@@ -313,9 +313,9 @@ class ChannelInputActivity : AppCompatActivity() {
         val dumpGranted = checkSelfPermission(android.Manifest.permission.DUMP) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED
         enableDetectionBody.text = when {
-            !granted -> "Needs Notification access. Tap to open the Android setting"
-            dumpGranted -> "Detects which apps are playing audio so app presets can follow them. Enhanced detection is on"
-            else -> "Detects which apps are playing audio so app presets can follow them. Long-press to copy the adb command for enhanced detection (session ids for every app)"
+            !granted -> getString(R.string.needs_notification_access)
+            dumpGranted -> getString(R.string.detection_enhanced_on)
+            else -> getString(R.string.detection_long_press_hint)
         }
     }
 
@@ -632,7 +632,7 @@ class ChannelInputActivity : AppCompatActivity() {
         val entries = buildPresetEntries(if (missing) binding!!.presetName else null)
 
         dropdown.setText(
-            if (missing) "${binding!!.presetName} (missing)" else currentSelection,
+            if (missing) getString(R.string.preset_missing, binding!!.presetName) else currentSelection,
             false,
         )
         dropdown.setAdapter(PresetDropdownAdapter(this, entries))

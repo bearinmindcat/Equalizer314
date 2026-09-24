@@ -158,13 +158,13 @@ object BottomNavHelper {
         val limiterOn = eqPrefs.getLimiterEnabled()
         val onCol = onColor(activity)
 
-        eqStatus.text = if (eqOn) "ON" else "OFF"
+        eqStatus.text = activity.getString(if (eqOn) com.bearinmind.equalizer314.R.string.on else com.bearinmind.equalizer314.R.string.off_2)
         eqStatus.setTextColor(if (eqOn) onCol else OFF_COLOR)
 
-        mbcStatus.text = if (mbcOn) "ON" else "OFF"
+        mbcStatus.text = activity.getString(if (mbcOn) com.bearinmind.equalizer314.R.string.on else com.bearinmind.equalizer314.R.string.off_2)
         mbcStatus.setTextColor(if (mbcOn) onCol else OFF_COLOR)
 
-        limiterStatus.text = if (limiterOn) "ON" else "OFF"
+        limiterStatus.text = activity.getString(if (limiterOn) com.bearinmind.equalizer314.R.string.on else com.bearinmind.equalizer314.R.string.off_2)
         limiterStatus.setTextColor(if (limiterOn) onCol else OFF_COLOR)
     }
 

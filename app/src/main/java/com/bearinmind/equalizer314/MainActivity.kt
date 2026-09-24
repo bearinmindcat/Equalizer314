@@ -252,8 +252,8 @@ class  MainActivity : AppCompatActivity() {
                 strokeWidth = (1 * density).toInt()
                 setBackgroundColor(0x00000000); insetTop = 0; insetBottom = 0
             }
-        val deleteBtn = dlgBtn("Delete", 0xFFEF9A9A.toInt(), endMargin = true)
-        val cancelBtn = dlgBtn("Cancel", 0xFFDDDDDD.toInt(), endMargin = false)
+        val deleteBtn = dlgBtn(getString(R.string.delete), 0xFFEF9A9A.toInt(), endMargin = true)
+        val cancelBtn = dlgBtn(getString(R.string.cancel), 0xFFDDDDDD.toInt(), endMargin = false)
         btnRow.addView(deleteBtn); btnRow.addView(cancelBtn)
         dialogView.addView(btnRow)
         val dialog = android.app.AlertDialog.Builder(this, R.style.Theme_Equalizer314_Dialog)
@@ -357,8 +357,8 @@ class  MainActivity : AppCompatActivity() {
                 setBackgroundColor(0x00000000)
                 insetTop = 0; insetBottom = 0
             }
-        val importBtn = outlinedBtn("Import", 0xFFDDDDDD.toInt())
-        val exportBtn = outlinedBtn("Export", 0xFFDDDDDD.toInt())
+        val importBtn = outlinedBtn(getString(R.string.import_label), 0xFFDDDDDD.toInt())
+        val exportBtn = outlinedBtn(getString(R.string.export_label), 0xFFDDDDDD.toInt())
         btnRow.addView(importBtn)
         btnRow.addView(exportBtn)
         dialogView.addView(title)
@@ -391,7 +391,7 @@ class  MainActivity : AppCompatActivity() {
         bandToggleManager.setupToggles()
         stateManager.pushEqUpdate()
         val preset = eqPrefs.getPresetName()
-        presetDropdown.setText(preset, false)
+        presetDropdown.setText(presetLabelOf(preset), false)
         updateAutoEqStatus()
         // Re-apply current mode visibility (toggles may have been rebuilt)
         if (stateManager.currentEqUiMode == EqUiMode.TABLE) {
@@ -490,7 +490,7 @@ class  MainActivity : AppCompatActivity() {
                 refreshChannelPopoutDim()
                 android.widget.Toast.makeText(
                     this,
-                    "Applied L:${profile.leftFilters.size} R:${profile.rightFilters.size} Both:${profile.sharedFilters.size} filters",
+                    getString(R.string.applied_lr_filters, profile.leftFilters.size, profile.rightFilters.size, profile.sharedFilters.size),
                     android.widget.Toast.LENGTH_SHORT
                 ).show()
             } else {
@@ -523,6 +523,20 @@ class  MainActivity : AppCompatActivity() {
     private lateinit var eqGraphView: EqGraphView
     private lateinit var eqToggleButton: MaterialButton
     private lateinit var eqPowerToggle: MaterialButton
+    /** Built-in presets: the key is stored and matched, the label is only what the user reads. */
+    private val builtInPresets = listOf(
+        "Flat" to R.string.preset_flat,
+        "Bass Boost" to R.string.preset_bass_boost,
+        "Treble Boost" to R.string.preset_treble_boost,
+        "Vocal Enhance" to R.string.preset_vocal_enhance,
+    )
+
+    private fun presetLabelOf(key: String): String =
+        builtInPresets.firstOrNull { it.first == key }?.let { getString(it.second) } ?: key
+
+    private fun presetKeyOf(label: String): String =
+        builtInPresets.firstOrNull { getString(it.second) == label }?.first ?: label
+
     private lateinit var presetDropdown: MaterialAutoCompleteTextView
     private lateinit var filterTypeGroup: LinearLayout
     private lateinit var qSlider: Slider
@@ -720,7 +734,7 @@ class  MainActivity : AppCompatActivity() {
                 stateManager.lastPresetApplyMs = System.currentTimeMillis()
                 reloadEqFromPrefs()
                 rebindActiveEq()
-                presetDropdown.setText(eqPrefs.getPresetName(), false)
+                presetDropdown.setText(presetLabelOf(eqPrefs.getPresetName()), false)
             }
             updateDevicePresetStatus()
         }
@@ -1013,10 +1027,10 @@ class  MainActivity : AppCompatActivity() {
         modeSelectorGroup = findViewById(R.id.modeSelectorGroup)
         graphCardView = (eqGraphView.parent as View).parent as View // FrameLayout → MaterialCardView
 
-        val presets = arrayOf("Flat", "Bass Boost", "Treble Boost", "Vocal Enhance")
-        val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, presets)
+        val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line,
+            builtInPresets.map { getString(it.second) })
         presetDropdown.setAdapter(adapter)
-        presetDropdown.setText("Flat", false)
+        presetDropdown.setText(getString(R.string.preset_flat), false)
 
         val savedBandCount = eqPrefs.getDpBandCount().coerceIn(128, 1024)
         // Keep a running DP's negotiated count (compat 32 / fallback 127); overriding it rebuilt the DP on every open.
@@ -1106,7 +1120,7 @@ class  MainActivity : AppCompatActivity() {
         stateManager.initEq(eqGraphView)
 
         val savedPreset = eqPrefs.getPresetName()
-        presetDropdown.setText(savedPreset, false)
+        presetDropdown.setText(presetLabelOf(savedPreset), false)
 
         updateEqToggleUI()
         eqGraphView.updateBandLevels()
@@ -1474,7 +1488,7 @@ class  MainActivity : AppCompatActivity() {
             refreshChannelPopoutDim()
             Toast.makeText(
                 this,
-                if (on) "Channel Side EQ on" else "Channel Side EQ off",
+                getString(if (on) R.string.cse_on else R.string.cse_off),
                 Toast.LENGTH_SHORT
             ).show()
         }
@@ -1527,9 +1541,9 @@ class  MainActivity : AppCompatActivity() {
                 btn.iconSize = (18 * density).toInt()
                 btn.iconTint = android.content.res.ColorStateList.valueOf(0xFF888888.toInt())
             }
-            val saveCurrentBtn = pickerActionBtn("New Preset", endMargin = true)
+            val saveCurrentBtn = pickerActionBtn(getString(R.string.new_preset), endMargin = true)
             pickerBtnIcon(saveCurrentBtn, R.drawable.ic_add)
-            val importPresetBtn = pickerActionBtn("Import Preset", endMargin = false)
+            val importPresetBtn = pickerActionBtn(getString(R.string.import_preset), endMargin = false)
             pickerBtnIcon(importPresetBtn, R.drawable.ic_export)
             importPresetBtn.setOnClickListener { presetImportLauncher.launch("*/*") }
             actionRow.addView(saveCurrentBtn)
@@ -1749,7 +1763,7 @@ class  MainActivity : AppCompatActivity() {
                     android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
             }
             presetPickerContainer.addView(
-                collapsibleSection("USER PRESETS", null, "pickerUserPresetsOpen", userPresetsBody))
+                collapsibleSection(getString(R.string.user_presets_header), null, "pickerUserPresetsOpen", userPresetsBody))
             presetPickerContainer.addView(userPresetsBody)
 
             // List saved presets — styled like (+) band buttons
@@ -2259,7 +2273,9 @@ class  MainActivity : AppCompatActivity() {
                     android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
             }
             presetPickerContainer.addView(
-                collapsibleSection("AUTOEQ PRESETS", "$autoEqTotal presets", "pickerAutoEqOpen", autoEqBody))
+                collapsibleSection(getString(R.string.autoeq_presets_header),
+                    resources.getQuantityString(R.plurals.n_presets, autoEqTotal, autoEqTotal),
+                    "pickerAutoEqOpen", autoEqBody))
             presetPickerContainer.addView(autoEqBody)
 
             val autoEqSearch = android.widget.EditText(this).apply {
@@ -2542,7 +2558,7 @@ class  MainActivity : AppCompatActivity() {
         bandPtsBtn.iconTint = android.content.res.ColorStateList.valueOf(graphBtnLitContent)
         eqGraphView.showBandPoints = bandPointsVisible
         eqGraphView.showBandCurves = bandCurvesVisible
-        onOffBtn.text = if (bandPointsVisible) "ON" else "OFF"
+        onOffBtn.text = getString(if (bandPointsVisible) R.string.on else R.string.off_2)
         paintLit(onOffBtn, bandPointsVisible)
         paintLit(fillBtn, bandCurvesVisible)
         eqGraphView.showGainHeat = eqPrefs.getGraphHeat()
@@ -2600,7 +2616,7 @@ class  MainActivity : AppCompatActivity() {
             eqGraphView.showBandPoints = bandPointsVisible
             eqGraphView.invalidate()
             eqPrefs.saveGraphBandPoints(bandPointsVisible)
-            onOffBtn.text = if (bandPointsVisible) "ON" else "OFF"
+            onOffBtn.text = getString(if (bandPointsVisible) R.string.on else R.string.off_2)
             paintLit(onOffBtn, bandPointsVisible)
         }
 
@@ -2868,9 +2884,9 @@ class  MainActivity : AppCompatActivity() {
 
         // Preset dropdown
         presetDropdown.setOnItemClickListener { parent, _, position, _ ->
-            val presetName = parent.getItemAtPosition(position) as? String ?: return@setOnItemClickListener
+            val presetName = presetKeyOf(parent.getItemAtPosition(position) as? String ?: return@setOnItemClickListener)
             stateManager.loadPreset(presetName, eqGraphView)
-            presetDropdown.setText(presetName, false)
+            presetDropdown.setText(presetLabelOf(presetName), false)
             bandToggleManager.updateIcons()
             if (stateManager.currentEqUiMode == EqUiMode.TABLE) tableController.buildTable()
             if (stateManager.currentEqUiMode == EqUiMode.GRAPHIC) graphicController.buildSliders(graphicController.targetCardHeight)
@@ -3491,7 +3507,7 @@ class  MainActivity : AppCompatActivity() {
 
     private fun updateAutoGainOffsetText() {
         val offset = stateManager.getAutoGainOffset()
-        autoGainOffsetText.text = String.format("Offset: %.1f dB", offset)
+        autoGainOffsetText.text = getString(R.string.auto_gain_offset, offset)
     }
 
     // ---- EQ UI Mode Switching ----
@@ -4042,7 +4058,7 @@ class  MainActivity : AppCompatActivity() {
 
     private fun showPresetsBottomSheet() {
         val density = resources.displayMetrics.density
-        val presets = arrayOf("Flat", "Bass Boost", "Treble Boost", "Vocal Enhance")
+        val presets = builtInPresets.map { it.first }
         val bottomSheet = com.google.android.material.bottomsheet.BottomSheetDialog(this)
         val sheetLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -4050,13 +4066,13 @@ class  MainActivity : AppCompatActivity() {
         }
         for (presetName in presets) {
             val item = TextView(this).apply {
-                text = presetName
+                text = presetLabelOf(presetName)
                 textSize = 16f
                 setTextColor(0xFFE2E2E2.toInt())
                 setPadding((16 * density).toInt(), (14 * density).toInt(), (16 * density).toInt(), (14 * density).toInt())
                 setOnClickListener {
                     stateManager.loadPreset(presetName, eqGraphView)
-                    presetDropdown.setText(presetName, false)
+                    presetDropdown.setText(presetLabelOf(presetName), false)
                     bandToggleManager.updateIcons()
                     if (stateManager.currentEqUiMode == EqUiMode.TABLE) tableController.buildTable()
                     if (stateManager.currentEqUiMode == EqUiMode.GRAPHIC) graphicController.buildSliders(graphicController.targetCardHeight)
@@ -4316,7 +4332,7 @@ class  MainActivity : AppCompatActivity() {
     }
 
     private fun updatePowerUI() {
-        powerButton.text = if (stateManager.isProcessing) "ON" else "OFF"
+        powerButton.text = getString(if (stateManager.isProcessing) R.string.on else R.string.off_2)
     }
 
     private fun updateBottomBarHighlight(isEqPage: Boolean) {
@@ -4348,7 +4364,7 @@ class  MainActivity : AppCompatActivity() {
     private fun applyEqToggleVisual(enabled: Boolean) {
         if (!::eqPowerToggle.isInitialized) return
         val d = resources.displayMetrics.density
-        eqPowerToggle.text = if (enabled) "ON" else "OFF"
+        eqPowerToggle.text = getString(if (enabled) R.string.on else R.string.off_2)
         if (enabled) {
             eqPowerToggle.setBackgroundColor(graphBtnLitBg)
             eqPowerToggle.strokeColor = android.content.res.ColorStateList.valueOf(graphBtnLitStroke)
@@ -4995,7 +5011,7 @@ class  MainActivity : AppCompatActivity() {
             simpleEqController.saveGains()
         }
         stateManager.saveState()
-        eqPrefs.savePresetName(presetDropdown.text.toString())
+        eqPrefs.savePresetName(presetKeyOf(presetDropdown.text.toString()))
     }
 
     override fun onStop() {
@@ -5030,7 +5046,7 @@ class  MainActivity : AppCompatActivity() {
             ) {
                 Toast.makeText(
                     this,
-                    "Notifications disabled — EQ will run without the Turn Off notification.",
+                    getString(R.string.notifications_disabled_warning),
                     Toast.LENGTH_LONG
                 ).show()
             }

@@ -20,42 +20,42 @@ import org.json.JSONObject
 object ApoConverter {
 
     sealed class Result {
-        data class Ok(val apoText: String, val sourceLabel: String) : Result()
-        data class Err(val message: String) : Result()
+        data class Ok(val apoText: String, val sourceLabelRes: Int) : Result()
+        data class Err(val messageRes: Int, val detail: String? = null) : Result()
     }
 
     fun convert(text: String): Result {
         val trimmed = text.trim()
-        if (trimmed.isEmpty()) return Result.Err("File is empty")
+        if (trimmed.isEmpty()) return Result.Err(com.bearinmind.equalizer314.R.string.apo_err_empty)
 
         // AutoEQ "GraphicEQ" single-line format (used by Wavelet's
         // headphone-correction exports + AutoEQ's downloads):
         //   "GraphicEQ: 20 -5.5; 21 -5.5; 22 -5.5; ..."
-        tryAutoEqGraphicEq(trimmed)?.let { return Result.Ok(it, "AutoEQ GraphicEQ") }
+        tryAutoEqGraphicEq(trimmed)?.let { return Result.Ok(it, com.bearinmind.equalizer314.R.string.apo_fmt_autoeq_graphiceq) }
 
         // Already APO? (Wavelet / Equalizer APO config.txt)
         if (looksLikeApo(trimmed)) {
-            return Result.Ok(trimmed, "Wavelet / APO (passthrough)")
+            return Result.Ok(trimmed, com.bearinmind.equalizer314.R.string.apo_fmt_passthrough)
         }
 
         // Try JSON shapes
         if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
             try {
                 val json = if (trimmed.startsWith("[")) JSONArray(trimmed) else JSONObject(trimmed)
-                tryWrappedPresetArray(json)?.let { return Result.Ok(it, "EQ preset (wrapped JSON)") }
-                tryPowerampParametric(json)?.let { return Result.Ok(it, "Poweramp parametric EQ") }
-                tryPowerampGraphic(json)?.let { return Result.Ok(it, "Poweramp graphic EQ") }
-                tryWaveletPreset(json)?.let { return Result.Ok(it, "Wavelet preset (JSON)") }
-                return Result.Err("JSON didn't match any known Wavelet / Poweramp shape")
+                tryWrappedPresetArray(json)?.let { return Result.Ok(it, com.bearinmind.equalizer314.R.string.apo_fmt_wrapped_json) }
+                tryPowerampParametric(json)?.let { return Result.Ok(it, com.bearinmind.equalizer314.R.string.apo_fmt_poweramp_parametric) }
+                tryPowerampGraphic(json)?.let { return Result.Ok(it, com.bearinmind.equalizer314.R.string.apo_fmt_poweramp_graphic) }
+                tryWaveletPreset(json)?.let { return Result.Ok(it, com.bearinmind.equalizer314.R.string.apo_fmt_wavelet_json) }
+                return Result.Err(com.bearinmind.equalizer314.R.string.apo_err_unknown_json)
             } catch (e: Exception) {
-                return Result.Err("Malformed JSON: ${e.message}")
+                return Result.Err(com.bearinmind.equalizer314.R.string.apo_err_malformed_json, e.message.orEmpty())
             }
         }
 
         // Try Poweramp's "key=value;..." graphic-EQ string blob
-        tryPowerampSettingsString(trimmed)?.let { return Result.Ok(it, "Poweramp graphic EQ (settings string)") }
+        tryPowerampSettingsString(trimmed)?.let { return Result.Ok(it, com.bearinmind.equalizer314.R.string.apo_fmt_poweramp_settings) }
 
-        return Result.Err("Unrecognised file format")
+        return Result.Err(com.bearinmind.equalizer314.R.string.apo_err_unrecognised)
     }
 
     // ---- AutoEQ GraphicEQ -----------------------------------------------

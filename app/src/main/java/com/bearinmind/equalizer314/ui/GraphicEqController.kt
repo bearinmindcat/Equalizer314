@@ -421,7 +421,7 @@ class GraphicEqController(
         val bandColor = if (slotIdx >= 0) state.bandColors[slotIdx] else null
         val colorBtn = MaterialButton(activity, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
             icon = null
-            text = if (bandColor != null) "COLOR" else "\u2014"
+            text = if (bandColor != null) activity.getString(R.string.color_caps) else "\u2014"
             textSize = filterLabelSize
             setTextColor(0xFFAAAAAA.toInt())
             cornerRadius = (8 * density).toInt()

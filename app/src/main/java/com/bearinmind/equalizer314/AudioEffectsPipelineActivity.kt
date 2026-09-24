@@ -21,30 +21,31 @@ import com.google.android.material.card.MaterialCardView
 class AudioEffectsPipelineActivity : AppCompatActivity() {
 
     enum class EffectId(
-        val title: String,
-        val description: String,
+        val titleRes: Int,
+        /** 0 = no second line. */
+        val descriptionRes: Int,
         val isFixed: Boolean = false,
         /** Supports the right-side on/off toggle; Channel Input / Audio Output are fixed bookends, DynamicsProcessing the always-on main chain. */
         val canToggle: Boolean = true,
     ) {
         AUDIO_INPUT(
-            "Channel Input",
-            "System audio at session 0 — input to the effects chain",
+            R.string.channel_input,
+            R.string.pipeline_input_desc,
             isFixed = true,
             canToggle = false
         ),
         DYNAMICS_PROCESSING(
-            "Dynamics Processing",
-            "Main audio processing chain for EQ, MBC & Limiting",
+            R.string.dynamics_processing_card,
+            R.string.pipeline_dp_desc,
             canToggle = false
         ),
         ENVIRONMENTAL_REVERB(
-            "Environmental Reverb",
-            ""
+            R.string.environmental_reverb,
+            0
         ),
         AUDIO_OUTPUT(
-            "Audio Output",
-            "Speakers, headphones, or other connected output",
+            R.string.audio_output,
+            R.string.pipeline_output_desc,
             isFixed = true,
             canToggle = false
         ),
@@ -109,9 +110,9 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
             onCardClick = { effect -> openDetailScreen(effect) },
             descriptionFor = { effect ->
                 when (effect) {
-                    EffectId.AUDIO_OUTPUT -> currentAudioOutputDescription() ?: effect.description
+                    EffectId.AUDIO_OUTPUT -> currentAudioOutputDescription() ?: getString(effect.descriptionRes)
                     EffectId.AUDIO_INPUT -> currentChannelInputDescription()
-                    else -> effect.description
+                    else -> if (effect.descriptionRes != 0) getString(effect.descriptionRes) else ""
                 }
             },
             priorityFor = { effect -> currentPriorityFor(effect) },
@@ -300,8 +301,8 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
     /** User-facing Channel Input label from the routing-mode pref (0 = System-wide, 1 = Session-based); matches ChannelInputActivity's chips. */
     private fun currentChannelInputDescription(): String =
         when (eqPrefs.getAudioRoutingMode()) {
-            1 -> "Session-based"
-            else -> "System-wide"
+            1 -> getString(R.string.session_based)
+            else -> getString(R.string.system_wide)
         }
 
     /** Which scope drives the audio, for the priority pill: Session-based and System-wide-without-auto-switch point at Channel Input, System-wide with auto-switch at Audio Output; null hides the pill. */
@@ -353,7 +354,7 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
         private val onHandleTouch: (RecyclerView.ViewHolder) -> Unit,
         private val onCardClick: (EffectId) -> Unit,
         /** Description override: Audio Output shows the live device name and connection type instead of the enum default. */
-        private val descriptionFor: (EffectId) -> String = { it.description },
+        private val descriptionFor: (EffectId) -> String = { "" },
         /** Priority indicator for the Channel Input / Audio Output cards, null elsewhere; resolved from routing-mode + auto-switch. */
         private val priorityFor: (EffectId) -> CardPriority? = { null },
     ) : RecyclerView.Adapter<PipelineAdapter.ViewHolder>() {
@@ -471,7 +472,7 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
         @SuppressLint("ClickableViewAccessibility")
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val effect = items[position]
-            holder.title.text = effect.title
+            holder.title.text = holder.itemView.context.getString(effect.titleRes)
             val desc = descriptionFor(effect)
             holder.description.text = desc
             // Hide the second line entirely when an effect has no
@@ -551,7 +552,8 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
             // row. Transparent fill with a colored stroke and matching
             // text color so the label reads against the card background.
             holder.pill.visibility = View.VISIBLE
-            holder.pill.text = if (active) "Priority" else "Not Priority"
+            holder.pill.text = holder.itemView.context.getString(
+                if (active) R.string.priority else R.string.not_priority)
             holder.pill.setTextColor(accent)
             holder.pill.background = android.graphics.drawable.GradientDrawable().apply {
                 cornerRadius = 100 * density

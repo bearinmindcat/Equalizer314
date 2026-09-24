@@ -1208,7 +1208,7 @@ class EqGraphView @JvmOverloads constructor(
     private fun drawActivePointLabel(canvas: Canvas, point: BandPoint) {
         val currentFilterType = parametricEq?.getBand(point.bandIndex)?.filterType?.name ?: "BELL"
         val actualGain = parametricEq?.getBand(point.bandIndex)?.gain ?: point.gain
-        val label = "Band ${getBandLabel(point.bandIndex)}: ${formatFrequency(point.frequency.toInt())} | ${String.format("%.1f dB", actualGain)} | $currentFilterType"
+        val label = "${context.getString(com.bearinmind.equalizer314.R.string.band_label, getBandLabel(point.bandIndex))}: ${formatFrequency(point.frequency.toInt())} | ${String.format("%.1f dB", actualGain)} | $currentFilterType"
 
         val labelWidth = labelPaint.measureText(label)
         val padH = 14f

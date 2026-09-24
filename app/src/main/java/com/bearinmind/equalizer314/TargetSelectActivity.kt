@@ -166,9 +166,9 @@ class TargetSelectActivity : AppCompatActivity() {
         val results = importedEntries + dbResults
         adapter.submitList(results)
         resultCount.text = if (query.isBlank()) {
-            "${allTargets.size + imported.size} targets"
+            (allTargets.size + imported.size).let { resources.getQuantityString(R.plurals.n_targets, it, it) }
         } else {
-            "${results.size} targets"
+            resources.getQuantityString(R.plurals.n_targets, results.size, results.size)
         }
     }
 

@@ -44,7 +44,7 @@ class ConvertToApoActivity : AppCompatActivity() {
     private var pendingText: String? = null
     private var pendingFileName: String = ""
     private var pendingFromPoweramp: Boolean = true
-    private var lastSourceName: String = "Converted preset"
+    private var lastSourceName: String = ""
 
     private val powerampLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) handlePicked(uri, fromPoweramp = true)
@@ -105,14 +105,14 @@ class ConvertToApoActivity : AppCompatActivity() {
         addToPresetsButton.setOnClickListener {
             val apoText = resultText.text.toString().trim()
             if (apoText.isEmpty()) return@setOnClickListener
-            eqPrefs.addImportedPreset(lastSourceName, apoText)
-            Toast.makeText(this, getString(R.string.added_to_autoeq_presets, lastSourceName), Toast.LENGTH_SHORT).show()
+            eqPrefs.addImportedPreset(sourceName(), apoText)
+            Toast.makeText(this, getString(R.string.added_to_autoeq_presets, sourceName()), Toast.LENGTH_SHORT).show()
         }
         exportButton.setOnClickListener {
             val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
                 addCategory(Intent.CATEGORY_OPENABLE)
                 type = "text/plain"
-                putExtra(Intent.EXTRA_TITLE, "${lastSourceName}_APO.txt")
+                putExtra(Intent.EXTRA_TITLE, "${sourceName()}_APO.txt")
             }
             exportLauncher.launch(intent)
         }
@@ -125,7 +125,7 @@ class ConvertToApoActivity : AppCompatActivity() {
                 uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null
             )?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
                 ?: uri.lastPathSegment?.substringAfterLast('/')
-                ?: "Converted preset"
+                ?: getString(R.string.converted_preset)
 
             pendingText = text
             pendingFileName = fileName
@@ -146,18 +146,20 @@ class ConvertToApoActivity : AppCompatActivity() {
         }
     }
 
+    private fun sourceName(): String = lastSourceName.ifBlank { getString(R.string.converted_preset) }
+
     private fun runConversion() {
         val text = pendingText ?: return
         when (val r = ApoConverter.convert(text)) {
             is ApoConverter.Result.Ok -> {
                 lastSourceName = pendingFileName.substringBeforeLast('.').ifBlank { pendingFileName }
-                showResult(r.apoText, r.sourceLabel)
+                showResult(r.apoText, getString(r.sourceLabelRes))
             }
             is ApoConverter.Result.Err -> {
                 resultCard.visibility = View.GONE
                 addToPresetsButton.visibility = View.GONE
                 exportButton.visibility = View.GONE
-                Toast.makeText(this, r.message, Toast.LENGTH_LONG).show()
+                Toast.makeText(this, r.detail?.let { getString(r.messageRes, it) } ?: getString(r.messageRes), Toast.LENGTH_LONG).show()
             }
         }
     }

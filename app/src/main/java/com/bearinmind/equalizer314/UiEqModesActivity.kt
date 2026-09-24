@@ -45,7 +45,7 @@ class UiEqModesActivity : AppCompatActivity() {
         if (isFinishing) return
         val density = resources.displayMetrics.density
         val root = styledDialogRoot()
-        root.addView(styledDialogTitle("Change EQ Modes"))
+        root.addView(styledDialogTitle(getString(R.string.change_eq_modes)))
 
         // Live mock of the main screen's mode tab rows (wraps to a 2nd row past two modes).
         val previewRow = android.widget.LinearLayout(this).apply {
@@ -65,8 +65,8 @@ class UiEqModesActivity : AppCompatActivity() {
         })
 
         val labels = mapOf(
-            "parametric" to "Parametric", "graphic" to "Graphic",
-            "table" to "Table", "simple" to "Simple")
+            "parametric" to getString(R.string.parametric), "graphic" to getString(R.string.graphic),
+            "table" to getString(R.string.table), "simple" to getString(R.string.simple))
 
         fun refreshPreview() {
             previewRow.removeAllViews()
@@ -158,7 +158,7 @@ class UiEqModesActivity : AppCompatActivity() {
                     if (!checked && ordered.count { eqPrefs.getEqModeEnabled(it.key) } <= 1) {
                         btn.isChecked = true
                         android.widget.Toast.makeText(
-                            this@UiEqModesActivity, "At least one mode must stay on",
+                            this@UiEqModesActivity, getString(R.string.at_least_one_mode),
                             android.widget.Toast.LENGTH_SHORT).show()
                         return@setOnCheckedChangeListener
                     }
@@ -215,7 +215,7 @@ class UiEqModesActivity : AppCompatActivity() {
         ).apply { bottomMargin = (6 * density).toInt() })
 
         root.addView(styledDialogDivider())
-        val closeBtn = styledDialogButton("Close", isCancel = false).apply {
+        val closeBtn = styledDialogButton(getString(R.string.close), isCancel = false).apply {
             layoutParams = android.widget.LinearLayout.LayoutParams(
                 android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
                 android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
@@ -233,7 +233,7 @@ class UiEqModesActivity : AppCompatActivity() {
         if (isFinishing) return
         val density = resources.displayMetrics.density
         val root = styledDialogRoot()
-        root.addView(styledDialogTitle("Notification Settings"))
+        root.addView(styledDialogTitle(getString(R.string.notification_settings)))
 
         // Live mock of the notification, updates as the toggles flip.
         val previewTitle = android.widget.TextView(this).apply {
@@ -259,7 +259,7 @@ class UiEqModesActivity : AppCompatActivity() {
 
         fun refreshPreview() {
             val on = eqPrefs.getPowerState()
-            previewTitle.text = if (on) "Equalizer314: Online" else "Equalizer314: Offline"
+            previewTitle.text = getString(if (on) R.string.notif_title_online else R.string.notif_title_offline)
             val am = getSystemService(android.media.AudioManager::class.java)
             val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
             val volPct = if (max > 0) am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) * 100 / max else 0
@@ -269,11 +269,15 @@ class UiEqModesActivity : AppCompatActivity() {
             val device = com.bearinmind.equalizer314.audio.EqService.staticLastDeviceLabel ?: "—"
             val lines = mutableListOf<String>()
             for (key in eqPrefs.getNotifLineOrder()) when (key) {
-                "volume" -> if (eqPrefs.getNotifShowVolume()) lines.add("Volume: $volPct%")
-                "mode" -> if (eqPrefs.getNotifShowMode()) lines.add(
-                    "Mode: " + if (eqPrefs.getAudioRoutingMode() == 1) "Session" else "System")
-                "preset" -> if (eqPrefs.getNotifShowPreset()) lines.add("Preset: ${if (isRealPreset) name else "none"}")
-                "device" -> if (eqPrefs.getNotifShowDevice()) lines.add("Device: $device")
+                "volume" -> if (eqPrefs.getNotifShowVolume())
+                    lines.add(getString(R.string.notif_volume_line, volPct))
+                "mode" -> if (eqPrefs.getNotifShowMode()) lines.add(getString(R.string.notif_mode_line,
+                    getString(if (eqPrefs.getAudioRoutingMode() == 1) R.string.notif_mode_session
+                              else R.string.notif_mode_system)))
+                "preset" -> if (eqPrefs.getNotifShowPreset()) lines.add(getString(R.string.notif_preset_line,
+                    if (isRealPreset) name else getString(R.string.notif_none)))
+                "device" -> if (eqPrefs.getNotifShowDevice())
+                    lines.add(getString(R.string.notif_device_line, device))
             }
             previewBody.text = lines.joinToString("\n")
             previewBody.visibility = if (lines.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
@@ -289,10 +293,10 @@ class UiEqModesActivity : AppCompatActivity() {
         // Drag-reorderable toggle rows (same handle-drag pattern as the pipeline screen).
         data class NotifRow(val key: String, val label: String, val get: () -> Boolean, val set: (Boolean) -> Unit)
         val allRows = mapOf(
-            "volume" to NotifRow("volume", "Volume", { eqPrefs.getNotifShowVolume() }, { eqPrefs.saveNotifShowVolume(it) }),
-            "mode" to NotifRow("mode", "Mode", { eqPrefs.getNotifShowMode() }, { eqPrefs.saveNotifShowMode(it) }),
-            "preset" to NotifRow("preset", "Preset", { eqPrefs.getNotifShowPreset() }, { eqPrefs.saveNotifShowPreset(it) }),
-            "device" to NotifRow("device", "Device", { eqPrefs.getNotifShowDevice() }, { eqPrefs.saveNotifShowDevice(it) }),
+            "volume" to NotifRow("volume", getString(R.string.notif_row_volume), { eqPrefs.getNotifShowVolume() }, { eqPrefs.saveNotifShowVolume(it) }),
+            "mode" to NotifRow("mode", getString(R.string.notif_row_mode), { eqPrefs.getNotifShowMode() }, { eqPrefs.saveNotifShowMode(it) }),
+            "preset" to NotifRow("preset", getString(R.string.notif_row_preset), { eqPrefs.getNotifShowPreset() }, { eqPrefs.saveNotifShowPreset(it) }),
+            "device" to NotifRow("device", getString(R.string.notif_row_device), { eqPrefs.getNotifShowDevice() }, { eqPrefs.saveNotifShowDevice(it) }),
         )
         val ordered = eqPrefs.getNotifLineOrder().mapNotNull { allRows[it] }.toMutableList()
 
@@ -432,7 +436,7 @@ class UiEqModesActivity : AppCompatActivity() {
         root.addView(hideRow)
 
         root.addView(styledDialogDivider())
-        val closeBtn = styledDialogButton("Close", isCancel = false).apply {
+        val closeBtn = styledDialogButton(getString(R.string.close), isCancel = false).apply {
             layoutParams = android.widget.LinearLayout.LayoutParams(
                 android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
                 android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)

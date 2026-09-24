@@ -366,4 +366,75 @@
     </plurals>
     <string name="switch_language_confirm">Mudar o app para %1$s?</string>
     <string name="switch_label">Mudar</string>
+    <string name="new_preset">Novo preset</string>
+    <string name="import_preset">Importar preset</string>
+    <string name="user_presets_header">SEUS PRESETS</string>
+    <string name="autoeq_presets_header">PRESETS DO AUTOEQ</string>
+    <string name="close">Fechar</string>
+    <string name="at_least_one_mode">Pelo menos um modo precisa ficar ligado</string>
+    <string name="notif_row_volume">Volume</string>
+    <string name="notif_row_mode">Modo</string>
+    <string name="notif_row_preset">Preset</string>
+    <string name="notif_row_device">Dispositivo</string>
+    <string name="notif_volume_line">Volume: %1$d%%</string>
+    <string name="preset_flat">Plano</string>
+    <string name="preset_bass_boost">Reforço de graves</string>
+    <string name="preset_treble_boost">Reforço de agudos</string>
+    <string name="preset_vocal_enhance">Realce vocal</string>
+    <plurals name="n_presets">
+        <item quantity="one">%1$d preset</item>
+        <item quantity="other">%1$d presets</item>
+    </plurals>
+    <string name="pipeline_input_desc">Áudio do sistema na sessão 0 — entrada da cadeia de efeitos</string>
+    <string name="dynamics_processing_card">Processamento dinâmico</string>
+    <string name="pipeline_dp_desc">Cadeia principal de processamento para EQ, MBC e limitador</string>
+    <string name="pipeline_output_desc">Alto-falantes, fones ou outra saída conectada</string>
+    <string name="priority">Prioridade</string>
+    <string name="not_priority">Sem prioridade</string>
+    <string name="current_output">Saída atual</string>
+    <string name="forget_device">Esquecer dispositivo</string>
+    <string name="preset_missing">%1$s (não encontrado)</string>
+    <string name="bt_name_only_warning">A identificação Bluetooth vai usar só o nome do dispositivo: dois aparelhos do mesmo modelo vão coincidir.</string>
+    <string name="needs_notification_access">Precisa de acesso às notificações. Toque para abrir a configuração do Android</string>
+    <string name="detection_enhanced_on">Detecta quais apps estão tocando áudio para que os presets de app os acompanhem. A detecção avançada está ligada</string>
+    <string name="detection_long_press_hint">Detecta quais apps estão tocando áudio para que os presets de app os acompanhem. Toque e segure para copiar o comando adb da detecção avançada (IDs de sessão de todos os apps)</string>
+    <string name="converted_preset">Preset convertido</string>
+    <string name="imported_label">Importado</string>
+    <string name="diffusion">Difusão</string>
+    <string name="density">Densidade</string>
+    <string name="dp_power_cycled">DP reiniciado</string>
+    <string name="devices_on_network">Dispositivos na sua rede</string>
+    <string name="refresh">Atualizar</string>
+    <string name="pair">Parear</string>
+    <string name="color_caps">COR</string>
+    <string name="export_label">Exportar</string>
+    <string name="cse_on">EQ por canal ligado</string>
+    <string name="cse_off">EQ por canal desligado</string>
+    <string name="auto_gain_offset">Compensação: %1$.1f dB</string>
+    <string name="generated_on">Gerado %1$s</string>
+    <string name="applied_lr_filters">Aplicados L:%1$d R:%2$d Ambos:%3$d filtros</string>
+    <string name="notifications_disabled_warning">Notificações desativadas: o EQ vai funcionar sem a notificação de desligar.</string>
+    <string name="apo_err_empty">O arquivo está vazio</string>
+    <string name="apo_fmt_autoeq_graphiceq">AutoEQ GraphicEQ</string>
+    <string name="apo_fmt_passthrough">Wavelet / APO (sem alterações)</string>
+    <string name="apo_fmt_wrapped_json">Preset de EQ (JSON encapsulado)</string>
+    <string name="apo_fmt_poweramp_parametric">EQ paramétrico do Poweramp</string>
+    <string name="apo_fmt_poweramp_graphic">EQ gráfico do Poweramp</string>
+    <string name="apo_fmt_wavelet_json">Preset do Wavelet (JSON)</string>
+    <string name="apo_err_unknown_json">O JSON não corresponde a nenhum formato conhecido do Wavelet / Poweramp</string>
+    <string name="apo_err_malformed_json">JSON malformado: %1$s</string>
+    <string name="apo_fmt_poweramp_settings">EQ gráfico do Poweramp (string de configurações)</string>
+    <string name="apo_err_unrecognised">Formato de arquivo não reconhecido</string>
+    <plurals name="n_points">
+        <item quantity="one">%1$d ponto</item>
+        <item quantity="other">%1$d pontos</item>
+    </plurals>
+    <plurals name="n_targets">
+        <item quantity="one">%1$d alvo</item>
+        <item quantity="other">%1$d alvos</item>
+    </plurals>
+    <plurals name="n_points_range">
+        <item quantity="one">%1$d ponto (%2$dHz - %3$dHz)</item>
+        <item quantity="other">%1$d pontos (%2$dHz - %3$dHz)</item>
+    </plurals>
 </resources>

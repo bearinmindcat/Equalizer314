@@ -165,9 +165,9 @@ class AutoEqActivity : AppCompatActivity() {
         val results = favEntries + regularImported + regularDb
         adapter.submitList(results)
         resultCount.text = if (query.isBlank()) {
-            "${database.totalCount() + imported.size} presets"
+            (database.totalCount() + imported.size).let { resources.getQuantityString(R.plurals.n_presets, it, it) }
         } else {
-            "${results.size} presets"
+            resources.getQuantityString(R.plurals.n_presets, results.size, results.size)
         }
     }
 
