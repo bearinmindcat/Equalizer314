@@ -786,49 +786,11 @@ class SimpleEqController(
         return row
     }
 
-    /** Build an APO config from the shared-pool preset JSON and hand it to MainActivity's export launcher. */
+    /** Export a pool preset as APO .txt via MainActivity's launcher. */
     private fun exportPresetApo(name: String) {
         val presetJson = eqPrefs.getCustomPresetJson(name) ?: return
-        val obj = org.json.JSONObject(presetJson)
-        val sb = StringBuilder()
-        sb.append("Preamp: ${String.format(java.util.Locale.US, "%.1f", obj.optDouble("preamp", 0.0))} dB\n")
-
-        fun appendFilters(bands: org.json.JSONArray, indexOffset: Int = 0) {
-            for (i in 0 until bands.length()) {
-                val b = bands.getJSONObject(i)
-                val apoType: String; val hasGain: Boolean; val hasQ: Boolean
-                when (b.getString("filterType")) {
-                    "BELL"         -> { apoType = "PK";  hasGain = true;  hasQ = true  }
-                    "LOW_SHELF"    -> { apoType = "LSC"; hasGain = true;  hasQ = true  }
-                    "HIGH_SHELF"   -> { apoType = "HSC"; hasGain = true;  hasQ = true  }
-                    "LOW_PASS"     -> { apoType = "LPQ"; hasGain = false; hasQ = true  }
-                    "HIGH_PASS"    -> { apoType = "HPQ"; hasGain = false; hasQ = true  }
-                    "LOW_SHELF_1"  -> { apoType = "LS 6dB"; hasGain = true; hasQ = false }
-                    "HIGH_SHELF_1" -> { apoType = "HS 6dB"; hasGain = true; hasQ = false }
-                    "LOW_PASS_1"   -> { apoType = "LP";  hasGain = false; hasQ = false }
-                    "HIGH_PASS_1"  -> { apoType = "HP";  hasGain = false; hasQ = false }
-                    "BAND_PASS"    -> { apoType = "BP";  hasGain = false; hasQ = true  }
-                    "NOTCH"        -> { apoType = "NO";  hasGain = false; hasQ = true  }
-                    "ALL_PASS"     -> { apoType = "AP";  hasGain = false; hasQ = true  }
-                    else           -> { apoType = "PK";  hasGain = true;  hasQ = true  }
-                }
-                val fc = b.getDouble("frequency").toInt()
-                val line = StringBuilder("Filter ${i + 1 + indexOffset}: ON $apoType Fc $fc Hz")
-                if (hasGain) line.append(" Gain ${String.format(java.util.Locale.US, "%.1f", b.getDouble("gain"))} dB")
-                if (hasQ) line.append(" Q ${String.format(java.util.Locale.US, "%.2f", b.getDouble("q"))}")
-                sb.append(line).append('\n')
-            }
-        }
-
-        val cseOn = obj.optBoolean("channelSideEqEnabled", false)
-        if (cseOn && obj.has("leftBands") && obj.has("rightBands")) {
-            val leftArr = obj.getJSONArray("leftBands")
-            sb.append("Channel: L\n"); appendFilters(leftArr)
-            sb.append("Channel: R\n"); appendFilters(obj.getJSONArray("rightBands"), indexOffset = leftArr.length())
-        } else {
-            appendFilters(obj.getJSONArray("bands"))
-        }
-        (activity as? com.bearinmind.equalizer314.MainActivity)?.launchPresetExport(sb.toString(), "$name.txt")
+        val text = com.bearinmind.equalizer314.state.PresetFileIo.toApoText(org.json.JSONObject(presetJson))
+        (activity as? com.bearinmind.equalizer314.MainActivity)?.launchPresetExport(text, "$name.txt")
     }
 
     private fun showDeleteDialog(name: String) {

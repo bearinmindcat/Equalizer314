@@ -105,52 +105,6 @@ class  MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Clean APO text for a preset (EQ only — the chain travels via the .json export). */
-    private fun buildApoExportText(obj: org.json.JSONObject): String {
-        val sb = StringBuilder()
-        // Locale.US: comma-decimal locales exported "Q 0,71", which APO and our own importer can't read.
-        sb.append("Preamp: ${String.format(java.util.Locale.US, "%.1f", obj.optDouble("preamp", 0.0))} dB\n")
-        fun appendFilters(bands: org.json.JSONArray, indexOffset: Int = 0) {
-            for (i in 0 until bands.length()) {
-                val b = bands.getJSONObject(i)
-                // FilterType → APO token. BP/NO/AP/LP/HP have no Gain; the 6 dB shelves and 1st-order LP/HP have no Q.
-                val apoType: String
-                val hasGain: Boolean
-                val hasQ: Boolean
-                when (b.getString("filterType")) {
-                    "BELL"         -> { apoType = "PK";  hasGain = true;  hasQ = true  }
-                    "LOW_SHELF"    -> { apoType = "LSC"; hasGain = true;  hasQ = true  }
-                    "HIGH_SHELF"   -> { apoType = "HSC"; hasGain = true;  hasQ = true  }
-                    "LOW_PASS"     -> { apoType = "LPQ"; hasGain = false; hasQ = true  }
-                    "HIGH_PASS"    -> { apoType = "HPQ"; hasGain = false; hasQ = true  }
-                    "LOW_SHELF_1"  -> { apoType = "LS 6dB"; hasGain = true; hasQ = false }
-                    "HIGH_SHELF_1" -> { apoType = "HS 6dB"; hasGain = true; hasQ = false }
-                    "LOW_PASS_1"   -> { apoType = "LP";  hasGain = false; hasQ = false }
-                    "HIGH_PASS_1"  -> { apoType = "HP";  hasGain = false; hasQ = false }
-                    "BAND_PASS"    -> { apoType = "BP";  hasGain = false; hasQ = true  }
-                    "NOTCH"        -> { apoType = "NO";  hasGain = false; hasQ = true  }
-                    "ALL_PASS"     -> { apoType = "AP";  hasGain = false; hasQ = true  }
-                    else           -> { apoType = "PK";  hasGain = true;  hasQ = true  }
-                }
-                val line = StringBuilder("Filter ${i + 1 + indexOffset}: ON $apoType Fc ${b.getDouble("frequency").toInt()} Hz")
-                if (hasGain) line.append(" Gain ${String.format(java.util.Locale.US, "%.1f", b.getDouble("gain"))} dB")
-                if (hasQ) line.append(" Q ${String.format(java.util.Locale.US, "%.2f", b.getDouble("q"))}")
-                sb.append(line).append('\n')
-            }
-        }
-        val cseOn = obj.optBoolean("channelSideEqEnabled", false)
-        if (cseOn && obj.has("leftBands") && obj.has("rightBands")) {
-            val leftArr = obj.getJSONArray("leftBands")
-            sb.append("Channel: L\n")
-            appendFilters(leftArr)
-            sb.append("Channel: R\n")
-            appendFilters(obj.getJSONArray("rightBands"), indexOffset = leftArr.length())
-        } else {
-            appendFilters(obj.getJSONArray("bands"))
-        }
-        return sb.toString()
-    }
-
     /** Export format popup (issue #78): clean APO .txt, or full native .json incl. MBC & limiter. */
     private fun showExportFormatDialog(name: String, presetJson: String) {
         val density = resources.displayMetrics.density
@@ -202,7 +156,7 @@ class  MainActivity : AppCompatActivity() {
             .setView(dialogView).create()
         apoBtn.setOnClickListener {
             dialog.dismiss()
-            launchPresetExport(buildApoExportText(org.json.JSONObject(presetJson)), "$name.txt")
+            launchPresetExport(com.bearinmind.equalizer314.state.PresetFileIo.toApoText(org.json.JSONObject(presetJson)), "$name.txt")
         }
         nativeBtn.setOnClickListener {
             dialog.dismiss()

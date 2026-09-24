@@ -6,8 +6,9 @@ import com.bearinmind.equalizer314.autoeq.AutoEqParser
 import com.bearinmind.equalizer314.autoeq.apoTokenToFilterType
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.Locale
 
-/** Shared preset-file import: native Equalizer314 .json, APO .txt, and the legacy EQ314 chain section. */
+/** Shared preset-file import/export: native Equalizer314 .json, APO .txt, and the legacy EQ314 chain section. */
 object PresetFileIo {
     /** Total filters in a preset JSON — CSE presets sum left + right + shared instead of the legacy `bands` copy. */
     fun filterCount(json: String?): Int {
@@ -44,6 +45,52 @@ object PresetFileIo {
             .putString("preset_$name", presetJson.toString())
             .putStringSet("preset_names", names)
             .apply()
+    }
+
+    /** APO .txt for a preset (EQ only; the chain travels via .json), shared by both export buttons. */
+    fun toApoText(obj: JSONObject): String {
+        val sb = StringBuilder()
+        // Locale.US: comma-decimal locales wrote "Q 0,71", which APO and our importer can't read.
+        sb.append("Preamp: ${String.format(Locale.US, "%.1f", obj.optDouble("preamp", 0.0))} dB\n")
+        fun appendFilters(bands: JSONArray, indexOffset: Int = 0) {
+            for (i in 0 until bands.length()) {
+                val b = bands.getJSONObject(i)
+                // BP/NO/AP/LP/HP have no Gain; 6 dB shelves and 1st-order LP/HP have no Q.
+                val apoType: String
+                val hasGain: Boolean
+                val hasQ: Boolean
+                when (b.getString("filterType")) {
+                    "BELL"         -> { apoType = "PK";  hasGain = true;  hasQ = true  }
+                    "LOW_SHELF"    -> { apoType = "LSC"; hasGain = true;  hasQ = true  }
+                    "HIGH_SHELF"   -> { apoType = "HSC"; hasGain = true;  hasQ = true  }
+                    "LOW_PASS"     -> { apoType = "LPQ"; hasGain = false; hasQ = true  }
+                    "HIGH_PASS"    -> { apoType = "HPQ"; hasGain = false; hasQ = true  }
+                    "LOW_SHELF_1"  -> { apoType = "LS 6dB"; hasGain = true; hasQ = false }
+                    "HIGH_SHELF_1" -> { apoType = "HS 6dB"; hasGain = true; hasQ = false }
+                    "LOW_PASS_1"   -> { apoType = "LP";  hasGain = false; hasQ = false }
+                    "HIGH_PASS_1"  -> { apoType = "HP";  hasGain = false; hasQ = false }
+                    "BAND_PASS"    -> { apoType = "BP";  hasGain = false; hasQ = true  }
+                    "NOTCH"        -> { apoType = "NO";  hasGain = false; hasQ = true  }
+                    "ALL_PASS"     -> { apoType = "AP";  hasGain = false; hasQ = true  }
+                    else           -> { apoType = "PK";  hasGain = true;  hasQ = true  }
+                }
+                // One string per line: release D8 (AGP 8.2) dropped Q appended to a per-line StringBuilder (#100, #114).
+                val gainPart = if (hasGain) " Gain ${String.format(Locale.US, "%.1f", b.getDouble("gain"))} dB" else ""
+                val qPart = if (hasQ) " Q ${String.format(Locale.US, "%.2f", b.getDouble("q"))}" else ""
+                sb.append("Filter ${i + 1 + indexOffset}: ON $apoType Fc ${b.getDouble("frequency").toInt()} Hz$gainPart$qPart\n")
+            }
+        }
+        val cseOn = obj.optBoolean("channelSideEqEnabled", false)
+        if (cseOn && obj.has("leftBands") && obj.has("rightBands")) {
+            val leftArr = obj.getJSONArray("leftBands")
+            sb.append("Channel: L\n")
+            appendFilters(leftArr)
+            sb.append("Channel: R\n")
+            appendFilters(obj.getJSONArray("rightBands"), indexOffset = leftArr.length())
+        } else {
+            appendFilters(obj.getJSONArray("bands"))
+        }
+        return sb.toString()
     }
 
     /** Parse a native preset JSON or an APO .txt (incl. the EQ314 chain section) into preset JSON. */
