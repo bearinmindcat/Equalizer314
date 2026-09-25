@@ -242,8 +242,7 @@ class TargetCurveActivity : AppCompatActivity() {
                 eqPrefs.savePresetName(getString(R.string.generate_custom_eq))
                 eqPrefs.saveAutoEqName("")
                 eqPrefs.saveAutoEqSource("")
-                // Generated curves are single-channel — disable Channel Side EQ so
-                // MainActivity rebinds to bothEq instead of a stale leftEq/rightEq view.
+                // Generated curves are single-channel: disable CSE so MainActivity rebinds to bothEq, not stale L/R views.
                 eqPrefs.saveChannelSideEqEnabled(false)
                 eqPrefs.clearLeftRightBands()
 
@@ -413,7 +412,7 @@ class TargetCurveActivity : AppCompatActivity() {
 
     private fun profileToApoText(profile: AutoEqProfile): String {
         val sb = StringBuilder()
-        sb.append("Preamp: ${String.format("%.1f", profile.preampDb)} dB\n")
+        sb.append("Preamp: ${String.format(java.util.Locale.US, "%.1f", profile.preampDb)} dB\n")
         for ((i, f) in profile.filters.withIndex()) {
             sb.append("Filter ${i + 1}: ON ${f.filterType} Fc ${f.frequency.toInt()} Hz Gain ${String.format(java.util.Locale.US, "%.1f", f.gain)} dB Q ${String.format(java.util.Locale.US, "%.2f", f.q)}\n")
         }
@@ -457,8 +456,7 @@ class TargetCurveActivity : AppCompatActivity() {
             setTextColor(0xFFE2E2E2.toInt()); textSize = 20f
             setPadding(0, 0, 0, (12 * density).toInt())
         }
-        // Input box: FrameLayout with rounded 12dp #555555 border wrapping a
-        // borderless EditText, matching the other "Save Custom Preset" dialogs.
+        // Input box: rounded 12dp #555555 border around a borderless EditText, like the other save dialogs.
         val inputBox = android.widget.FrameLayout(this).apply {
             layoutParams = android.widget.LinearLayout.LayoutParams(
                 android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
@@ -537,9 +535,7 @@ class TargetCurveActivity : AppCompatActivity() {
         cancelBtn.setOnClickListener { dialog.dismiss() }
         addBtn.setOnClickListener {
             val name = nameInput.text.toString().trim().ifEmpty { defaultName }
-            // Save into custom_presets (same store as the main "Save Custom Preset"),
-            // not the AutoEQ imported list, so the EQ is re-selectable and bindable to
-            // apps/devices. Use the computed profile if available, else re-parse the APO.
+            // Save to custom_presets (not the AutoEQ list) so it's re-selectable/bindable; computed profile, else re-parsed APO.
             val profile = lastComputedProfile ?: AutoEqParser.parse(apoText)
             if (profile == null) {
                 Toast.makeText(this, getString(R.string.could_not_parse_generated_eq), Toast.LENGTH_SHORT).show()

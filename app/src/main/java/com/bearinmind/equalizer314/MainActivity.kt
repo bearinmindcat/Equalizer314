@@ -2911,11 +2911,11 @@ class  MainActivity : AppCompatActivity() {
         // Color swatches
         setupColorSwatches()
 
-        // EQ mode selector: advanced modes clear the Simple flag, Simple sets it.
-        modeParametricBtn.setOnClickListener { eqPrefs.saveSimpleEqEnabled(false); switchEqUiMode(EqUiMode.PARAMETRIC) }
-        modeGraphicBtn.setOnClickListener { eqPrefs.saveSimpleEqEnabled(false); switchEqUiMode(EqUiMode.GRAPHIC) }
-        modeTableBtn.setOnClickListener { eqPrefs.saveSimpleEqEnabled(false); switchEqUiMode(EqUiMode.TABLE) }
-        modeSimpleBtn.setOnClickListener { eqPrefs.saveSimpleEqEnabled(true); switchEqUiMode(EqUiMode.SIMPLE) }
+        // EQ mode tabs; the Simple flag is set in selectEqUiMode.
+        modeParametricBtn.setOnClickListener { selectEqUiMode(EqUiMode.PARAMETRIC) }
+        modeGraphicBtn.setOnClickListener { selectEqUiMode(EqUiMode.GRAPHIC) }
+        modeTableBtn.setOnClickListener { selectEqUiMode(EqUiMode.TABLE) }
+        modeSimpleBtn.setOnClickListener { selectEqUiMode(EqUiMode.SIMPLE) }
 
         // Settings controls
         setupSettingsListeners()
@@ -3534,6 +3534,13 @@ class  MainActivity : AppCompatActivity() {
         badgeAnchorSpecWidth = specWidth
         badgeAnchorBtnTop = btnTop
         repositionChannelBadge(findViewById(R.id.altRouteChannelBadge))
+    }
+
+    /** Mode-tab tap; ignores the active tab (re-entering Simple crashed on the detached preamp card). */
+    private fun selectEqUiMode(mode: EqUiMode) {
+        if (mode == stateManager.currentEqUiMode) return
+        eqPrefs.saveSimpleEqEnabled(mode == EqUiMode.SIMPLE)
+        switchEqUiMode(mode)
     }
 
     private fun switchEqUiMode(mode: EqUiMode) {
