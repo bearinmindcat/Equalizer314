@@ -24,6 +24,41 @@ class EqPreferencesManager(context: Context) {
     data class Binding(val key: String, val label: String, val presetName: String)
 
     companion object {
+        /** EQ from a saved/preset band array; starts empty, as ParametricEqualizer() seeds 4 flat "phantom" bands. */
+        fun eqFromBands(
+            arr: JSONArray,
+            defaultChannel: ParametricEqualizer.Channel = ParametricEqualizer.Channel.BOTH,
+        ): ParametricEqualizer = ParametricEqualizer().also { fillBands(it, arr, defaultChannel) }
+
+        /** Replace [eq]'s bands with [arr]; clearing first keeps each "enabled" flag on its band. */
+        private fun fillBands(eq: ParametricEqualizer, arr: JSONArray, defaultChannel: ParametricEqualizer.Channel) {
+            eq.clearBands()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                val ft = try {
+                    BiquadFilter.FilterType.valueOf(obj.getString("filterType"))
+                } catch (_: Exception) {
+                    BiquadFilter.FilterType.BELL
+                }
+                eq.addBand(
+                    obj.getDouble("frequency").toFloat(),
+                    obj.getDouble("gain").toFloat(),
+                    ft,
+                    obj.getDouble("q")
+                )
+                if (obj.has("enabled")) eq.setBandEnabled(i, obj.getBoolean("enabled"))
+                // Untagged bands (pre-#53 saves, presets) take the default channel.
+                eq.getBand(i)?.channel = if (obj.has("channel")) {
+                    try {
+                        ParametricEqualizer.Channel.valueOf(obj.getString("channel"))
+                    } catch (_: Exception) {
+                        defaultChannel
+                    }
+                } else defaultChannel
+            }
+            eq.isEnabled = true
+        }
+
         /** Reserved presetName for device and app bindings: no EQ while that device/app is active (distinct from "(none)"). */
         const val DEVICE_PRESET_DISABLED = "__disable_eq__"
         const val PRESET_DISABLED_LABEL = "Disable EQ"
@@ -122,32 +157,7 @@ class EqPreferencesManager(context: Context) {
         defaultChannel: ParametricEqualizer.Channel = ParametricEqualizer.Channel.BOTH,
     ): Boolean {
         return try {
-            val arr = JSONArray(jsonStr)
-            eq.clearBands()
-            for (i in 0 until arr.length()) {
-                val obj = arr.getJSONObject(i)
-                val ft = try {
-                    BiquadFilter.FilterType.valueOf(obj.getString("filterType"))
-                } catch (_: Exception) {
-                    BiquadFilter.FilterType.BELL
-                }
-                eq.addBand(
-                    obj.getDouble("frequency").toFloat(),
-                    obj.getDouble("gain").toFloat(),
-                    ft,
-                    obj.getDouble("q")
-                )
-                if (obj.has("enabled")) eq.setBandEnabled(i, obj.getBoolean("enabled"))
-                // Pre-#53 saves have no "channel" — the default keeps L/R curves independent.
-                eq.getBand(i)?.channel = if (obj.has("channel")) {
-                    try {
-                        ParametricEqualizer.Channel.valueOf(obj.getString("channel"))
-                    } catch (_: Exception) {
-                        defaultChannel
-                    }
-                } else defaultChannel
-            }
-            eq.isEnabled = true
+            fillBands(eq, JSONArray(jsonStr), defaultChannel)
             true
         } catch (_: Exception) {
             false

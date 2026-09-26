@@ -3,7 +3,6 @@ package com.bearinmind.equalizer314.audio
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import com.bearinmind.equalizer314.dsp.BiquadFilter
 import com.bearinmind.equalizer314.dsp.ParametricEqualizer
 import com.bearinmind.equalizer314.state.EqPreferencesManager
 import org.json.JSONArray
@@ -185,8 +184,9 @@ class RouteSwitchCoordinator(
         if (hasLeftRight) {
             val leftArr = preset.getJSONArray("leftBands")
             val rightArr = preset.getJSONArray("rightBands")
-            val leftEq = buildEqualizerFromBands(leftArr)
-            val rightEq = buildEqualizerFromBands(rightArr)
+            // Untagged preset bands stay per-channel, like an in-app preset load (issue #53).
+            val leftEq = EqPreferencesManager.eqFromBands(leftArr, ParametricEqualizer.Channel.LEFT)
+            val rightEq = EqPreferencesManager.eqFromBands(rightArr, ParametricEqualizer.Channel.RIGHT)
             // Same prefs keys EqStateManager reads on launch; `bands` mirrors L for back-compat.
             eqPrefs.saveChannelSideEqEnabled(true)
             eqPrefs.saveLeftBands(leftEq)
@@ -194,7 +194,8 @@ class RouteSwitchCoordinator(
             livePrefs.edit().putString("bands", leftArr.toString()).apply()
             // Shared "Both" layer + per-channel preamps ride the preset.
             val sharedArr = preset.optJSONArray("sharedBands")
-            val sharedEq = if (sharedArr != null) buildEqualizerFromBands(sharedArr) else ParametricEqualizer()
+            // No/empty shared layer → the stock flat 4-band layer (as resetSharedEq).
+            val sharedEq = if (sharedArr != null && sharedArr.length() > 0) EqPreferencesManager.eqFromBands(sharedArr) else ParametricEqualizer()
             eqPrefs.saveSharedBands(sharedEq)
             com.bearinmind.equalizer314.dsp.ParametricToDpConverter.overlayEq =
                 if (sharedEq.getBandCount() > 0) sharedEq else null
@@ -230,11 +231,11 @@ class RouteSwitchCoordinator(
 
         if (dynamicsManager.isActive) {
             if (hasLeftRight) {
-                val leftEq = buildEqualizerFromBands(preset.getJSONArray("leftBands"))
-                val rightEq = buildEqualizerFromBands(preset.getJSONArray("rightBands"))
+                val leftEq = EqPreferencesManager.eqFromBands(preset.getJSONArray("leftBands"))
+                val rightEq = EqPreferencesManager.eqFromBands(preset.getJSONArray("rightBands"))
                 dynamicsManager.updateFromEqualizers(leftEq, rightEq)
             } else {
-                val eq = buildEqualizerFromBands(preset.getJSONArray("bands"))
+                val eq = EqPreferencesManager.eqFromBands(preset.getJSONArray("bands"))
                 dynamicsManager.updateFromEqualizer(eq)
             }
         }
@@ -259,25 +260,6 @@ class RouteSwitchCoordinator(
         val prefs = context.getSharedPreferences("custom_presets", Context.MODE_PRIVATE)
         val str = prefs.getString("preset_$name", null) ?: return null
         return runCatching { JSONObject(str) }.getOrNull()
-    }
-
-    private fun buildEqualizerFromBands(arr: JSONArray): ParametricEqualizer {
-        val eq = ParametricEqualizer()
-        for (i in 0 until arr.length()) {
-            val o = arr.getJSONObject(i)
-            val type = runCatching {
-                BiquadFilter.FilterType.valueOf(o.getString("filterType"))
-            }.getOrDefault(BiquadFilter.FilterType.BELL)
-            eq.addBand(
-                o.getDouble("frequency").toFloat(),
-                o.getDouble("gain").toFloat(),
-                type,
-                o.getDouble("q"),
-            )
-            if (o.has("enabled")) eq.setBandEnabled(i, o.getBoolean("enabled"))
-        }
-        eq.isEnabled = true
-        return eq
     }
 
     companion object {

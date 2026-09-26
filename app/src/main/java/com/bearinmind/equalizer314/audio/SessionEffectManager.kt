@@ -8,7 +8,6 @@ import android.media.audiofx.EnvironmentalReverb
 import android.os.Build
 import android.util.Log
 import java.util.UUID
-import com.bearinmind.equalizer314.dsp.BiquadFilter
 import com.bearinmind.equalizer314.dsp.ParametricEqualizer
 import com.bearinmind.equalizer314.dsp.ParametricToDpConverter
 import com.bearinmind.equalizer314.state.EqPreferencesManager
@@ -661,24 +660,7 @@ class SessionEffectManager(private val context: Context) {
             .getOrNull() ?: return null
         return runCatching {
             val obj = JSONObject(str)
-            fun buildEq(arr: JSONArray): ParametricEqualizer {
-                val eq = ParametricEqualizer()
-                for (i in 0 until arr.length()) {
-                    val b = arr.getJSONObject(i)
-                    val ft = runCatching {
-                        BiquadFilter.FilterType.valueOf(b.getString("filterType"))
-                    }.getOrDefault(BiquadFilter.FilterType.BELL)
-                    eq.addBand(
-                        b.getDouble("frequency").toFloat(),
-                        b.getDouble("gain").toFloat(),
-                        ft,
-                        b.getDouble("q"),
-                    )
-                    if (b.has("enabled")) eq.setBandEnabled(i, b.getBoolean("enabled"))
-                }
-                eq.isEnabled = true
-                return eq
-            }
+            fun buildEq(arr: JSONArray): ParametricEqualizer = EqPreferencesManager.eqFromBands(arr)
             val preamp = if (obj.has("preamp")) obj.getDouble("preamp").toFloat() else 0f
             val cseOn = obj.optBoolean("channelSideEqEnabled", false)
             if (cseOn && obj.has("leftBands") && obj.has("rightBands")) {

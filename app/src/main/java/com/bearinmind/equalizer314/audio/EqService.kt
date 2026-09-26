@@ -1143,23 +1143,7 @@ class EqService : Service() {
         val prefs = getSharedPreferences("eq_settings", Context.MODE_PRIVATE)
         val str = runCatching { prefs.getString("bands", null) }.getOrNull() ?: return null
         return runCatching {
-            val arr = org.json.JSONArray(str)
-            val eq = ParametricEqualizer()
-            for (i in 0 until arr.length()) {
-                val o = arr.getJSONObject(i)
-                val type = runCatching {
-                    com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.valueOf(o.getString("filterType"))
-                }.getOrDefault(com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.BELL)
-                eq.addBand(
-                    o.getDouble("frequency").toFloat(),
-                    o.getDouble("gain").toFloat(),
-                    type,
-                    o.getDouble("q"),
-                )
-                if (o.has("enabled")) eq.setBandEnabled(i, o.getBoolean("enabled"))
-            }
-            eq.isEnabled = true
-            eq
+            com.bearinmind.equalizer314.state.EqPreferencesManager.eqFromBands(org.json.JSONArray(str))
         }.getOrNull()
     }
 
