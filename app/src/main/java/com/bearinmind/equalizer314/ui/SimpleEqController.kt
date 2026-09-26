@@ -51,6 +51,8 @@ class SimpleEqController(
     private fun saveSnapshot() {
         val eq = state.parametricEq
         val snap = FloatArray(FREQUENCIES.size) { i -> eq.getBand(i)?.gain ?: 0f }
+        // Skip repeats (e.g. every slider rebuild), else the next undo lands on an identical state and looks dead.
+        if (historyIndex >= 0 && history[historyIndex].contentEquals(snap)) { updateUndoRedoState(); return }
         // Trim future states
         while (history.size > historyIndex + 1) history.removeAt(history.size - 1)
         history.add(snap)
@@ -68,6 +70,8 @@ class SimpleEqController(
         barsView?.setAllGains(snap)
         miniGraph?.invalidate()
         onEqChanged()
+        // Undo/redo/reset/preset persist at once, like a drag end, so the prefs never lag the bars.
+        saveGains()
     }
 
     private fun updateUndoRedoState() {

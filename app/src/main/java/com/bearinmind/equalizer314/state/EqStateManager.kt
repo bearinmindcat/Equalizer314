@@ -14,6 +14,8 @@ import com.bearinmind.equalizer314.dsp.ParametricToDpConverter
 import com.bearinmind.equalizer314.ui.EqGraphView
 import com.bearinmind.equalizer314.EqUiMode
 import com.bearinmind.equalizer314.R
+import org.json.JSONArray
+import org.json.JSONObject
 
 class EqStateManager(
     private val context: Context,
@@ -25,6 +27,8 @@ class EqStateManager(
         /** User-facing band cap (16 default, up to [ABSOLUTE_MAX_BANDS] via Experimental "Max EQ Bands", issue #31); var so ExperimentalActivity can update it live. */
         var MAX_BANDS = 16
         const val MIN_BANDS = 1
+        /** Undo history depth (issue #120). */
+        const val MAX_UNDO_STEPS = 100
         val COLOR_PALETTE = intArrayOf(
             0xFFE53935.toInt(), 0xFFFF9800.toInt(), 0xFFFFEB3B.toInt(), 0xFF4CAF50.toInt(),
             0xFF00BCD4.toInt(), 0xFF2196F3.toInt(), 0xFF7C4DFF.toInt(), 0xFFE91E63.toInt()
@@ -831,5 +835,106 @@ class EqStateManager(
             eqPrefs.saveRightBands(rightEq, rightBandSlots)
             eqPrefs.saveSharedBands(sharedEq, sharedBandSlots)
         }
+    }
+
+    // Undo/redo for Parametric/Graphic/Table (issue #120): snapshots of all four editing EQs + slot layouts; Simple keeps its own.
+    private val undoStack = mutableListOf<String>()
+    private var undoIndex = -1
+    private var undoCse = false
+
+    /** Push the current EQ when it differs from the last entry; a CSE on/off switch restarts history (its L/R fork isn't an undo step). */
+    fun recordUndoPoint() {
+        if (currentEqUiMode == EqUiMode.SIMPLE) return
+        syncBothBands()
+        val cse = eqPrefs.getChannelSideEqEnabled()
+        val snap = undoSnapshot()
+        if (undoIndex < 0 || cse != undoCse) return resetUndo(snap, cse)
+        if (undoStack[undoIndex] == snap) return
+        while (undoStack.size > undoIndex + 1) undoStack.removeAt(undoStack.size - 1)
+        undoStack.add(snap)
+        if (undoStack.size > MAX_UNDO_STEPS) undoStack.removeAt(0)
+        undoIndex = undoStack.size - 1
+    }
+
+    /** Restart history at the current EQ (external loads, leaving Simple mode). */
+    fun resetUndoHistory() {
+        if (currentEqUiMode == EqUiMode.SIMPLE) return
+        syncBothBands()
+        resetUndo(undoSnapshot(), eqPrefs.getChannelSideEqEnabled())
+    }
+
+    /** Step back one edit (recording any unrecorded one first); false when there's nothing earlier. */
+    fun undo(): Boolean {
+        if (currentEqUiMode == EqUiMode.SIMPLE) return false
+        recordUndoPoint()
+        if (undoIndex <= 0) return false
+        restoreUndoSnapshot(undoStack[--undoIndex])
+        return true
+    }
+
+    /** Step forward again; an edit made after undoing drops the redo branch (via recordUndoPoint). */
+    fun redo(): Boolean {
+        if (currentEqUiMode == EqUiMode.SIMPLE) return false
+        recordUndoPoint()
+        if (undoIndex >= undoStack.size - 1) return false
+        restoreUndoSnapshot(undoStack[++undoIndex])
+        return true
+    }
+
+    /** After undo/redo + the UI refresh, adopt the settled state as the current entry so any normalization never reads as a new edit. */
+    fun settleUndoPoint() {
+        if (currentEqUiMode == EqUiMode.SIMPLE || undoIndex < 0) return
+        syncBothBands()
+        undoStack[undoIndex] = undoSnapshot()
+    }
+
+    private fun resetUndo(snap: String, cse: Boolean) {
+        undoStack.clear()
+        undoStack.add(snap)
+        undoIndex = 0
+        undoCse = cse
+    }
+
+    private fun undoSnapshot(): String = JSONObject().apply {
+        put("both", eqToJson(bothEq, bothBandSlots))
+        put("left", eqToJson(leftEq, leftBandSlots))
+        put("right", eqToJson(rightEq, rightBandSlots))
+        put("shared", eqToJson(sharedEq, sharedBandSlots))
+    }.toString()
+
+    private fun eqToJson(eq: ParametricEqualizer, slots: List<Int>) = JSONObject().apply {
+        put("bands", JSONArray().apply {
+            for (b in eq.getAllBands()) put(JSONObject().apply {
+                put("f", b.frequency.toDouble()); put("g", b.gain.toDouble()); put("q", b.q)
+                put("t", b.filterType.name); put("e", b.enabled); put("c", b.channel.name)
+            })
+        })
+        // Same rule as rebuildSlots: a stale list (e.g. L/R while CSE is off) must round-trip unchanged, else every undo reads as a new edit.
+        put("slots", JSONArray(if (slots.size == eq.getBandCount()) slots else List(eq.getBandCount()) { it }))
+    }
+
+    private fun restoreUndoSnapshot(snap: String) {
+        val o = JSONObject(snap)
+        jsonToEq(o.getJSONObject("both"), bothEq, bothBandSlots)
+        jsonToEq(o.getJSONObject("left"), leftEq, leftBandSlots)
+        jsonToEq(o.getJSONObject("right"), rightEq, rightBandSlots)
+        jsonToEq(o.getJSONObject("shared"), sharedEq, sharedBandSlots)
+        val count = parametricEq.getBandCount()
+        selectedBandIndex = if (count > 0) (selectedBandIndex ?: 0).coerceIn(0, count - 1) else null
+        saveState()
+    }
+
+    private fun jsonToEq(o: JSONObject, eq: ParametricEqualizer, slots: MutableList<Int>) {
+        eq.clearBands()
+        val arr = o.getJSONArray("bands")
+        for (i in 0 until arr.length()) {
+            val b = arr.getJSONObject(i)
+            eq.addBand(b.getDouble("f").toFloat(), b.getDouble("g").toFloat(),
+                BiquadFilter.FilterType.valueOf(b.getString("t")), b.getDouble("q"))
+            eq.setBandEnabled(i, b.getBoolean("e"))
+            eq.getBand(i)?.channel = ParametricEqualizer.Channel.valueOf(b.getString("c"))
+        }
+        val saved = o.getJSONArray("slots").let { a -> List(a.length()) { a.getInt(it) } }
+        rebuildSlots(slots, eq, saved)
     }
 }

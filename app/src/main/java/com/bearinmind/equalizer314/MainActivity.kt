@@ -353,6 +353,8 @@ class  MainActivity : AppCompatActivity() {
             bandToggleGroup2.visibility = View.GONE
             tableController.buildTable()
         }
+        // Loaded from outside (preset screens, device switch): undo starts fresh here.
+        stateManager.resetUndoHistory()
     }
 
     private val autoEqLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -2731,60 +2733,10 @@ class  MainActivity : AppCompatActivity() {
             }
         }
 
-        // Undo/Redo — EQ state history
-        val eqHistory = mutableListOf<String>()
-        var historyIndex = -1
-        fun saveEqState() {
-            val eq = stateManager.parametricEq
-            val json = org.json.JSONObject()
-            val bands = org.json.JSONArray()
-            for (b in eq.getAllBands()) {
-                val bj = org.json.JSONObject()
-                bj.put("frequency", b.frequency); bj.put("gain", b.gain)
-                bj.put("q", b.q); bj.put("filterType", b.filterType.name)
-                bj.put("enabled", b.enabled)
-                bands.put(bj)
-            }
-            json.put("bands", bands)
-            // Trim future states if we're not at the end
-            while (eqHistory.size > historyIndex + 1) eqHistory.removeAt(eqHistory.size - 1)
-            eqHistory.add(json.toString())
-            historyIndex = eqHistory.size - 1
-        }
-        fun restoreEqState(jsonStr: String) {
-            val eq = stateManager.parametricEq
-            val obj = org.json.JSONObject(jsonStr)
-            val bandsArr = obj.getJSONArray("bands")
-            eq.clearBands()
-            for (i in 0 until bandsArr.length()) {
-                val bj = bandsArr.getJSONObject(i)
-                val ft = try { com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.valueOf(bj.getString("filterType")) }
-                         catch (_: Exception) { com.bearinmind.equalizer314.dsp.BiquadFilter.FilterType.BELL }
-                eq.addBand(bj.getDouble("frequency").toFloat(), bj.getDouble("gain").toFloat(), ft, bj.getDouble("q"))
-                if (bj.has("enabled")) eq.setBandEnabled(i, bj.getBoolean("enabled"))
-            }
-            eqGraphView.setParametricEqualizer(eq)
-            stateManager.eqPrefs.saveState(eq)
-            stateManager.persistLeftRightIfCse()
-            stateManager.initBandSlots()
-            bandToggleManager.setupToggles()
-            if (stateManager.isProcessing) stateManager.pushEqUpdate()
-        }
-        // Save initial state
-        saveEqState()
-
-        undoBtn.setOnClickListener {
-            if (historyIndex > 0) {
-                historyIndex--
-                restoreEqState(eqHistory[historyIndex])
-            }
-        }
-        redoBtn.setOnClickListener {
-            if (historyIndex < eqHistory.size - 1) {
-                historyIndex++
-                restoreEqState(eqHistory[historyIndex])
-            }
-        }
+        // Undo/redo (issue #120): EqStateManager holds the history; dispatchTouchEvent records each edit on the next touch-down.
+        stateManager.resetUndoHistory()
+        undoBtn.setOnClickListener { if (stateManager.undo()) refreshAfterUndo() }
+        redoBtn.setOnClickListener { if (stateManager.redo()) refreshAfterUndo() }
 
         fun updateVizToggleStyle(active: Boolean) {
             if (active) {
@@ -3544,6 +3496,7 @@ class  MainActivity : AppCompatActivity() {
     }
 
     private fun switchEqUiMode(mode: EqUiMode) {
+        val prevMode = stateManager.currentEqUiMode
         // TV Mode nav sync — hub debounces 150ms, so state is read post-switch.
         com.bearinmind.equalizer314.remote.TvRemoteHub.onLocalEqChanged()
         // Clean up table mode bands when leaving
@@ -3744,6 +3697,8 @@ class  MainActivity : AppCompatActivity() {
         stateManager.pushEqUpdate()
         // Refresh the red experimental-DP overlay so it shows the new path (feature-aware ↔ direct) the moment the mode changes.
         eqGraphView.invalidate()
+        // Simple swaps in its own 10 bands (and has its own undo): the advanced history restarts on the way back.
+        if (prevMode == EqUiMode.SIMPLE && mode != EqUiMode.SIMPLE) stateManager.resetUndoHistory()
     }
 
     private fun reorderToggleRows(animate: Boolean = true) {
@@ -4887,6 +4842,19 @@ class  MainActivity : AppCompatActivity() {
         bandToggleManager.setupToggles()
         if (stateManager.currentEqUiMode == EqUiMode.TABLE) tableController.buildTable()
         refreshChannelPopoutDim()
+    }
+
+    /** Redraw every EQ view after undo/redo swapped the bands underneath them (issue #120). */
+    private fun refreshAfterUndo() {
+        rebindActiveEq()
+        if (stateManager.currentEqUiMode == EqUiMode.GRAPHIC) graphicController.buildSliders(graphicController.targetCardHeight)
+        stateManager.settleUndoPoint()
+    }
+
+    /** Each touch-down first records the EQ into undo history, so every edit path (drag, typed value, dialog, preset) is one undo step (issue #120). */
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+        if (ev.actionMasked == android.view.MotionEvent.ACTION_DOWN && ::stateManager.isInitialized) stateManager.recordUndoPoint()
+        return super.dispatchTouchEvent(ev)
     }
 
     override fun onResume() {
