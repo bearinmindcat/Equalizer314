@@ -438,6 +438,31 @@
         <item quantity="many">%1$d точок (%2$dГц - %3$dГц)</item>
         <item quantity="other">%1$d точок (%2$dГц - %3$dГц)</item>
     </plurals>
+    <!-- Virtual surround (Experimental, issue #128) -->
+    <string name="vs_title">Віртуальний об'ємний звук</string>
+    <string name="vs_desc">Щоб ця функція працювала, аудіо потрібно записувати. Деякі застосунки можуть не дозволяти це без модифікації.</string>
+    <string name="vs_choose_hrir">Вибрати файл HRIR</string>
+    <string name="vs_hrir_files">Файли HRIR</string>
+    <string name="vs_import_file">Імпорт файлу…</string>
+    <string name="vs_status_starting">Запуск…</string>
+    plurals name="vs_status_running">
+    <item quantity="one">%1$d застосунок оброблений</item>
+    <item quantity="few">%1$d застосунки оброблені</item>
+    <item quantity="many">%1$d застосунків оброблено</item>
+    <item quantity="other">%1$d застосунків оброблено</item>
+</plurals>
+    <string name="vs_note">Працює лише в застосунках, які оголошують своє аудіо (або з дозволом DUMP) — у розробці</string>
+    <string name="vs_status_stopped">Зупинено: %1$s</string>
+    <string name="vs_error_revoked">запис було зупинено</string>
+    <string name="vs_error_hrir">не вдалося завантажити файл HRIR</string>
+    <string name="vs_error_capture">не вдалося захопити аудіо</string>
+    <string name="vs_needs_android_10">Віртуальний об'ємний звук потребує Android 10 або новішого</string>
+    <string name="vs_engine_unavailable">Звуковий рушій недоступний на цьому пристрої</string>
+    <string name="vs_choose_hrir_first">Спочатку виберіть файл HRIR</string>
+    <string name="vs_needs_system_wide">Спочатку перемкніть вхід каналу на «Загальносистемний»</string>
+    <string name="vs_needs_record_permission">Віртуальному об'ємному звуку потрібен дозвіл на запис аудіо</string>
+    <string name="vs_unsupported_file">Не вдається використати цей файл (%1$s)</string>
+    <string name="vs_notif_title">Віртуальний об'ємний звук увімкнено</string>
     <plurals name="n_targets">
         <item quantity="one">%1$d цільова крива</item>
         <item quantity="few">%1$d цільові криві</item>
