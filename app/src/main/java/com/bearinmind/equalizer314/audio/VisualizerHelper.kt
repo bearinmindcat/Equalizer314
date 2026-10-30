@@ -71,7 +71,8 @@ class VisualizerHelper {
                         if (waveform == null || waveform.size < 64 || v == null) return
 
                         if (isMusicPlaying) {
-                            renderer.updateWaveformData(waveform, samplingRate)
+                            // Visualizer reports the capture rate in MILLIHERTZ (48 kHz → 48_000_000)
+                            renderer.updateWaveformData(waveform, samplingRate / 1000)
 
                             // Compute calibration offset: absolute dBFS vs normalized spectrum
                             val measurement = Visualizer.MeasurementPeakRms()

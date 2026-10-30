@@ -52,7 +52,13 @@ class LongWindowAnalyzer(targetSize: Int = 4096, sampleRate: Int = 48000) {
         set(value) {
             if (field != value) {
                 field = value
-                windowNeedsRebuild = true   // adaptive sizes depend on the rate too
+                val span = zoomSpanHz
+                if (span != null && span > 0f) {
+                    val wanted = nextPowerOfTwo((value * zoomBins / span).toInt().coerceAtLeast(MIN_SIZE))
+                    val size = wanted.coerceIn(MIN_SIZE, MAX_SIZE)
+                    if (size != targetSize) targetSize = size
+                }
+                windowNeedsRebuild = true
                 scheduleCompute(true)
             }
         }
@@ -165,7 +171,6 @@ class LongWindowAnalyzer(targetSize: Int = 4096, sampleRate: Int = 48000) {
     // ── Per-window buffers (allocated on size change only) ──────────────
     private var bufReal = FloatArray(0)
     private var bufImag = FloatArray(0)
-    private var hannTable = FloatArray(0)
     private var stateLinear = FloatArray(0)   // worker-owned EMA state
     private var publishScratch = FloatArray(0)
     private var ppoScratch = FloatArray(0)
@@ -196,11 +201,6 @@ class LongWindowAnalyzer(targetSize: Int = 4096, sampleRate: Int = 48000) {
         val n = size
         bufReal = FloatArray(n)
         bufImag = FloatArray(n)
-        hannTable = FloatArray(n)
-        val twoPi = 2.0 * PI
-        for (i in 0 until n) {
-            hannTable[i] = (0.5 - 0.5 * cos(twoPi * i / n)).toFloat()
-        }
         val bins = n / 2
         stateLinear = FloatArray(bins)   // zeros — smoothing restarts on resize
         publishScratch = FloatArray(bins)
@@ -276,13 +276,17 @@ class LongWindowAnalyzer(targetSize: Int = 4096, sampleRate: Int = 48000) {
             src = if (src == 0) RING_SIZE - 1 else src - 1
         }
 
-        // Hann window on the copied segment
-        for (i in 0 until copyCount) bufReal[i] *= hannTable[i]
+        // Hann window on the copied segment (sized to the actual segment so the
+        // window tapers to zero at both ends — avoids leakage during ramp-up)
+        for (i in 0 until copyCount) {
+            val w = (0.5 - 0.5 * cos(2.0 * PI * i / copyCount)).toFloat()
+            bufReal[i] *= w
+        }
 
         SimpleFFT.fft(bufReal, bufImag)
 
         val bins = n / 2
-        val norm = 2f / copyCount   // single-sided + Hann window average 0.5
+        val norm = 4f / copyCount   // single-sided (x2) + Hann window coherent gain (x2)
         // EMA ballistics in linear domain (fast attack, configurable release)
         val state = stateLinear
         val old = effectiveSize / 2
@@ -376,7 +380,7 @@ class LongWindowAnalyzer(targetSize: Int = 4096, sampleRate: Int = 48000) {
         val peakBin = bestBin + delta
         val peakMag = exp(y1 + 0.5 * (y0 - y2) * delta - 0.25 * denom * delta * delta)
         val dbDb = 20.0 / ln(10.0)
-        return Peak((peakBin * binHz).toFloat(), (peakMag * dbDb).toFloat())
+        return Peak((peakBin * binHz).toFloat(), (dbDb * ln(peakMag.coerceAtLeast(1e-12))).toFloat())
     }
 
     fun releaseAll() {

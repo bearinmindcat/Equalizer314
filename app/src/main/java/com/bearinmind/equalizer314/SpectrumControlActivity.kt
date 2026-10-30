@@ -464,7 +464,8 @@ class SpectrumControlActivity : AppCompatActivity() {
                     ) {
                         if (waveform == null || waveform.size < 32) return
                         if (isMusicPlaying) {
-                            renderer?.updateWaveformData(waveform, samplingRate)
+                            // Visualizer reports the capture rate in MILLIHERTZ (48 kHz → 48_000_000)
+                            renderer?.updateWaveformData(waveform, samplingRate / 1000)
                         } else {
                             renderer?.feedSilence()
                             renderer?.fadeOut(0.04f)
