@@ -330,6 +330,7 @@ class  MainActivity : AppCompatActivity() {
     private lateinit var simpleEqController: SimpleEqController
     private lateinit var bandToggleManager: BandToggleManager
     private val visualizerHelper = com.bearinmind.equalizer314.audio.VisualizerHelper()
+    private lateinit var auditionController: com.bearinmind.equalizer314.audio.AuditionController
 
     /** [simpleFromPrefs]: the device-switch service already wrote Simple's bars — reload them, don't convert. */
     private fun reloadEqFromPrefs(simpleFromPrefs: Boolean = false) {
@@ -1055,9 +1056,17 @@ class  MainActivity : AppCompatActivity() {
             // Per-band L/Both/R picker popup retired — see LegacyFeatures.kt.
         )
 
+        // Band Solo audition: owns the DP staircase while active (suppresses normal pushes)
+        auditionController = com.bearinmind.equalizer314.audio.AuditionController(stateManager)
+        stateManager.auditionSuppressor = { auditionController.isActive }
+
         // Wire state manager callbacks
         stateManager.onProcessingChanged = { active ->
             animatePowerFab(active)
+            // EQ processed off → any held solo audition must end immediately
+            if (!active && auditionController.isActive) {
+                auditionController.stopAudition()
+            }
             // TV Mode: power on/off is part of the synced state.
             com.bearinmind.equalizer314.remote.TvRemoteHub.onLocalEqChanged()
         }
@@ -2755,6 +2764,7 @@ class  MainActivity : AppCompatActivity() {
             == android.content.pm.PackageManager.PERMISSION_GRANTED) {
             visualizerHelper.start(eqGraphView)
             eqGraphView.spectrumRenderer = visualizerHelper.renderer
+            configureSurgicalSpectrum()
             updateVizToggleStyle(true)
         } else {
             updateVizToggleStyle(false)
@@ -2774,6 +2784,7 @@ class  MainActivity : AppCompatActivity() {
                 }
                 visualizerHelper.start(eqGraphView)
                 eqGraphView.spectrumRenderer = visualizerHelper.renderer
+                configureSurgicalSpectrum()
                 updateVizToggleStyle(true)
                 eqPrefs.saveSpectrumEnabled(true)
             }
@@ -2803,9 +2814,14 @@ class  MainActivity : AppCompatActivity() {
             reorderToggleRows()
         }
 
-        eqGraphView.onBandChangedListener = { bandIndex, _, _ ->
-            // Throttle DP writes during drag — each ACTION_MOVE would trigger a full Pre-EQ rewrite on the audio thread.
-            stateManager.pushEqUpdateThrottled()
+        eqGraphView.onBandChangedListener = { bandIndex, freq, _ ->
+            // Band Solo audition: dragging the held node retargets the audition instead of pushing the EQ.
+            if (auditionController.isActive) {
+                auditionController.retargetAudition(bandIndex, freq)
+            } else {
+                // Throttle DP writes during drag — each ACTION_MOVE would trigger a full Pre-EQ rewrite on the audio thread.
+                stateManager.pushEqUpdateThrottled()
+            }
             // Mirror "Both" edits to the other channel and redraw its ghost curve LIVE during the drag (issue #53).
             if (stateManager.activeChannel != EqStateManager.ActiveChannel.BOTH) {
                 stateManager.syncBothBands()
@@ -2817,13 +2833,36 @@ class  MainActivity : AppCompatActivity() {
         }
 
         eqGraphView.onBandDragEndListener = {
-            stateManager.flushEqUpdate()
+            if (!auditionController.isActive) stateManager.flushEqUpdate()
             // Sync the table or graphic cards to the dragged values.
             if (stateManager.currentEqUiMode == EqUiMode.TABLE) tableController.buildTable()
             if (stateManager.currentEqUiMode == EqUiMode.GRAPHIC) graphicController.buildSliders(graphicController.targetCardHeight)
         }
 
         eqGraphView.onLongPressListener = { showPresetsBottomSheet() }
+
+        // Surgical solo audition on band long-press (hold to hear the band, release to restore)
+        eqGraphView.onBandSoloStart = { bandIndex ->
+            if (!auditionController.startAudition(bandIndex)) {
+                Toast.makeText(this, getString(R.string.solo_requires_eq_on), Toast.LENGTH_SHORT).show()
+            }
+        }
+        eqGraphView.onBandSoloEnd = {
+            auditionController.stopAudition()
+        }
+
+        // Double-tap the tracked peak → surgical notch at that exact frequency
+        eqGraphView.onTrackerDoubleTap = { freq ->
+            bandToggleManager.addNewBand(freq, BiquadFilter.FilterType.NOTCH)
+            stateManager.pushEqUpdate()
+            Toast.makeText(this, getString(R.string.notch_added_at, formatHzLabel(freq)), Toast.LENGTH_SHORT).show()
+        }
+        eqGraphView.onTrackerRangeChanged = { lo, hi ->
+            eqPrefs.saveTrackerRange(lo, hi)
+        }
+        eqGraphView.onZoomRangeChanged = { lo, hi ->
+            eqPrefs.saveGraphZoomRange(lo, hi)
+        }
 
         // Band parameter sliders + text inputs
         setupBandSliderListeners()
@@ -3303,6 +3342,78 @@ class  MainActivity : AppCompatActivity() {
             startActivity(android.content.Intent(this, UiEqModesActivity::class.java))
             overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
         }
+    }
+
+    /**
+     * Precision Surgical EQ wiring: zoom range, tracker window, target ghost
+     * / delta and the manual FFT size restore. Runs every time the
+     * visualizer is (re)started so a paused overlay state can't leak away.
+     */
+    fun configureSurgicalSpectrum() {
+        val renderer = visualizerHelper.renderer
+        // Manual FFT size (Spectrum Control) vs zoom-adaptive sizing
+        renderer.clearManualFftSize()
+        if (eqPrefs.getFftSizeEnabled()) {
+            renderer.setFftSize(com.bearinmind.equalizer314.audio.LongWindowAnalyzer.SIZES[
+                eqPrefs.getFftSizeIndex().coerceIn(0, com.bearinmind.equalizer314.audio.LongWindowAnalyzer.SIZES.size - 1)])
+        }
+        // Zoom range restore
+        val zoomLo = eqPrefs.getGraphZoomLo()
+        val zoomHi = eqPrefs.getGraphZoomHi()
+        eqGraphView.setZoomRange(if (zoomLo > 0f) zoomLo else 10f, if (zoomHi > zoomLo) zoomHi else 20000f)
+        // Ghost / delta toggles
+        renderer.showTargetGhost = eqPrefs.getTargetGhostEnabled()
+        renderer.showTargetDelta = eqPrefs.getTargetDeltaEnabled()
+        renderer.targetAutoAlign = true
+        renderer.targetOffsetDb = 0f
+        // Tracker window restore
+        eqGraphView.trackerEnabled = eqPrefs.getTrackerEnabled()
+        val tLo = eqPrefs.getTrackerLo()
+        val tHi = eqPrefs.getTrackerHi()
+        if (tLo > 0f && tHi > tLo) {
+            eqGraphView.trackerLoHz = tLo
+            eqGraphView.trackerHiHz = tHi
+        } else {
+            eqGraphView.trackerLoHz = 40f
+            eqGraphView.trackerHiHz = 1600f
+        }
+        // Target curve (asset CSV or imported text) — loaded off-thread
+        loadSelectedTargetCurve()
+    }
+
+    /** Loads the currently-selected target curve into the renderer for ghost/delta display. */
+    private fun loadSelectedTargetCurve() {
+        val name = eqPrefs.getSelectedTarget()
+        if (name == null) {
+            visualizerHelper.renderer.targetCurve = null
+            visualizerHelper.renderer.targetLabel = null
+            return
+        }
+        Thread {
+            val fr = try {
+                if (name == "__custom__") {
+                    eqPrefs.getSelectedTargetName()?.let { customName ->
+                        eqPrefs.getImportedTargetText(customName)?.let {
+                            com.bearinmind.equalizer314.autoeq.FreqResponseParser.parse(it)
+                        }
+                    }
+                } else {
+                    assets.open("targets/$name.csv").bufferedReader().use { reader ->
+                        com.bearinmind.equalizer314.autoeq.FreqResponseParser.parse(reader.readText())
+                    }
+                }
+            } catch (_: Exception) { null }
+            runOnUiThread {
+                visualizerHelper.renderer.targetCurve = fr
+                visualizerHelper.renderer.targetLabel = eqPrefs.getSelectedTargetName() ?: name
+            }
+        }.start()
+    }
+
+    private fun formatHzLabel(freq: Float): String = when {
+        freq >= 1000f -> if (freq % 1000f == 0f) "${(freq / 1000).toInt()} kHz" else String.format("%.1f kHz", freq / 1000f)
+        freq >= 100f -> "${freq.toInt()} Hz"
+        else -> String.format("%.1f Hz", freq)
     }
 
     private fun applySpectrumSettings() {
@@ -4936,6 +5047,7 @@ class  MainActivity : AppCompatActivity() {
             == android.content.pm.PackageManager.PERMISSION_GRANTED) {
             visualizerHelper.start(eqGraphView)
             eqGraphView.spectrumRenderer = visualizerHelper.renderer
+            configureSurgicalSpectrum()
         }
         // Refresh ON/OFF status under nav icons
         com.bearinmind.equalizer314.ui.BottomNavHelper.updateStatus(this, eqPrefs)
@@ -4948,6 +5060,10 @@ class  MainActivity : AppCompatActivity() {
         // Release visualizer so other activities can use session 0
         visualizerHelper.stop()
         eqGraphView.spectrumRenderer = null
+        // A held solo audition must not outlive the visual context
+        if (auditionController.isActive) {
+            auditionController.stopAudition()
+        }
         // Save simple EQ gains if in simple mode
         if (stateManager.currentEqUiMode == EqUiMode.SIMPLE) {
             simpleEqController.saveGains()
@@ -4971,6 +5087,7 @@ class  MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         visualizerHelper.stop()
+        visualizerHelper.renderer.shutdownWorker()
         try { unregisterReceiver(eqStoppedReceiver) } catch (_: Exception) {}
         try { unregisterReceiver(eqStartedReceiver) } catch (_: Exception) {}
         try { unregisterReceiver(statusRefreshReceiver) } catch (_: Exception) {}
@@ -4996,6 +5113,7 @@ class  MainActivity : AppCompatActivity() {
         if (requestCode == 200 && grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
             visualizerHelper.start(eqGraphView)
             eqGraphView.spectrumRenderer = visualizerHelper.renderer
+            configureSurgicalSpectrum()
             eqPrefs.saveSpectrumEnabled(true)
             val vizBtn = findViewById<com.google.android.material.button.MaterialButton>(R.id.visualizerToggle)
             val d = resources.displayMetrics.density

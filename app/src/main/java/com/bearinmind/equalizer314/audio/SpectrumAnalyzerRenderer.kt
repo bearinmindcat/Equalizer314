@@ -1,33 +1,136 @@
 package com.bearinmind.equalizer314.audio
 
 import android.graphics.*
+import com.bearinmind.equalizer314.autoeq.FreqResponse
+import com.bearinmind.equalizer314.autoeq.FreqResponseParser
 import kotlin.math.*
 
 /**
- * Waveform-based spectrum analyzer renderer. Pipeline per frame:
- * waveform bytes → Hann window → zero-pad → FFT → dBFS (WaveformFftProcessor);
- * dB→linear; asymmetric EMA in linear domain (fast attack, slow release); linear→dB;
- * log-freq mapping (interpolate sub-bin, peak multi-bin); +3 dB/oct tilt (pivot 1 kHz);
- * render with cubic Bézier paths + gradient fill.
+ * Spectrum analyzer renderer for the Precision Surgical EQ.
+ *
+ * All FFT analysis is delegated to [LongWindowAnalyzer]: waveform captures
+ * from session 0 are accumulated into a long analysis window (2048–65536
+ * samples) whose true frequency resolution scales with the current zoom
+ * span — so a surgical view of 20–300 Hz can resolve fractions of a Hz.
+ *
+ * Extras over a plain analyzer:
+ *  - Zoom-aware log-frequency mapping (visible range set by the graph view).
+ *  - Optional target-curve ghost overlay + red/green delta fill (live vs.
+ *    target), auto-aligned with a rolling median offset.
+ *  - `spectrumDbAt()` + `findDominantPeak()` for the spectrum tracker.
  */
 class SpectrumAnalyzerRenderer(
-    private val sampleRate: Int = 48000
+    sampleRate: Int = 48000
 ) {
-    private var fftProcessor = WaveformFftProcessor(fftSize = 4096, sampleRate = sampleRate)
-
-    /** Change FFT size at runtime. Resets smoothing state. */
-    fun setFftSize(size: Int) {
-        if (size != fftProcessor.fftSize) {
-            fftProcessor = WaveformFftProcessor(fftSize = size, sampleRate = sampleRate)
-            smoothedLinear = null
-        }
+    companion object {
+        const val MIN_VISIBLE_HZ = 1f
+        const val MAX_VISIBLE_HZ = 30000f
     }
+
+    private val analyzer = LongWindowAnalyzer(targetSize = 4096, sampleRate = sampleRate)
+
+    /** Real output sample rate, refreshed from Visualizer callbacks. */
+    @Volatile
+    var sampleRate: Int = sampleRate
+        private set
+
+    fun setSampleRate(sr: Int) {
+        if (sr <= 0) return
+        sampleRate = sr
+        analyzer.sampleRate = sr
+    }
+
+    /** Manual FFT size (Spectrum Control). When set, zoom adaptivity is off. */
+    @Volatile
+    private var manualFftSize: Int? = null
+
+    /** Change FFT size at runtime (manual mode; disables zoom adaptivity). Resets smoothing state. */
+    fun setFftSize(size: Int) {
+        manualFftSize = size
+        analyzer.clearZoomSpan()
+        analyzer.setTargetSize(size)
+    }
+
+    /** Back to zoom-adaptive window sizing (manual override off). */
+    fun clearManualFftSize() {
+        manualFftSize = null
+        analyzer.clearZoomSpan()
+        analyzer.setTargetSize(4096)
+    }
+
+    fun getFftSize(): Int = analyzer.getTargetSize()
+    fun getEffectiveSize(): Int = analyzer.effectiveSize
+    fun getBinWidthHz(): Float = analyzer.binWidthHz
 
     /** PPO (Points Per Octave) smoothing. 0 = disabled. Typical: 1, 3, 6, 12, 24, 48 */
     @Volatile
     var ppoSmoothing: Int = 0
+        set(value) {
+            field = value
+            analyzer.ppoSmoothing = value
+        }
 
-    /** Spectrum color (ARGB). Set to change the fill/stroke tint. */
+    @Volatile
+    var releaseAlpha: Float = 0.22f
+        set(value) {
+            field = value
+            analyzer.releaseAlpha = value
+        }
+
+    fun getSmoothedLinear(): FloatArray? = analyzer.getSmoothedLinear()
+
+    // ── Zoom-aware frequency mapping ────────────────────────────────────
+    @Volatile
+    private var visibleLoHz = 20f
+    @Volatile
+    private var visibleHiHz = 20000f
+
+    fun setVisibleFrequencyRange(loHz: Float, hiHz: Float) {
+        val lo = loHz.coerceIn(MIN_VISIBLE_HZ, MAX_VISIBLE_HZ)
+        val hi = hiHz.coerceIn(lo + 0.01f, MAX_VISIBLE_HZ)
+        visibleLoHz = lo
+        visibleHiHz = hi
+        if (manualFftSize == null) {
+            // Zoom-adaptive analysis window: more bins for a narrower span
+            analyzer.setZoomSpan(hi / lo)
+        } else {
+            analyzer.clearZoomSpan()
+        }
+    }
+
+    // ── Target curve ghost + delta ──────────────────────────────────────
+    @Volatile
+    var targetCurve: FreqResponse? = null
+        set(value) {
+            field = value
+            autoAlignOffsetDb = 0f
+        }
+
+    @Volatile
+    var targetLabel: String? = null
+
+    @Volatile
+    var showTargetGhost = false
+
+    @Volatile
+    var showTargetDelta = false
+
+    /** Manual user offset in dB added to the target curve before drawing. */
+    @Volatile
+    var targetOffsetDb = 0f
+
+    /** When true the renderer keeps aligning the ghost to the live spectrum at the median. */
+    @Volatile
+    var targetAutoAlign = true
+
+    @Volatile
+    private var autoAlignOffsetDb = 0f
+
+    private val alignProbeFreqs: FloatArray by lazy {
+        FreqResponseParser.logSpace(33, 20f, 20000f)
+    }
+
+    // ── Colors / drawing objects ────────────────────────────────────────
     fun setSpectrumColor(color: Int) {
         val r = (color shr 16) and 0xFF
         val g = (color shr 8) and 0xFF
@@ -38,27 +141,9 @@ class SpectrumAnalyzerRenderer(
     }
     private var spectrumR = 180; private var spectrumG = 180; private var spectrumB = 180
 
-    // Temporally smoothed LINEAR magnitudes per bin (not dB)
-    // Smoothing in linear domain properly reduces noise floor by √N frames
-    @Volatile
-    private var smoothedLinear: FloatArray? = null
-
-    // Pre-computed PPO-smoothed dB values (computed on Visualizer thread, read on UI thread)
-    @Volatile
-    private var ppoSmoothedDb: FloatArray? = null
-
-    /** Expose smoothed linear magnitudes for compressor gain computation */
-    fun getSmoothedLinear(): FloatArray? = smoothedLinear
-    fun getBinWidthHz(): Float = fftProcessor.binWidthHz
-
     // MBC gain computer — computes per-band GR from actual spectrum levels each frame
     var mbcGainComputer: MbcGainComputer? = null
     var mbcBandSettings: Array<MbcGainComputer.BandSettings>? = null
-
-    // Asymmetric ballistics — applied to linear magnitudes
-    private val attackAlpha = 0.6f    // fast rise (~2-3 frames to reach 90%)
-    @Volatile
-    var releaseAlpha = 0.22f  // ~6 frames to decay. Lower = slower falloff.
 
     // Opacity for fade-out when music stops (1.0 = fully visible)
     @Volatile
@@ -73,8 +158,32 @@ class SpectrumAnalyzerRenderer(
     private val outputFillPath = Path()
     private val outputStrokePath = Path()
 
+    // Reusable drawing objects — target ghost + delta
+    private val ghostPath = Path()
+    private val deltaAbovePath = Path()
+    private val deltaBelowPath = Path()
+
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
+    }
+
+    /** Ghost overlay (target curve) — dashed translucent blue line. */
+    private val ghostPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 2.4f
+        color = 0x662196F3
+        pathEffect = DashPathEffect(floatArrayOf(10f, 12f), 0f)
+    }
+
+    /** Delta fill: live ABOVE target (louder) = green; BELOW = red. */
+    private val deltaPaintAbove = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = 0x30219A81
+    }
+
+    private val deltaPaintBelow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = 0x30E53935
     }
 
     private val inputStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -90,70 +199,18 @@ class SpectrumAnalyzerRenderer(
     }
 
     /**
-     * Called from Visualizer callback with RAW WAVEFORM bytes.
+     * Called from Visualizer callback with RAW WAVEFORM bytes and the real
+     * capture sampling rate.
      */
-    fun updateWaveformData(waveform: ByteArray) {
+    fun updateWaveformData(waveform: ByteArray, samplingRate: Int? = null) {
+        if (samplingRate != null) setSampleRate(samplingRate)
         opacity = 1f  // reset fade on real audio
-
-        val dbValues = fftProcessor.process(waveform)
-        val n = dbValues.size
-
-        val currentLinear = FloatArray(n) { i ->
-            10f.pow(dbValues[i] / 20f)
-        }
-
-        var prev = smoothedLinear
-        if (prev == null || prev.size != n) {
-            prev = FloatArray(n)
-        }
-        val result = FloatArray(n)
-        for (i in 0 until n) {
-            val alpha = if (currentLinear[i] > prev[i]) attackAlpha else releaseAlpha
-            result[i] = alpha * currentLinear[i] + (1f - alpha) * prev[i]
-        }
-        smoothedLinear = result
-
-        // Pre-compute PPO smoothing on this thread (not UI thread)
-        val ppo = ppoSmoothing
-        if (ppo > 0) {
-            val rawDb = FloatArray(n) { i ->
-                if (result[i] > 1e-10f) (20f * log10(result[i])).coerceAtLeast(-96f)
-                else -96f
-            }
-            val binHz = fftProcessor.binWidthHz
-            val halfOctaves = 0.5f / ppo
-            // Precompute power + prefix sum for O(1) range queries
-            val power = FloatArray(n) { i -> 10f.pow(rawDb[i] / 10f) }
-            val prefix = FloatArray(n + 1)
-            for (i in 0 until n) prefix[i + 1] = prefix[i] + power[i]
-            val smoothed = FloatArray(n)
-            for (k in 0 until n) {
-                val centerFreq = k * binHz
-                if (centerFreq < 1f) { smoothed[k] = rawDb[k]; continue }
-                val loBin = ((centerFreq * 2f.pow(-halfOctaves)) / binHz).toInt().coerceIn(0, n - 1)
-                val hiBin = ((centerFreq * 2f.pow(halfOctaves)) / binHz).toInt().coerceIn(0, n - 1)
-                val count = hiBin - loBin + 1
-                if (count <= 1) { smoothed[k] = rawDb[k]; continue }
-                val avg = (prefix[hiBin + 1] - prefix[loBin]) / count
-                smoothed[k] = if (avg > 1e-20f) (10f * log10(avg)).coerceAtLeast(-96f) else -96f
-            }
-            ppoSmoothedDb = smoothed
-        } else {
-            ppoSmoothedDb = null
-        }
+        analyzer.appendWaveform(waveform)
     }
 
     /** Feed zeros into the EMA so it decays naturally toward silence */
     fun feedSilence() {
-        val prev = smoothedLinear ?: return
-        val n = prev.size
-        val result = FloatArray(n)
-        for (i in 0 until n) {
-            // Slower decay than normal release for a gentle fall
-            result[i] = 0.92f * prev[i]
-        }
-        smoothedLinear = result
-        ppoSmoothedDb = null  // force draw() to recompute from decayed linear values
+        analyzer.decay(0.92f)
     }
 
     /** Restore opacity to full (called when playback resumes) */
@@ -163,10 +220,40 @@ class SpectrumAnalyzerRenderer(
     fun fadeOut(amount: Float) {
         opacity = (opacity - amount).coerceAtLeast(0f)
         if (opacity <= 0f) {
-            smoothedLinear = null  // fully gone
+            analyzer.releaseAll()
         }
     }
 
+    // ── Tracker support ─────────────────────────────────────────────────
+    /**
+     * Spectrum dB (tilt-compensated) at [freqHz] for tracker marker
+     * positioning. Null when no analysis data yet.
+     */
+    fun spectrumDbAt(freqHz: Float): Float? {
+        val linear = analyzer.getSmoothedLinear() ?: return null
+        val n = linear.size
+        if (n < 3) return null
+        val exactBin = freqHz / analyzer.binWidthHz
+        val lower = exactBin.toInt().coerceIn(1, n - 2)
+        val frac = (exactBin - lower).coerceIn(0f, 1f)
+        val mag = linear[lower] * (1f - frac) + linear[lower + 1] * frac
+        if (mag <= 1e-10f) return null
+        val db = 20f * log10(mag)
+        val tiltDb = 3.0f * (log10(freqHz / 1000f) / 0.30103f)
+        return db + tiltDb
+    }
+
+    /**
+     * Dominant frequency in [minHz, maxHz] above [minDb] (tilt-compensated
+     * display convention). The raw search+threshold happens pre-tilt, so the
+     * caller threshold is shifted by the tilt at the band midpoint.
+     */
+    fun findDominantPeak(minHz: Float, maxHz: Float, minDb: Float = -60f): LongWindowAnalyzer.Peak? {
+        val midTilt = 3.0f * (log10(((minHz + maxHz) / 2f) / 1000f) / 0.30103f)
+        return analyzer.findDominantPeak(minHz, maxHz, minDb - midTilt)
+    }
+
+    // ── Draw ────────────────────────────────────────────────────────────
     /**
      * @param eqResponseDb Optional EQ frequency response in dB per display pixel.
      *                     When provided, draws dual spectrum: dim input + bright output.
@@ -178,7 +265,7 @@ class SpectrumAnalyzerRenderer(
         dbMin: Float, dbMax: Float,
         eqResponseDb: FloatArray? = null
     ) {
-        val linear = smoothedLinear ?: return
+        val linear = analyzer.getSmoothedLinear() ?: return
         val n = linear.size
         if (n < 2) return
         if (opacity <= 0f) return
@@ -188,30 +275,31 @@ class SpectrumAnalyzerRenderer(
         val dbRange = dbMax - dbMin
         if (dbRange <= 0f || graphWidth <= 0f) return
 
-        val binWidthHz = fftProcessor.binWidthHz
+        val binWidthHz = analyzer.binWidthHz
 
-        // Use pre-computed PPO-smoothed dB if available, otherwise compute raw dB
-        val precomputed = ppoSmoothedDb
-        val db: FloatArray
-        if (precomputed != null && precomputed.size == n) {
-            db = precomputed
-        } else {
-            db = FloatArray(n) { i ->
-                if (linear[i] > 1e-10f) (20f * log10(linear[i])).coerceAtLeast(-96f)
-                else -96f
-            }
+        // Pre-computed PPO-smoothed dB (from analyzer worker, when enabled)
+        val ppoDb = analyzer.getPpoDb()
+
+        fun dbOf(bin: Int): Float {
+            val d = ppoDb
+            if (d != null && d.size == n) return d[bin]
+            val mag = linear[bin]
+            return if (mag > 1e-10f) (20f * log10(mag)).coerceAtLeast(-96f) else -96f
         }
 
-        // Compute MBC band gains from the ACTUAL spectrum levels this frame
+        // When MBC is active the gain math needs the full per-bin dB vector
         val mbcComputer = mbcGainComputer
         val mbcSettings = mbcBandSettings
         if (mbcComputer != null && mbcSettings != null) {
-            mbcComputer.computeAllBandGains(db, sampleRate, fftProcessor.fftSize, mbcSettings)
+            val fullDb = FloatArray(n) { i -> dbOf(i) }
+            mbcComputer.computeAllBandGains(fullDb, sampleRate, analyzer.effectiveSize, mbcSettings)
         }
 
-        // Log frequency mapping: 20 Hz – 20 kHz
-        val logMin = log10(20f)
-        val logMax = log10(20000f)
+        // Log frequency mapping over the ZOOMED visible range
+        val visLo = visibleLoHz
+        val visHi = visibleHiHz
+        val logMin = log10(visLo)
+        val logMax = log10(visHi)
         val logRange = logMax - logMin
 
         // Collect display points — one per pixel column
@@ -235,11 +323,12 @@ class SpectrumAnalyzerRenderer(
                 val exactBin = freq / binWidthHz
                 val lower = exactBin.toInt().coerceIn(1, n - 2)
                 val frac = exactBin - lower
-                rawDb = db[lower] * (1f - frac) + db[lower + 1] * frac
+                rawDb = dbOf(lower) * (1f - frac) + dbOf(lower + 1) * frac
             } else {
                 var peak = -96f
                 for (b in binLow..binHigh.coerceAtMost(n - 1)) {
-                    if (db[b] > peak) peak = db[b]
+                    val v = dbOf(b)
+                    if (v > peak) peak = v
                 }
                 rawDb = peak
             }
@@ -260,26 +349,6 @@ class SpectrumAnalyzerRenderer(
                 outputY[x] = top + graphHeight * (1f - outputNorm)
             }
         }
-
-        // Bass smoothing disabled — was killing low-end extension
-        // val bass150Pixel = ((log10(150f) - logMin) / logRange * displayWidth).toInt()
-        //     .coerceIn(0, displayWidth - 1)
-        // val bass300Pixel = ((log10(300f) - logMin) / logRange * displayWidth).toInt()
-        //     .coerceIn(0, displayWidth - 1)
-        // for (pass in 0 until 3) {
-        //     val tmp = inputY.copyOf()
-        //     val tmpOut = outputY?.copyOf()
-        //     for (x in 2 until bass300Pixel - 2) {
-        //         val smoothed = (tmp[x - 2] + tmp[x - 1] + tmp[x] + tmp[x + 1] + tmp[x + 2]) / 5f
-        //         val blend = if (x < bass150Pixel) 1f
-        //                     else 1f - (x - bass150Pixel).toFloat() / (bass300Pixel - bass150Pixel)
-        //         inputY[x] = blend * smoothed + (1f - blend) * tmp[x]
-        //         if (tmpOut != null && outputY != null) {
-        //             val sOut = (tmpOut[x - 2] + tmpOut[x - 1] + tmpOut[x] + tmpOut[x + 1] + tmpOut[x + 2]) / 5f
-        //             outputY[x] = blend * sOut + (1f - blend) * tmpOut[x]
-        //         }
-        //     }
-        // }
 
         val step = 2
         val lastIdx = displayWidth - 1
@@ -380,11 +449,146 @@ class SpectrumAnalyzerRenderer(
             canvas.drawPath(inputStrokePath, inputStrokePaint)
         }
 
+        // ── Target ghost + delta ──
+        val fr = targetCurve
+        if (fr != null && (showTargetGhost || showTargetDelta) && fr.frequencies.size >= 2) {
+            updateAutoAlign(
+                alignProbeFreqs.size,
+                { col -> columnDbVis(col, inputY, top, graphHeight, dbMax, dbRange) },
+                visLo, visHi, displayWidth
+            ) { f -> targetDbAt(fr, f) }
+
+            if (showTargetGhost || showTargetDelta) {
+                val ghostY = FloatArray(displayWidth)
+                for (x in 0 until displayWidth) {
+                    val logFreq = logMin + logRange * (x + 0.5f) / displayWidth
+                    val freq = 10f.pow(logFreq)
+                    val targetDb = targetDbAt(fr, freq) + targetOffsetDb + autoAlignOffsetDb
+                    val norm = ((targetDb - dbMin) / dbRange).coerceIn(0f, 1f)
+                    ghostY[x] = top + graphHeight * (1f - norm)
+                }
+
+                if (showTargetGhost) {
+                    ghostPath.reset()
+                    ghostPath.moveTo(xArr[0], ghostY[0])
+                    i = step
+                    while (i < displayWidth) {
+                        val midX = (xArr[i - step] + xArr[i]) / 2f
+                        ghostPath.cubicTo(midX, ghostY[i - step], midX, ghostY[i], xArr[i], ghostY[i])
+                        i += step
+                    }
+                    if (i - step < lastIdx) ghostPath.lineTo(xArr[lastIdx], ghostY[lastIdx])
+                    canvas.drawPath(ghostPath, ghostPaint)
+                }
+
+                if (showTargetDelta) {
+                    // Band between live and ghost, split by which is louder.
+                    // Each contiguous above/below run is one closed subpath.
+                    buildDeltaBands(deltaAbovePath, xArr, inputY, ghostY, above = true)
+                    buildDeltaBands(deltaBelowPath, xArr, inputY, ghostY, above = false)
+                    canvas.drawPath(deltaAbovePath, deltaPaintAbove)
+                    canvas.drawPath(deltaBelowPath, deltaPaintBelow)
+                }
+            }
+        }
+
         canvas.restore()
     }
 
+    private fun columnDbVis(
+        x: Int, inputY: FloatArray, top: Float, graphHeight: Float,
+        dbMax: Float, dbRange: Float
+    ): Float = dbMax - ((inputY[x] - top) / graphHeight).coerceIn(0f, 1f) * dbRange
+
+    private fun buildDeltaBands(
+        path: Path, xArr: FloatArray, inputY: FloatArray, ghostY: FloatArray, above: Boolean
+    ) {
+        path.reset()
+        val w = xArr.size
+        var x = 0
+        while (x < w) {
+            val inRun = if (above) inputY[x] < ghostY[x] else inputY[x] > ghostY[x]
+            if (inRun) {
+                // follow live curve, then return along ghost curve
+                path.moveTo(xArr[x], inputY[x])
+                var end = x
+                while (end + 1 < w && (if (above) inputY[end + 1] < ghostY[end + 1] else inputY[end + 1] > ghostY[end + 1])) {
+                    end++
+                    path.lineTo(xArr[end], inputY[end])
+                }
+                for (xi in end downTo x) {
+                    path.lineTo(xArr[xi], ghostY[xi])
+                }
+                path.close()
+                x = end + 1
+            } else {
+                x++
+            }
+        }
+    }
+
+    private fun targetDbAt(fr: FreqResponse, freq: Float): Float {
+        val fs = fr.frequencies
+        val ls = fr.levels
+        val m = fs.size
+        if (m < 2) return ls[0]
+        if (freq <= fs[0]) return ls[0]
+        if (freq >= fs[m - 1]) return ls[m - 1]
+        var lo = 0
+        var hi = m - 1
+        while (hi - lo > 1) {
+            val mid = (lo + hi) / 2
+            if (fs[mid] <= freq) lo = mid else hi = mid
+        }
+        val logF = ln(freq.toDouble())
+        val logLo = ln(fs[lo].toDouble())
+        val logHi = ln(fs[hi].toDouble())
+        val t = ((logF - logLo) / (logHi - logLo)).coerceIn(0.0, 1.0)
+        return (ls[lo] * (1.0 - t) + ls[hi] * t).toFloat()
+    }
+
+    /**
+     * Rolling median of (live − target) over a sparse probe grid inside the
+     * visible range — updates the auto-align offset with a slow EMA so the
+     * ghost drifts gently to the live level instead of bouncing.
+     */
+    private fun updateAutoAlign(
+        probeCount: Int,
+        liveDbAt: (Int) -> Float,
+        visLo: Float, visHi: Float,
+        displayWidth: Int,
+        targetDbOf: (Float) -> Float
+    ) {
+        if (!showTargetDelta || !targetAutoAlign) return
+        if (probeCount <= 6) return
+        val probes = alignProbeFreqs
+        val logLo = ln(visLo.toDouble())
+        val logHi = ln(visHi.toDouble())
+        val logSpan = logHi - logLo
+        val diffs = FloatArray(probeCount)
+        var idx = 0
+        for (p in 0 until probeCount) {
+            val f = probes[p]
+            if (f < visLo || f > visHi) continue
+            val colFloat = ((ln(f.toDouble()) - logLo) / logSpan * displayWidth).toFloat()
+            val col = colFloat.toInt().coerceIn(0, displayWidth - 1)
+            val liveDb = liveDbAt(col)
+            if (liveDb <= -95f) continue   // silent bin — skip
+            diffs[idx++] = liveDb - targetDbOf(f)
+        }
+        if (idx < 6) return
+        val used = diffs.copyOf(idx)
+        used.sort()
+        val median = used[idx / 2]
+        autoAlignOffsetDb += 0.06f * (median - autoAlignOffsetDb)
+    }
+
     fun release() {
-        smoothedLinear = null
+        analyzer.releaseAll()
         opacity = 0f
+    }
+
+    fun shutdownWorker() {
+        analyzer.shutdown()
     }
 }

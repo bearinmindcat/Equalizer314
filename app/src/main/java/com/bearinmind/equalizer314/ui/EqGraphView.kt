@@ -163,6 +163,91 @@ class EqGraphView @JvmOverloads constructor(
     private var longPressRunnable: Runnable? = null
     private val longPressTimeout = 500L
 
+    // Surgical gesture state
+    private var tappedAtDown: Int? = null
+    private var soloFiring = false
+    private var draggingTrackerEdge = -1     // 0 = low edge, 1 = high edge
+    private var lastEmptyTapTime = 0L
+    private var lastEmptyTapX = 0f
+    private var lastEmptyTapY = 0f
+    // Pinch zoom + two-finger pan
+    private var panCentroidX = 0f
+    private var pinchStartSpan = 0f        // px distance between the two fingers at pinch start
+    private var pinchStartLogSpan = 0f     // log-frequency span at pinch start
+    private var pinchFocusLog = 0f         // log(freq) under the pinch center at start
+    private var pinchFocusT = 0f           // relative position of the focus inside the span
+    private var pinchSessionActive = false
+    private val minLogSpan = 0.1f
+    private val fullLogSpan get() = log10(graphMaxFreq) - log10(graphMinFreq)
+
+    private fun handleTwoFingerTransform(event: MotionEvent) {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                cancelLongPressTimer()
+                isDragging = false
+                val x0 = event.getX(0)
+                val x1 = event.getX(1)
+                val span = abs(x0 - x1)
+                pinchStartSpan = span.coerceAtLeast(1f)
+                val logLo = log10(zoomLoHz)
+                val logHi = log10(zoomHiHz)
+                pinchStartLogSpan = logHi - logLo
+                val centerPx = (x0 + x1) / 2f
+                pinchFocusLog = log10(xToFreq(centerPx.coerceIn(0f, width.toFloat()), width.toFloat()))
+                pinchFocusT = ((pinchFocusLog - logLo) / pinchStartLogSpan).coerceIn(0f, 1f)
+                panCentroidX = centerPx
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (event.pointerCount < 2) return
+                val x0 = event.getX(0)
+                val x1 = event.getX(1)
+                val span = (abs(x0 - x1)).coerceAtLeast(1f)
+                val graphWidth = width.toFloat()
+
+                // ── Zoom: keep the frequency under the PCI (pinch center) anchored ──
+                val newSpanLog = (pinchStartLogSpan * pinchStartSpan / span)
+                    .coerceIn(minLogSpan, fullLogSpan)
+                var newLo = pinchFocusLog - pinchFocusT * newSpanLog
+                var newHi = newLo + newSpanLog
+                val fullLo = log10(graphMinFreq)
+                val fullHi = log10(graphMaxFreq)
+                if (newLo < fullLo) { newLo = fullLo; newHi = newLo + newSpanLog }
+                if (newHi > fullHi) { newHi = fullHi; newLo = newHi - newSpanLog }
+                if (newLo < fullLo) newLo = fullLo
+                val spanChanged = abs(newSpanLog - (log10(zoomHiHz) - log10(zoomLoHz))) > 0.003f
+                if (spanChanged) {
+                    zoomLoHz = 10f.pow(newLo)
+                    zoomHiHz = 10f.pow(newHi)
+                    onZoomRangeChanged?.invoke(zoomLoHz, zoomHiHz)
+                }
+
+                // ── Pan: two fingers slide together ──
+                val centroid = (x0 + x1) / 2f
+                val dX = centroid - panCentroidX
+                if (abs(dX) > 0.5f) {
+                    val logSpan = log10(zoomHiHz) - log10(zoomLoHz)
+                    val dLog = -(dX / graphWidth) * logSpan
+                    val logLo = log10(zoomLoHz)
+                    val logHi = log10(zoomHiHz)
+                    var pLo = logLo + dLog
+                    var pHi = logHi + dLog
+                    if (pLo < fullLo) { pLo = fullLo; pHi = pLo + logSpan }
+                    if (pHi > fullHi) { pHi = fullHi; pLo = pHi - logSpan }
+                    zoomLoHz = 10f.pow(pLo)
+                    zoomHiHz = 10f.pow(pHi)
+                    if (!spanChanged) onZoomRangeChanged?.invoke(zoomLoHz, zoomHiHz)
+                    panCentroidX = centroid
+                }
+                if (spanChanged || abs(dX) > 0.5f) invalidate()
+            }
+            MotionEvent.ACTION_POINTER_UP -> {
+                // After the gesture ends, swallow the remaining finger's moves
+                // so the view doesn't yank or select something accidentally.
+                panCentroidX = -1f
+            }
+        }
+    }
+
     // Paint objects
     private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFF333333.toInt()
@@ -267,6 +352,53 @@ class EqGraphView @JvmOverloads constructor(
     var onBandSelectedListener: ((bandIndex: Int?) -> Unit)? = null
     var onBandDragEndListener: (() -> Unit)? = null
     var onLongPressListener: (() -> Unit)? = null
+    // Surgical solo audition on band long-press (started on band node, ended on finger up)
+    var onBandSoloStart: ((bandIndex: Int) -> Unit)? = null
+    var onBandSoloEnd: (() -> Unit)? = null
+    // Spectrum tracker double-tap → add a notch at the tracked frequency
+    var onTrackerDoubleTap: ((frequency: Float) -> Unit)? = null
+    var onTrackerRangeChanged: ((loHz: Float, hiHz: Float) -> Unit)? = null
+    var onZoomRangeChanged: ((loHz: Float, hiHz: Float) -> Unit)? = null
+
+    // ── Surgical zoom (log-frequency domain) ──
+    private var zoomLoHz = 10f
+    private var zoomHiHz = 20000f
+    val isZoomed: Boolean
+        get() = zoomLoHz > graphMinFreq + 0.001f || zoomHiHz < graphMaxFreq - 0.001f
+
+    fun setZoomRange(loHz: Float, hiHz: Float) {
+        zoomLoHz = loHz.coerceIn(graphMinFreq, graphMaxFreq)
+        zoomHiHz = hiHz.coerceIn(zoomLoHz * 1.05f, graphMaxFreq)
+        invalidate()
+    }
+
+    fun getZoomRange(): Pair<Float, Float> = zoomLoHz to zoomHiHz
+
+    fun resetZoom() {
+        zoomLoHz = graphMinFreq
+        zoomHiHz = graphMaxFreq
+        onZoomRangeChanged?.invoke(zoomLoHz, zoomHiHz)
+        invalidate()
+    }
+
+    // ── Spectrum tracker (Dynamic Spectrum Tracker) ──
+    var trackerEnabled = false
+        set(value) { field = value; invalidate() }
+    var trackerLoHz = 40f
+    var trackerHiHz = 1600f
+
+    private var trackerPeakFreq: Float? = null
+    private var trackerPeakDbNorm = 0f
+    private var trackerPeakLastCalc = 0L
+
+    private fun setTrackerRange(loHz: Float, hiHz: Float) {
+        val lo = loHz.coerceIn(graphMinFreq, graphMaxFreq)
+        val hi = hiHz.coerceIn(lo * 1.01f, graphMaxFreq)
+        trackerLoHz = lo
+        trackerHiHz = hi
+        onTrackerRangeChanged?.invoke(lo, hi)
+        invalidate()
+    }
     // Slot labels for band dots (e.g., [0, 2, 4, 6] → display as "1", "3", "5", "7")
     private var bandSlotLabels: List<Int>? = null
     private var bandColorMap: Map<Int, Int>? = null
@@ -463,9 +595,9 @@ class EqGraphView @JvmOverloads constructor(
             canvas.drawLine(lineStartX, y, width.toFloat(), y, gridPaint)
         }
 
-        val freqMarkers = listOf(100f, 1000f, 10000f)
+        val freqMarkers = adaptiveFreqMarkers()
         for (freq in freqMarkers) {
-            if (freq >= graphMinFreq && freq <= graphMaxFreq) {
+            if (freq >= zoomLoHz && freq <= zoomHiHz) {
                 val x = freqToX(freq, graphWidth)
                 canvas.drawLine(x, 0f, x, height.toFloat(), gridPaint)
             }
@@ -499,18 +631,43 @@ class EqGraphView @JvmOverloads constructor(
             canvas.drawText(dbLabel, 10f, textY, labelPaint)
         }
 
-        val freqMarkers = listOf(100f, 1000f, 10000f)
+        val freqMarkers = adaptiveFreqMarkers()
         for (freq in freqMarkers) {
-            if (freq >= graphMinFreq && freq <= graphMaxFreq) {
+            if (freq >= zoomLoHz && freq <= zoomHiHz) {
                 val x = freqToX(freq, graphWidth)
-                val freqLabel = when {
-                    freq >= 1000f -> "${(freq / 1000).toInt()}k"
-                    else -> "${freq.toInt()}"
-                }
+                val freqLabel = formatFreqLabel(freq)
                 val labelWidth = labelPaint.measureText(freqLabel)
                 canvas.drawText(freqLabel, x - labelWidth / 2f, vPad + graphHeight + 30f, labelPaint)
             }
         }
+    }
+
+    /**
+     * Adaptive frequency grid: classic 100/1k/10k markers normally, but when
+     * the zoom span is narrow, a dense 1-2-5 pattern fills the visible range
+     * so the surgical view stays readable.
+     */
+    private fun adaptiveFreqMarkers(): List<Float> {
+        val logSpan = log10(zoomHiHz) - log10(zoomLoHz)
+        if (logSpan > 1.1f) return listOf(100f, 1000f, 10000f)
+        val markers = mutableListOf<Float>()
+        val step = 1 + (logSpan * 3f).toInt()   // 2, 3 or 4 markers per decade
+        val sequence = when (step) { 2 -> floatArrayOf(1f, 5f); 3 -> floatArrayOf(1f, 2f, 5f); else -> floatArrayOf(1.25f, 2.5f, 5f, 7.5f) }
+        val loDecade = (log10(zoomLoHz)).toInt() - 1
+        val hiDecade = (log10(zoomHiHz)).toInt() + 1
+        for (d in loDecade..hiDecade) {
+            for (m in sequence) {
+                markers.add(m * 10f.pow(d))
+            }
+        }
+        return markers
+    }
+
+    private fun formatFreqLabel(freq: Float): String = when {
+        freq >= 1000f -> if (freq % 1000f == 0f) "${(freq / 1000).toInt()}k" else String.format("%.1fk", freq / 1000f)
+        freq >= 100f -> "${freq.toInt()}"
+        freq >= 10f -> if (freq % 1f == 0f) "${freq.toInt()}" else String.format("%.1f", freq)
+        else -> String.format("%.2f", freq)
     }
 
     private var cachedSpectrumHash = 0
@@ -524,8 +681,9 @@ class EqGraphView @JvmOverloads constructor(
             val eq = parametricEq
             // EQ frequency response + MBC pre-gain combined
             val displayWidth = graphWidth.toInt().coerceAtLeast(1)
-            val logMin = kotlin.math.log10(20f)
-            val logMax = kotlin.math.log10(20000f)
+            // Zoom-aware mapping — EQ response and spectrum must share the same x mapping
+            val logMin = kotlin.math.log10(zoomLoHz)
+            val logMax = kotlin.math.log10(zoomHiHz)
             val logRange = logMax - logMin
             val crossovers = mbcCrossovers
             val gains = mbcBandGains
@@ -543,8 +701,11 @@ class EqGraphView @JvmOverloads constructor(
                     db
                 }
             } else null
+            // Keep the analyzer's mapping in sync with the graph's zoom
+            renderer.setVisibleFrequencyRange(zoomLoHz, zoomHiHz)
             renderer.draw(canvas, 0f, 0f, graphWidth, height.toFloat(),
                 dbMin = -60f, dbMax = 0f, eqResponseDb = eqResponse)
+            drawTrackerOverlay(canvas, renderer, vPad, graphWidth, graphHeight)
             return
         }
 
@@ -670,6 +831,109 @@ class EqGraphView @JvmOverloads constructor(
             canvas.drawPath(spectrumPath, spectrumLinePaint)
         }
     }
+
+    // ── Spectrum tracker (Dynamic Spectrum Tracker) overlay ────────────
+    private val trackerBoundaryPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 2.5f
+        color = 0xCC2196F3.toInt()
+        pathEffect = DashPathEffect(floatArrayOf(10f, 10f), 0f)
+    }
+
+    private val trackerDimPaint = Paint().apply {
+        style = Paint.Style.FILL
+        color = 0x44000000
+    }
+
+    private val trackerHandlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = 0xCC2196F3.toInt()
+    }
+
+    private val trackerPeakPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 3f
+        color = 0xFFFFD54F.toInt()
+    }
+
+    private val trackerPeakFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = 0x44FFD54F.toInt()
+    }
+
+    private val trackerLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = 0xFFFFD54F.toInt()
+        textSize = 26f
+        typeface = Typeface.DEFAULT_BOLD
+        textAlign = Paint.Align.CENTER
+    }
+
+    private fun drawTrackerOverlay(
+        canvas: Canvas,
+        renderer: com.bearinmind.equalizer314.audio.SpectrumAnalyzerRenderer,
+        vPad: Float, graphWidth: Float, graphHeight: Float
+    ) {
+        if (!trackerEnabled) return
+        val bottom = vPad + graphHeight
+        val loX = freqToX(trackerLoHz, graphWidth).coerceIn(0f, graphWidth)
+        val hiX = freqToX(trackerHiHz, graphWidth).coerceIn(0f, graphWidth)
+
+        // Dim everything outside the tracker window
+        if (loX > 0f) {
+            tmpRect.set(0f, 0f, loX, bottom)
+            canvas.drawRect(tmpRect, trackerDimPaint)
+        }
+        if (hiX < graphWidth) {
+            tmpRect.set(hiX, 0f, graphWidth, bottom)
+            canvas.drawRect(tmpRect, trackerDimPaint)
+        }
+
+        // Boundary lines
+        canvas.drawLine(loX, 0f, loX, bottom, trackerBoundaryPaint)
+        canvas.drawLine(hiX, 0f, hiX, bottom, trackerBoundaryPaint)
+
+        // Edge handles (small tabs at the top of the graph)
+        val handleW = 44f
+        val handleH = 16f
+        canvas.drawRoundRect(loX - handleW / 2f, 0f, loX + handleW / 2f, handleH, 8f, 8f, trackerHandlePaint)
+        canvas.drawRoundRect(hiX - handleW / 2f, 0f, hiX + handleW / 2f, handleH, 8f, 8f, trackerHandlePaint)
+
+        // Dominant peak inside the tracker window (recomputed ≤ 10 Hz)
+        val now = System.currentTimeMillis()
+        if (now - trackerPeakLastCalc > 100L) {
+            trackerPeakLastCalc = now
+            val peak = renderer.findDominantPeak(trackerLoHz, trackerHiHz, minDb = -50f)
+            trackerPeakFreq = peak?.frequencyHz
+            trackerPeakDbNorm = if (peak != null) {
+                (renderer.spectrumDbAt(peak.frequencyHz)?.let { (it + 60f) / 60f } ?: trackerPeakDbNorm)
+                    .coerceIn(0f, 1f)
+            } else trackerPeakDbNorm
+        }
+
+        val peakFreq = trackerPeakFreq
+        if (peakFreq != null) {
+            val px = freqToX(peakFreq, graphWidth)
+            if (px in 0f..graphWidth) {
+                val py = vPad + graphHeight * (1f - trackerPeakDbNorm)
+                val r = 26f
+                canvas.drawCircle(px, py, r, trackerPeakFillPaint)
+                canvas.drawCircle(px, py, r, trackerPeakPaint)
+                canvas.drawCircle(px, py, 4f, trackerPeakPaint)
+
+                val label = formatFreqLabel(peakFreq) + " Hz"
+                val tw = trackerLabelPaint.measureText(label)
+                val labelBgL = (px - tw / 2f - 14f).coerceAtLeast(0f)
+                val labelBgR = (px + tw / 2f + 14f).coerceAtMost(graphWidth)
+                val labelBgT = (py + r + 8f).coerceAtMost(bottom - 54f)
+                val labelBgB = labelBgT + 40f
+                canvas.drawRoundRect(labelBgL, labelBgT, labelBgR, labelBgB, 12f, 12f, trackerHandlePaint)
+                canvas.drawText(label, px, labelBgT + 28f, trackerLabelPaint)
+            }
+        }
+    }
+
+    private val tmpRect = RectF()
 
     private fun calculatePointPositions(vPad: Float, graphWidth: Float, graphHeight: Float) {
         for (point in bandPoints) {
@@ -1243,8 +1507,8 @@ class EqGraphView @JvmOverloads constructor(
     }
 
     private fun freqToX(freq: Float, graphWidth: Float): Float {
-        val logMin = log10(graphMinFreq)
-        val logMax = log10(graphMaxFreq)
+        val logMin = log10(zoomLoHz)
+        val logMax = log10(zoomHiHz)
         val logFreq = log10(freq)
         return graphWidth * (logFreq - logMin) / (logMax - logMin)
     }
@@ -1259,8 +1523,8 @@ class EqGraphView @JvmOverloads constructor(
 
     private fun xToFreq(x: Float, graphWidth: Float): Float {
         val normalizedX = (x / graphWidth).coerceIn(0f, 1f)
-        val logMin = log10(graphMinFreq)
-        val logMax = log10(graphMaxFreq)
+        val logMin = log10(zoomLoHz)
+        val logMax = log10(zoomHiHz)
         val logFreq = logMin + normalizedX * (logMax - logMin)
         return 10f.pow(logFreq).coerceIn(graphMinFreq, graphMaxFreq)
     }
@@ -1428,6 +1692,30 @@ class EqGraphView @JvmOverloads constructor(
             return super.onTouchEvent(event)
         }
 
+        // Any second finger switches to zoom/pan mode
+        if (event.actionMasked == MotionEvent.ACTION_POINTER_DOWN || event.pointerCount >= 2) {
+            if (!pinchSessionActive && event.actionMasked == MotionEvent.ACTION_POINTER_DOWN) {
+                pinchSessionActive = true
+            }
+            handleTwoFingerTransform(event)
+            return true
+        }
+        if (pinchSessionActive) {
+            // Swallow remaining single-finger motion until all fingers lift
+            if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+                pinchSessionActive = false
+                cancelLongPressTimer()
+                parent?.requestDisallowInterceptTouchEvent(false)
+                if (soloFiring) {
+                    soloFiring = false
+                    tappedAtDown = null
+                    onBandSoloEnd?.invoke()
+                    invalidate()
+                }
+            }
+            return true
+        }
+
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
                 touchStartX = event.x
@@ -1436,17 +1724,35 @@ class EqGraphView @JvmOverloads constructor(
                 // Prevent ScrollView from intercepting while we wait for long-press
                 parent?.requestDisallowInterceptTouchEvent(true)
 
+                // Tracker edge handles get single-finger drag priority
+                if (trackerEnabled) {
+                    val graphWidth = width.toFloat()
+                    val loX = freqToX(trackerLoHz, graphWidth)
+                    val hiX = freqToX(trackerHiHz, graphWidth)
+                    if (abs(event.x - loX) < 60f) { draggingTrackerEdge = 0; return true }
+                    if (abs(event.x - hiX) < 60f) { draggingTrackerEdge = 1; return true }
+                }
+
                 // Start long-press timer for ALL taps (cancelled if drag starts)
                 cancelLongPressTimer()
+                val tapped = findClosestPoint(event.x, event.y)
+                tappedAtDown = tapped
                 longPressRunnable = Runnable {
                     // Fire long press and clear active band so drag doesn't start after
                     activeBandIndex = null
                     isDragging = false
-                    onLongPressListener?.invoke()
+                    val target = tappedAtDown
+                    if (target != null) {
+                        // Surgical solo audition — starts the band-pass audition,
+                        // ends when the finger lifts
+                        soloFiring = true
+                        onBandSoloStart?.invoke(target)
+                    } else {
+                        onLongPressListener?.invoke()
+                    }
                 }
                 longPressHandler.postDelayed(longPressRunnable!!, longPressTimeout)
 
-                val tapped = findClosestPoint(event.x, event.y)
                 if (tapped != null) activeBandIndex = tapped
                 if (tapped != null) {
                     val currentTime = System.currentTimeMillis()
@@ -1469,10 +1775,52 @@ class EqGraphView @JvmOverloads constructor(
                     invalidate()
                     return true
                 }
+
+                // Empty-space taps: double-tap → tracker notch, else zoom reset
+                val now = System.currentTimeMillis()
+                if (now - lastEmptyTapTime < doubleTapTimeout &&
+                    abs(event.x - lastEmptyTapX) < 90f && abs(event.y - lastEmptyTapY) < 90f
+                ) {
+                    cancelLongPressTimer()
+                    lastEmptyTapTime = 0L
+                    val peakFreq = trackerPeakFreq
+                    val handled = if (trackerEnabled && peakFreq != null) {
+                        val peakX = freqToX(peakFreq, width.toFloat())
+                        if (abs(peakX - event.x) < 120f) {
+                            onTrackerDoubleTap?.invoke(peakFreq)
+                            true
+                        } else false
+                    } else false
+                    if (!handled) resetZoom()
+                    invalidate()
+                    return true
+                }
+                lastEmptyTapTime = now
+                lastEmptyTapX = event.x
+                lastEmptyTapY = event.y
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
                 if (justResetBand) return true
+
+                // While a solo audition is held, the same node is still
+                // draggable — dragging retargets the audition (the activity
+                // decides whether to retarget or end it).
+                if (soloFiring) {
+                    val target = tappedAtDown
+                    if (target != null && target in bandPoints.indices) {
+                        updatePointPosition(event.x, event.y)
+                        invalidate()
+                    }
+                    return true
+                }
+
+                if (draggingTrackerEdge >= 0) {
+                    val f = xToFreq(event.x, width.toFloat())
+                    if (draggingTrackerEdge == 0) setTrackerRange(f, trackerHiHz)
+                    else setTrackerRange(trackerLoHz, f)
+                    return true
+                }
 
                 val dx = event.x - touchStartX
                 val dy = event.y - touchStartY
@@ -1500,6 +1848,18 @@ class EqGraphView @JvmOverloads constructor(
                 cancelLongPressTimer()
                 parent?.requestDisallowInterceptTouchEvent(false)
                 justResetBand = false
+                if (draggingTrackerEdge >= 0) {
+                    draggingTrackerEdge = -1
+                    invalidate()
+                    return true
+                }
+                if (soloFiring) {
+                    soloFiring = false
+                    tappedAtDown = null
+                    onBandSoloEnd?.invoke()
+                    invalidate()
+                    return true
+                }
                 val wasDragging = isDragging
                 isDragging = false
                 invalidate()

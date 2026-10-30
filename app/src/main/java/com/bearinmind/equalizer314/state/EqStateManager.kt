@@ -285,9 +285,14 @@ class EqStateManager(
     /** TV Mode hook (issues #35/#55): fired on every pushEqUpdate BEFORE the isProcessing early-return — a Remote-mode phone must sync to the TV even when its own DP is off. */
     var onEqPushed: (() -> Unit)? = null
 
+    /** Band Solo audition hook: non-null and returning true ⇒ all normal DP
+     *  pushes are suppressed while the solo staircase owns the converter. */
+    var auditionSuppressor: (() -> Boolean)? = null
+
     fun pushEqUpdate() {
         // Mirror tethered ("Both"-tagged) band edits between L and R — runs even when not processing so in-memory state is correct for the next save.
         syncBothBands()
+        if (auditionSuppressor?.invoke() == true) return
         // Shared "Both" layer rides every conversion as an overlay while CSE is on (final channel = channel curve + shared curve).
         ParametricToDpConverter.overlayEq =
             if (eqPrefs.getChannelSideEqEnabled() && sharedEq.getBandCount() > 0) sharedEq else null
@@ -327,6 +332,7 @@ class EqStateManager(
     /** Coalesce rapid EQ updates (graph drags) into at most one DP write per frame; call [flushEqUpdate] on drag-end. */
     fun pushEqUpdateThrottled() {
         if (!isProcessing) return
+        if (auditionSuppressor?.invoke() == true) return
         // Issue #61: a live drag freezes the DP cutoff layout and the auto-gain offset — every mid-drag write is then a pure gain update instead of a layout reconfigure + stepped whole-mix duck.
         ParametricToDpConverter.layoutFrozen = true
         eqService?.dynamicsManager?.gainHold = true

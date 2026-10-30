@@ -461,4 +461,14 @@
         <item quantity="one">%1$d target</item>
         <item quantity="other">%1$d targets</item>
     </plurals>
+
+    <!-- Precision Surgical EQ -->
+    <string name="solo_requires_eq_on">Turn the EQ on to audition a band</string>
+    <string name="notch_added_at">Notch added at %1$s</string>
+    <string name="spectrum_fft_size_title">FFT window size</string>
+    <string name="spectrum_fft_size_auto_note">Auto — window follows the zoom level</string>
+    <string name="spectrum_ghost_toggle_title">Target curve ghost</string>
+    <string name="spectrum_ghost_toggle_sub">Draw the selected target curve on the spectrum</string>
+    <string name="spectrum_delta_toggle_title">Delta view</string>
+    <string name="spectrum_delta_toggle_sub">Fill green above / red below the target curve</string>
 </resources>

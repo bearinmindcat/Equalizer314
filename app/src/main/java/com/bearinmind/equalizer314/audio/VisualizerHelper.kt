@@ -71,7 +71,7 @@ class VisualizerHelper {
                         if (waveform == null || waveform.size < 64 || v == null) return
 
                         if (isMusicPlaying) {
-                            renderer.updateWaveformData(waveform)
+                            renderer.updateWaveformData(waveform, samplingRate)
 
                             // Compute calibration offset: absolute dBFS vs normalized spectrum
                             val measurement = Visualizer.MeasurementPeakRms()

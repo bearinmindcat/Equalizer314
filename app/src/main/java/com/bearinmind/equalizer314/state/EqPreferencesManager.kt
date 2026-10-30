@@ -633,6 +633,22 @@ class EqPreferencesManager(context: Context) {
     fun saveSpectrumFps(fps: Int) { prefs.edit().putInt("spectrumFps", fps).apply() }
     fun getSpectrumFps(): Int = prefs.getInt("spectrumFps", 60)
 
+    // Precision Surgical EQ — zoom, tracker, target ghost/delta
+    fun saveGraphZoomRange(lo: Float, hi: Float) { prefs.edit().putFloat("graphZoomLo", lo).putFloat("graphZoomHi", hi).apply() }
+    /** 0 = unset → the graph falls back to the full 10 Hz–20 kHz range. */
+    fun getGraphZoomLo(): Float = prefs.getFloat("graphZoomLo", 0f)
+    fun getGraphZoomHi(): Float = prefs.getFloat("graphZoomHi", 0f)
+    fun saveTrackerEnabled(enabled: Boolean) { prefs.edit().putBoolean("trackerEnabled", enabled).apply() }
+    fun getTrackerEnabled(): Boolean = prefs.getBoolean("trackerEnabled", false)
+    fun saveTrackerRange(lo: Float, hi: Float) { prefs.edit().putFloat("trackerLo", lo).putFloat("trackerHi", hi).apply() }
+    /** 0 = unset → defaults chosen at wiring time. */
+    fun getTrackerLo(): Float = prefs.getFloat("trackerLo", 0f)
+    fun getTrackerHi(): Float = prefs.getFloat("trackerHi", 0f)
+    fun saveTargetGhostEnabled(enabled: Boolean) { prefs.edit().putBoolean("targetGhostEnabled", enabled).apply() }
+    fun getTargetGhostEnabled(): Boolean = prefs.getBoolean("targetGhostEnabled", false)
+    fun saveTargetDeltaEnabled(enabled: Boolean) { prefs.edit().putBoolean("targetDeltaEnabled", enabled).apply() }
+    fun getTargetDeltaEnabled(): Boolean = prefs.getBoolean("targetDeltaEnabled", false)
+
     // MBC
     fun saveMbcEnabled(enabled: Boolean) { prefs.edit().putBoolean("mbcEnabled", enabled).apply() }
     fun getMbcEnabled(): Boolean = prefs.getBoolean("mbcEnabled", false)
