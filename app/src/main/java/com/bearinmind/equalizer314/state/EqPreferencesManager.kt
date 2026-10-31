@@ -633,7 +633,15 @@ class EqPreferencesManager(context: Context) {
     fun saveSpectrumFps(fps: Int) { prefs.edit().putInt("spectrumFps", fps).apply() }
     fun getSpectrumFps(): Int = prefs.getInt("spectrumFps", 60)
 
-    // Precision Surgical EQ — zoom, tracker, target ghost/delta
+    // Precision Surgical EQ — zoom, tracker, target ghost/delta, experimental toggles
+    fun saveLongWindowFftEnabled(enabled: Boolean) { prefs.edit().putBoolean("expLongWindowFft", enabled).apply() }
+    fun getLongWindowFftEnabled(): Boolean = prefs.getBoolean("expLongWindowFft", false)
+    fun saveBandSoloEnabled(enabled: Boolean) { prefs.edit().putBoolean("expBandSolo", enabled).apply() }
+    fun getBandSoloEnabled(): Boolean = prefs.getBoolean("expBandSolo", false)
+    fun saveGraphZoomEnabled(enabled: Boolean) { prefs.edit().putBoolean("expGraphZoom", enabled).apply() }
+    fun getGraphZoomEnabled(): Boolean = prefs.getBoolean("expGraphZoom", false)
+    fun saveCustomFftSize(size: Int) { prefs.edit().putInt("customFftSize", size).apply() }
+    fun getCustomFftSize(): Int = prefs.getInt("customFftSize", 4096)
     fun saveGraphZoomRange(lo: Float, hi: Float) { prefs.edit().putFloat("graphZoomLo", lo).putFloat("graphZoomHi", hi).apply() }
     /** 0 = unset → the graph falls back to the full 10 Hz–20 kHz range. */
     fun getGraphZoomLo(): Float = prefs.getFloat("graphZoomLo", 0f)

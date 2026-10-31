@@ -26,6 +26,10 @@ class ExperimentalActivity : AppCompatActivity() {
         setupPresetAutosave()
         setupTvMode()
         setupVirtualSurround()
+        setupLongWindowFft()
+        setupBandSolo()
+        setupGraphZoom()
+        setupSpectrumTracker()
 
         // Hide the legacy "Experimental DP Engine" switch row; the view stays so the card structure holds.
         findViewById<android.view.View>(R.id.expDpModeSwitch)
@@ -153,6 +157,38 @@ class ExperimentalActivity : AppCompatActivity() {
                         .setAction(com.bearinmind.equalizer314.audio.EqService.ACTION_REAPPLY_MBC)
                 )
             } catch (_: Exception) {}
+        }
+    }
+
+    private fun setupLongWindowFft() {
+        val switch = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.expLongWindowSwitch)
+        switch?.isChecked = eqPrefs.getLongWindowFftEnabled()
+        switch?.setOnCheckedChangeListener { _, isChecked ->
+            eqPrefs.saveLongWindowFftEnabled(isChecked)
+        }
+    }
+
+    private fun setupBandSolo() {
+        val switch = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.expBandSoloSwitch)
+        switch?.isChecked = eqPrefs.getBandSoloEnabled()
+        switch?.setOnCheckedChangeListener { _, isChecked ->
+            eqPrefs.saveBandSoloEnabled(isChecked)
+        }
+    }
+
+    private fun setupGraphZoom() {
+        val switch = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.expGraphZoomSwitch)
+        switch?.isChecked = eqPrefs.getGraphZoomEnabled()
+        switch?.setOnCheckedChangeListener { _, isChecked ->
+            eqPrefs.saveGraphZoomEnabled(isChecked)
+        }
+    }
+
+    private fun setupSpectrumTracker() {
+        val switch = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.expTrackerSwitch)
+        switch?.isChecked = eqPrefs.getTrackerEnabled()
+        switch?.setOnCheckedChangeListener { _, isChecked ->
+            eqPrefs.saveTrackerEnabled(isChecked)
         }
     }
 

@@ -3351,31 +3351,45 @@ class  MainActivity : AppCompatActivity() {
      */
     fun configureSurgicalSpectrum() {
         val renderer = visualizerHelper.renderer
-        // Manual FFT size (Spectrum Control) vs zoom-adaptive sizing
+        // Engine selection: Long-Window (experimental) vs Original WaveformFft (bypass/default)
+        renderer.useLongWindow = eqPrefs.getLongWindowFftEnabled()
+
+        // Manual / custom FFT size (Spectrum Control) vs zoom-adaptive sizing
         renderer.clearManualFftSize()
         if (eqPrefs.getFftSizeEnabled()) {
-            renderer.setFftSize(com.bearinmind.equalizer314.audio.LongWindowAnalyzer.SIZES[
-                eqPrefs.getFftSizeIndex().coerceIn(0, com.bearinmind.equalizer314.audio.LongWindowAnalyzer.SIZES.size - 1)])
+            renderer.setFftSize(eqPrefs.getCustomFftSize())
         }
-        // Zoom range restore
-        val zoomLo = eqPrefs.getGraphZoomLo()
-        val zoomHi = eqPrefs.getGraphZoomHi()
-        eqGraphView.setZoomRange(if (zoomLo > 0f) zoomLo else 10f, if (zoomHi > zoomLo) zoomHi else 20000f)
+        // Zoom range restore & toggle
+        val zoomEnabled = eqPrefs.getGraphZoomEnabled()
+        eqGraphView.zoomEnabled = zoomEnabled
+        if (zoomEnabled) {
+            val zoomLo = eqPrefs.getGraphZoomLo()
+            val zoomHi = eqPrefs.getGraphZoomHi()
+            eqGraphView.setZoomRange(if (zoomLo > 0f) zoomLo else 10f, if (zoomHi > zoomLo) zoomHi else 20000f)
+        } else {
+            eqGraphView.resetZoom()
+        }
+        // Band solo toggle
+        eqGraphView.bandSoloEnabled = eqPrefs.getBandSoloEnabled()
+
         // Ghost / delta toggles
         renderer.showTargetGhost = eqPrefs.getTargetGhostEnabled()
         renderer.showTargetDelta = eqPrefs.getTargetDeltaEnabled()
         renderer.targetAutoAlign = true
         renderer.targetOffsetDb = 0f
-        // Tracker window restore
-        eqGraphView.trackerEnabled = eqPrefs.getTrackerEnabled()
-        val tLo = eqPrefs.getTrackerLo()
-        val tHi = eqPrefs.getTrackerHi()
-        if (tLo > 0f && tHi > tLo) {
-            eqGraphView.trackerLoHz = tLo
-            eqGraphView.trackerHiHz = tHi
-        } else {
-            eqGraphView.trackerLoHz = 40f
-            eqGraphView.trackerHiHz = 1600f
+        // Tracker window restore & toggle
+        val trackerOn = eqPrefs.getTrackerEnabled()
+        eqGraphView.trackerEnabled = trackerOn
+        if (trackerOn) {
+            val tLo = eqPrefs.getTrackerLo()
+            val tHi = eqPrefs.getTrackerHi()
+            if (tLo > 0f && tHi > tLo) {
+                eqGraphView.trackerLoHz = tLo
+                eqGraphView.trackerHiHz = tHi
+            } else {
+                eqGraphView.trackerLoHz = 40f
+                eqGraphView.trackerHiHz = 1600f
+            }
         }
         // Target curve (asset CSV or imported text) — loaded off-thread
         loadSelectedTargetCurve()
@@ -5047,8 +5061,8 @@ class  MainActivity : AppCompatActivity() {
             == android.content.pm.PackageManager.PERMISSION_GRANTED) {
             visualizerHelper.start(eqGraphView)
             eqGraphView.spectrumRenderer = visualizerHelper.renderer
-            configureSurgicalSpectrum()
         }
+        configureSurgicalSpectrum()
         // Refresh ON/OFF status under nav icons
         com.bearinmind.equalizer314.ui.BottomNavHelper.updateStatus(this, eqPrefs)
         updateAutoEqStatus()

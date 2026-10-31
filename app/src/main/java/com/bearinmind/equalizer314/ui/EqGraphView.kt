@@ -361,6 +361,17 @@ class EqGraphView @JvmOverloads constructor(
     var onZoomRangeChanged: ((loHz: Float, hiHz: Float) -> Unit)? = null
 
     // ── Surgical zoom (log-frequency domain) ──
+    var zoomEnabled = false
+        set(value) {
+            field = value
+            if (!value) {
+                zoomLoHz = graphMinFreq
+                zoomHiHz = graphMaxFreq
+            }
+            invalidate()
+        }
+    var bandSoloEnabled = false
+
     private var zoomLoHz = 10f
     private var zoomHiHz = 20000f
     val isZoomed: Boolean
@@ -1692,8 +1703,8 @@ class EqGraphView @JvmOverloads constructor(
             return super.onTouchEvent(event)
         }
 
-        // Any second finger switches to zoom/pan mode
-        if (event.actionMasked == MotionEvent.ACTION_POINTER_DOWN || event.pointerCount >= 2) {
+        // Any second finger switches to zoom/pan mode (when zoomEnabled is on)
+        if (zoomEnabled && (event.actionMasked == MotionEvent.ACTION_POINTER_DOWN || event.pointerCount >= 2)) {
             if (!pinchSessionActive && event.actionMasked == MotionEvent.ACTION_POINTER_DOWN) {
                 pinchSessionActive = true
             }
@@ -1742,7 +1753,7 @@ class EqGraphView @JvmOverloads constructor(
                     activeBandIndex = null
                     isDragging = false
                     val target = tappedAtDown
-                    if (target != null) {
+                    if (target != null && bandSoloEnabled) {
                         // Surgical solo audition — starts the band-pass audition,
                         // ends when the finger lifts
                         soloFiring = true
@@ -1791,7 +1802,7 @@ class EqGraphView @JvmOverloads constructor(
                             true
                         } else false
                     } else false
-                    if (!handled) resetZoom()
+                    if (!handled && zoomEnabled) resetZoom()
                     invalidate()
                     return true
                 }

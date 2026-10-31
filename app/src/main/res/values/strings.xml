@@ -467,8 +467,17 @@
     <string name="notch_added_at">Notch added at %1$s</string>
     <string name="spectrum_fft_size_title">FFT window size</string>
     <string name="spectrum_fft_size_auto_note">Auto — window follows the zoom level</string>
+    <string name="spectrum_fft_size_custom_label">Custom FFT points</string>
     <string name="spectrum_ghost_toggle_title">Target curve ghost</string>
     <string name="spectrum_ghost_toggle_sub">Draw the selected target curve on the spectrum</string>
     <string name="spectrum_delta_toggle_title">Delta view</string>
     <string name="spectrum_delta_toggle_sub">Fill green above / red below the target curve</string>
+    <string name="exp_long_window_title">Long-Window FFT Analyzer</string>
+    <string name="exp_long_window_desc">Multi-block rolling FFT window. Off (recommended) bypasses to the original zero-padded FFT engine.</string>
+    <string name="exp_band_solo_title">Band Solo Audition</string>
+    <string name="exp_band_solo_desc">Long-press any band on the graph to audition a narrow band-pass filter centered at its frequency.</string>
+    <string name="exp_graph_zoom_title">Frequency Axis Zoom &amp; Pan</string>
+    <string name="exp_graph_zoom_desc">Two-finger pinch to zoom and drag to pan frequency range on the EQ graph. Double-tap empty area to reset.</string>
+    <string name="exp_tracker_title">Dynamic Spectrum Tracker</string>
+    <string name="exp_tracker_desc">Draggable frequency window with live resonance peak tracking. Double-tap marker to add notch.</string>
 </resources>

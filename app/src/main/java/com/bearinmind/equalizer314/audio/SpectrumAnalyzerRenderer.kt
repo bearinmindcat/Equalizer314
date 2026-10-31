@@ -27,7 +27,24 @@ class SpectrumAnalyzerRenderer(
         const val MAX_VISIBLE_HZ = 30000f
     }
 
+    private var fftProcessor = WaveformFftProcessor(fftSize = 4096, sampleRate = sampleRate)
     private val analyzer = LongWindowAnalyzer(targetSize = 4096, sampleRate = sampleRate)
+
+    /** When true: multi-block LongWindowAnalyzer. When false (default/bypass): original zero-padded WaveformFftProcessor. */
+    @Volatile
+    var useLongWindow: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                smoothedLinearLocal = null
+                ppoSmoothedDbLocal = null
+                if (value) {
+                    analyzer.setTargetSize(manualFftSize ?: 4096)
+                } else {
+                    fftProcessor = WaveformFftProcessor(fftSize = manualFftSize ?: 4096, sampleRate = sampleRate)
+                }
+            }
+        }
 
     /** Real output sample rate, refreshed from Visualizer callbacks. */
     @Volatile
@@ -35,9 +52,15 @@ class SpectrumAnalyzerRenderer(
         private set
 
     fun setSampleRate(sr: Int) {
-        if (sr <= 0) return
-        sampleRate = sr
-        analyzer.sampleRate = sr
+        var hz = sr
+        if (hz > 1_000_000) hz /= 1000
+        if (hz < 8000 || hz > 192000) return
+        if (sampleRate == hz) return
+        sampleRate = hz
+        analyzer.sampleRate = hz
+        fftProcessor = WaveformFftProcessor(fftSize = fftProcessor.fftSize, sampleRate = hz)
+        smoothedLinearLocal = null
+        ppoSmoothedDbLocal = null
     }
 
     /** Manual FFT size (Spectrum Control). When set, zoom adaptivity is off. */
@@ -49,6 +72,11 @@ class SpectrumAnalyzerRenderer(
         manualFftSize = size
         analyzer.clearZoomSpan()
         analyzer.setTargetSize(size)
+        if (size != fftProcessor.fftSize) {
+            fftProcessor = WaveformFftProcessor(fftSize = size, sampleRate = sampleRate)
+            smoothedLinearLocal = null
+            ppoSmoothedDbLocal = null
+        }
     }
 
     /** Back to zoom-adaptive window sizing (manual override off). */
@@ -56,11 +84,16 @@ class SpectrumAnalyzerRenderer(
         manualFftSize = null
         analyzer.clearZoomSpan()
         analyzer.setTargetSize(4096)
+        if (fftProcessor.fftSize != 4096) {
+            fftProcessor = WaveformFftProcessor(fftSize = 4096, sampleRate = sampleRate)
+            smoothedLinearLocal = null
+            ppoSmoothedDbLocal = null
+        }
     }
 
-    fun getFftSize(): Int = analyzer.getTargetSize()
-    fun getEffectiveSize(): Int = analyzer.effectiveSize
-    fun getBinWidthHz(): Float = analyzer.binWidthHz
+    fun getFftSize(): Int = if (useLongWindow) analyzer.getTargetSize() else fftProcessor.fftSize
+    fun getEffectiveSize(): Int = if (useLongWindow) analyzer.effectiveSize else fftProcessor.fftSize
+    fun getBinWidthHz(): Float = if (useLongWindow) analyzer.binWidthHz else fftProcessor.binWidthHz
 
     /** PPO (Points Per Octave) smoothing. 0 = disabled. Typical: 1, 3, 6, 12, 24, 48 */
     @Volatile
@@ -70,6 +103,7 @@ class SpectrumAnalyzerRenderer(
             analyzer.ppoSmoothing = value
         }
 
+    private val attackAlpha = 0.6f
     @Volatile
     var releaseAlpha: Float = 0.22f
         set(value) {
@@ -77,7 +111,13 @@ class SpectrumAnalyzerRenderer(
             analyzer.releaseAlpha = value
         }
 
-    fun getSmoothedLinear(): FloatArray? = analyzer.getSmoothedLinear()
+    @Volatile
+    private var smoothedLinearLocal: FloatArray? = null
+    @Volatile
+    private var ppoSmoothedDbLocal: FloatArray? = null
+
+    fun getSmoothedLinear(): FloatArray? =
+        if (useLongWindow) analyzer.getSmoothedLinear() else smoothedLinearLocal
 
     // ── Zoom-aware frequency mapping ────────────────────────────────────
     @Volatile
@@ -205,12 +245,72 @@ class SpectrumAnalyzerRenderer(
     fun updateWaveformData(waveform: ByteArray, samplingRate: Int? = null) {
         if (samplingRate != null) setSampleRate(samplingRate)
         opacity = 1f  // reset fade on real audio
-        analyzer.appendWaveform(waveform)
+
+        if (useLongWindow) {
+            analyzer.appendWaveform(waveform)
+        } else {
+            // Original zero-padded FFT engine
+            val dbValues = fftProcessor.process(waveform)
+            val n = dbValues.size
+
+            val currentLinear = FloatArray(n) { i ->
+                10f.pow(dbValues[i] / 20f)
+            }
+
+            var prev = smoothedLinearLocal
+            if (prev == null || prev.size != n) {
+                prev = FloatArray(n)
+            }
+            val result = FloatArray(n)
+            for (i in 0 until n) {
+                val alpha = if (currentLinear[i] > prev[i]) attackAlpha else releaseAlpha
+                result[i] = alpha * currentLinear[i] + (1f - alpha) * prev[i]
+            }
+            smoothedLinearLocal = result
+
+            // Pre-compute PPO smoothing on this thread (not UI thread)
+            val ppo = ppoSmoothing
+            if (ppo > 0) {
+                val rawDb = FloatArray(n) { i ->
+                    if (result[i] > 1e-10f) (20f * log10(result[i])).coerceAtLeast(-96f)
+                    else -96f
+                }
+                val binHz = fftProcessor.binWidthHz
+                val halfOctaves = 0.5f / ppo
+                // Precompute power + prefix sum for O(1) range queries
+                val power = FloatArray(n) { i -> 10f.pow(rawDb[i] / 10f) }
+                val prefix = FloatArray(n + 1)
+                for (i in 0 until n) prefix[i + 1] = prefix[i] + power[i]
+                val smoothed = FloatArray(n)
+                for (k in 0 until n) {
+                    val centerFreq = k * binHz
+                    if (centerFreq < 1f) { smoothed[k] = rawDb[k]; continue }
+                    val loBin = ((centerFreq * 2f.pow(-halfOctaves)) / binHz).toInt().coerceIn(0, n - 1)
+                    val hiBin = ((centerFreq * 2f.pow(halfOctaves)) / binHz).toInt().coerceIn(0, n - 1)
+                    val count = hiBin - loBin + 1
+                    if (count <= 1) { smoothed[k] = rawDb[k]; continue }
+                    val avg = (prefix[hiBin + 1] - prefix[loBin]) / count
+                    smoothed[k] = if (avg > 1e-20f) (10f * log10(avg)).coerceAtLeast(-96f) else -96f
+                }
+                ppoSmoothedDbLocal = smoothed
+            } else {
+                ppoSmoothedDbLocal = null
+            }
+        }
     }
 
     /** Feed zeros into the EMA so it decays naturally toward silence */
     fun feedSilence() {
-        analyzer.decay(0.92f)
+        if (useLongWindow) {
+            analyzer.decay(0.92f)
+        } else {
+            val prev = smoothedLinearLocal ?: return
+            val n = prev.size
+            val result = FloatArray(n)
+            for (i in 0 until n) result[i] = 0.92f * prev[i]
+            smoothedLinearLocal = result
+            ppoSmoothedDbLocal = null
+        }
     }
 
     /** Restore opacity to full (called when playback resumes) */
@@ -221,6 +321,8 @@ class SpectrumAnalyzerRenderer(
         opacity = (opacity - amount).coerceAtLeast(0f)
         if (opacity <= 0f) {
             analyzer.releaseAll()
+            smoothedLinearLocal = null
+            ppoSmoothedDbLocal = null
         }
     }
 
@@ -230,10 +332,11 @@ class SpectrumAnalyzerRenderer(
      * positioning. Null when no analysis data yet.
      */
     fun spectrumDbAt(freqHz: Float): Float? {
-        val linear = analyzer.getSmoothedLinear() ?: return null
+        val linear = getSmoothedLinear() ?: return null
         val n = linear.size
         if (n < 3) return null
-        val exactBin = freqHz / analyzer.binWidthHz
+        val binHz = getBinWidthHz()
+        val exactBin = freqHz / binHz
         val lower = exactBin.toInt().coerceIn(1, n - 2)
         val frac = (exactBin - lower).coerceIn(0f, 1f)
         val mag = linear[lower] * (1f - frac) + linear[lower + 1] * frac
@@ -250,7 +353,35 @@ class SpectrumAnalyzerRenderer(
      */
     fun findDominantPeak(minHz: Float, maxHz: Float, minDb: Float = -60f): LongWindowAnalyzer.Peak? {
         val midTilt = 3.0f * (log10(((minHz + maxHz) / 2f) / 1000f) / 0.30103f)
-        return analyzer.findDominantPeak(minHz, maxHz, minDb - midTilt)
+        if (useLongWindow) {
+            return analyzer.findDominantPeak(minHz, maxHz, minDb - midTilt)
+        }
+        val lin = smoothedLinearLocal ?: return null
+        val n = lin.size
+        if (n < 3) return null
+        val binHz = getBinWidthHz()
+        val loBin = (minHz / binHz).toInt().coerceIn(1, n - 2)
+        val hiBin = (maxHz / binHz).toInt().coerceIn(1, n - 2)
+        if (hiBin < loBin) return null
+
+        var bestBin = -1
+        var bestMag = 0f
+        for (k in loBin..hiBin) {
+            val m = lin[k]
+            if (m > bestMag) { bestMag = m; bestBin = k }
+        }
+        if (bestBin < 0) return null
+        if (20f * log10(bestMag.coerceAtLeast(1e-10f)) < (minDb - midTilt)) return null
+
+        val y0 = ln(max(1e-12, lin[bestBin - 1].toDouble()))
+        val y1 = ln(max(1e-12, lin[bestBin].toDouble()))
+        val y2 = ln(max(1e-12, lin[bestBin + 1].toDouble()))
+        val denom = y0 - 2.0 * y1 + y2
+        val delta = if (abs(denom) < 1e-12) 0.0 else (0.5 * (y0 - y2) / denom).coerceIn(-0.5, 0.5)
+        val peakBin = bestBin + delta
+        val peakMag = exp(y1 + 0.5 * (y0 - y2) * delta - 0.25 * denom * delta * delta)
+        val dbDb = 20.0 / ln(10.0)
+        return LongWindowAnalyzer.Peak((peakBin * binHz).toFloat(), (dbDb * ln(peakMag.coerceAtLeast(1e-12))).toFloat())
     }
 
     // ── Draw ────────────────────────────────────────────────────────────
@@ -265,7 +396,7 @@ class SpectrumAnalyzerRenderer(
         dbMin: Float, dbMax: Float,
         eqResponseDb: FloatArray? = null
     ) {
-        val linear = analyzer.getSmoothedLinear() ?: return
+        val linear = getSmoothedLinear() ?: return
         val n = linear.size
         if (n < 2) return
         if (opacity <= 0f) return
@@ -275,10 +406,10 @@ class SpectrumAnalyzerRenderer(
         val dbRange = dbMax - dbMin
         if (dbRange <= 0f || graphWidth <= 0f) return
 
-        val binWidthHz = analyzer.binWidthHz
+        val binWidthHz = getBinWidthHz()
 
-        // Pre-computed PPO-smoothed dB (from analyzer worker, when enabled)
-        val ppoDb = analyzer.getPpoDb()
+        // Pre-computed PPO-smoothed dB if available
+        val ppoDb = if (useLongWindow) analyzer.getPpoDb() else ppoSmoothedDbLocal
 
         fun dbOf(bin: Int): Float {
             val d = ppoDb
@@ -292,7 +423,7 @@ class SpectrumAnalyzerRenderer(
         val mbcSettings = mbcBandSettings
         if (mbcComputer != null && mbcSettings != null) {
             val fullDb = FloatArray(n) { i -> dbOf(i) }
-            mbcComputer.computeAllBandGains(fullDb, sampleRate, analyzer.effectiveSize, mbcSettings)
+            mbcComputer.computeAllBandGains(fullDb, sampleRate, getEffectiveSize(), mbcSettings)
         }
 
         // Log frequency mapping over the ZOOMED visible range
@@ -585,6 +716,8 @@ class SpectrumAnalyzerRenderer(
 
     fun release() {
         analyzer.releaseAll()
+        smoothedLinearLocal = null
+        ppoSmoothedDbLocal = null
         opacity = 0f
     }
 

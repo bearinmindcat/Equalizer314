@@ -22,8 +22,8 @@ class SpectrumControlActivity : AppCompatActivity() {
     private var audioManager: android.media.AudioManager? = null
     private var playbackCallback: android.media.AudioManager.AudioPlaybackCallback? = null
 
-    private val fftSizes = com.bearinmind.equalizer314.audio.LongWindowAnalyzer.SIZES
-    private val fftLabels = fftSizes.map { "$it" }.toTypedArray()
+    private val fftSizes = intArrayOf(1024, 2048, 4096, 8192, 16384, 32768, 65536)
+    private val fftLabels = arrayOf("1k", "2k", "4k", "8k", "16k", "32k", "65k")
     private val ppoValues = intArrayOf(1, 2, 3, 6, 12, 24, 48, 96)
     private val ppoLabels = arrayOf("1/1", "1/2", "1/3", "1/6", "1/12", "1/24", "1/48", "1/96")
 
@@ -139,6 +139,7 @@ class SpectrumControlActivity : AppCompatActivity() {
     private fun setupFftSize() {
         val summarySwitch = findViewById<MaterialSwitch>(R.id.fftSizeSwitch)
         val summarySlider = findViewById<Slider>(R.id.fftSizeSlider)
+        val summaryText = findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.fftSizeText)
         val summaryRow = findViewById<android.view.View>(R.id.fftSizeRow)
         val tickRow = findViewById<android.widget.FrameLayout>(R.id.fftSizeTickLabels)
 
@@ -174,27 +175,70 @@ class SpectrumControlActivity : AppCompatActivity() {
         }
 
         val enabled = eqPrefs.getFftSizeEnabled()
-        val idx = eqPrefs.getFftSizeIndex().coerceIn(0, fftSizes.size - 1)
+        var customSize = eqPrefs.getCustomFftSize()
+        var idx = fftSizes.indexOf(customSize)
+        if (idx < 0) {
+            idx = eqPrefs.getFftSizeIndex().coerceIn(0, fftSizes.size - 1)
+            customSize = fftSizes[idx]
+        }
         summarySwitch.isChecked = enabled
         summarySlider.value = idx.toFloat()
+        summaryText?.setText(customSize.toString())
         summaryRow.alpha = if (enabled) 1f else 0.4f
         summarySlider.isEnabled = enabled
+        summaryText?.isEnabled = enabled
         updateFftTickHighlight(idx)
-        applyFftSize(enabled, idx)
+        applyFftSize(enabled, customSize)
 
         summarySwitch.setOnCheckedChangeListener { _, isChecked ->
             eqPrefs.saveFftSizeEnabled(isChecked)
             summaryRow.alpha = if (isChecked) 1f else 0.4f
             summarySlider.isEnabled = isChecked
-            applyFftSize(isChecked, summarySlider.value.toInt().coerceIn(0, fftSizes.size - 1))
+            summaryText?.isEnabled = isChecked
+            applyFftSize(isChecked, eqPrefs.getCustomFftSize())
         }
 
+        var isUpdatingText = false
         summarySlider.addOnChangeListener { _, value, fromUser ->
             if (!fromUser) return@addOnChangeListener
             val newIdx = value.toInt().coerceIn(0, fftSizes.size - 1)
+            val newSize = fftSizes[newIdx]
             updateFftTickHighlight(newIdx)
             eqPrefs.saveFftSizeIndex(newIdx)
-            applyFftSize(eqPrefs.getFftSizeEnabled(), newIdx)
+            eqPrefs.saveCustomFftSize(newSize)
+            isUpdatingText = true
+            summaryText?.setText(newSize.toString())
+            isUpdatingText = false
+            applyFftSize(eqPrefs.getFftSizeEnabled(), newSize)
+        }
+
+        summaryText?.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
+                summaryText.clearFocus()
+                true
+            } else false
+        }
+        summaryText?.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus && !isUpdatingText) {
+                val inputStr = summaryText.text?.toString()?.trim()
+                val parsed = inputStr?.toIntOrNull()
+                if (parsed != null && parsed >= 512) {
+                    val validSize = com.bearinmind.equalizer314.audio.LongWindowAnalyzer.nextPowerOfTwo(parsed).coerceIn(512, 65536)
+                    eqPrefs.saveCustomFftSize(validSize)
+                    val matchIdx = fftSizes.indexOf(validSize)
+                    if (matchIdx >= 0) {
+                        summarySlider.value = matchIdx.toFloat()
+                        eqPrefs.saveFftSizeIndex(matchIdx)
+                        updateFftTickHighlight(matchIdx)
+                    } else {
+                        updateFftTickHighlight(-1)
+                    }
+                    summaryText.setText(validSize.toString())
+                    applyFftSize(eqPrefs.getFftSizeEnabled(), validSize)
+                } else {
+                    summaryText.setText(eqPrefs.getCustomFftSize().toString())
+                }
+            }
         }
     }
 
@@ -213,9 +257,9 @@ class SpectrumControlActivity : AppCompatActivity() {
     }
 
     /** Live preview of the size on this activity's renderer; MainActivity reapplies from prefs on resume. */
-    private fun applyFftSize(enabled: Boolean, idx: Int) {
+    private fun applyFftSize(enabled: Boolean, size: Int) {
         val r = renderer ?: return
-        if (enabled) r.setFftSize(fftSizes[idx.coerceIn(0, fftSizes.size - 1)])
+        if (enabled) r.setFftSize(size)
         else r.clearManualFftSize()
     }
 
@@ -432,6 +476,7 @@ class SpectrumControlActivity : AppCompatActivity() {
 
     private fun applyCurrentSettings() {
         val r = renderer ?: return
+        r.useLongWindow = eqPrefs.getLongWindowFftEnabled()
         if (eqPrefs.getPpoEnabled()) {
             r.ppoSmoothing = ppoValues[eqPrefs.getPpoIndex().coerceIn(0, 7)]
         } else {
