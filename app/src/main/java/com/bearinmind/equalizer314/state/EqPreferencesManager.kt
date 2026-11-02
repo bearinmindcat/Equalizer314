@@ -334,6 +334,14 @@ class EqPreferencesManager(context: Context) {
     fun savePreampRight(v: Float) { prefs.edit().putFloat("preampRightDb", v.saneOr(0f, -20f, 20f)).apply() }
     fun getPreampRight(): Float = prefs.getFloat("preampRightDb", 0f)
     fun getPreampGain(): Float = prefs.getFloat("preampGain", 0f)
+    /** All three preamps in one commit — the slider saves on every move. */
+    fun savePreamps(shared: Float, left: Float, right: Float) {
+        prefs.edit()
+            .putFloat("preampGain", shared.saneOr(0f, -20f, 20f))
+            .putFloat("preampLeftDb", left.saneOr(0f, -20f, 20f))
+            .putFloat("preampRightDb", right.saneOr(0f, -20f, 20f))
+            .apply()
+    }
 
     // Auto-gain
     fun saveAutoGainEnabled(enabled: Boolean) { prefs.edit().putBoolean("autoGainEnabled", enabled).apply() }

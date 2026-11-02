@@ -153,12 +153,17 @@ class EqStateManager(
     // Callbacks
     var onProcessingChanged: ((Boolean) -> Unit)? = null
     var onServiceConnected: (() -> Unit)? = null
+    /** Main thread, after a worker-side curve fit moved the auto-gain offset. */
+    var onAutoGainOffsetChanged: (() -> Unit)? = null
 
     val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             val service = (binder as EqService.EqBinder).service
             eqService = service
             serviceBound = true
+            // Weak, so the long-lived service never pins this activity-owned manager.
+            val self = java.lang.ref.WeakReference(this@EqStateManager)
+            service.dynamicsManager.onAutoGainOffsetChanged = Runnable { self.get()?.onAutoGainOffsetChanged?.invoke() }
             android.util.Log.d("EqStateManager", "onServiceConnected: pendingStartEq=$pendingStartEq isActive=${service.dynamicsManager.isActive}")
             if (pendingStartEq) {
                 pendingStartEq = false
@@ -315,6 +320,24 @@ class EqStateManager(
         }
         val (lEq, rEq) = getChannelEqs()
         eqService?.updateEqPerChannel(lEq, rEq)
+    }
+
+    /** Preamp-only edit: the curve is unchanged, so write just the input-gain stage instead of refitting every band. */
+    fun pushPreampUpdate() {
+        val dm = eqService?.dynamicsManager
+        if (!isProcessing || dm == null || !dm.isActive) return pushEqUpdate()
+        onEqPushed?.invoke()
+        dm.channelBalancePercent = channelBalancePercent
+        if (eqPrefs.getChannelSideEqEnabled()) {
+            dm.preampGainDb = 0f
+            dm.leftChannelGainDb = leftChannelGainDb + preampLeftDb
+            dm.rightChannelGainDb = rightChannelGainDb + preampRightDb
+        } else {
+            dm.preampGainDb = preampGainDb
+            dm.leftChannelGainDb = leftChannelGainDb
+            dm.rightChannelGainDb = rightChannelGainDb
+        }
+        dm.applyInputGain()
     }
 
     private val updateHandler = android.os.Handler(android.os.Looper.getMainLooper())

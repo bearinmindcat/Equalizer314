@@ -1064,6 +1064,8 @@ class  MainActivity : AppCompatActivity() {
         stateManager.onServiceConnected = {
             doStartEq()
         }
+        // The curve fit runs on the DP worker now, so the auto-gain readout refreshes when it lands.
+        stateManager.onAutoGainOffsetChanged = { updateAutoGainOffsetText() }
     }
 
     private fun initEQ() {
@@ -3360,8 +3362,7 @@ class  MainActivity : AppCompatActivity() {
             preampText.setText(String.format("%.1f", value))
             stateManager.setActivePreamp(value)
             persistPreamps()
-            stateManager.pushEqUpdate()
-            updateAutoGainOffsetText()
+            stateManager.pushPreampUpdate()
         }
 
         var preampJustDoubleTapped = false
@@ -3371,8 +3372,7 @@ class  MainActivity : AppCompatActivity() {
                 preampText.setText(String.format("%.1f", 0f))
                 stateManager.setActivePreamp(0f)
                 persistPreamps()
-                stateManager.pushEqUpdate()
-                updateAutoGainOffsetText()
+                stateManager.pushPreampUpdate()
                 preampJustDoubleTapped = true
                 return true
             }
@@ -3394,8 +3394,7 @@ class  MainActivity : AppCompatActivity() {
                 preampSlider.value = gain
                 stateManager.setActivePreamp(gain)
                 persistPreamps()
-                stateManager.pushEqUpdate()
-                updateAutoGainOffsetText()
+                stateManager.pushPreampUpdate()
                 preampText.clearFocus()
             }
             true
@@ -4805,9 +4804,7 @@ class  MainActivity : AppCompatActivity() {
 
     /** Persist all three preamp values (shared + per-side). */
     private fun persistPreamps() {
-        eqPrefs.savePreampGain(stateManager.preampGainDb)
-        eqPrefs.savePreampLeft(stateManager.preampLeftDb)
-        eqPrefs.savePreampRight(stateManager.preampRightDb)
+        eqPrefs.savePreamps(stateManager.preampGainDb, stateManager.preampLeftDb, stateManager.preampRightDb)
     }
 
     /** Point the preamp slider/text at the active view's preamp value. */
