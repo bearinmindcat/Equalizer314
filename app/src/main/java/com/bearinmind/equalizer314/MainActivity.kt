@@ -81,6 +81,8 @@ class  MainActivity : AppCompatActivity() {
 
     // ---- Preset import ----
     private var refreshPresetPicker: (() -> Unit)? = null
+    // Clears the picker's open flag + lit save icon when a mode switch hides the picker (issue #117).
+    private var resetPresetPickerState: (() -> Unit)? = null
 
     private val presetImportLauncher = registerForActivityResult(
         ActivityResultContracts.GetContent()
@@ -2462,6 +2464,12 @@ class  MainActivity : AppCompatActivity() {
             presetPickerScroll.post { sizePresetPicker() }
         }
 
+        resetPresetPickerState = {
+            presetPickerOpen = false
+            saveBtn.setBackgroundColor(graphBtnDimBg)
+            saveBtn.strokeColor = android.content.res.ColorStateList.valueOf(graphBtnDimStroke)
+            saveBtn.iconTint = android.content.res.ColorStateList.valueOf(graphBtnDimContent)
+        }
         saveBtn.setOnClickListener {
             presetPickerOpen = !presetPickerOpen
             if (presetPickerOpen) {
@@ -3578,6 +3586,7 @@ class  MainActivity : AppCompatActivity() {
                 visibility = View.GONE
                 alpha = 1f
             }
+            resetPresetPickerState?.invoke()
 
             val preampCard = findViewById<View>(R.id.preampCardBar)
             if (preampCard.parent !== eqControlsContainer) {
@@ -3671,6 +3680,7 @@ class  MainActivity : AppCompatActivity() {
                     visibility = View.GONE
                     alpha = 1f
                 }
+                resetPresetPickerState?.invoke()
 
                 // Match the controls overlay's 8dp topMargin from PARAMETRIC/GRAPHIC.
                 val overlay = simpleEqContainer.parent as? View
