@@ -460,4 +460,6 @@
     <string name="vs_needs_record_permission">El sonido envolvente virtual necesita el permiso de grabación de audio</string>
     <string name="vs_unsupported_file">No se puede usar este archivo (%1$s)</string>
     <string name="vs_notif_title">Sonido envolvente virtual activado</string>
+    <string name="output_session_compatibility">Compatibilidad de salida de audio</string>
+    <string name="output_session_compatibility_description">Usa las sesiones de audio de las apps cuando el procesamiento de todo el sistema no llega a tu salida. «Todo el sistema» aplica los ajustes actuales a todas las sesiones multimedia detectadas; «Por sesión» mantiene los preajustes de cada app. Requiere la detección de sesiones. Las sesiones nuevas pueden tardar un momento en conectarse.</string>
 </resources>

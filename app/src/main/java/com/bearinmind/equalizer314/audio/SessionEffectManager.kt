@@ -104,6 +104,7 @@ class SessionEffectManager(private val context: Context) {
         for (entry in sessionInfo.values.toList()) {
             attach(entry.sessionId, entry.packageName, entry.source)
         }
+        Log.d(TAG, "refreshActiveEffects: ${sessions.size} effect(s) updated")
     }
 
     /** Whether the driving session actually carries a DP; false when it is only tracked (no usable session id). */
@@ -571,17 +572,12 @@ class SessionEffectManager(private val context: Context) {
             dp.setMbcBandByChannelIndex(1, 0, dummy)
         }
 
-        val oldOverlay = ParametricToDpConverter.overlayEq
-        try {
-            ParametricToDpConverter.overlayEq = loaded.json.optJSONArray("sharedBands")
-                ?.let { EqPreferencesManager.eqFromBands(it) }
-            val bypass = loaded.live && !eqPrefs.getEqEnabled()
-            val left = if (bypass) ParametricEqualizer().apply { clearBands() } else loaded.leftEq
-            val right = if (bypass) left else loaded.rightEq
-            applySessionEq(dp, left, right, interleave)
-        } finally {
-            ParametricToDpConverter.overlayEq = oldOverlay
-        }
+        // The preset's own shared (CSE) bands, passed explicitly so the global overlay is never touched off the main thread.
+        val overlay = loaded.json.optJSONArray("sharedBands")?.let { EqPreferencesManager.eqFromBands(it) }
+        val bypass = loaded.live && !eqPrefs.getEqEnabled()
+        val left = if (bypass) ParametricEqualizer().apply { clearBands() } else loaded.leftEq
+        val right = if (bypass) left else loaded.rightEq
+        applySessionEq(dp, left, right, interleave, if (bypass) null else overlay)
         val cse = loaded.json.optBoolean("channelSideEqEnabled", false)
         val base = if (cse) 0f else loaded.preampDb
         val leftGain = base + if (cse) loaded.json.optDouble("preampLeft", 0.0).toFloat() else 0f
@@ -598,6 +594,7 @@ class SessionEffectManager(private val context: Context) {
         leftEq: ParametricEqualizer,
         rightEq: ParametricEqualizer,
         interleave: Boolean,
+        overlay: ParametricEqualizer?,
     ) {
         val cutoffs: FloatArray
         val leftGains: FloatArray
@@ -607,20 +604,20 @@ class SessionEffectManager(private val context: Context) {
         var rightPost: FloatArray? = null
         if (interleave) {
             if (leftEq === rightEq) {
-                val li = ParametricToDpConverter.convertInterleaved(leftEq)
+                val li = ParametricToDpConverter.convertInterleaved(leftEq, overlay)
                 cutoffs = li.preCutoffs; leftGains = li.preGains; rightGains = li.preGains.copyOf()
                 postCutoffs = li.postCutoffs; leftPost = li.postGains; rightPost = li.postGains.copyOf()
             } else {
-                val di = ParametricToDpConverter.convertInterleavedDual(leftEq, rightEq)
+                val di = ParametricToDpConverter.convertInterleavedDual(leftEq, rightEq, overlay)
                 cutoffs = di.preCutoffs; leftGains = di.leftPreGains; rightGains = di.rightPreGains
                 postCutoffs = di.postCutoffs; leftPost = di.leftPostGains; rightPost = di.rightPostGains
             }
         } else {
             if (leftEq === rightEq) {
-                val r = ParametricToDpConverter.convertFeatureAware(leftEq)
+                val r = ParametricToDpConverter.convertFeatureAware(leftEq, overlay)
                 cutoffs = r.cutoffs; leftGains = r.gains; rightGains = r.gains.copyOf()
             } else {
-                val d = ParametricToDpConverter.convertFeatureAwareDual(leftEq, rightEq)
+                val d = ParametricToDpConverter.convertFeatureAwareDual(leftEq, rightEq, overlay)
                 cutoffs = d.cutoffs; leftGains = d.leftGains; rightGains = d.rightGains
             }
         }

@@ -460,4 +460,6 @@
     <string name="vs_needs_record_permission">O som surround virtual precisa da permissão de gravação de áudio</string>
     <string name="vs_unsupported_file">Não é possível usar este arquivo (%1$s)</string>
     <string name="vs_notif_title">Som surround virtual ligado</string>
+    <string name="output_session_compatibility">Compatibilidade de saída de áudio</string>
+    <string name="output_session_compatibility_description">Usa as sessões de áudio dos apps quando o processamento de todo o sistema não chega à sua saída. «Todo o sistema» aplica as configurações atuais a todas as sessões de mídia detectadas; «Por sessão» mantém as predefinições de cada app. Requer a detecção de sessões. Novas sessões podem levar um momento para se conectar.</string>
 </resources>

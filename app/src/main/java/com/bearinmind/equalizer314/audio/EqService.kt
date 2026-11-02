@@ -146,7 +146,9 @@ class EqService : Service() {
             EqPreferencesManager(this).getPowerState()
         } else dynamicsManager.isActive
 
-    private val sessionUpdateHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    // Off the main thread: a refresh re-fits the EQ curve once per attached session.
+    private val sessionUpdateThread = lazy { android.os.HandlerThread("SessionEffectRefresh").apply { start() } }
+    private val sessionUpdateHandler by lazy { android.os.Handler(sessionUpdateThread.value.looper) }
     private val sessionUpdate = Runnable { sessionEffects?.refreshActiveEffects() }
     private val sessionPrefStores by lazy {
         listOf("eq_settings", "app_bindings", "custom_presets").map {
@@ -1240,7 +1242,10 @@ class EqService : Service() {
 
     override fun onDestroy() {
         sessionPrefStores.forEach { it.unregisterOnSharedPreferenceChangeListener(sessionPrefListener) }
-        sessionUpdateHandler.removeCallbacksAndMessages(null)
+        if (sessionUpdateThread.isInitialized()) {
+            sessionUpdateHandler.removeCallbacksAndMessages(null)
+            sessionUpdateThread.value.quitSafely()
+        }
         stopWatchdog()
         try { unregisterReceiver(volumeReceiver) } catch (_: Exception) {}
         try { unregisterReceiver(routePresetReceiver) } catch (_: Exception) {}
