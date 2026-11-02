@@ -493,6 +493,8 @@ class EqService : Service() {
 
     /** Start/Stop toast from the service so it shows with MainActivity closed. */
     private fun showDpStateToast(started: Boolean) {
+        // The EQ screen shows power on its button; a toast there sat over the preamp slider (issue #133).
+        if (com.bearinmind.equalizer314.MainActivity.isOnScreen) return
         val message = getString(if (started) R.string.dp_start else R.string.dp_stop)
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }

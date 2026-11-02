@@ -41,6 +41,9 @@ class  MainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "Equalizer314"
+        /** True while the EQ screen is resumed; EqService skips its power toast then (issue #133). */
+        @Volatile var isOnScreen = false
+            private set
     }
 
     // State manager
@@ -4147,7 +4150,7 @@ class  MainActivity : AppCompatActivity() {
     private fun onPowerTap() {
         if (eqPrefs.usesSessionProcessing()) {
             val on = !eqPrefs.getPowerState()
-            showPowerSnackbar(on, getString(R.string.per_app_eq))
+            showPowerSnackbar(on)
             animatePowerFab(on)
             stateManager.isProcessing = on
             val svc = Intent(this, EqService::class.java)
@@ -4286,11 +4289,10 @@ class  MainActivity : AppCompatActivity() {
         dlg.show()
     }
 
-    private fun showPowerSnackbar(on: Boolean, label: String = getString(R.string.dynamics_processing)) {
+    /** Persist power + update the FAB; no toast, it sat over the preamp slider (issue #133) and the FAB already shows the state. */
+    private fun showPowerSnackbar(on: Boolean) {
         eqPrefs.savePowerState(on)
         com.bearinmind.equalizer314.ui.BottomNavHelper.updatePowerFab(this, on)
-        val message = getString(if (on) R.string.x_start else R.string.x_stop, label)
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 
     /** Tag to the language's own name. One line per values-XX folder; absent ones are filtered out below. */
@@ -4956,6 +4958,7 @@ class  MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        isOnScreen = true
         updateDevicePresetStatus()
         // "Add more EQ bands" cap lowered while away: drop bands beyond it, then refresh toggles + graph (issue #31).
         if (stateManager.enforceBandCap()) {
@@ -5029,6 +5032,7 @@ class  MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
+        isOnScreen = false
         // Release visualizer so other activities can use session 0
         visualizerHelper.stop()
         eqGraphView.spectrumRenderer = null
