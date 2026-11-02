@@ -1124,6 +1124,18 @@ class EqPreferencesManager(context: Context) {
         appBindingsPrefs.edit().putInt("audio_routing_mode", mode).apply()
     }
 
+    /** Optional workaround for firmware that routes session-0 effects away from Bluetooth. */
+    fun getOutputSessionCompatibility(): Boolean =
+        appBindingsPrefs.getBoolean("output_session_compatibility", false)
+
+    fun setOutputSessionCompatibility(enabled: Boolean) {
+        appBindingsPrefs.edit().putBoolean("output_session_compatibility", enabled).apply()
+    }
+
+    /** Processing backend; the user's System-wide / Session-based selection remains separate. */
+    fun usesSessionProcessing(): Boolean =
+        getAudioRoutingMode() == 1 || getOutputSessionCompatibility()
+
     /** Channel Input "Apps" filter: 0 = media-capable apps only (default), 1 = show all. */
     fun getAppListFilterMode(): Int =
         appBindingsPrefs.getInt("app_list_filter_mode", 0)

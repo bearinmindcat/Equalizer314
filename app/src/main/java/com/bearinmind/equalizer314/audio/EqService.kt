@@ -141,6 +141,29 @@ class EqService : Service() {
     var sessionEffects: SessionEffectManager? = null
         private set
 
+    val isProcessingActive: Boolean
+        get() = if (EqPreferencesManager(this).usesSessionProcessing()) {
+            EqPreferencesManager(this).getPowerState()
+        } else dynamicsManager.isActive
+
+    private val sessionUpdateHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val sessionUpdate = Runnable { sessionEffects?.refreshActiveEffects() }
+    private val sessionPrefStores by lazy {
+        listOf("eq_settings", "app_bindings", "custom_presets").map {
+            getSharedPreferences(it, Context.MODE_PRIVATE)
+        }
+    }
+    private val sessionPrefListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+        refreshSessionProcessing()
+    }
+
+    /** Preference writes and UI edits share a coalesced live-update path. */
+    fun refreshSessionProcessing() {
+        if (!EqPreferencesManager(this).getOutputSessionCompatibility()) return
+        sessionUpdateHandler.removeCallbacks(sessionUpdate)
+        sessionUpdateHandler.postDelayed(sessionUpdate, 50L)
+    }
+
     // Volume change listener
     private val volumeReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -244,7 +267,7 @@ class EqService : Service() {
     /** Re-verify session-0 control, re-attach if displaced; cooldown-gated, MBC + bypass re-applied. */
     private fun verifyAndReclaimGlobalDp() {
         val prefs = EqPreferencesManager(this)
-        if (prefs.getAudioRoutingMode() == 1) return   // Session-based: no global DP
+        if (prefs.usesSessionProcessing()) return   // Session-based: no global DP
         if (!prefs.getPowerState()) return              // EQ powered off
         if (!dynamicsManager.isActive) return
         if (!dynamicsManager.hasLostControl()) return
@@ -294,7 +317,7 @@ class EqService : Service() {
         lastPlayingPackages = playingNow
         if (!appChanged) return
         val prefs = EqPreferencesManager(this)
-        if (prefs.getAudioRoutingMode() == 1) return
+        if (prefs.usesSessionProcessing()) return
         if (!prefs.getPowerState()) return
         if (!dynamicsManager.isActive) return
         val now = System.currentTimeMillis()
@@ -479,6 +502,7 @@ class EqService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        sessionPrefStores.forEach { it.registerOnSharedPreferenceChangeListener(sessionPrefListener) }
         createNotificationChannel()
         // Feed the converter the device's real mixer sample rate (#26).
         try {
@@ -538,6 +562,7 @@ class EqService : Service() {
         val coordinator = RouteSwitchCoordinator(this, eqPrefs, dynamicsManager)
         // Per-app session attachment; created before the monitor so onRouteRebuild can reach it.
         sessionEffects = SessionEffectManager(this)
+        if (eqPrefs.getOutputSessionCompatibility()) setDpRunning(eqPrefs.getPowerState())
 
         val monitor = AudioRoutingMonitor(this).apply {
             onRouteChange = { change ->
@@ -548,6 +573,7 @@ class EqService : Service() {
                 coordinator.onRouteChange(change)
                 // Physical output change → device lifecycle with the route-change recreate.
                 handleDeviceRouteLifecycle(change.key, recreateOnActive = true)
+                refreshSessionProcessing()
             }
             // Populate the "seen" list as devices appear, before they're routed.
             onDeviceSeen = { key, label -> eqPrefs.rememberSeenDevice(key, label) }
@@ -605,6 +631,7 @@ class EqService : Service() {
                 return START_NOT_STICKY
             }
             ACTION_REAPPLY_MBC -> {
+                refreshSessionProcessing()
                 // Prefs are the source of truth (#78): sync limiter + MBC, rebuild on structure change.
                 val p = EqPreferencesManager(this)
                 val limChanged = dynamicsManager.limiterEnabled != p.getLimiterEnabled() ||
@@ -641,6 +668,7 @@ class EqService : Service() {
                 return START_NOT_STICKY
             }
             ACTION_APPLY_PERSISTED_EQ -> {
+                refreshSessionProcessing()
                 if (dynamicsManager.isActive) {
                     loadPersistedParametricEq()?.let { eq ->
                         val p = EqPreferencesManager(this)
@@ -671,7 +699,7 @@ class EqService : Service() {
                     releaseSessionEffectsKeepingReverb()
                     setDpRunning(false)
                 }
-                if (p.getPowerState() && p.getAudioRoutingMode() != 1) {
+                if (p.getPowerState() && p.usesSessionProcessing().not()) {
                     startService(Intent(this, EqService::class.java).setAction(ACTION_AUTO_START))
                 } else {
                     updateNotification()
@@ -679,6 +707,11 @@ class EqService : Service() {
                 return START_NOT_STICKY
             }
             ACTION_RECYCLE_DP -> {
+                if (EqPreferencesManager(this).usesSessionProcessing()) {
+                    sessionEffects?.onRoutingModeChanged()
+                    refreshSessionProcessing()
+                    return START_NOT_STICKY
+                }
                 // Rebuild live DP in place so creation-time settings apply without a power cycle; MBC geometry from prefs (#78).
                 EqPreferencesManager(this).let { p ->
                     dynamicsManager.mbcEnabled = p.getMbcEnabled()
@@ -702,6 +735,7 @@ class EqService : Service() {
                 val on = intent.getBooleanExtra(EXTRA_POWER_ON, true)
                 EqPreferencesManager(this).savePowerState(on)
                 sessionEffects?.setArmed(on)
+                if (EqPreferencesManager(this).getOutputSessionCompatibility()) setDpRunning(on)
                 updateNotification()
                 return START_STICKY
             }
@@ -709,7 +743,7 @@ class EqService : Service() {
                 manualOverrideDeviceKey = null
                 dynamicsManager.stop()
                 // Power off is the master switch: per-app effects, a toggled-on reverb and virtual surround stop too (issue #127); Session mode keeps the tracked sessions for the UI.
-                if (EqPreferencesManager(this).getAudioRoutingMode() == 1) sessionEffects?.setArmed(false)
+                if (EqPreferencesManager(this).usesSessionProcessing()) sessionEffects?.setArmed(false)
                 else sessionEffects?.releaseAll()
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) VirtualSurroundService.stop(this)
                 // Persist power-off so tile/notification taps sync when MainActivity is gone.
@@ -727,7 +761,7 @@ class EqService : Service() {
                 Log.d(TAG, "ACTION_START_FROM_TILE — toggle requested, dynamicsManager.isActive=${dynamicsManager.isActive}")
                 if (!safeStartForeground()) return START_NOT_STICKY
                 EqPreferencesManager(this).let { p ->
-                    if (p.getAudioRoutingMode() == 1) {
+                    if (p.usesSessionProcessing()) {
                         // Session mode: the tile toggles the per-app effects, never a global DP.
                         val on = !p.getPowerState()
                         p.savePowerState(on)
@@ -809,7 +843,7 @@ class EqService : Service() {
                 if (!safeStartForeground()) return START_NOT_STICKY
                 if (dynamicsManager.isActive) return START_STICKY
                 EqPreferencesManager(this).let { p ->
-                    if (p.getAudioRoutingMode() == 1) {
+                    if (p.usesSessionProcessing()) {
                         // Session mode has no global DP — "on" arms the per-app effects.
                         p.savePowerState(true)
                         sessionEffects?.setArmed(true)
@@ -931,7 +965,7 @@ class EqService : Service() {
                 if (!safeStartForeground()) return START_NOT_STICKY
                 // Session-based never runs a parallel session-0 instance — stop the global DP.
                 val prefs = EqPreferencesManager(this)
-                if (prefs.getAudioRoutingMode() == 1) {
+                if (prefs.usesSessionProcessing()) {
                     routeCoordinator?.endAppOverride()
                     dynamicsManager.stop()
                     setDpRunning(false)
@@ -957,6 +991,12 @@ class EqService : Service() {
                 sessionEffects?.applyReverbParamsToAll()
                 // onRoutingModeChanged releases/re-attaches per-session DPs independently of reverbs.
                 sessionEffects?.onRoutingModeChanged()
+                if (prefs.getOutputSessionCompatibility()) {
+                    setDpRunning(prefs.getPowerState())
+                    sendBroadcast(Intent(if (prefs.getPowerState()) ACTION_EQ_STARTED else ACTION_EQ_STOPPED)
+                        .setPackage(packageName))
+                }
+                updateNotification()
                 // System-wide: MainActivity owns the EQ instance — no auto-start here.
                 return START_STICKY
             }
@@ -970,6 +1010,13 @@ class EqService : Service() {
 
     fun startEq(eq: ParametricEqualizer): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return false
+        if (EqPreferencesManager(this).usesSessionProcessing()) {
+            EqPreferencesManager(this).savePowerState(true)
+            sessionEffects?.setArmed(true)
+            setDpRunning(true)
+            safeStartForeground()
+            return true
+        }
         manualOverrideDeviceKey = lastDeviceKey ?: overridePending
         dynamicsManager.curveBypassed = !EqPreferencesManager(this).getEqEnabled()
         dynamicsManager.start(eq)
@@ -1007,7 +1054,7 @@ class EqService : Service() {
     private fun restoreDpIfPowerOn(reason: String) {
         if (dynamicsManager.isActive || disabledByDevice) return
         val p = EqPreferencesManager(this)
-        if (!p.getPowerState() || p.getAudioRoutingMode() == 1) return
+        if (!p.getPowerState() || p.usesSessionProcessing()) return
         val now = System.currentTimeMillis()
         if (now - lastRestoreAttemptMs < 30_000L) return
         lastRestoreAttemptMs = now
@@ -1029,7 +1076,7 @@ class EqService : Service() {
     private fun handleDeviceRouteLifecycle(deviceKey: String, recreateOnActive: Boolean) {
         val prefs = EqPreferencesManager(this)
         // Session-based routing doesn't use the global DP at all.
-        if (prefs.getAudioRoutingMode() == 1) return
+        if (prefs.usesSessionProcessing()) return
         if (!prefs.getDeviceAutoSwitchEnabled()) return
         val binding = prefs.getDeviceBindingSmart(deviceKey, lastDeviceLabel ?: "")
         val isDisable = binding?.presetName == EqPreferencesManager.DEVICE_PRESET_DISABLED
@@ -1088,10 +1135,18 @@ class EqService : Service() {
     }
 
     fun updateEq(eq: ParametricEqualizer) {
+        if (EqPreferencesManager(this).usesSessionProcessing()) {
+            refreshSessionProcessing()
+            return
+        }
         dynamicsManager.updateFromEqualizer(eq)
     }
 
     fun updateEqPerChannel(leftEq: ParametricEqualizer, rightEq: ParametricEqualizer) {
+        if (EqPreferencesManager(this).usesSessionProcessing()) {
+            refreshSessionProcessing()
+            return
+        }
         dynamicsManager.updateFromEqualizers(leftEq, rightEq)
     }
 
@@ -1184,6 +1239,8 @@ class EqService : Service() {
     }
 
     override fun onDestroy() {
+        sessionPrefStores.forEach { it.unregisterOnSharedPreferenceChangeListener(sessionPrefListener) }
+        sessionUpdateHandler.removeCallbacksAndMessages(null)
         stopWatchdog()
         try { unregisterReceiver(volumeReceiver) } catch (_: Exception) {}
         try { unregisterReceiver(routePresetReceiver) } catch (_: Exception) {}
@@ -1231,7 +1288,7 @@ class EqService : Service() {
 
         val prefs = EqPreferencesManager(this)
         // Notification mirrors live DP state; in Session mode "on" means the per-app effects are armed.
-        val isOn = dynamicsManager.isActive || (prefs.getAudioRoutingMode() == 1 && prefs.getPowerState())
+        val isOn = dynamicsManager.isActive || (prefs.usesSessionProcessing() && prefs.getPowerState())
         val toggleIntent = Intent(this, EqService::class.java).apply {
             action = if (isOn) ACTION_STOP else ACTION_AUTO_START
         }

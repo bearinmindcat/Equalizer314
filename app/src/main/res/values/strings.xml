@@ -461,4 +461,6 @@
         <item quantity="one">%1$d target</item>
         <item quantity="other">%1$d targets</item>
     </plurals>
+    <string name="output_session_compatibility">Audio output compatibility</string>
+    <string name="output_session_compatibility_description">Use app audio sessions when system-wide processing does not reach your output. System-wide applies the current settings to all detected media sessions; Session-based keeps app presets. Requires session detection. New sessions may take a moment to attach.</string>
 </resources>

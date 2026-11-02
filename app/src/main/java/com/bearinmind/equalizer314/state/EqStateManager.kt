@@ -170,7 +170,7 @@ class EqStateManager(
                 android.util.Log.d("EqStateManager", "Calling doStartEq via onServiceConnected callback!")
                 onServiceConnected?.invoke()
             } else {
-                isProcessing = service.dynamicsManager.isActive
+                isProcessing = service.isProcessingActive
                 onProcessingChanged?.invoke(isProcessing)
             }
         }
@@ -297,6 +297,11 @@ class EqStateManager(
         ParametricToDpConverter.overlayEq =
             if (eqPrefs.getChannelSideEqEnabled() && sharedEq.getBandCount() > 0) sharedEq else null
         onEqPushed?.invoke()
+        if (eqPrefs.getOutputSessionCompatibility()) {
+            saveState()
+            eqService?.refreshSessionProcessing()
+            return
+        }
         if (!isProcessing) return
         val dm = eqService?.dynamicsManager ?: run {
             // Service binding still pending (re-bound async on start): persist and let the service push it, so the sound follows the graph.
@@ -706,6 +711,11 @@ class EqStateManager(
 
     /** Apply only channel-side-options changes (balance / per-channel preamp) without recomputing the EQ curve. Cheap enough to call on every slider step. */
     fun pushChannelSettingsUpdate() {
+        if (eqPrefs.getOutputSessionCompatibility()) {
+            saveState()
+            eqService?.refreshSessionProcessing()
+            return
+        }
         if (!isProcessing) return
         val dm = eqService?.dynamicsManager ?: return
         dm.channelBalancePercent = channelBalancePercent
@@ -715,6 +725,11 @@ class EqStateManager(
     }
 
     fun pushLimiterUpdate() {
+        if (eqPrefs.getOutputSessionCompatibility()) {
+            saveState()
+            eqService?.refreshSessionProcessing()
+            return
+        }
         if (!isProcessing) return
         val dm = eqService?.dynamicsManager ?: return
         dm.limiterEnabled = limiterEnabled

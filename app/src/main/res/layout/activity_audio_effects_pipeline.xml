@@ -78,6 +78,24 @@
             android:textColor="?attr/colorOnSurfaceVariant" />
     </com.google.android.material.card.MaterialCardView>
 
+    <com.google.android.material.materialswitch.MaterialSwitch
+        android:id="@+id/outputSessionCompatibilitySwitch"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
+        android:padding="12dp"
+        android:text="@string/output_session_compatibility"
+        android:textAppearance="@style/TextAppearance.Material3.TitleSmall" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="28dp"
+        android:layout_marginBottom="12dp"
+        android:text="@string/output_session_compatibility_description"
+        android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+        android:textColor="?attr/colorOnSurfaceVariant" />
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/audioPipelineRecyclerView"
         android:layout_width="match_parent"

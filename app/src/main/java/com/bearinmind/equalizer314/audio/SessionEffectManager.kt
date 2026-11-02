@@ -30,6 +30,8 @@ class SessionEffectManager(private val context: Context) {
     )
 
     private val sessions = mutableMapOf<Int, DynamicsProcessing>()
+    private data class Layout(val bands: Int, val mbcBands: Int, val interleave: Boolean, val frameMs: Float)
+    private val layouts = mutableMapOf<Int, Layout>()
     // Insert reverb via the low-level AudioEffect ctor (the SDK ctor gives the silent auxiliary variant).
     private val reverbs = mutableMapOf<Int, AudioEffect>()
 
@@ -82,20 +84,25 @@ class SessionEffectManager(private val context: Context) {
     @Synchronized
     fun reapplyBindingFor(packageName: String) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
-        if (eqPrefs.getAudioRoutingMode() != 1) return
+        if (!eqPrefs.usesSessionProcessing()) return
         // Snapshot first — attach() will mutate sessionInfo.
         val affected = sessionInfo.values
             .filter { it.packageName == packageName }
             .toList()
         for (entry in affected) {
-            // Drop the existing DP so attach() builds a fresh one for the new binding.
-            sessions.remove(entry.sessionId)?.let {
-                try { it.release() } catch (_: Throwable) {}
-            }
             attach(entry.sessionId, entry.packageName, entry.source)
         }
         if (affected.isNotEmpty()) {
             Log.d(TAG, "reapplyBindingFor($packageName) rebuilt ${affected.size} session(s)")
+        }
+    }
+
+    /** Update already attached effects without a power cycle; structural changes rebuild only that session. */
+    @Synchronized
+    fun refreshActiveEffects() {
+        if (!eqPrefs.usesSessionProcessing()) return
+        for (entry in sessionInfo.values.toList()) {
+            attach(entry.sessionId, entry.packageName, entry.source)
         }
     }
 
@@ -110,6 +117,11 @@ class SessionEffectManager(private val context: Context) {
     private fun notifySessionsChanged() {
         drivingPresetName = getCurrentDrivingPreset()
         drivingPresetAttached = isDrivingPresetAttached()
+        visualizerSessionId = if (eqPrefs.getOutputSessionCompatibility()) {
+            sessionInfo.values.firstOrNull {
+                it.packageName in playingPackages && sessions.containsKey(it.sessionId)
+            }?.sessionId ?: 0
+        } else 0
         context.sendBroadcast(
             android.content.Intent(ACTION_SESSIONS_CHANGED)
                 .setPackage(context.packageName),
@@ -149,7 +161,7 @@ class SessionEffectManager(private val context: Context) {
         notifySessionsChanged()
 
         // DP / reverb attachment is Session-based only (mode 1).
-        if (eqPrefs.getAudioRoutingMode() != 1) {
+        if (!eqPrefs.usesSessionProcessing()) {
             return
         }
 
@@ -163,31 +175,55 @@ class SessionEffectManager(private val context: Context) {
             attachReverbLocked(sessionId)
         }
 
-        if (binding == null) {
+        val emulateGlobal = eqPrefs.getOutputSessionCompatibility() && eqPrefs.getAudioRoutingMode() != 1
+        if (emulateGlobal) {
+            val key = EqService.staticLastDeviceKey
+            val disabledOutput = eqPrefs.getDeviceAutoSwitchEnabled() && key != null &&
+                eqPrefs.getDeviceBinding(key)?.presetName == EqPreferencesManager.DEVICE_PRESET_DISABLED
+            if (disabledOutput || eqPrefs.getAppliedAppPreset() == EqPreferencesManager.DEVICE_PRESET_DISABLED) {
+                sessions.remove(sessionId)?.let { try { it.release() } catch (_: Throwable) {} }
+                layouts.remove(sessionId)
+                return
+            }
+        }
+        if (!emulateGlobal && binding == null) {
+            sessions.remove(sessionId)?.let { try { it.release() } catch (_: Throwable) {} }
+            layouts.remove(sessionId)
             Log.d(TAG, "No binding for $packageName — tracking only (session=$sessionId source=$source)")
             return
         }
-        if (binding.presetName == EqPreferencesManager.DEVICE_PRESET_DISABLED) {
+        if (!emulateGlobal && binding?.presetName == EqPreferencesManager.DEVICE_PRESET_DISABLED) {
             sessions.remove(sessionId)?.let { try { it.release() } catch (_: Throwable) {} }
             Log.d(TAG, "EQ disabled for $packageName — no DP on session $sessionId")
             return
         }
 
-        val loaded = loadPreset(binding.presetName)
+        val useLive = emulateGlobal || (eqPrefs.getOutputSessionCompatibility() &&
+            binding?.presetName == eqPrefs.getPresetName())
+        val loaded = if (useLive) loadLivePreset() else binding?.let { loadPreset(it.presetName) }
         if (loaded == null) {
-            Log.w(TAG, "Binding for $packageName references missing preset '${binding.presetName}'")
+            Log.w(TAG, "No usable EQ for $packageName (session=$sessionId)")
             return
         }
 
-        // Replace any existing DP for this session; the reverb has its own lifecycle.
-        sessions.remove(sessionId)?.let {
-            try { it.release() } catch (_: Throwable) {}
-        }
-
         try {
+            val current = sessions[sessionId]
+            val layout = layouts[sessionId]
+            val chain = resolveChain(loaded.json)
+            val mbcBands = if (chain.mbcEnabled) chain.mbcBands.size.coerceAtLeast(1) else 1
+            if (current != null && layout != null &&
+                layout.mbcBands == mbcBands && layout.frameMs == DynamicsProcessingManager.effectiveFrameMs &&
+                layout.interleave == DynamicsProcessingManager.effectiveInterleave &&
+                layout.bands == ParametricToDpConverter.numBands && current.hasControl()) {
+                configureSessionDp(current, loaded, chain, layout.interleave)
+                current.enabled = true
+                return
+            }
+            sessions.remove(sessionId)?.let { try { it.release() } catch (_: Throwable) {} }
+            layouts.remove(sessionId)
             val dp = createSessionDp(sessionId, loaded)
             sessions[sessionId] = dp
-            Log.d(TAG, "Attached DP session=$sessionId pkg=$packageName preset=${binding.presetName} preamp=${"%.1f".format(loaded.preampDb)}dB source=$source")
+            Log.d(TAG, "Attached DP session=$sessionId pkg=$packageName live=$useLive preamp=${loaded.preampDb}dB source=$source")
             notifySessionsChanged()
         } catch (t: Throwable) {
             // Swallow construction failure — another EQ may own the session, or it closed.
@@ -243,8 +279,10 @@ class SessionEffectManager(private val context: Context) {
         if (!armed) {
             for ((_, dp) in sessions) { try { dp.release() } catch (_: Throwable) {} }
             sessions.clear()
+            layouts.clear()
             for ((_, r) in reverbs) { try { r.release() } catch (_: Throwable) {} }
             reverbs.clear()
+            notifySessionsChanged()
             Log.d(TAG, "Per-app effects released (power off)")
             return
         }
@@ -255,13 +293,15 @@ class SessionEffectManager(private val context: Context) {
     @Synchronized
     fun onRoutingModeChanged() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
-        val isSessionBased = eqPrefs.getAudioRoutingMode() == 1
+        val isSessionBased = eqPrefs.usesSessionProcessing()
         if (!isSessionBased) {
             // Leaving Session-based: release per-session DPs, keep sessionInfo for the UI.
             for ((_, dp) in sessions) {
                 try { dp.release() } catch (_: Throwable) {}
             }
             sessions.clear()
+            layouts.clear()
+            notifySessionsChanged()
             return
         }
         // Entering Session-based: re-attach DPs for every tracked session (attach is idempotent).
@@ -283,7 +323,7 @@ class SessionEffectManager(private val context: Context) {
             reverbs.clear()
             return
         }
-        val sessionMode = eqPrefs.getAudioRoutingMode() == 1
+        val sessionMode = eqPrefs.usesSessionProcessing()
         val wanted: Set<Int> = if (sessionMode) {
             sessionInfo.keys.filter { it > 0 }.toSet()
         } else {
@@ -309,6 +349,7 @@ class SessionEffectManager(private val context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
         // Allow session 0 (global output mix); only reject negative/synthetic ids.
         if (sessionId < 0) return
+        if (sessionId in reverbs) return
         reverbs.remove(sessionId)?.let {
             try { it.release() } catch (_: Throwable) {}
         }
@@ -408,6 +449,7 @@ class SessionEffectManager(private val context: Context) {
 
     @Synchronized
     fun detach(sessionId: Int) {
+        layouts.remove(sessionId)
         sessions.remove(sessionId)?.let { dp ->
             try { dp.release() } catch (_: Throwable) {}
             Log.d(TAG, "Detached DP from session $sessionId")
@@ -433,6 +475,7 @@ class SessionEffectManager(private val context: Context) {
             .map { it.key }
         if (toDrop.isEmpty()) return
         for (sid in toDrop) {
+            layouts.remove(sid)
             sessions.remove(sid)?.let {
                 try { it.release() } catch (_: Throwable) {}
             }
@@ -448,6 +491,7 @@ class SessionEffectManager(private val context: Context) {
 
     @Synchronized
     fun releaseAll() {
+        layouts.clear()
         for ((_, dp) in sessions) {
             try { dp.release() } catch (_: Throwable) {}
         }
@@ -464,7 +508,11 @@ class SessionEffectManager(private val context: Context) {
 
     /** Full-chain per-app DP from the preset's chain (global prefs as fallback) — same engine settings as session 0. */
     private fun createSessionDp(sessionId: Int, loaded: LoadedPreset): DynamicsProcessing {
-        if (ParametricToDpConverter.numBands < 32) ParametricToDpConverter.setNumBands(127)
+        if (DynamicsProcessingManager.compatMode) {
+            ParametricToDpConverter.setNumBands(DynamicsProcessingManager.COMPAT_BAND_COUNT)
+        } else if (ParametricToDpConverter.numBands < 32 || ParametricToDpConverter.numBands > 128) {
+            ParametricToDpConverter.setNumBands(127)
+        }
         val bandCount = ParametricToDpConverter.numBands
         val frameMs = DynamicsProcessingManager.effectiveFrameMs
         ParametricToDpConverter.frameDurationMs = frameMs
@@ -490,7 +538,24 @@ class SessionEffectManager(private val context: Context) {
             build(false)
         }
 
-        // Stage order matches the global DP: limiter -> MBC -> EQ -> enable.
+        try {
+            configureSessionDp(dp, loaded, chain, interleave)
+            dp.enabled = true
+            layouts[sessionId] = Layout(bandCount, mbcStageBands, interleave, frameMs)
+            return dp
+        } catch (t: Throwable) {
+            try { dp.release() } catch (_: Throwable) {}
+            throw t
+        }
+    }
+
+    private fun configureSessionDp(
+        dp: DynamicsProcessing,
+        loaded: LoadedPreset,
+        chain: SessionChain,
+        interleave: Boolean,
+    ) {
+        // Stage order matches the global DP: limiter -> MBC -> EQ -> gain.
         val limiter = DynamicsProcessing.Limiter(
             chain.limiterEnabled, chain.limiterEnabled, 0,
             chain.limiterAttack, chain.limiterRelease, chain.limiterRatio,
@@ -506,18 +571,26 @@ class SessionEffectManager(private val context: Context) {
             dp.setMbcBandByChannelIndex(1, 0, dummy)
         }
 
-        applySessionEq(dp, loaded.leftEq, loaded.rightEq, interleave)
-
-        if (loaded.preampDb != 0f) {
-            try {
-                dp.setInputGainbyChannel(0, loaded.preampDb)
-                dp.setInputGainbyChannel(1, loaded.preampDb)
-            } catch (e: Throwable) {
-                Log.w(TAG, "setInputGainbyChannel failed for session $sessionId", e)
-            }
+        val oldOverlay = ParametricToDpConverter.overlayEq
+        try {
+            ParametricToDpConverter.overlayEq = loaded.json.optJSONArray("sharedBands")
+                ?.let { EqPreferencesManager.eqFromBands(it) }
+            val bypass = loaded.live && !eqPrefs.getEqEnabled()
+            val left = if (bypass) ParametricEqualizer().apply { clearBands() } else loaded.leftEq
+            val right = if (bypass) left else loaded.rightEq
+            applySessionEq(dp, left, right, interleave)
+        } finally {
+            ParametricToDpConverter.overlayEq = oldOverlay
         }
-        dp.enabled = true
-        return dp
+        val cse = loaded.json.optBoolean("channelSideEqEnabled", false)
+        val base = if (cse) 0f else loaded.preampDb
+        val leftGain = base + if (cse) loaded.json.optDouble("preampLeft", 0.0).toFloat() else 0f
+        val rightGain = base + if (cse) loaded.json.optDouble("preampRight", 0.0).toFloat() else 0f
+        val balance = eqPrefs.getChannelBalancePercent().coerceIn(-100, 100)
+        val leftBalance = if (balance > 0) 20f * kotlin.math.log10(((100 - balance) / 100f).coerceAtLeast(1e-4f)) else 0f
+        val rightBalance = if (balance < 0) 20f * kotlin.math.log10(((100 + balance) / 100f).coerceAtLeast(1e-4f)) else 0f
+        dp.setInputGainbyChannel(0, (leftGain + eqPrefs.getLeftChannelGainDb() + leftBalance).coerceIn(-60f, 24f))
+        dp.setInputGainbyChannel(1, (rightGain + eqPrefs.getRightChannelGainDb() + rightBalance).coerceIn(-60f, 24f))
     }
 
     private fun applySessionEq(
@@ -647,15 +720,31 @@ class SessionEffectManager(private val context: Context) {
         val rightEq: ParametricEqualizer,
         val preampDb: Float,
         val json: JSONObject,
+        val live: Boolean = false,
     )
+
+    private fun loadLivePreset(): LoadedPreset? {
+        val obj = eqPrefs.captureLiveEqState() ?: return null
+        if (eqPrefs.isSimpleModeActive()) {
+            val gains = eqPrefs.getSimpleEqGains()
+            if (gains != null) {
+                val simple = EqPreferencesManager.simpleEqFor(gains)
+                return LoadedPreset(simple, simple, eqPrefs.getPreampGain(), obj, live = true)
+            }
+        }
+        return parsePreset(obj)?.copy(live = true)
+    }
 
     /** Load a pool preset's bands + preamp (CSE leftBands/rightBands honored); preamp defaults to 0 dB. */
     private fun loadPreset(name: String): LoadedPreset? {
         val prefs = context.getSharedPreferences("custom_presets", Context.MODE_PRIVATE)
         val str = runCatching { prefs.getString("preset_$name", null) }
             .getOrNull() ?: return null
+        return runCatching { parsePreset(JSONObject(str)) }.getOrNull()
+    }
+
+    private fun parsePreset(obj: JSONObject): LoadedPreset? {
         return runCatching {
-            val obj = JSONObject(str)
             fun buildEq(arr: JSONArray): ParametricEqualizer = EqPreferencesManager.eqFromBands(arr)
             val preamp = if (obj.has("preamp")) obj.getDouble("preamp").toFloat() else 0f
             val cseOn = obj.optBoolean("channelSideEqEnabled", false)
@@ -676,6 +765,8 @@ class SessionEffectManager(private val context: Context) {
 
     companion object {
         private const val TAG = "SessionEffectManager"
+        @Volatile var visualizerSessionId: Int = 0
+            private set
         /** Binder-free mirror of [getCurrentDrivingPreset] for MainActivity's graph follow. */
         @Volatile
         var drivingPresetName: String? = null

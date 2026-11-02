@@ -14,6 +14,16 @@ class VisualizerHelper {
     }
 
     private var visualizer: Visualizer? = null
+    private var captureSessionId = 0
+
+    fun refreshSession(graphView: EqGraphView) {
+        if (isRunning && captureSessionId != requestedSession(graphView.context)) start(graphView)
+    }
+
+    private fun requestedSession(context: Context): Int =
+        if (com.bearinmind.equalizer314.state.EqPreferencesManager(context).getOutputSessionCompatibility()) {
+            SessionEffectManager.visualizerSessionId
+        } else 0
     val renderer = SpectrumAnalyzerRenderer()
     var isRunning = false
         private set
@@ -63,7 +73,8 @@ class VisualizerHelper {
         }
 
         try {
-            visualizer = Visualizer(0).apply {
+            captureSessionId = requestedSession(context)
+            visualizer = Visualizer(captureSessionId).apply {
                 captureSize = Visualizer.getCaptureSizeRange()[1]
                 scalingMode = Visualizer.SCALING_MODE_NORMALIZED
                 measurementMode = Visualizer.MEASUREMENT_MODE_PEAK_RMS

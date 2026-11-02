@@ -164,7 +164,8 @@ object AudioPolicyDumpParser {
         // SoundPool players (UI clicks, alarm tones, game SFX) aren't music-stream candidates.
         if (line.contains("type:android.media.SoundPool")) return true
         // Only music-ish usage tags get EQ. USAGE_MEDIA = music/video; USAGE_UNKNOWN = untagged third-party players.
-        if (!line.contains("USAGE_MEDIA") && !line.contains("USAGE_UNKNOWN")) return true
+        if (!line.contains("USAGE_MEDIA") && !line.contains("USAGE_UNKNOWN") &&
+            !line.contains("USAGE_GAME")) return true
 
         val uidMatch = POWERAMP_UID_PID.matcher(line)
         if (!uidMatch.find()) return true   // prefix matched but no UID — skip

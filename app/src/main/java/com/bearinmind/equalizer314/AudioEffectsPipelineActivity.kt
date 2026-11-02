@@ -62,6 +62,24 @@ class AudioEffectsPipelineActivity : AppCompatActivity() {
         setContentView(R.layout.activity_audio_effects_pipeline)
         eqPrefs = EqPreferencesManager(this)
 
+        findViewById<com.google.android.material.materialswitch.MaterialSwitch>(
+            R.id.outputSessionCompatibilitySwitch,
+        ).apply {
+            isChecked = eqPrefs.getOutputSessionCompatibility()
+            setOnCheckedChangeListener { _, checked ->
+                eqPrefs.setOutputSessionCompatibility(checked)
+                val intent = android.content.Intent(
+                    this@AudioEffectsPipelineActivity,
+                    com.bearinmind.equalizer314.audio.EqService::class.java,
+                ).setAction(com.bearinmind.equalizer314.audio.EqService.ACTION_APPLY_ROUTING_MODE)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    startForegroundService(intent)
+                } else {
+                    startService(intent)
+                }
+            }
+        }
+
         findViewById<ImageButton>(R.id.audioPipelineBackButton).setOnClickListener { finish() }
 
         // Info button toggles the "how-to" card (same height animation as Apps/Devices sections).

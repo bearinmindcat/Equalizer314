@@ -630,6 +630,7 @@ class  MainActivity : AppCompatActivity() {
         override fun onReceive(context: Context?, intent: Intent?) {
             syncGraphToDrivingAppPreset()
             updateDevicePresetStatus()
+            visualizerHelper.refreshSession(eqGraphView)
         }
     }
 
@@ -4139,7 +4140,7 @@ class  MainActivity : AppCompatActivity() {
 
     /** Power tap: Session mode arms/disarms the per-app effects (no global DP); otherwise start/stop the global DP. */
     private fun onPowerTap() {
-        if (eqPrefs.getAudioRoutingMode() == 1) {
+        if (eqPrefs.usesSessionProcessing()) {
             val on = !eqPrefs.getPowerState()
             showPowerSnackbar(on, getString(R.string.per_app_eq))
             animatePowerFab(on)
@@ -4910,7 +4911,7 @@ class  MainActivity : AppCompatActivity() {
         val savedPower = eqPrefs.getPowerState()
         com.bearinmind.equalizer314.ui.BottomNavHelper.setPowerFabInstant(this, savedPower)
         if (stateManager.serviceBound && stateManager.eqService != null) {
-            stateManager.isProcessing = stateManager.eqService!!.dynamicsManager.isActive
+            stateManager.isProcessing = stateManager.eqService!!.isProcessingActive
             // A Disable-EQ binding keeps power on with the DP detached — show the real state.
             if (savedPower && !stateManager.isProcessing && stateManager.eqService!!.isDisabledByDevice) {
                 com.bearinmind.equalizer314.ui.BottomNavHelper.setPowerFabInstant(this, false)
@@ -5026,7 +5027,7 @@ class  MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         if (stateManager.serviceBound && stateManager.eqService != null) {
-            stateManager.isProcessing = stateManager.eqService!!.dynamicsManager.isActive
+            stateManager.isProcessing = stateManager.eqService!!.isProcessingActive
         } else {
             stateManager.isProcessing = false
         }
