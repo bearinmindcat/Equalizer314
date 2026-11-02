@@ -628,6 +628,59 @@ class EqService : Service() {
     }
 
     /** startForeground that survives FGS refusal (Android 14+ boot path): stopSelf cleanly, rely on the app-open fallback. */
+    /** Start the global DP from the persisted EQ/MBC/limiter state (AUTO_START and the Disable-EQ resume); true when it runs. */
+    private fun startGlobalDpFromPrefs(): Boolean {
+        val eq = loadPersistedParametricEq()
+        if (eq != null) {
+            val p = EqPreferencesManager(this)
+            with(dynamicsManager) {
+                preampGainDb = p.getPreampGain()
+                autoGainEnabled = p.getAutoGainEnabled()
+                channelBalancePercent = p.getChannelBalancePercent()
+                leftChannelGainDb = p.getLeftChannelGainDb()
+                rightChannelGainDb = p.getRightChannelGainDb()
+                if (p.getChannelSideEqEnabled()) {
+                    // CSE keeps the preamp per side on the channel gains, not the shared stage.
+                    preampGainDb = 0f
+                    leftChannelGainDb += p.getPreampLeft()
+                    rightChannelGainDb += p.getPreampRight()
+                }
+                limiterEnabled = p.getLimiterEnabled()
+                limiterAttackMs = p.getLimiterAttack()
+                limiterReleaseMs = p.getLimiterRelease()
+                limiterRatio = p.getLimiterRatio()
+                limiterThresholdDb = p.getLimiterThreshold()
+                limiterPostGainDb = p.getLimiterPostGain()
+                mbcEnabled = p.getMbcEnabled()
+                mbcBandCount = p.getMbcBandCount()
+                curveBypassed = !p.getEqEnabled()
+            }
+            val cse = loadChannelSideEqs(p)
+            dynamicsManager.start(cse?.first ?: eq, cse?.second)
+            if (dynamicsManager.isActive) {
+                cse?.let { (l, r) -> dynamicsManager.updateFromEqualizers(l, r) }
+                p.savePowerState(true)
+                setDpRunning(true)
+                dpOutputKey = lastDeviceKey
+                syncSystemSoundBypassFromCurrent()
+                applyPersistedMbcConfig()
+                reapplyCurrentDeviceBinding()
+                if (dynamicsManager.isActive) {
+                    showDpStateToast(started = true)
+                    sendBroadcast(Intent(ACTION_EQ_STARTED).setPackage(packageName))
+                }
+                updateNotification()
+                // Re-attach reverb for the active routing mode (global → session 0).
+                sessionEffects?.applyReverbParamsToAll()
+            } else {
+                Log.w(TAG, "startGlobalDpFromPrefs: dynamicsManager.start failed silently")
+            }
+        } else {
+            Log.w(TAG, "startGlobalDpFromPrefs: no persisted bands to start with")
+        }
+        return dynamicsManager.isActive
+    }
+
     private fun safeStartForeground(): Boolean {
         return try {
             startForeground(NOTIFICATION_ID, buildNotification())
@@ -880,54 +933,7 @@ class EqService : Service() {
                         return START_STICKY
                     }
                 }
-                val eq = loadPersistedParametricEq()
-                if (eq != null) {
-                    val p = EqPreferencesManager(this)
-                    with(dynamicsManager) {
-                        preampGainDb = p.getPreampGain()
-                        autoGainEnabled = p.getAutoGainEnabled()
-                        channelBalancePercent = p.getChannelBalancePercent()
-                        leftChannelGainDb = p.getLeftChannelGainDb()
-                        rightChannelGainDb = p.getRightChannelGainDb()
-                        if (p.getChannelSideEqEnabled()) {
-                            // CSE keeps the preamp per side on the channel gains, not the shared stage.
-                            preampGainDb = 0f
-                            leftChannelGainDb += p.getPreampLeft()
-                            rightChannelGainDb += p.getPreampRight()
-                        }
-                        limiterEnabled = p.getLimiterEnabled()
-                        limiterAttackMs = p.getLimiterAttack()
-                        limiterReleaseMs = p.getLimiterRelease()
-                        limiterRatio = p.getLimiterRatio()
-                        limiterThresholdDb = p.getLimiterThreshold()
-                        limiterPostGainDb = p.getLimiterPostGain()
-                        mbcEnabled = p.getMbcEnabled()
-                        mbcBandCount = p.getMbcBandCount()
-                        curveBypassed = !p.getEqEnabled()
-                    }
-                    val cse = loadChannelSideEqs(p)
-                    dynamicsManager.start(cse?.first ?: eq, cse?.second)
-                    if (dynamicsManager.isActive) {
-                        cse?.let { (l, r) -> dynamicsManager.updateFromEqualizers(l, r) }
-                        p.savePowerState(true)
-                        setDpRunning(true)
-                        dpOutputKey = lastDeviceKey
-                        syncSystemSoundBypassFromCurrent()
-                        applyPersistedMbcConfig()
-                        reapplyCurrentDeviceBinding()
-                        if (dynamicsManager.isActive) {
-                            showDpStateToast(started = true)
-                            sendBroadcast(Intent(ACTION_EQ_STARTED).setPackage(packageName))
-                        }
-                        updateNotification()
-                        // Re-attach reverb for the active routing mode (global → session 0).
-                        sessionEffects?.applyReverbParamsToAll()
-                    } else {
-                        Log.w(TAG, "ACTION_AUTO_START: dynamicsManager.start failed silently")
-                    }
-                } else {
-                    Log.w(TAG, "ACTION_AUTO_START: no persisted bands to start with")
-                }
+                startGlobalDpFromPrefs()
                 return START_STICKY
             }
             ACTION_ATTACH_SESSION -> {
@@ -1148,16 +1154,13 @@ class EqService : Service() {
                 }
             }
             prefs.getPowerState() && disabledByDevice -> {
-                // Non-disable device after a Disable detach — resume via AUTO_START.
+                // Non-disable device after a Disable detach: resume in-process; a self-sent FGS start is refused while the app is in the background (issue #136).
                 disabledByDevice = false
-                val svc = Intent(this, EqService::class.java)
-                    .setAction(ACTION_AUTO_START)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    startForegroundService(svc)
-                } else {
-                    startService(svc)
+                try { startForeground(NOTIFICATION_ID, buildNotification()) } catch (e: Exception) {
+                    Log.w(TAG, "Resume: startForeground refused (${e.javaClass.simpleName}) — continuing")
                 }
-                Log.d(TAG, "Non-disable device '$deviceKey' routed in — resuming DP")
+                val resumed = startGlobalDpFromPrefs()
+                Log.d(TAG, "Non-disable device '$deviceKey' routed in — resuming DP: $resumed")
             }
         }
     }
@@ -1254,7 +1257,10 @@ class EqService : Service() {
         // Issue #58: hide-while-off drops foreground + cancels; TV Mode pins the notification.
         val tvModeOn = com.bearinmind.equalizer314.remote.TvRemoteHub.getMode(this) !=
             com.bearinmind.equalizer314.remote.TvRemoteHub.MODE_OFF
-        if (!tvModeOn && !dynamicsManager.isActive && EqPreferencesManager(this).getHideNotificationWhenOff()) {
+        val prefs = EqPreferencesManager(this)
+        // Paused by a Disable-EQ device with power on: stay foreground so the next device can resume it (issue #136).
+        val waitingForDevice = disabledByDevice && prefs.getPowerState()
+        if (!tvModeOn && !dynamicsManager.isActive && !waitingForDevice && prefs.getHideNotificationWhenOff()) {
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
                     stopForeground(STOP_FOREGROUND_REMOVE)
