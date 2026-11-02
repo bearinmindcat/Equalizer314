@@ -24,6 +24,9 @@ class VisualizerHelper {
     @Volatile
     var isMusicPlaying = true  // assume playing until told otherwise
     private var graphViewRef: EqGraphView? = null
+    // Primary output rate — used when the Visualizer's reported capture rate can't be trusted (issue #137).
+    @Volatile
+    private var fallbackRateHz = 48000
 
     // Calibration: offset between normalized spectrum dB and absolute dBFS
     // Apply this to normalized per-band levels to get absolute dBFS for compressor math
@@ -38,6 +41,7 @@ class VisualizerHelper {
         // Register AudioPlaybackCallback to detect play/pause (works on speaker AND Bluetooth)
         val context = graphView.context
         audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        fallbackRateHz = audioManager?.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)?.toIntOrNull() ?: 48000
         isMusicPlaying = true  // assume playing on start
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -71,6 +75,7 @@ class VisualizerHelper {
                         if (waveform == null || waveform.size < 64 || v == null) return
 
                         if (isMusicPlaying) {
+                            renderer.setSampleRate(SpectrumAnalyzerRenderer.captureRateHz(samplingRate, fallbackRateHz))
                             renderer.updateWaveformData(waveform)
 
                             // Compute calibration offset: absolute dBFS vs normalized spectrum

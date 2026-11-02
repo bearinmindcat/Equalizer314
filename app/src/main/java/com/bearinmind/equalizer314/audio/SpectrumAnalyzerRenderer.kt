@@ -11,8 +11,21 @@ import kotlin.math.*
  * render with cubic Bézier paths + gradient fill.
  */
 class SpectrumAnalyzerRenderer(
-    private val sampleRate: Int = 48000
+    sampleRate: Int = 48000
 ) {
+    companion object {
+        /** Capture rate in Hz from a Visualizer callback (milliHz); an implausible value, or 44.1 kHz before Android 14 (possibly the unset default), falls back to [fallbackHz]. */
+        fun captureRateHz(samplingRate: Int, fallbackHz: Int): Int {
+            val hz = if (samplingRate > 1_000_000) samplingRate / 1000 else samplingRate
+            if (hz !in 8000..768000) return fallbackHz
+            if (hz == 44100 && android.os.Build.VERSION.SDK_INT < 34) return fallbackHz
+            return hz
+        }
+    }
+
+    // Output rate of the captured audio — bin → Hz depends on it (issue #137: a 96 kHz output drew everything an octave low).
+    @Volatile
+    private var sampleRate: Int = sampleRate
     private var fftProcessor = WaveformFftProcessor(fftSize = 4096, sampleRate = sampleRate)
 
     /** Change FFT size at runtime. Resets smoothing state. */
@@ -21,6 +34,15 @@ class SpectrumAnalyzerRenderer(
             fftProcessor = WaveformFftProcessor(fftSize = size, sampleRate = sampleRate)
             smoothedLinear = null
         }
+    }
+
+    /** Track the capture rate; a change rebuilds the FFT and drops smoothing (old bins mean other frequencies). */
+    fun setSampleRate(hz: Int) {
+        if (hz == sampleRate || hz !in 8000..768000) return
+        sampleRate = hz
+        fftProcessor = WaveformFftProcessor(fftSize = fftProcessor.fftSize, sampleRate = hz)
+        smoothedLinear = null
+        ppoSmoothedDb = null
     }
 
     /** PPO (Points Per Octave) smoothing. 0 = disabled. Typical: 1, 3, 6, 12, 24, 48 */
@@ -176,7 +198,9 @@ class SpectrumAnalyzerRenderer(
         canvas: Canvas,
         left: Float, top: Float, right: Float, bottom: Float,
         dbMin: Float, dbMax: Float,
-        eqResponseDb: FloatArray? = null
+        eqResponseDb: FloatArray? = null,
+        freqMin: Float = 20f,
+        freqMax: Float = 20000f,
     ) {
         val linear = smoothedLinear ?: return
         val n = linear.size
@@ -209,9 +233,9 @@ class SpectrumAnalyzerRenderer(
             mbcComputer.computeAllBandGains(db, sampleRate, fftProcessor.fftSize, mbcSettings)
         }
 
-        // Log frequency mapping: 20 Hz – 20 kHz
-        val logMin = log10(20f)
-        val logMax = log10(20000f)
+        // Log frequency mapping across the caller's axis (issue #137: a fixed 20 Hz start on the 10 Hz graph drew 1 kHz at ~740 Hz)
+        val logMin = log10(freqMin)
+        val logMax = log10(freqMax)
         val logRange = logMax - logMin
 
         // Collect display points — one per pixel column

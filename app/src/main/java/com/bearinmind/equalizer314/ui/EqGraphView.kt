@@ -524,8 +524,9 @@ class EqGraphView @JvmOverloads constructor(
             val eq = parametricEq
             // EQ frequency response + MBC pre-gain combined
             val displayWidth = graphWidth.toInt().coerceAtLeast(1)
-            val logMin = kotlin.math.log10(20f)
-            val logMax = kotlin.math.log10(20000f)
+            // Same axis as the grid and EQ curve (issue #137).
+            val logMin = kotlin.math.log10(graphMinFreq)
+            val logMax = kotlin.math.log10(graphMaxFreq)
             val logRange = logMax - logMin
             val crossovers = mbcCrossovers
             val gains = mbcBandGains
@@ -544,7 +545,8 @@ class EqGraphView @JvmOverloads constructor(
                 }
             } else null
             renderer.draw(canvas, 0f, 0f, graphWidth, height.toFloat(),
-                dbMin = -60f, dbMax = 0f, eqResponseDb = eqResponse)
+                dbMin = -60f, dbMax = 0f, eqResponseDb = eqResponse,
+                freqMin = graphMinFreq, freqMax = graphMaxFreq)
             return
         }
 
