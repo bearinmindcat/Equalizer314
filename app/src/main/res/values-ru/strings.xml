@@ -438,6 +438,31 @@
         <item quantity="many">%1$d точек (%2$dГц - %3$dГц)</item>
         <item quantity="other">%1$d точек (%2$dГц - %3$dГц)</item>
     </plurals>
+    <!-- Virtual surround (Experimental, issue #128) -->
+    <string name="vs_title">Виртуальный объёмный звук</string>
+    <string name="vs_desc">Для работы этой функции необходимо записывать аудио. Некоторые приложения могут не разрешать это без модификации.</string>
+    <string name="vs_choose_hrir">Выбрать файл HRIR</string>
+    <string name="vs_hrir_files">Файлы HRIR</string>
+    <string name="vs_import_file">Импорт файла…</string>
+    <string name="vs_status_starting">Запуск…</string>
+    <plurals name="vs_status_running">
+        <item quantity="one">%1$d приложение обработано</item>
+        <item quantity="few">%1$d приложения обработано</item>
+        <item quantity="many">%1$d приложений обработано</item>
+        <item quantity="other">%1$d приложений обработано</item>
+    </plurals>
+    <string name="vs_note">Работает только в приложениях, которые объявляют своё аудио (или с разрешением DUMP) — в разработке</string>
+    <string name="vs_status_stopped">Остановлено: %1$s</string>
+    <string name="vs_error_revoked">запись была остановлена</string>
+    <string name="vs_error_hrir">не удалось загрузить файл HRIR</string>
+    <string name="vs_error_capture">не удалось захватить аудио</string>
+    <string name="vs_needs_android_10">Виртуальный объёмный звук требует Android 10 или новее</string>
+    <string name="vs_engine_unavailable">Аудиодвижок недоступен на этом устройстве</string>
+    <string name="vs_choose_hrir_first">Сначала выберите файл HRIR</string>
+    <string name="vs_needs_system_wide">Сначала переключите вход канала на «Общесистемный»</string>
+    <string name="vs_needs_record_permission">Виртуальному объёмному звуку требуется разрешение на запись аудио</string>
+    <string name="vs_unsupported_file">Не удаётся использовать этот файл (%1$s)</string>
+    <string name="vs_notif_title">Виртуальный объёмный звук включён</string>
     <plurals name="n_targets">
         <item quantity="one">%1$d целевая кривая</item>
         <item quantity="few">%1$d целевые кривые</item>
