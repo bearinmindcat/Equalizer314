@@ -106,6 +106,12 @@ class EqService : Service() {
             AudioAttributes.USAGE_ASSISTANCE_SONIFICATION,
             AudioAttributes.USAGE_ASSISTANT,
         )
+        /** Music-like usages whose start re-sends the EQ settings (issue #109). */
+        private val MEDIA_USAGES = setOf(
+            AudioAttributes.USAGE_MEDIA,
+            AudioAttributes.USAGE_GAME,
+            AudioAttributes.USAGE_UNKNOWN,
+        )
 
         fun start(context: Context) {
             val intent = Intent(context, EqService::class.java)
@@ -302,10 +308,28 @@ class EqService : Service() {
             watchdogHandler.postDelayed(playbackSettleVerify, 300)
             watchdogHandler.postDelayed(playbackSettleVerify, 1200)
             watchdogHandler.postDelayed(playbackSettleVerify, 2500)
+            // Some ROMs keep the effect "healthy" but drop its settings across pause/stop: re-send them when music starts again (issue #109).
+            val mediaNow = configs.orEmpty().any { it.audioAttributes.usage in MEDIA_USAGES }
+            if (mediaNow && !mediaPlaying) {
+                watchdogHandler.removeCallbacks(mediaStartRewrite)
+                watchdogHandler.postDelayed(mediaStartRewrite, 500)
+                watchdogHandler.postDelayed(mediaStartRewrite, 2000)
+            }
+            mediaPlaying = mediaNow
         }
     }
 
     private val playbackSettleVerify = Runnable { verifyAndReclaimGlobalDp() }
+
+    private var mediaPlaying = false
+    private val mediaStartRewrite = Runnable {
+        val p = EqPreferencesManager(this)
+        if (p.usesSessionProcessing() || !p.getPowerState() || !dynamicsManager.isActive) return@Runnable
+        if (dynamicsManager.rewriteInPlace()) {
+            applyPersistedMbcConfig()
+            Log.d(TAG, "Music started — EQ settings re-sent in place (issue #109)")
+        }
+    }
 
     private var lastPlayingPackages: Set<String> = emptySet()
     /** Latest playing set from the listener (every snapshot, empty included) — app-binding re-evaluation input. */

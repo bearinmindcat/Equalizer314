@@ -293,6 +293,17 @@ class DynamicsProcessingManager {
         }
     }
 
+    /** Re-send the live curve, input gains and limiter to the same effect (no rebuild); false when not ours or not running (issue #109). */
+    fun rewriteInPlace(): Boolean {
+        val dp = dynamicsProcessing ?: return false
+        val eq = lastEq ?: return false
+        if (!isActive) return false
+        try { if (!dp.hasControl()) return false } catch (_: Throwable) { return false }
+        applyParametricResponse(dp, eq, lastRightEq ?: eq)
+        updateLimiter()
+        return true
+    }
+
     /** Power-cycle-equivalent recreate on the current output with the last EQ; caller re-applies MBC / bypass. */
     fun reattachActive(): Boolean {
         if (!isActive) return false
