@@ -10,6 +10,8 @@ import android.os.SystemClock
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
+import java.text.BreakIterator
+import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
@@ -597,8 +599,7 @@ class ReverbVisualizerView @JvmOverloads constructor(
         val bottom = hfSubBandBottom
 
         // "HF Level" label, top-centred above the trackline.
-        val labelBaselineY = top + 4f * density - controlLabelPaint.ascent()
-        c.drawText(context.getString(R.string.rv_hf_level), (left + right) / 2f, labelBaselineY, controlLabelPaint)
+        drawZoneLabel(c, context.getString(R.string.rv_hf_level), left, right, top + 4f * density)
 
         // Trackline tick-to-tick (full zone width, like Reverb Delay).
         val cy = (top + bottom) / 2f
@@ -627,8 +628,7 @@ class ReverbVisualizerView @JvmOverloads constructor(
         c.drawRoundRect(left, top, right, bottom, cornerR, cornerR, zoneCardPaint)
 
         // Label "HF Damping" inside the sub-box, top-centred.
-        val labelBaselineY = top + 4f * density - controlLabelPaint.ascent()
-        c.drawText(context.getString(R.string.rv_hf_damping), (left + right) / 2f, labelBaselineY, controlLabelPaint)
+        drawZoneLabel(c, context.getString(R.string.rv_hf_damping), left, right, top + 4f * density)
 
         val r = 5.5f * density
         val b = hfDotInnerBounds()
@@ -762,10 +762,40 @@ class ReverbVisualizerView @JvmOverloads constructor(
         // Fixed zone labels (not attached to dragged circles), centred between each
         // zone's ticks, pinned to the band top. Early Reflections = zones 0-1;
         // Reverb Delay = zone 2; Reverb Tail = zone 3.
-        val labelY = controlBandTop + 4f * density - controlLabelPaint.ascent()
-        c.drawText(context.getString(R.string.rv_early_reflections), (zoneStart(0) + zoneEnd(1)) / 2f, labelY, controlLabelPaint)
-        c.drawText(context.getString(R.string.rv_reverb_delay), (zoneStart(2) + zoneEnd(2)) / 2f, labelY, controlLabelPaint)
-        c.drawText(context.getString(R.string.rv_reverb_tail), (zoneStart(3) + zoneEnd(3)) / 2f, labelY, controlLabelPaint)
+        val labelTop = controlBandTop + 4f * density
+        drawZoneLabel(c, context.getString(R.string.rv_early_reflections), zoneStart(0), zoneEnd(1), labelTop)
+        drawZoneLabel(c, context.getString(R.string.rv_reverb_delay), zoneStart(2), zoneEnd(2), labelTop)
+        drawZoneLabel(c, context.getString(R.string.rv_reverb_tail), zoneStart(3), zoneEnd(3), labelTop)
+    }
+
+    /** Zone label centred between [left] and [right] from [top] down: a long translation wraps once at a word break, then shrinks (down to 7 dp) until its widest line fits, so neighbouring labels never run into each other. */
+    private fun drawZoneLabel(c: Canvas, text: String, left: Float, right: Float, top: Float) {
+        val p = controlLabelPaint
+        val base = p.textSize
+        val maxW = right - left - 6f * density
+        val lines = if (p.measureText(text) <= maxW) listOf(text) else splitAtMiddleBreak(text, p)
+        val widest = lines.maxOf { p.measureText(it) }
+        if (widest > maxW) p.textSize = (base * maxW / widest).coerceAtLeast(7f * density)
+        var y = top - p.ascent()
+        for (line in lines) {
+            c.drawText(line, (left + right) / 2f, y, p)
+            y += p.fontSpacing
+        }
+        p.textSize = base
+    }
+
+    /** [text] split at the line-break opportunity nearest its visual middle; one line when it has none. */
+    private fun splitAtMiddleBreak(text: String, p: Paint): List<String> {
+        val it = BreakIterator.getLineInstance().apply { setText(text) }
+        var best = -1
+        var bestDiff = Float.MAX_VALUE
+        var b = it.next()
+        while (b != BreakIterator.DONE && b < text.length) {
+            val diff = abs(p.measureText(text, 0, b) - p.measureText(text, b, text.length))
+            if (diff < bestDiff) { bestDiff = diff; best = b }
+            b = it.next()
+        }
+        return if (best <= 0) listOf(text) else listOf(text.substring(0, best).trimEnd(), text.substring(best).trim())
     }
 
     private fun trackLineY(): Float {
