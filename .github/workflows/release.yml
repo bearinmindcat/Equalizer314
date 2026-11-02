@@ -1,29 +1,54 @@
-# Release pipeline: pushing a version tag (Equalizer314-v0.0.22-beta, …) builds the APK signed with the
-# release key and makes it a draft GitHub release named after the tag, with the fastlane changelog for
-# that versionCode as its notes. Edit the notes on GitHub and publish the draft.
+# Releases. The usual way is Actions › Release › Run workflow (on main), which
+#   1. bumps versionName to the next patch (0.0.22-beta → 0.0.23-beta, or the version typed in) and versionCode by 1,
+#   2. writes fastlane/metadata/android/en-US/changelogs/<versionCode>.txt from the commits since the last release,
+#   3. commits both as "chore: version bump to v<version>" and pushes it to main,
+#   4. builds the APK signed with the release key and publishes the GitHub release, which creates the tag
+#      Equalizer314-v<version> that F-Droid picks the release up from (UpdateCheckMode: Tags).
+# If versionName has no tag yet (bumped by hand), that version is released as it is, and a changelog already
+# written by hand for the new versionCode is used instead of the generated one.
 #
-# The tag must match versionName in app/build.gradle.kts, and the APK must be signed with the key F-Droid
-# expects (AllowedAPKSigningKeys): F-Droid rebuilds every release from source and only publishes it when
-# its build is byte-identical to the APK attached here (Equalizer314-v<version>.apk).
+# Pushing a tag Equalizer314-v<versionName> by hand also works: that commit is built and released as it is.
 #
-# A manual run (Actions › Release › Run workflow) is a dry run: it builds the APK at the version in
-# app/build.gradle.kts and keeps it as the run's artifact, and releases nothing.
+# The notes come from semantic commit subjects: "feat: …" goes under New, "fix: …" under Fixes, "perf: …" under
+# Improvements and merged pull requests under Contributions. chore/docs/ci/refactor/… and subjects without a type are left out
+# (the run's summary lists the untyped ones, in case one was meant to be there).
+#
+# F-Droid rebuilds every release from source and only publishes it when its build is byte-identical to the APK
+# attached here (Equalizer314-v<version>.apk), so the APK must be signed with the key in AllowedAPKSigningKeys.
 name: Release
 
 on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version (leave blank for the next patch, e.g. 0.0.22-beta → 0.0.23-beta)
+        type: string
+        default: ''
+      draft:
+        description: Keep it as a draft instead of publishing
+        type: boolean
+        default: false
+      dry_run:
+        description: Dry run (only shows the version and notes and builds the APK; changes and releases nothing)
+        type: boolean
+        default: false
   push:
     tags: ['Equalizer314-v*']
-  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
-  # never cancel a release halfway; a newer push waits its turn
+  # one release at a time, and never cancel one halfway
+  group: release
   cancel-in-progress: false
 
+defaults:
+  run:
+    shell: bash
+
 env:
+  TAG_PREFIX: Equalizer314-v
   # SHA-256 of the release certificate, as in F-Droid's AllowedAPKSigningKeys
   RELEASE_CERT_SHA256: 7a8368d18ad64294f9aadf4b736adcd15cb0cb88c6b9dc2e0bd5f1e461b83e52
   # same versions as app/build.gradle.kts and F-Droid's recipe (ndk: r27c)
@@ -31,31 +56,203 @@ env:
   CMAKE_VERSION: 3.22.1
 
 jobs:
-  apk:
-    name: APK
+  prepare:
+    name: Version and notes
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # pushes the version bump commit
     outputs:
-      version: ${{ steps.v.outputs.version }}
-      code: ${{ steps.v.outputs.code }}
+      skip: ${{ steps.v.outputs.skip }}
+      release: ${{ steps.v.outputs.release }}
+      sha: ${{ steps.v.outputs.sha }}
+      tag: ${{ steps.v.outputs.tag }}
+      notes: ${{ steps.v.outputs.notes }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # every tag and commit, for the notes
 
       - id: v
-        name: Resolve version
+        name: Version, changelog and bump commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry_run || false }}
         run: |
-          name="$(sed -n 's/^ *versionName = "\(.*\)"$/\1/p' app/build.gradle.kts)"
-          code="$(sed -n 's/^ *versionCode = \([0-9]*\)$/\1/p' app/build.gradle.kts)"
+          set -euo pipefail
+          gradle=app/build.gradle.kts
+          name="$(sed -n 's/^ *versionName = "\(.*\)"$/\1/p' "$gradle")"
+          code="$(sed -n 's/^ *versionCode = \([0-9]*\)$/\1/p' "$gradle")"
           if [ -z "$name" ] || [ -z "$code" ]; then
-            echo "::error::versionName / versionCode not found in app/build.gradle.kts"
+            echo "::error::versionName / versionCode not found in $gradle"
             exit 1
           fi
-          if [ "$GITHUB_REF_TYPE" = tag ] && [ "${GITHUB_REF_NAME#Equalizer314-v}" != "$name" ]; then
-            echo "::error::tag $GITHUB_REF_NAME doesn't match versionName $name"
-            exit 1
+          has_tag() { git rev-parse -q --verify "refs/tags/$TAG_PREFIX$1" >/dev/null; }
+
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            version="${GITHUB_REF_NAME#"$TAG_PREFIX"}"
+            if [ "$version" != "$name" ]; then
+              echo "::error::tag $GITHUB_REF_NAME doesn't match versionName $name"
+              exit 1
+            fi
+            if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+              # the tag came from publishing a release (a draft, say), so there's nothing left to do
+              echo "$GITHUB_REF_NAME is already released." >>"$GITHUB_STEP_SUMMARY"
+              echo "skip=true" >>"$GITHUB_OUTPUT"
+              exit 0
+            fi
+            prev="$(git describe --tags --abbrev=0 --match "$TAG_PREFIX*" HEAD^ 2>/dev/null || true)"
+            release=true
+          else
+            if [ "$DRY_RUN" != true ] && [ "$GITHUB_REF_NAME" != main ]; then
+              echo "::error::releases are made from main (this run is on $GITHUB_REF_NAME)"
+              exit 1
+            fi
+            prev="$(git describe --tags --abbrev=0 --match "$TAG_PREFIX*" 2>/dev/null || true)"
+            if has_tag "$name"; then
+              # released already, so this is the next one: next patch, keeping a -beta style label
+              core="$(grep -oE '^[0-9]+\.[0-9]+\.[0-9]+' <<<"$name" || true)"
+              if [ -z "$core" ] && [ -z "$INPUT_VERSION" ]; then
+                echo "::error::can't work out the version after $name: type it in when running the workflow"
+                exit 1
+              fi
+              label="${name#"$core"}"
+              label="${label%%_*}"
+              IFS=. read -r major minor patch <<<"$core"
+              version="${INPUT_VERSION:-$major.$minor.$((patch + 1))$label}"
+              code=$((code + 1))
+            else
+              version="${INPUT_VERSION:-$name}"
+            fi
+            version="${version#v}"
+            if ! [[ $version =~ ^[0-9A-Za-z][0-9A-Za-z._-]*$ ]]; then
+              echo "::error::\"$version\" isn't a version name like 0.0.23-beta"
+              exit 1
+            fi
+            if has_tag "$version"; then
+              echo "::error::$TAG_PREFIX$version is already released"
+              exit 1
+            fi
+            if [ "$DRY_RUN" != true ] && [ -z "$(git rev-list "${prev:+$prev..}HEAD")" ]; then
+              echo "::error::no commits since $prev, nothing to release"
+              exit 1
+            fi
+            release="$([ "$DRY_RUN" = true ] && echo false || echo true)"
           fi
-          echo "version=$name" >>"$GITHUB_OUTPUT"
-          echo "code=$code" >>"$GITHUB_OUTPUT"
-          echo "### v$name ($code, \`${GITHUB_SHA::9}\`)" >>"$GITHUB_STEP_SUMMARY"
+          tag="$TAG_PREFIX$version"
+          range="${prev:+$prev..}HEAD"
+
+          # Notes from the commits on main's own line (a merged pull request counts once, as its merge).
+          tidy() {  # capital first letter, trailing "; issue #12" → " (issue #12)"
+            sed -E 's/[;,] *(issues? #[0-9].*)$/ (\1)/' <<<"${1^}"
+          }
+          new=() fixes=() perf=() prs=() untyped=()
+          type_re='^([A-Za-z]+)(\([^)]*\))?!?: *(.+)$'
+          while IFS= read -r subject; do
+            if [[ $subject =~ $type_re ]]; then
+              case "${BASH_REMATCH[1],,}" in
+                feat) new+=("$(tidy "${BASH_REMATCH[3]}")") ;;
+                fix) fixes+=("$(tidy "${BASH_REMATCH[3]}")") ;;
+                perf) perf+=("$(tidy "${BASH_REMATCH[3]}")") ;;
+              esac
+            else
+              untyped+=("$subject")
+            fi
+          done < <(git log --reverse --first-parent --no-merges --format=%s "$range")
+          pr_re='^Merge pull request #([0-9]+) from ([^/]+)/'
+          for c in $(git rev-list --reverse --first-parent --merges "$range"); do
+            [[ $(git log -1 --format=%s "$c") =~ $pr_re ]] || continue
+            num="${BASH_REMATCH[1]}" who="${BASH_REMATCH[2]}"
+            title="$(git log -1 --format=%b "$c" | sed -n '/[^[:space:]]/{p;q}')"
+            prs+=("$num"$'\t'"$who"$'\t'"$(tidy "${title:-Pull request #$num}")")
+          done
+
+          changelog="fastlane/metadata/android/en-US/changelogs/$code.txt"
+          notes="$RUNNER_TEMP/notes.md"
+          if [ -f "$changelog" ]; then
+            # written by hand: used as is, for F-Droid and here
+            { echo "### What's new"; echo; cat "$changelog"; echo; } >"$notes"
+          else
+            if [ $((${#new[@]} + ${#fixes[@]} + ${#perf[@]} + ${#prs[@]})) -eq 0 ]; then
+              msg="no feat: or fix: commits since ${prev:-the start} for the notes; use those types, or write $changelog by hand"
+              # a tag pushed by hand is out already, so it's released anyway
+              if [ "$DRY_RUN" = true ] || [ "$GITHUB_REF_TYPE" = tag ]; then echo "::warning::$msg"; else echo "::error::$msg"; exit 1; fi
+            fi
+            mkdir -p "$(dirname "$changelog")"
+            {
+              for t in "${new[@]}"; do echo "- New: $t"; done
+              for t in "${fixes[@]}"; do echo "- Fixed: $t"; done
+              for t in "${perf[@]}"; do echo "- $t"; done
+              for p in "${prs[@]}"; do IFS=$'\t' read -r num who t <<<"$p"; echo "- $t (by $who, #$num)"; done
+            } >"$changelog"
+            {
+              if [ ${#new[@]} -gt 0 ]; then echo "### New"; printf -- '- %s\n' "${new[@]}"; echo; fi
+              if [ ${#fixes[@]} -gt 0 ]; then echo "### Fixes"; printf -- '- %s\n' "${fixes[@]}"; echo; fi
+              if [ ${#perf[@]} -gt 0 ]; then echo "### Improvements"; printf -- '- %s\n' "${perf[@]}"; echo; fi
+              if [ ${#prs[@]} -gt 0 ]; then
+                echo "### Contributions"
+                for p in "${prs[@]}"; do IFS=$'\t' read -r num who t <<<"$p"; echo "- $t by @$who in #$num"; done
+                echo
+              fi
+            } >"$notes"
+          fi
+          if [ -n "$prev" ]; then
+            echo "**Full changelog**: https://github.com/$GITHUB_REPOSITORY/compare/$prev...$tag" >>"$notes"
+          fi
+
+          if [ "$GITHUB_REF_TYPE" != tag ]; then
+            sed -i "s/^\( *versionName = \)\".*\"$/\1\"$version\"/; s/^\( *versionCode = \)[0-9]*$/\1$code/" "$gradle"
+            if [ "$(sed -n 's/^ *versionName = "\(.*\)"$/\1/p' "$gradle")" != "$version" ] ||
+               [ "$(sed -n 's/^ *versionCode = \([0-9]*\)$/\1/p' "$gradle")" != "$code" ]; then
+              echo "::error::couldn't set the version in $gradle"
+              exit 1
+            fi
+            if [ "$DRY_RUN" != true ] && [ -n "$(git status --porcelain)" ]; then
+              git config user.name "$GITHUB_ACTOR"
+              git config user.email "$GITHUB_ACTOR_ID+$GITHUB_ACTOR@users.noreply.github.com"
+              git add "$gradle" "$changelog"
+              git commit -q -m "chore: version bump to v$version"
+              # fails, changing nothing, if main moved since this run started
+              git push -q origin "HEAD:refs/heads/$GITHUB_REF_NAME"
+            fi
+          fi
+
+          {
+            echo "sha=$(git rev-parse HEAD)"
+            echo "tag=$tag"
+            echo "release=$release"
+            delim="NOTES_$(openssl rand -hex 12)"
+            echo "notes<<$delim"
+            cat "$notes"
+            echo "$delim"
+          } >>"$GITHUB_OUTPUT"
+          {
+            echo "## $tag ($code)"
+            if [ "$DRY_RUN" = true ]; then
+              echo "Dry run: nothing was committed or released, and the APK is built from the code as it is."
+            fi
+            echo
+            cat "$notes"
+            if [ ${#untyped[@]} -gt 0 ]; then
+              echo
+              echo "<details><summary>Left out of the notes (no feat:/fix: type)</summary>"
+              echo
+              printf -- '- %s\n' "${untyped[@]}"
+              echo "</details>"
+            fi
+          } >>"$GITHUB_STEP_SUMMARY"
+
+  apk:
+    name: APK
+    needs: prepare
+    if: needs.prepare.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    env:
+      RELEASING: ${{ needs.prepare.outputs.release }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
 
       # Java 21, like local builds and F-Droid's build server
       - uses: actions/setup-java@v6
@@ -82,7 +279,7 @@ jobs:
               echo "ORG_GRADLE_PROJECT_RELEASE_KEY_ALIAS=$KEY_ALIAS"
               echo "ORG_GRADLE_PROJECT_RELEASE_KEY_PASSWORD=$KEY_PASSWORD"
             } >>"$GITHUB_ENV"
-          elif [ "$GITHUB_REF_TYPE" = tag ]; then
+          elif [ "$RELEASING" = true ]; then
             echo "::error::No release key: a release is never signed with a throwaway key"
             exit 1
           else
@@ -98,13 +295,12 @@ jobs:
           fi
 
       - name: Build
-        env:
-          VERSION: ${{ steps.v.outputs.version }}
         run: |
+          version="$(sed -n 's/^ *versionName = "\(.*\)"$/\1/p' app/build.gradle.kts)"
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
           mkdir -p dist
-          cp app/build/outputs/apk/release/app-release.apk "dist/Equalizer314-v$VERSION.apk"
+          cp app/build/outputs/apk/release/app-release.apk "dist/$TAG_PREFIX$version.apk"
 
       - name: Check the signature
         run: |
@@ -112,7 +308,7 @@ jobs:
           apk="$(ls dist/*.apk)"
           certs="$("$apksigner" verify --print-certs "$apk")"
           sha="$(sed -n 's/.*certificate SHA-256 digest: //p' <<<"$certs" | head -n 1)"
-          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$sha" != "$RELEASE_CERT_SHA256" ]; then
+          if [ "$RELEASING" = true ] && [ "$sha" != "$RELEASE_CERT_SHA256" ]; then
             echo "::error::$apk is signed with $sha, not the release key F-Droid expects"
             exit 1
           fi
@@ -134,9 +330,9 @@ jobs:
         run: rm -f "$RUNNER_TEMP/release.jks"
 
   release:
-    name: GitHub Release
-    needs: apk
-    if: github.ref_type == 'tag'
+    name: GitHub release
+    needs: [prepare, apk]
+    if: needs.prepare.outputs.release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -144,20 +340,26 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GH_REPO: ${{ github.repository }}
     steps:
-      - uses: actions/checkout@v7
-        with:
-          sparse-checkout: fastlane
-
       - uses: actions/download-artifact@v8
         with:
           name: release-apk
           path: dist
 
-      - name: Draft the release
+      - name: Publish
         env:
-          CODE: ${{ needs.apk.outputs.code }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          SHA: ${{ needs.prepare.outputs.sha }}
+          NOTES: ${{ needs.prepare.outputs.notes }}
+          DRAFT: ${{ inputs.draft || false }}
         run: |
-          changelog="fastlane/metadata/android/en-US/changelogs/$CODE.txt"
-          { echo "### What's new"; echo; [ -f "$changelog" ] && cat "$changelog"; } >"$RUNNER_TEMP/notes.md"
-          gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" -- dist/*
-          echo "Draft **$GITHUB_REF_NAME** is ready: check the notes and publish it." >>"$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "$NOTES" >"$RUNNER_TEMP/notes.md"
+          args=(--title "$TAG" --notes-file "$RUNNER_TEMP/notes.md")
+          # a tag pushed by hand is used as is; otherwise the release creates the tag on the bump commit
+          if [ "$GITHUB_REF_TYPE" = tag ]; then args+=(--verify-tag); else args+=(--target "$SHA"); fi
+          if [ "$DRAFT" = true ]; then args+=(--draft); fi
+          url="$(gh release create "$TAG" "${args[@]}" -- dist/*)"
+          if [ "$DRAFT" = true ]; then
+            echo "Draft [$TAG]($url) is ready: check it and publish it (that creates the tag)." >>"$GITHUB_STEP_SUMMARY"
+          else
+            echo "Published [$TAG]($url)." >>"$GITHUB_STEP_SUMMARY"
+          fi
