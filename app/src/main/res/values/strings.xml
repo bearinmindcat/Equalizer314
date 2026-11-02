@@ -232,6 +232,10 @@
     <string name="overwrite_custom_preset">Overwrite Custom Preset</string>
     <string name="overwrite">Overwrite</string>
     <string name="updated_quoted">Updated \"%1$s\"</string>
+    <string name="rename_preset">Rename Preset</string>
+    <string name="rename">Rename</string>
+    <string name="preset_name_taken">A preset named \"%1$s\" already exists</string>
+    <string name="renamed_quoted">Renamed to \"%1$s\"</string>
     <string name="loaded_quoted">Loaded \"%1$s\"</string>
     <string name="search_autoeq">Search AutoEQ...</string>
     <string name="remove">Remove</string>

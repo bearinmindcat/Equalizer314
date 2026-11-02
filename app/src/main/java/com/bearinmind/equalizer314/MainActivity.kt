@@ -2134,6 +2134,11 @@ class  MainActivity : AppCompatActivity() {
                 presetRow.addView(overwriteBtn)
                 presetRow.addView(exportBtn)
                 presetRow.addView(deleteBtn)
+                // Long-press to rename (issue #140)
+                presetRow.setOnLongClickListener {
+                    showRenamePresetDialog(name) { populatePresetPicker() }
+                    true
+                }
                 // Tap to load preset
                 presetRow.setOnClickListener {
                     val json = prefs.getString("preset_$name", null) ?: return@setOnClickListener
@@ -4198,6 +4203,87 @@ class  MainActivity : AppCompatActivity() {
         powerFab.postDelayed({
             stateManager.stopProcessing { on -> animatePowerFab(on) }
         }, 280)
+    }
+
+    /** Rename a saved preset (issue #140), styled like the overwrite dialog; bindings and the live name follow it. */
+    private fun showRenamePresetDialog(oldName: String, onRenamed: () -> Unit) {
+        val d = resources.displayMetrics.density
+        val dlgView = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding((24 * d).toInt(), (20 * d).toInt(), (24 * d).toInt(), (16 * d).toInt())
+        }
+        val dlgTitle = android.widget.TextView(this).apply {
+            text = getString(R.string.rename_preset)
+            setTextColor(0xFFE2E2E2.toInt()); textSize = 20f
+            setPadding(0, 0, 0, (12 * d).toInt())
+        }
+        val dlgInputBox = android.widget.FrameLayout(this).apply {
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (16 * d).toInt() }
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0x00000000)
+                setStroke((1 * d).toInt(), 0xFF555555.toInt())
+                cornerRadius = 12 * d
+            }
+        }
+        val dlgInput = android.widget.EditText(this).apply {
+            setText(oldName)
+            setSelection(oldName.length)
+            setTextColor(0xFFFFFFFF.toInt())
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+            background = null
+            val pad = (14 * d).toInt()
+            setPadding(pad, pad, pad, pad)
+            isSingleLine = true
+        }
+        dlgInputBox.addView(dlgInput)
+        val dlgDiv = android.view.View(this).apply {
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, (1 * d).toInt()).apply { bottomMargin = (12 * d).toInt() }
+            setBackgroundColor(0xFF444444.toInt())
+        }
+        fun dlgButton(label: String, color: Int, start: Boolean) =
+            com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                text = label
+                layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    if (start) marginEnd = (3 * d).toInt() else marginStart = (3 * d).toInt()
+                }
+                cornerRadius = (12 * d).toInt()
+                setTextColor(color)
+                setBackgroundColor(0x00000000)
+                strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                strokeWidth = (1 * d).toInt()
+                insetTop = 0; insetBottom = 0
+            }
+        val dlgCancelBtn = dlgButton(getString(R.string.cancel), 0xFFEF9A9A.toInt(), start = true)
+        val dlgOkBtn = dlgButton(getString(R.string.rename), 0xFFDDDDDD.toInt(), start = false)
+        val dlgBtnRow = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            addView(dlgCancelBtn); addView(dlgOkBtn)
+        }
+        dlgView.addView(dlgTitle); dlgView.addView(dlgInputBox); dlgView.addView(dlgDiv); dlgView.addView(dlgBtnRow)
+        val dlg = android.app.AlertDialog.Builder(this, R.style.Theme_Equalizer314_Dialog).setView(dlgView).create()
+        dlgCancelBtn.setOnClickListener { dlg.dismiss() }
+        dlgOkBtn.setOnClickListener {
+            val newName = dlgInput.text.toString().trim()
+            when {
+                newName.isEmpty() || newName == oldName -> dlg.dismiss()
+                !eqPrefs.renamePreset(oldName, newName) ->
+                    android.widget.Toast.makeText(this, getString(R.string.preset_name_taken, newName), android.widget.Toast.LENGTH_SHORT).show()
+                else -> {
+                    onRenamed()
+                    updateDevicePresetStatus()
+                    try {
+                        startService(android.content.Intent(this, com.bearinmind.equalizer314.audio.EqService::class.java)
+                            .setAction(com.bearinmind.equalizer314.audio.EqService.ACTION_REFRESH_NOTIFICATION))
+                    } catch (_: Exception) {}
+                    android.widget.Toast.makeText(this, getString(R.string.renamed_quoted, newName), android.widget.Toast.LENGTH_SHORT).show()
+                    dlg.dismiss()
+                }
+            }
+        }
+        dlg.show()
     }
 
     private fun showPowerSnackbar(on: Boolean, label: String = getString(R.string.dynamics_processing)) {

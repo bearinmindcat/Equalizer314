@@ -231,6 +231,10 @@
     <string name="overwrite_custom_preset">Sobrescrever preset personalizado</string>
     <string name="overwrite">Sobrescrever</string>
     <string name="updated_quoted">\"%1$s\" atualizado</string>
+    <string name="rename_preset">Renomear preset</string>
+    <string name="rename">Renomear</string>
+    <string name="preset_name_taken">Já existe um preset chamado \"%1$s\"</string>
+    <string name="renamed_quoted">Renomeado para \"%1$s\"</string>
     <string name="loaded_quoted">\"%1$s\" carregado</string>
     <string name="search_autoeq">Pesquisar no AutoEQ...</string>
     <string name="remove">Remover</string>
