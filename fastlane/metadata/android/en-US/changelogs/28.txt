@@ -1,0 +1,14 @@
+- New: Optional audio output compatibility mode (issue #141)
+- New: Rename presets by long-pressing them (issue #140)
+- New: Extra frequency grid lines on the eq graph (issue #122)
+- New: About card with app version and github link (issue #103)
+- Fixed: Lag when changing eq settings on slower devices
+- Fixed: Spectrum analyzer drawing frequencies in the wrong place (issue #137)
+- Fixed: Reverb labels getting cut off in translations
+- Fixed: Power on/off pop-up covering the preamp slider (issue #133)
+- Fixed: Save icon staying highlighted after switching eq modes (issue #117)
+- Fixed: Eq not applying after pausing or stopping music on some phones (issue #109)
+- Fixed: Eq not turning back on when headphones connect after a disable eq device (issue #136)
+- Fixed: Eq not working on xiaomi phones when skip system sounds is on (issue #99)
+- Add unambigious license badge (by var2p, #3)
+- Updating Ukrainian and Russian translations (by reallystates, #134)
