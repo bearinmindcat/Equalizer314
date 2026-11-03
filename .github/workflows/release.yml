@@ -9,9 +9,9 @@
 #
 # Pushing a tag Equalizer314-v<versionName> by hand also works: that commit is built and released as it is.
 #
-# The notes come from semantic commit subjects: "feat: …" goes under New, "fix: …" under Fixes, "perf: …" under
-# Improvements and merged pull requests under Contributions. chore/docs/ci/refactor/… and subjects without a type are left out
-# (the run's summary lists the untyped ones, in case one was meant to be there).
+# The notes come from semantic commit subjects, like Launcher314's: "feat: x" → "Added x", "fix: x; issue #12" →
+# "Fixed x - issue #12"; fixes without an issue, "perf: …" and merged pull requests go after a blank line.
+# chore/docs/ci/refactor/… and subjects without a type are left out (the run's summary lists the untyped ones).
 #
 # F-Droid rebuilds every release from source and only publishes it when its build is byte-identical to the APK
 # attached here (Equalizer314-v<version>.apk), so the APK must be signed with the key in AllowedAPKSigningKeys.
@@ -142,18 +142,21 @@ jobs:
           tag="$TAG_PREFIX$version"
           range="${prev:+$prev..}HEAD"
 
-          # Notes from the commits on main's own line (a merged pull request counts once, as its merge).
-          tidy() {  # capital first letter, trailing "; issue #12" → " (issue #12)"
-            sed -E 's/[;,] *(issues? #[0-9].*)$/ (\1)/' <<<"${1^}"
+          # Notes from the commits on main's own line (a merged pull request counts once, as its merge), in Launcher314's style.
+          tidy() {  # trailing "; issue #12" → " - issue #12", the word eq → EQ
+            sed -E 's/[;,] *(issues? #[0-9].*)$/ - \1/; s/\beq\b/EQ/g' <<<"$1"
           }
-          new=() fixes=() perf=() prs=() untyped=()
+          new=() fixes=() rest=() untyped=()
           type_re='^([A-Za-z]+)(\([^)]*\))?!?: *(.+)$'
+          issue_re=' - issues? #[0-9]'
           while IFS= read -r subject; do
             if [[ $subject =~ $type_re ]]; then
-              case "${BASH_REMATCH[1],,}" in
-                feat) new+=("$(tidy "${BASH_REMATCH[3]}")") ;;
-                fix) fixes+=("$(tidy "${BASH_REMATCH[3]}")") ;;
-                perf) perf+=("$(tidy "${BASH_REMATCH[3]}")") ;;
+              type="${BASH_REMATCH[1],,}"
+              t="$(tidy "${BASH_REMATCH[3]}")"
+              case "$type" in
+                feat) new+=("Added $t") ;;
+                fix) if [[ $t =~ $issue_re ]]; then fixes+=("Fixed $t"); else rest+=("Fixed $t"); fi ;;
+                perf) rest+=("${t^}") ;;
               esac
             else
               untyped+=("$subject")
@@ -164,41 +167,31 @@ jobs:
             [[ $(git log -1 --format=%s "$c") =~ $pr_re ]] || continue
             num="${BASH_REMATCH[1]}" who="${BASH_REMATCH[2]}"
             title="$(git log -1 --format=%b "$c" | sed -n '/[^[:space:]]/{p;q}')"
-            prs+=("$num"$'\t'"$who"$'\t'"$(tidy "${title:-Pull request #$num}")")
+            t="$(tidy "${title:-Pull request #$num}")"
+            rest+=("${t^} - PR #$num by $who")
           done
 
           changelog="fastlane/metadata/android/en-US/changelogs/$code.txt"
           notes="$RUNNER_TEMP/notes.md"
-          if [ -f "$changelog" ]; then
-            # written by hand: used as is, for F-Droid and here
-            { echo "### What's new"; echo; cat "$changelog"; echo; } >"$notes"
-          else
-            if [ $((${#new[@]} + ${#fixes[@]} + ${#perf[@]} + ${#prs[@]})) -eq 0 ]; then
+          # a changelog written by hand is used as is
+          if [ ! -f "$changelog" ]; then
+            if [ $((${#new[@]} + ${#fixes[@]} + ${#rest[@]})) -eq 0 ]; then
               msg="no feat: or fix: commits since ${prev:-the start} for the notes; use those types, or write $changelog by hand"
               # a tag pushed by hand is out already, so it's released anyway
               if [ "$DRY_RUN" = true ] || [ "$GITHUB_REF_TYPE" = tag ]; then echo "::warning::$msg"; else echo "::error::$msg"; exit 1; fi
             fi
             mkdir -p "$(dirname "$changelog")"
+            # features and fixed issues first, then a blank line and the rest
+            main=("${new[@]}" "${fixes[@]}")
             {
-              for t in "${new[@]}"; do echo "- New: $t"; done
-              for t in "${fixes[@]}"; do echo "- Fixed: $t"; done
-              for t in "${perf[@]}"; do echo "- $t"; done
-              for p in "${prs[@]}"; do IFS=$'\t' read -r num who t <<<"$p"; echo "- $t (by $who, #$num)"; done
-            } >"$changelog"
-            {
-              if [ ${#new[@]} -gt 0 ]; then echo "### New"; printf -- '- %s\n' "${new[@]}"; echo; fi
-              if [ ${#fixes[@]} -gt 0 ]; then echo "### Fixes"; printf -- '- %s\n' "${fixes[@]}"; echo; fi
-              if [ ${#perf[@]} -gt 0 ]; then echo "### Improvements"; printf -- '- %s\n' "${perf[@]}"; echo; fi
-              if [ ${#prs[@]} -gt 0 ]; then
-                echo "### Contributions"
-                for p in "${prs[@]}"; do IFS=$'\t' read -r num who t <<<"$p"; echo "- $t by @$who in #$num"; done
-                echo
+              [ ${#main[@]} -eq 0 ] || printf '%s\n' "${main[@]}"
+              if [ ${#rest[@]} -gt 0 ]; then
+                [ ${#main[@]} -eq 0 ] || echo
+                printf '%s\n' "${rest[@]}"
               fi
-            } >"$notes"
+            } >"$changelog"
           fi
-          if [ -n "$prev" ]; then
-            echo "**Full changelog**: https://github.com/$GITHUB_REPOSITORY/compare/$prev...$tag" >>"$notes"
-          fi
+          { echo "## What's New"; echo; cat "$changelog"; } >"$notes"
 
           if [ "$GITHUB_REF_TYPE" != tag ]; then
             sed -i "s/^\( *versionName = \)\".*\"$/\1\"$version\"/; s/^\( *versionCode = \)[0-9]*$/\1$code/" "$gradle"
