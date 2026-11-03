@@ -261,7 +261,8 @@ jobs:
           java-version: '21'
 
       - name: Install the Android NDK and CMake
-        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$NDK_VERSION" "cmake;$CMAKE_VERSION" >/dev/null
+        # yes dies of a broken pipe once sdkmanager is done, which pipefail would count as a failure
+        run: (yes 2>/dev/null || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$NDK_VERSION" "cmake;$CMAKE_VERSION" >/dev/null
 
       - name: Release key
         env:
