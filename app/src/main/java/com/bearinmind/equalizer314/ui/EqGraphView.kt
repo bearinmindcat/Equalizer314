@@ -169,6 +169,11 @@ class EqGraphView @JvmOverloads constructor(
         strokeWidth = 1f
         style = Paint.Style.STROKE
     }
+    private val minorGridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        strokeWidth = 1f
+        style = Paint.Style.STROKE
+    }
+    private val minorGridDecades = floatArrayOf(10f, 100f, 1000f, 10000f)
 
 
 
@@ -461,6 +466,19 @@ class EqGraphView @JvmOverloads constructor(
             val lineStartX = 10f + labelWidth + 6f
 
             canvas.drawLine(lineStartX, y, width.toFloat(), y, gridPaint)
+        }
+
+        // Unlabelled 2–9 × decade lines, fainter than the 100/1k/10k ones (issue #122).
+        minorGridPaint.color = gridPaint.color
+        minorGridPaint.alpha = 110
+        for (decade in minorGridDecades) {
+            for (m in 2..9) {
+                val freq = decade * m
+                if (freq > graphMinFreq && freq < graphMaxFreq) {
+                    val x = freqToX(freq, graphWidth)
+                    canvas.drawLine(x, 0f, x, height.toFloat(), minorGridPaint)
+                }
+            }
         }
 
         val freqMarkers = listOf(100f, 1000f, 10000f)
