@@ -106,6 +106,14 @@ class EqService : Service() {
             AudioAttributes.USAGE_ASSISTANCE_SONIFICATION,
             AudioAttributes.USAGE_ASSISTANT,
         )
+        /** Calls keep the system-sound bypass however long they last. */
+        private val CALL_USAGES = setOf(
+            AudioAttributes.USAGE_VOICE_COMMUNICATION,
+            AudioAttributes.USAGE_VOICE_COMMUNICATION_SIGNALLING,
+        )
+        /** Longer than any real system sound; a player past this is stuck (issues #99/#130). */
+        private const val SYSTEM_SOUND_MAX_MS = 10_000L
+        private val PIID_REGEX = Regex("""piid:(\d+)""")
         /** Music-like usages whose start re-sends the EQ settings (issue #109). */
         private val MEDIA_USAGES = setOf(
             AudioAttributes.USAGE_MEDIA,
@@ -356,10 +364,31 @@ class EqService : Service() {
         }
     }
 
+    // First-seen time per system-sound player (piid).
+    private val systemSoundFirstSeenMs = HashMap<String, Long>()
+    private val systemSoundRecheck = Runnable {
+        getSystemService(AudioManager::class.java)?.let { applySystemSoundBypass(it.activePlaybackConfigurations.orEmpty()) }
+    }
+
+    /** Stable per-player key: the piid in toString() (its getter is a system API); attributes as a fallback. */
+    private fun playerKey(c: AudioPlaybackConfiguration): String =
+        PIID_REGEX.find(c.toString())?.groupValues?.get(1) ?: c.audioAttributes.toString()
+
     /** Drive the bypass flag from active playback usages (pref-gated), then re-derive the curve state. */
     private fun applySystemSoundBypass(configs: List<AudioPlaybackConfiguration>) {
         val bypassEnabled = EqPreferencesManager(this).getBypassSystemSounds()
-        val anySystemSound = bypassEnabled && configs.any { c -> c.audioAttributes.usage in BYPASS_USAGES }
+        // A system sound playing past SYSTEM_SOUND_MAX_MS is stuck (HyperOS, issues #99/#130) and ignored; calls keep their bypass.
+        val now = android.os.SystemClock.elapsedRealtime()
+        val systemSounds = configs.filter { it.audioAttributes.usage in BYPASS_USAGES }
+        val keys = systemSounds.map { playerKey(it) }.toSet()
+        systemSoundFirstSeenMs.keys.retainAll(keys)
+        for (k in keys) systemSoundFirstSeenMs.getOrPut(k) { now }
+        val call = systemSounds.any { it.audioAttributes.usage in CALL_USAGES }
+        val freshSince = systemSoundFirstSeenMs.values.filter { now - it < SYSTEM_SOUND_MAX_MS }
+        watchdogHandler.removeCallbacks(systemSoundRecheck)
+        freshSince.minOrNull()?.let { watchdogHandler.postDelayed(systemSoundRecheck, SYSTEM_SOUND_MAX_MS - (now - it) + 50) }
+        val anySystemSound = bypassEnabled && (call || freshSince.isNotEmpty())
+        if (keys.size > freshSince.size && !call) Log.d(TAG, "${keys.size - freshSince.size} system sound(s) playing > ${SYSTEM_SOUND_MAX_MS / 1000} s — ignored")
         if (anySystemSound != systemSoundBypassActive) {
             systemSoundBypassActive = anySystemSound
             Log.d(TAG, "system sound ${if (anySystemSound) "started — curve flattened" else "stopped — curve restored"}")
@@ -1279,6 +1308,8 @@ class EqService : Service() {
             sessionUpdateThread.value.quitSafely()
         }
         stopWatchdog()
+        watchdogHandler.removeCallbacks(systemSoundRecheck)
+        watchdogHandler.removeCallbacks(mediaStartRewrite)
         try { unregisterReceiver(volumeReceiver) } catch (_: Exception) {}
         try { unregisterReceiver(routePresetReceiver) } catch (_: Exception) {}
         try {
