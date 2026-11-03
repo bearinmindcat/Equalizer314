@@ -30,9 +30,9 @@ class SpectrumAnalyzerRenderer(
     private var fftProcessor = WaveformFftProcessor(fftSize = 4096, sampleRate = sampleRate)
     private val analyzer = LongWindowAnalyzer(targetSize = 4096, sampleRate = sampleRate)
 
-    /** When true: multi-block LongWindowAnalyzer. When false (default/bypass): original zero-padded WaveformFftProcessor. */
+    /** LongWindowAnalyzer is the primary spectrum analyzer engine. */
     @Volatile
-    var useLongWindow: Boolean = false
+    var useLongWindow: Boolean = true
         set(value) {
             if (field != value) {
                 field = value

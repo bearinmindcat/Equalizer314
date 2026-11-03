@@ -848,12 +848,37 @@ class BandToggleManager(
         onBandCountChanged()
     }
 
+    private var lastButtonTapTime = 0L
+    private var lastButtonTapBand: Int? = null
+    private var buttonTapCount = 0
+
     /** Selects the band; re-tapping it with Channel Side EQ on opens the L / Both / R picker (issue #53). */
     private fun onToggleClicked(anchor: View, bandIdx: Int) {
+        val now = System.currentTimeMillis()
+        if (lastButtonTapBand == bandIdx && now - lastButtonTapTime < 350L) {
+            buttonTapCount++
+        } else {
+            buttonTapCount = 1
+        }
+        lastButtonTapTime = now
+        lastButtonTapBand = bandIdx
+
         val cseOn = state.activeChannel != EqStateManager.ActiveChannel.BOTH
-        if (cseOn && state.selectedBandIndex == bandIdx && onBandReselected != null) {
-            onBandReselected.invoke(anchor, bandIdx)
-            return
+        if (cseOn) {
+            if (buttonTapCount == 2 && state.selectedBandIndex == bandIdx && onBandReselected != null) {
+                onBandReselected.invoke(anchor, bandIdx)
+                return
+            } else if (buttonTapCount >= 3) {
+                buttonTapCount = 0
+                graphView.toggleFollowTrackedFrequency(bandIdx)
+                return
+            }
+        } else {
+            if (buttonTapCount >= 2) {
+                buttonTapCount = 0
+                graphView.toggleFollowTrackedFrequency(bandIdx)
+                return
+            }
         }
         graphView.setActiveBand(bandIdx)
         updateSelection(bandIdx)

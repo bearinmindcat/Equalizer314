@@ -2857,6 +2857,17 @@ class  MainActivity : AppCompatActivity() {
             stateManager.pushEqUpdate()
             Toast.makeText(this, getString(R.string.notch_added_at, formatHzLabel(freq)), Toast.LENGTH_SHORT).show()
         }
+        eqGraphView.onTrackerFollowBandChanged = { bandIndex, isFollowing ->
+            if (bandIndex != null) {
+                val slotLabel = if (bandIndex < stateManager.bandSlots.size) stateManager.bandSlots[bandIndex] + 1 else bandIndex + 1
+                if (isFollowing) {
+                    val freq = eqGraphView.trackerPeakFreq ?: stateManager.parametricEq.getBand(bandIndex)?.frequency ?: 1000f
+                    Toast.makeText(this, getString(R.string.band_following_tracker, slotLabel.toString(), formatHzLabel(freq)), Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, getString(R.string.band_stopped_following_tracker, slotLabel.toString()), Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
         eqGraphView.onTrackerRangeChanged = { lo, hi ->
             eqPrefs.saveTrackerRange(lo, hi)
         }
@@ -3351,8 +3362,8 @@ class  MainActivity : AppCompatActivity() {
      */
     fun configureSurgicalSpectrum() {
         val renderer = visualizerHelper.renderer
-        // Engine selection: Long-Window (experimental) vs Original WaveformFft (bypass/default)
-        renderer.useLongWindow = eqPrefs.getLongWindowFftEnabled()
+        // Long-Window FFT Analyzer is merged into the Spectrum Control FFT Window Size
+        renderer.useLongWindow = true
 
         // Manual / custom FFT size (Spectrum Control) vs zoom-adaptive sizing
         renderer.clearManualFftSize()
@@ -3380,6 +3391,7 @@ class  MainActivity : AppCompatActivity() {
         // Tracker window restore & toggle
         val trackerOn = eqPrefs.getTrackerEnabled()
         eqGraphView.trackerEnabled = trackerOn
+        eqGraphView.trackerHighFftEnabled = eqPrefs.getTrackerHighFftEnabled()
         if (trackerOn) {
             val tLo = eqPrefs.getTrackerLo()
             val tHi = eqPrefs.getTrackerHi()
@@ -3389,6 +3401,9 @@ class  MainActivity : AppCompatActivity() {
             } else {
                 eqGraphView.trackerLoHz = 40f
                 eqGraphView.trackerHiHz = 1600f
+            }
+            if (eqGraphView.trackerHighFftEnabled) {
+                eqGraphView.adjustFrequenciesInTrackerField()
             }
         }
         // Target curve (asset CSV or imported text) — loaded off-thread

@@ -146,9 +146,10 @@ class EqGraphView @JvmOverloads constructor(
         style = Paint.Style.STROKE
     }
 
-    // Double-click detection
+    // Double-click / triple-click detection
     private var lastTapTime = 0L
     private var lastTapBandIndex: Int? = null
+    private var bandTapCount = 0
     private val doubleTapTimeout = 300L
     private var justResetBand = false
 
@@ -357,6 +358,7 @@ class EqGraphView @JvmOverloads constructor(
     var onBandSoloEnd: (() -> Unit)? = null
     // Spectrum tracker double-tap → add a notch at the tracked frequency
     var onTrackerDoubleTap: ((frequency: Float) -> Unit)? = null
+    var onTrackerFollowBandChanged: ((bandIndex: Int?, isFollowing: Boolean) -> Unit)? = null
     var onTrackerRangeChanged: ((loHz: Float, hiHz: Float) -> Unit)? = null
     var onZoomRangeChanged: ((loHz: Float, hiHz: Float) -> Unit)? = null
 
@@ -394,13 +396,84 @@ class EqGraphView @JvmOverloads constructor(
 
     // ── Spectrum tracker (Dynamic Spectrum Tracker) ──
     var trackerEnabled = false
-        set(value) { field = value; invalidate() }
+        set(value) {
+            field = value
+            if (!value) {
+                followingTrackerBand = null
+            }
+            invalidate()
+        }
+    var trackerHighFftEnabled = false
+        set(value) {
+            field = value
+            if (value && trackerEnabled) {
+                adjustFrequenciesInTrackerField()
+            }
+            invalidate()
+        }
     var trackerLoHz = 40f
     var trackerHiHz = 1600f
 
-    private var trackerPeakFreq: Float? = null
+    var trackerPeakFreq: Float? = null
+        private set
     private var trackerPeakDbNorm = 0f
     private var trackerPeakLastCalc = 0L
+
+    var followingTrackerBand: Int? = null
+        private set
+
+    fun adjustFreqToFft(freq: Float): Float {
+        val binWidth = spectrumRenderer?.getBinWidthHz() ?: (48000f / (spectrumRenderer?.getEffectiveSize() ?: 4096))
+        if (binWidth <= 0f) return freq
+        val k = kotlin.math.round(freq / binWidth)
+        return (k * binWidth).coerceIn(trackerLoHz, trackerHiHz)
+    }
+
+    fun adjustFrequenciesInTrackerField() {
+        val binWidth = spectrumRenderer?.getBinWidthHz() ?: (48000f / (spectrumRenderer?.getEffectiveSize() ?: 4096))
+        if (binWidth <= 0f) return
+        val eq = parametricEq ?: return
+        var changed = false
+        for (i in 0 until eq.getBandCount()) {
+            val band = eq.getBand(i) ?: continue
+            if (band.frequency in trackerLoHz..trackerHiHz) {
+                val k = kotlin.math.round(band.frequency / binWidth)
+                val snapped = (k * binWidth).coerceIn(trackerLoHz, trackerHiHz)
+                if (kotlin.math.abs(snapped - band.frequency) > 0.05f) {
+                    band.frequency = snapped
+                    if (i in bandPoints.indices) {
+                        bandPoints[i].frequency = snapped
+                    }
+                    onBandChangedListener?.invoke(i, snapped, band.gain)
+                    changed = true
+                }
+            }
+        }
+        if (changed) {
+            onBandDragEndListener?.invoke()
+            invalidate()
+        }
+    }
+
+    fun toggleFollowTrackedFrequency(bandIndex: Int) {
+        if (followingTrackerBand == bandIndex) {
+            followingTrackerBand = null
+            onTrackerFollowBandChanged?.invoke(bandIndex, false)
+            invalidate()
+        } else {
+            followingTrackerBand = bandIndex
+            val peak = trackerPeakFreq
+            if (peak != null && bandIndex in bandPoints.indices) {
+                val f = if (trackerHighFftEnabled) adjustFreqToFft(peak) else peak
+                parametricEq?.getBand(bandIndex)?.frequency = f
+                bandPoints[bandIndex].frequency = f
+                onBandChangedListener?.invoke(bandIndex, f, bandPoints[bandIndex].gain)
+                onBandDragEndListener?.invoke()
+            }
+            onTrackerFollowBandChanged?.invoke(bandIndex, true)
+            invalidate()
+        }
+    }
 
     private fun setTrackerRange(loHz: Float, hiHz: Float) {
         val lo = loHz.coerceIn(graphMinFreq, graphMaxFreq)
@@ -408,6 +481,9 @@ class EqGraphView @JvmOverloads constructor(
         trackerLoHz = lo
         trackerHiHz = hi
         onTrackerRangeChanged?.invoke(lo, hi)
+        if (trackerHighFftEnabled) {
+            adjustFrequenciesInTrackerField()
+        }
         invalidate()
     }
     // Slot labels for band dots (e.g., [0, 2, 4, 6] → display as "1", "3", "5", "7")
@@ -452,6 +528,7 @@ class EqGraphView @JvmOverloads constructor(
         // A smaller EQ (reset, preset, channel) must not keep a selection past its last band (issue #129).
         if ((activeBandIndex ?: -1) >= bandPoints.size) activeBandIndex = null
         if ((lastTapBandIndex ?: -1) >= bandPoints.size) lastTapBandIndex = null
+        if ((followingTrackerBand ?: -1) >= bandPoints.size) followingTrackerBand = null
 
         invalidate()
     }
@@ -915,11 +992,30 @@ class EqGraphView @JvmOverloads constructor(
         if (now - trackerPeakLastCalc > 100L) {
             trackerPeakLastCalc = now
             val peak = renderer.findDominantPeak(trackerLoHz, trackerHiHz, minDb = -50f)
-            trackerPeakFreq = peak?.frequencyHz
+            val rawPeak = peak?.frequencyHz
+            trackerPeakFreq = if (rawPeak != null && trackerHighFftEnabled) {
+                adjustFreqToFft(rawPeak)
+            } else {
+                rawPeak
+            }
             trackerPeakDbNorm = if (peak != null) {
                 (renderer.spectrumDbAt(peak.frequencyHz)?.let { (it + 60f) / 60f } ?: trackerPeakDbNorm)
                     .coerceIn(0f, 1f)
             } else trackerPeakDbNorm
+
+            // Live follow: update the following band's frequency
+            val following = followingTrackerBand
+            val targetFreq = trackerPeakFreq
+            if (following != null && targetFreq != null && following in bandPoints.indices) {
+                val band = parametricEq?.getBand(following)
+                if (band != null && abs(band.frequency - targetFreq) > 0.2f) {
+                    band.frequency = targetFreq
+                    bandPoints[following].frequency = targetFreq
+                    post {
+                        onBandChangedListener?.invoke(following, targetFreq, band.gain)
+                    }
+                }
+            }
         }
 
         val peakFreq = trackerPeakFreq
@@ -1391,6 +1487,11 @@ class EqGraphView @JvmOverloads constructor(
             // Solid background fill to mask grid lines under all dots
             canvas.drawCircle(point.x, point.y, 20f, pointBgPaint)
 
+            // Following tracker indicator ring
+            if (i == followingTrackerBand && trackerEnabled) {
+                canvas.drawCircle(point.x, point.y, 28f, trackerPeakPaint)
+            }
+
             val bandNumber = getBandLabel(i)
             if (!bandEnabled) {
                 canvas.drawCircle(point.x, point.y, 20f, disabledPointPaint)
@@ -1768,17 +1869,30 @@ class EqGraphView @JvmOverloads constructor(
                 if (tapped != null) {
                     val currentTime = System.currentTimeMillis()
                     if (activeBandIndex == lastTapBandIndex && currentTime - lastTapTime < doubleTapTimeout) {
+                        bandTapCount++
+                    } else {
+                        bandTapCount = 1
+                    }
+                    lastTapTime = currentTime
+                    lastTapBandIndex = activeBandIndex
+
+                    if (bandTapCount == 2) {
                         cancelLongPressTimer()
                         resetBandToZero(activeBandIndex!!)
                         justResetBand = true
+                        invalidate()
+                        return true
+                    } else if (bandTapCount >= 3) {
+                        cancelLongPressTimer()
+                        bandTapCount = 0
                         lastTapTime = 0L
                         lastTapBandIndex = null
+                        justResetBand = true
+                        toggleFollowTrackedFrequency(activeBandIndex!!)
                         invalidate()
                         return true
                     }
 
-                    lastTapTime = currentTime
-                    lastTapBandIndex = activeBandIndex
                     isDragging = false
 
                     parent?.requestDisallowInterceptTouchEvent(true)
@@ -1847,6 +1961,10 @@ class EqGraphView @JvmOverloads constructor(
                     if (!isDragging) {
                         if (distance < dragThreshold) return true
                         isDragging = true
+                        if (followingTrackerBand == it) {
+                            followingTrackerBand = null
+                            onTrackerFollowBandChanged?.invoke(it, false)
+                        }
                     }
 
                     parent?.requestDisallowInterceptTouchEvent(true)

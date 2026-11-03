@@ -26,7 +26,6 @@ class ExperimentalActivity : AppCompatActivity() {
         setupPresetAutosave()
         setupTvMode()
         setupVirtualSurround()
-        setupLongWindowFft()
         setupBandSolo()
         setupGraphZoom()
         setupSpectrumTracker()
@@ -160,14 +159,6 @@ class ExperimentalActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupLongWindowFft() {
-        val switch = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.expLongWindowSwitch)
-        switch?.isChecked = eqPrefs.getLongWindowFftEnabled()
-        switch?.setOnCheckedChangeListener { _, isChecked ->
-            eqPrefs.saveLongWindowFftEnabled(isChecked)
-        }
-    }
-
     private fun setupBandSolo() {
         val switch = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.expBandSoloSwitch)
         switch?.isChecked = eqPrefs.getBandSoloEnabled()
@@ -186,9 +177,27 @@ class ExperimentalActivity : AppCompatActivity() {
 
     private fun setupSpectrumTracker() {
         val switch = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.expTrackerSwitch)
-        switch?.isChecked = eqPrefs.getTrackerEnabled()
+        val highFftSwitch = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.expTrackerHighFftSwitch)
+        val highFftRow = findViewById<android.view.View>(R.id.expTrackerHighFftRow)
+        val highFftDivider = findViewById<android.view.View>(R.id.expTrackerHighFftDivider)
+
+        val trackerOn = eqPrefs.getTrackerEnabled()
+        switch?.isChecked = trackerOn
+        highFftSwitch?.isChecked = eqPrefs.getTrackerHighFftEnabled()
+        fun updateHighFftState(enabled: Boolean) {
+            val alpha = if (enabled) 1f else 0.4f
+            highFftRow?.alpha = alpha
+            highFftSwitch?.isEnabled = enabled
+            highFftDivider?.alpha = if (enabled) 0.3f else 0.1f
+        }
+        updateHighFftState(trackerOn)
+
         switch?.setOnCheckedChangeListener { _, isChecked ->
             eqPrefs.saveTrackerEnabled(isChecked)
+            updateHighFftState(isChecked)
+        }
+        highFftSwitch?.setOnCheckedChangeListener { _, isChecked ->
+            eqPrefs.saveTrackerHighFftEnabled(isChecked)
         }
     }
 

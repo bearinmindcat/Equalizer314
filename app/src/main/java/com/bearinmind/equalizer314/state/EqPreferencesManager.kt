@@ -633,9 +633,9 @@ class EqPreferencesManager(context: Context) {
     fun saveSpectrumFps(fps: Int) { prefs.edit().putInt("spectrumFps", fps).apply() }
     fun getSpectrumFps(): Int = prefs.getInt("spectrumFps", 60)
 
-    // Precision Surgical EQ — zoom, tracker, target ghost/delta, experimental toggles
+    // Precision Surgical EQ, zoom, tracker, target ghost/delta, experimental toggles
     fun saveLongWindowFftEnabled(enabled: Boolean) { prefs.edit().putBoolean("expLongWindowFft", enabled).apply() }
-    fun getLongWindowFftEnabled(): Boolean = prefs.getBoolean("expLongWindowFft", false)
+    fun getLongWindowFftEnabled(): Boolean = prefs.getBoolean("expLongWindowFft", true)
     fun saveBandSoloEnabled(enabled: Boolean) { prefs.edit().putBoolean("expBandSolo", enabled).apply() }
     fun getBandSoloEnabled(): Boolean = prefs.getBoolean("expBandSolo", false)
     fun saveGraphZoomEnabled(enabled: Boolean) { prefs.edit().putBoolean("expGraphZoom", enabled).apply() }
@@ -643,11 +643,13 @@ class EqPreferencesManager(context: Context) {
     fun saveCustomFftSize(size: Int) { prefs.edit().putInt("customFftSize", size).apply() }
     fun getCustomFftSize(): Int = prefs.getInt("customFftSize", 4096)
     fun saveGraphZoomRange(lo: Float, hi: Float) { prefs.edit().putFloat("graphZoomLo", lo).putFloat("graphZoomHi", hi).apply() }
-    /** 0 = unset → the graph falls back to the full 10 Hz–20 kHz range. */
+    /** 0 = unset, the graph falls back to the full 10 Hz–20 kHz range. */
     fun getGraphZoomLo(): Float = prefs.getFloat("graphZoomLo", 0f)
     fun getGraphZoomHi(): Float = prefs.getFloat("graphZoomHi", 0f)
     fun saveTrackerEnabled(enabled: Boolean) { prefs.edit().putBoolean("trackerEnabled", enabled).apply() }
     fun getTrackerEnabled(): Boolean = prefs.getBoolean("trackerEnabled", false)
+    fun saveTrackerHighFftEnabled(enabled: Boolean) { prefs.edit().putBoolean("trackerHighFft", enabled).apply() }
+    fun getTrackerHighFftEnabled(): Boolean = prefs.getBoolean("trackerHighFft", false)
     fun saveTrackerRange(lo: Float, hi: Float) { prefs.edit().putFloat("trackerLo", lo).putFloat("trackerHi", hi).apply() }
     /** 0 = unset → defaults chosen at wiring time. */
     fun getTrackerLo(): Float = prefs.getFloat("trackerLo", 0f)

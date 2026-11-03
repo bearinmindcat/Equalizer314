@@ -259,8 +259,10 @@ class SpectrumControlActivity : AppCompatActivity() {
     /** Live preview of the size on this activity's renderer; MainActivity reapplies from prefs on resume. */
     private fun applyFftSize(enabled: Boolean, size: Int) {
         val r = renderer ?: return
+        r.useLongWindow = true
         if (enabled) r.setFftSize(size)
         else r.clearManualFftSize()
+        graphView?.invalidate()
     }
 
     private fun setupGhostDeltaToggles() {
@@ -476,7 +478,7 @@ class SpectrumControlActivity : AppCompatActivity() {
 
     private fun applyCurrentSettings() {
         val r = renderer ?: return
-        r.useLongWindow = eqPrefs.getLongWindowFftEnabled()
+        r.useLongWindow = true
         if (eqPrefs.getPpoEnabled()) {
             r.ppoSmoothing = ppoValues[eqPrefs.getPpoIndex().coerceIn(0, 7)]
         } else {
