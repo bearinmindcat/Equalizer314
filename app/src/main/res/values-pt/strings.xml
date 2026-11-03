@@ -362,6 +362,8 @@
     <string name="device_key_wired">Com fio</string>
     <string name="device_key_speaker">Alto-falante</string>
     <string name="language">Idioma</string>
+    <string name="about">Sobre</string>
+    <string name="about_desc">Código-fonte, relatórios e versões no GitHub</string>
     <string name="system_default">Padrão do sistema</string>
     <string name="no_languages_match">Nenhum idioma corresponde</string>
     <plurals name="n_languages">

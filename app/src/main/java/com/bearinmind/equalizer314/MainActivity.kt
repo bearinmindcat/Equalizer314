@@ -3369,6 +3369,7 @@ class  MainActivity : AppCompatActivity() {
         }
 
         setupLanguagePicker()
+        setupAboutCard()
 
         // Spectrum Control
         setupSpectrumControl()
@@ -4314,6 +4315,16 @@ class  MainActivity : AppCompatActivity() {
         "uk" to "\u0423\u043a\u0440\u0430\u0457\u043d\u0441\u044c\u043a\u0430",
         "zh" to "\u7b80\u4f53\u4e2d\u6587",
     )
+
+    /** About card: version from the build, tap opens the GitHub repo (issue #103). */
+    private fun setupAboutCard() {
+        findViewById<TextView>(R.id.aboutVersionText).text = getString(R.string.version_value, BuildConfig.VERSION_NAME)
+        findViewById<View>(R.id.aboutCard).setOnClickListener {
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/bearinmindcat/Equalizer314")))
+            } catch (_: android.content.ActivityNotFoundException) {}
+        }
+    }
 
     private fun setupLanguagePicker() {
         val valueText = findViewById<TextView>(R.id.languageValueText)

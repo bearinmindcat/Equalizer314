@@ -362,6 +362,8 @@
     <string name="device_key_wired">Cable</string>
     <string name="device_key_speaker">Altavoz</string>
     <string name="language">Idioma</string>
+    <string name="about">Acerca de</string>
+    <string name="about_desc">Código fuente, reportes y versiones en GitHub</string>
     <string name="system_default">Predeterminado del sistema</string>
     <string name="no_languages_match">Ningún idioma coincide</string>
     <plurals name="n_languages">

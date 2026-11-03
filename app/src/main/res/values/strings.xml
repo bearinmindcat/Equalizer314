@@ -363,6 +363,9 @@
     <string name="device_key_wired">Wired</string>
     <string name="device_key_speaker">Speaker</string>
     <string name="language">Language</string>
+    <string name="about">About</string>
+    <string name="about_desc">Source code, issues and releases on GitHub</string>
+    <string name="version_value" translatable="false">v%1$s</string>
     <string name="system_default">System default</string>
     <string name="no_languages_match">No languages match</string>
     <plurals name="n_languages">
