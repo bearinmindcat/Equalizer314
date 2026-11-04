@@ -7,6 +7,34 @@
 
 <img src="https://img.shields.io/badge/Requires-Android%209.0%2B%20(API%2028)-3DDC84?logo=android&logoColor=white" alt="Requires Android 9.0+ (API 28)">
 
+> **Note on this Fork (`symeathrea`):**
+> This fork is an experimental augmentation of Equalizer314 focused on precision surgical audio engineering, advanced real-time spectrum analysis, and dynamic tracking. Release APKs are compiled exclusively through **GitHub Actions** to guarantee clean, reproducible builds without local compile artifacts or redundant compile history, and uploaded directly to GitHub Releases.
+
+## Fork Augmentations & Experimental Features
+
+This fork introduces powerful surgical audio tools and real-time visualization enhancements on top of the latest upstream Equalizer314 (v0.0.23-beta):
+
+- **Dynamic Spectrum Tracker (DST):**
+  - Live resonance peak tracking with sub-bin parabolic interpolation and real-time frequency readout.
+  - **Band Following:** Three-tap any band node (or double-tap on the band toggle button, or three-tap with Channel Side EQ) to dynamically follow the tracked peak frequency inside the DST field; dragging the band releases tracking and restores manual control.
+  - **High FFT Scanning:** Toggle in Experimental settings to adjust frequencies inside the DST field to the nearest FFT resolution bins.
+  - Double-tap the peak marker to instantly drop a NOTCH filter at the tracked resonance.
+- **Precision Surgical EQ & Long-Window Rolling FFT:**
+  - Multi-block rolling FFT spectrum analysis scaling up to **65536 points** (true resolution down to 0.73 Hz) on an allocation-free worker thread.
+  - Unified FFT Window Size control in Spectrum Control (1k to 65k points) with real-time rolling window shifts.
+- **Frequency Axis Zoom & Pan:**
+  - Two-finger pinch to zoom the frequency axis anchored at the pinch midpoint, and drag to pan across the audio spectrum.
+  - Adaptive logarithmic grid markers (1-2-5 pattern in narrow spans, 100 / 1k / 10k in full span). Double-tap empty area resets to full range.
+- **Target Curve Ghost & Delta View:**
+  - Selected target curves (asset CSV or imported) render as dashed ghost lines over the live spectrum.
+  - Live delta fill highlights energy differences (green above / red below the target curve) with rolling-median offset alignment.
+- **Band Solo Audition:**
+  - Long-press any band node to audition a 3x cascaded band-pass filter centered at that band's frequency with zero DP rebuild. Release instantly restores the prior EQ curve.
+- **Upstream v0.0.23-beta Settings Integration:**
+  - Fully integrated with audio output compatibility mode, preset renaming, extra grid lines, and output sample rate calibration.
+
+---
+
 Though the app is still in beta, a lot of crash issues and inconsistences are fixed. As of now the app is also released on google play and currently going through the walk of shame. Still in early stages of testing and development, so I'll try my best to make note of your issues, run them myself and fix them as quick as possible.
 
 ## About
@@ -114,9 +142,8 @@ Equalizer314 is released under the **GNU General Public License v3.0**. See [LIC
 
 You are free to use, modify, and redistribute this software under the terms of the GPL v3. If you distribute a modified version, you must release the source under the same license.
 
-## Misc info for myself
+## Building & Releases
 
-Try to use [semantic commit](https://kapeli.com/cheat_sheets/Semantic_Commits.docset/Contents/Resources/Documents/index)
-messages. Use `feat:` / `fix:` / `perf:` / `chore:` / `docs:` / etc.
-
-Releases: Actions › Release › Run workflow. It bumps the version, writes the changelog from the `feat:` / `fix:` / `perf:` commits since the last release, builds the signed APK and publishes the release (details in [release.yml](.github/workflows/release.yml)).
+- **GitHub Actions Workflow:** All release APKs must be built via GitHub Actions (`Actions › Release › Run workflow` on `symeathrea`). This ensures clean compilation in a sandboxed CI environment, eliminating redundant local compile history and artifacts from the repository.
+- **Publishing Releases:** The workflow builds the APK artifact and automatically prepares the release notes; the resulting clean APK is published and uploaded directly to GitHub Releases.
+- **Commit Conventions:** Follow [semantic commits](https://kapeli.com/cheat_sheets/Semantic_Commits.docset/Contents/Resources/Documents/index) (`feat:`, `fix:`, `perf:`, `chore:`, `docs:`) so release changelogs populate automatically.
