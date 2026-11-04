@@ -231,6 +231,10 @@
     <string name="overwrite_custom_preset">Sobrescrever preset personalizado</string>
     <string name="overwrite">Sobrescrever</string>
     <string name="updated_quoted">\"%1$s\" atualizado</string>
+    <string name="rename_preset">Renomear preset</string>
+    <string name="rename">Renomear</string>
+    <string name="preset_name_taken">Já existe um preset chamado \"%1$s\"</string>
+    <string name="renamed_quoted">Renomeado para \"%1$s\"</string>
     <string name="loaded_quoted">\"%1$s\" carregado</string>
     <string name="search_autoeq">Pesquisar no AutoEQ...</string>
     <string name="remove">Remover</string>
@@ -358,6 +362,8 @@
     <string name="device_key_wired">Com fio</string>
     <string name="device_key_speaker">Alto-falante</string>
     <string name="language">Idioma</string>
+    <string name="about">Sobre</string>
+    <string name="about_desc">Código-fonte, relatórios e versões no GitHub</string>
     <string name="system_default">Padrão do sistema</string>
     <string name="no_languages_match">Nenhum idioma corresponde</string>
     <plurals name="n_languages">
@@ -460,4 +466,6 @@
     <string name="vs_needs_record_permission">O som surround virtual precisa da permissão de gravação de áudio</string>
     <string name="vs_unsupported_file">Não é possível usar este arquivo (%1$s)</string>
     <string name="vs_notif_title">Som surround virtual ligado</string>
+    <string name="output_session_compatibility">Compatibilidade de saída de áudio</string>
+    <string name="output_session_compatibility_description">Usa as sessões de áudio dos apps quando o processamento de todo o sistema não chega à sua saída. «Todo o sistema» aplica as configurações atuais a todas as sessões de mídia detectadas; «Por sessão» mantém as predefinições de cada app. Requer a detecção de sessões. Novas sessões podem levar um momento para se conectar.</string>
 </resources>

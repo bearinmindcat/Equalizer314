@@ -153,19 +153,24 @@ class EqStateManager(
     // Callbacks
     var onProcessingChanged: ((Boolean) -> Unit)? = null
     var onServiceConnected: (() -> Unit)? = null
+    /** Main thread, after a worker-side curve fit moved the auto-gain offset. */
+    var onAutoGainOffsetChanged: (() -> Unit)? = null
 
     val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             val service = (binder as EqService.EqBinder).service
             eqService = service
             serviceBound = true
+            // Weak, so the long-lived service never pins this activity-owned manager.
+            val self = java.lang.ref.WeakReference(this@EqStateManager)
+            service.dynamicsManager.onAutoGainOffsetChanged = Runnable { self.get()?.onAutoGainOffsetChanged?.invoke() }
             android.util.Log.d("EqStateManager", "onServiceConnected: pendingStartEq=$pendingStartEq isActive=${service.dynamicsManager.isActive}")
             if (pendingStartEq) {
                 pendingStartEq = false
                 android.util.Log.d("EqStateManager", "Calling doStartEq via onServiceConnected callback!")
                 onServiceConnected?.invoke()
             } else {
-                isProcessing = service.dynamicsManager.isActive
+                isProcessing = service.isProcessingActive
                 onProcessingChanged?.invoke(isProcessing)
             }
         }
@@ -297,6 +302,11 @@ class EqStateManager(
         ParametricToDpConverter.overlayEq =
             if (eqPrefs.getChannelSideEqEnabled() && sharedEq.getBandCount() > 0) sharedEq else null
         onEqPushed?.invoke()
+        if (eqPrefs.getOutputSessionCompatibility()) {
+            saveState()
+            eqService?.refreshSessionProcessing()
+            return
+        }
         if (!isProcessing) return
         val dm = eqService?.dynamicsManager ?: run {
             // Service binding still pending (re-bound async on start): persist and let the service push it, so the sound follows the graph.
@@ -320,6 +330,24 @@ class EqStateManager(
         }
         val (lEq, rEq) = getChannelEqs()
         eqService?.updateEqPerChannel(lEq, rEq)
+    }
+
+    /** Preamp-only edit: the curve is unchanged, so write just the input-gain stage instead of refitting every band. */
+    fun pushPreampUpdate() {
+        val dm = eqService?.dynamicsManager
+        if (!isProcessing || dm == null || !dm.isActive) return pushEqUpdate()
+        onEqPushed?.invoke()
+        dm.channelBalancePercent = channelBalancePercent
+        if (eqPrefs.getChannelSideEqEnabled()) {
+            dm.preampGainDb = 0f
+            dm.leftChannelGainDb = leftChannelGainDb + preampLeftDb
+            dm.rightChannelGainDb = rightChannelGainDb + preampRightDb
+        } else {
+            dm.preampGainDb = preampGainDb
+            dm.leftChannelGainDb = leftChannelGainDb
+            dm.rightChannelGainDb = rightChannelGainDb
+        }
+        dm.applyInputGain()
     }
 
     private val updateHandler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -689,6 +717,11 @@ class EqStateManager(
 
     /** Apply only channel-side-options changes (balance / per-channel preamp) without recomputing the EQ curve. Cheap enough to call on every slider step. */
     fun pushChannelSettingsUpdate() {
+        if (eqPrefs.getOutputSessionCompatibility()) {
+            saveState()
+            eqService?.refreshSessionProcessing()
+            return
+        }
         if (!isProcessing) return
         val dm = eqService?.dynamicsManager ?: return
         dm.channelBalancePercent = channelBalancePercent
@@ -698,6 +731,11 @@ class EqStateManager(
     }
 
     fun pushLimiterUpdate() {
+        if (eqPrefs.getOutputSessionCompatibility()) {
+            saveState()
+            eqService?.refreshSessionProcessing()
+            return
+        }
         if (!isProcessing) return
         val dm = eqService?.dynamicsManager ?: return
         dm.limiterEnabled = limiterEnabled

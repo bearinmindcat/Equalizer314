@@ -108,6 +108,15 @@ All of these acknowledgements are mentioned in code comments, but I wanted too a
 
 ## License
 
+[![GPL-3.0-only](https://img.shields.io/badge/License-GPL--3.0--only-blue.svg)](https://spdx.org/licenses/GPL-3.0-only.html)
+
 Equalizer314 is released under the **GNU General Public License v3.0**. See [LICENSE](LICENSE) for the full text.
 
 You are free to use, modify, and redistribute this software under the terms of the GPL v3. If you distribute a modified version, you must release the source under the same license.
+
+## Misc info for myself
+
+Try to use [semantic commit](https://kapeli.com/cheat_sheets/Semantic_Commits.docset/Contents/Resources/Documents/index)
+messages. Use `feat:` / `fix:` / `perf:` / `chore:` / `docs:` / etc.
+
+Releases: Actions › Release › Run workflow. It bumps the version, writes the changelog from the `feat:` / `fix:` / `perf:` commits since the last release, builds the signed APK and publishes the release (details in [release.yml](.github/workflows/release.yml)).

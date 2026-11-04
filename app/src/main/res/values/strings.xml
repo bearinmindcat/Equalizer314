@@ -232,6 +232,10 @@
     <string name="overwrite_custom_preset">Overwrite Custom Preset</string>
     <string name="overwrite">Overwrite</string>
     <string name="updated_quoted">Updated \"%1$s\"</string>
+    <string name="rename_preset">Rename Preset</string>
+    <string name="rename">Rename</string>
+    <string name="preset_name_taken">A preset named \"%1$s\" already exists</string>
+    <string name="renamed_quoted">Renamed to \"%1$s\"</string>
     <string name="loaded_quoted">Loaded \"%1$s\"</string>
     <string name="search_autoeq">Search AutoEQ...</string>
     <string name="remove">Remove</string>
@@ -359,6 +363,9 @@
     <string name="device_key_wired">Wired</string>
     <string name="device_key_speaker">Speaker</string>
     <string name="language">Language</string>
+    <string name="about">About</string>
+    <string name="about_desc">Source code, issues and releases on GitHub</string>
+    <string name="version_value" translatable="false">v%1$s</string>
     <string name="system_default">System default</string>
     <string name="no_languages_match">No languages match</string>
     <plurals name="n_languages">
@@ -461,7 +468,6 @@
         <item quantity="one">%1$d target</item>
         <item quantity="other">%1$d targets</item>
     </plurals>
-
     <!-- Precision Surgical EQ -->
     <string name="solo_requires_eq_on">Turn the EQ on to audition a band</string>
     <string name="notch_added_at">Notch added at %1$s</string>
@@ -484,4 +490,7 @@
     <string name="exp_tracker_high_fft_desc">Adjust frequencies inside the DST field based on the FFT window size.</string>
     <string name="band_following_tracker">Band %1$s following tracked frequency, %2$s</string>
     <string name="band_stopped_following_tracker">Band %1$s stopped following</string>
+
+    <string name="output_session_compatibility">Audio output compatibility</string>
+    <string name="output_session_compatibility_description">Use app audio sessions when system-wide processing does not reach your output. System-wide applies the current settings to all detected media sessions; Session-based keeps app presets. Requires session detection. New sessions may take a moment to attach.</string>
 </resources>

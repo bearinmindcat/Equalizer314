@@ -41,6 +41,9 @@ class  MainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "Equalizer314"
+        /** True while the EQ screen is resumed; EqService skips its power toast then (issue #133). */
+        @Volatile var isOnScreen = false
+            private set
     }
 
     // State manager
@@ -78,6 +81,8 @@ class  MainActivity : AppCompatActivity() {
 
     // ---- Preset import ----
     private var refreshPresetPicker: (() -> Unit)? = null
+    // Clears the picker's open flag + lit save icon when a mode switch hides the picker (issue #117).
+    private var resetPresetPickerState: (() -> Unit)? = null
 
     private val presetImportLauncher = registerForActivityResult(
         ActivityResultContracts.GetContent()
@@ -631,6 +636,7 @@ class  MainActivity : AppCompatActivity() {
         override fun onReceive(context: Context?, intent: Intent?) {
             syncGraphToDrivingAppPreset()
             updateDevicePresetStatus()
+            visualizerHelper.refreshSession(eqGraphView)
         }
     }
 
@@ -1073,6 +1079,8 @@ class  MainActivity : AppCompatActivity() {
         stateManager.onServiceConnected = {
             doStartEq()
         }
+        // The curve fit runs on the DP worker now, so the auto-gain readout refreshes when it lands.
+        stateManager.onAutoGainOffsetChanged = { updateAutoGainOffsetText() }
     }
 
     private fun initEQ() {
@@ -2140,6 +2148,11 @@ class  MainActivity : AppCompatActivity() {
                 presetRow.addView(overwriteBtn)
                 presetRow.addView(exportBtn)
                 presetRow.addView(deleteBtn)
+                // Long-press to rename (issue #140)
+                presetRow.setOnLongClickListener {
+                    showRenamePresetDialog(name) { populatePresetPicker() }
+                    true
+                }
                 // Tap to load preset
                 presetRow.setOnClickListener {
                     val json = prefs.getString("preset_$name", null) ?: return@setOnClickListener
@@ -2460,6 +2473,12 @@ class  MainActivity : AppCompatActivity() {
             presetPickerScroll.post { sizePresetPicker() }
         }
 
+        resetPresetPickerState = {
+            presetPickerOpen = false
+            saveBtn.setBackgroundColor(graphBtnDimBg)
+            saveBtn.strokeColor = android.content.res.ColorStateList.valueOf(graphBtnDimStroke)
+            saveBtn.iconTint = android.content.res.ColorStateList.valueOf(graphBtnDimContent)
+        }
         saveBtn.setOnClickListener {
             presetPickerOpen = !presetPickerOpen
             if (presetPickerOpen) {
@@ -3490,6 +3509,7 @@ class  MainActivity : AppCompatActivity() {
         }
 
         setupLanguagePicker()
+        setupAboutCard()
 
         // Spectrum Control
         setupSpectrumControl()
@@ -3500,8 +3520,7 @@ class  MainActivity : AppCompatActivity() {
             preampText.setText(String.format("%.1f", value))
             stateManager.setActivePreamp(value)
             persistPreamps()
-            stateManager.pushEqUpdate()
-            updateAutoGainOffsetText()
+            stateManager.pushPreampUpdate()
         }
 
         var preampJustDoubleTapped = false
@@ -3511,8 +3530,7 @@ class  MainActivity : AppCompatActivity() {
                 preampText.setText(String.format("%.1f", 0f))
                 stateManager.setActivePreamp(0f)
                 persistPreamps()
-                stateManager.pushEqUpdate()
-                updateAutoGainOffsetText()
+                stateManager.pushPreampUpdate()
                 preampJustDoubleTapped = true
                 return true
             }
@@ -3534,8 +3552,7 @@ class  MainActivity : AppCompatActivity() {
                 preampSlider.value = gain
                 stateManager.setActivePreamp(gain)
                 persistPreamps()
-                stateManager.pushEqUpdate()
-                updateAutoGainOffsetText()
+                stateManager.pushPreampUpdate()
                 preampText.clearFocus()
             }
             true
@@ -3710,6 +3727,7 @@ class  MainActivity : AppCompatActivity() {
                 visibility = View.GONE
                 alpha = 1f
             }
+            resetPresetPickerState?.invoke()
 
             val preampCard = findViewById<View>(R.id.preampCardBar)
             if (preampCard.parent !== eqControlsContainer) {
@@ -3803,6 +3821,7 @@ class  MainActivity : AppCompatActivity() {
                     visibility = View.GONE
                     alpha = 1f
                 }
+                resetPresetPickerState?.invoke()
 
                 // Match the controls overlay's 8dp topMargin from PARAMETRIC/GRAPHIC.
                 val overlay = simpleEqContainer.parent as? View
@@ -4280,9 +4299,9 @@ class  MainActivity : AppCompatActivity() {
 
     /** Power tap: Session mode arms/disarms the per-app effects (no global DP); otherwise start/stop the global DP. */
     private fun onPowerTap() {
-        if (eqPrefs.getAudioRoutingMode() == 1) {
+        if (eqPrefs.usesSessionProcessing()) {
             val on = !eqPrefs.getPowerState()
-            showPowerSnackbar(on, getString(R.string.per_app_eq))
+            showPowerSnackbar(on)
             animatePowerFab(on)
             stateManager.isProcessing = on
             val svc = Intent(this, EqService::class.java)
@@ -4340,11 +4359,91 @@ class  MainActivity : AppCompatActivity() {
         }, 280)
     }
 
-    private fun showPowerSnackbar(on: Boolean, label: String = getString(R.string.dynamics_processing)) {
+    /** Rename a saved preset (issue #140), styled like the overwrite dialog; bindings and the live name follow it. */
+    private fun showRenamePresetDialog(oldName: String, onRenamed: () -> Unit) {
+        val d = resources.displayMetrics.density
+        val dlgView = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding((24 * d).toInt(), (20 * d).toInt(), (24 * d).toInt(), (16 * d).toInt())
+        }
+        val dlgTitle = android.widget.TextView(this).apply {
+            text = getString(R.string.rename_preset)
+            setTextColor(0xFFE2E2E2.toInt()); textSize = 20f
+            setPadding(0, 0, 0, (12 * d).toInt())
+        }
+        val dlgInputBox = android.widget.FrameLayout(this).apply {
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (16 * d).toInt() }
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0x00000000)
+                setStroke((1 * d).toInt(), 0xFF555555.toInt())
+                cornerRadius = 12 * d
+            }
+        }
+        val dlgInput = android.widget.EditText(this).apply {
+            setText(oldName)
+            setSelection(oldName.length)
+            setTextColor(0xFFFFFFFF.toInt())
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+            background = null
+            val pad = (14 * d).toInt()
+            setPadding(pad, pad, pad, pad)
+            isSingleLine = true
+        }
+        dlgInputBox.addView(dlgInput)
+        val dlgDiv = android.view.View(this).apply {
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, (1 * d).toInt()).apply { bottomMargin = (12 * d).toInt() }
+            setBackgroundColor(0xFF444444.toInt())
+        }
+        fun dlgButton(label: String, color: Int, start: Boolean) =
+            com.google.android.material.button.MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                text = label
+                layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    if (start) marginEnd = (3 * d).toInt() else marginStart = (3 * d).toInt()
+                }
+                cornerRadius = (12 * d).toInt()
+                setTextColor(color)
+                setBackgroundColor(0x00000000)
+                strokeColor = android.content.res.ColorStateList.valueOf(0xFF444444.toInt())
+                strokeWidth = (1 * d).toInt()
+                insetTop = 0; insetBottom = 0
+            }
+        val dlgCancelBtn = dlgButton(getString(R.string.cancel), 0xFFEF9A9A.toInt(), start = true)
+        val dlgOkBtn = dlgButton(getString(R.string.rename), 0xFFDDDDDD.toInt(), start = false)
+        val dlgBtnRow = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            addView(dlgCancelBtn); addView(dlgOkBtn)
+        }
+        dlgView.addView(dlgTitle); dlgView.addView(dlgInputBox); dlgView.addView(dlgDiv); dlgView.addView(dlgBtnRow)
+        val dlg = android.app.AlertDialog.Builder(this, R.style.Theme_Equalizer314_Dialog).setView(dlgView).create()
+        dlgCancelBtn.setOnClickListener { dlg.dismiss() }
+        dlgOkBtn.setOnClickListener {
+            val newName = dlgInput.text.toString().trim()
+            when {
+                newName.isEmpty() || newName == oldName -> dlg.dismiss()
+                !eqPrefs.renamePreset(oldName, newName) ->
+                    android.widget.Toast.makeText(this, getString(R.string.preset_name_taken, newName), android.widget.Toast.LENGTH_SHORT).show()
+                else -> {
+                    onRenamed()
+                    updateDevicePresetStatus()
+                    try {
+                        startService(android.content.Intent(this, com.bearinmind.equalizer314.audio.EqService::class.java)
+                            .setAction(com.bearinmind.equalizer314.audio.EqService.ACTION_REFRESH_NOTIFICATION))
+                    } catch (_: Exception) {}
+                    android.widget.Toast.makeText(this, getString(R.string.renamed_quoted, newName), android.widget.Toast.LENGTH_SHORT).show()
+                    dlg.dismiss()
+                }
+            }
+        }
+        dlg.show()
+    }
+
+    /** Persist power + update the FAB; no toast, it sat over the preamp slider (issue #133) and the FAB already shows the state. */
+    private fun showPowerSnackbar(on: Boolean) {
         eqPrefs.savePowerState(on)
         com.bearinmind.equalizer314.ui.BottomNavHelper.updatePowerFab(this, on)
-        val message = getString(if (on) R.string.x_start else R.string.x_stop, label)
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 
     /** Tag to the language's own name. One line per values-XX folder; absent ones are filtered out below. */
@@ -4356,6 +4455,16 @@ class  MainActivity : AppCompatActivity() {
         "uk" to "\u0423\u043a\u0440\u0430\u0457\u043d\u0441\u044c\u043a\u0430",
         "zh" to "\u7b80\u4f53\u4e2d\u6587",
     )
+
+    /** About card: version from the build, tap opens the GitHub repo (issue #103). */
+    private fun setupAboutCard() {
+        findViewById<TextView>(R.id.aboutVersionText).text = getString(R.string.version_value, BuildConfig.VERSION_NAME)
+        findViewById<View>(R.id.aboutCard).setOnClickListener {
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/bearinmindcat/Equalizer314")))
+            } catch (_: android.content.ActivityNotFoundException) {}
+        }
+    }
 
     private fun setupLanguagePicker() {
         val valueText = findViewById<TextView>(R.id.languageValueText)
@@ -4945,9 +5054,7 @@ class  MainActivity : AppCompatActivity() {
 
     /** Persist all three preamp values (shared + per-side). */
     private fun persistPreamps() {
-        eqPrefs.savePreampGain(stateManager.preampGainDb)
-        eqPrefs.savePreampLeft(stateManager.preampLeftDb)
-        eqPrefs.savePreampRight(stateManager.preampRightDb)
+        eqPrefs.savePreamps(stateManager.preampGainDb, stateManager.preampLeftDb, stateManager.preampRightDb)
     }
 
     /** Point the preamp slider/text at the active view's preamp value. */
@@ -5012,6 +5119,7 @@ class  MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        isOnScreen = true
         updateDevicePresetStatus()
         // "Add more EQ bands" cap lowered while away: drop bands beyond it, then refresh toggles + graph (issue #31).
         if (stateManager.enforceBandCap()) {
@@ -5053,7 +5161,7 @@ class  MainActivity : AppCompatActivity() {
         val savedPower = eqPrefs.getPowerState()
         com.bearinmind.equalizer314.ui.BottomNavHelper.setPowerFabInstant(this, savedPower)
         if (stateManager.serviceBound && stateManager.eqService != null) {
-            stateManager.isProcessing = stateManager.eqService!!.dynamicsManager.isActive
+            stateManager.isProcessing = stateManager.eqService!!.isProcessingActive
             // A Disable-EQ binding keeps power on with the DP detached — show the real state.
             if (savedPower && !stateManager.isProcessing && stateManager.eqService!!.isDisabledByDevice) {
                 com.bearinmind.equalizer314.ui.BottomNavHelper.setPowerFabInstant(this, false)
@@ -5086,6 +5194,7 @@ class  MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
+        isOnScreen = false
         // Release visualizer so other activities can use session 0
         visualizerHelper.stop()
         eqGraphView.spectrumRenderer = null
@@ -5176,7 +5285,7 @@ class  MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         if (stateManager.serviceBound && stateManager.eqService != null) {
-            stateManager.isProcessing = stateManager.eqService!!.dynamicsManager.isActive
+            stateManager.isProcessing = stateManager.eqService!!.isProcessingActive
         } else {
             stateManager.isProcessing = false
         }

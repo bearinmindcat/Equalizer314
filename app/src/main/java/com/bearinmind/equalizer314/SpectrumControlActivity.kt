@@ -20,6 +20,9 @@ class SpectrumControlActivity : AppCompatActivity() {
     private var graphView: EqGraphView? = null
     private var isMusicPlaying = true
     private var audioManager: android.media.AudioManager? = null
+    // Primary output rate — fallback when the Visualizer's capture rate can't be trusted (issue #137).
+    @Volatile
+    private var fallbackRateHz = 48000
     private var playbackCallback: android.media.AudioManager.AudioPlaybackCallback? = null
 
     private val fftSizes = intArrayOf(1024, 2048, 4096, 8192, 16384, 32768, 65536)
@@ -488,6 +491,7 @@ class SpectrumControlActivity : AppCompatActivity() {
 
     private fun startSpectrum() {
         audioManager = getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+        fallbackRateHz = audioManager?.getProperty(android.media.AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)?.toIntOrNull() ?: 48000
         isMusicPlaying = true
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             playbackCallback = object : android.media.AudioManager.AudioPlaybackCallback() {
@@ -511,8 +515,8 @@ class SpectrumControlActivity : AppCompatActivity() {
                     ) {
                         if (waveform == null || waveform.size < 32) return
                         if (isMusicPlaying) {
-                            // Visualizer reports the capture rate in MILLIHERTZ (48 kHz → 48_000_000)
-                            renderer?.updateWaveformData(waveform, samplingRate / 1000)
+                            renderer?.setSampleRate(SpectrumAnalyzerRenderer.captureRateHz(samplingRate, fallbackRateHz))
+                            renderer?.updateWaveformData(waveform)
                         } else {
                             renderer?.feedSilence()
                             renderer?.fadeOut(0.04f)

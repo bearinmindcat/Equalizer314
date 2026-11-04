@@ -1,8 +1,19 @@
-- Dynamic Spectrum Tracker (DST): Three-tap any band node (or double-tap on the band toggle button, or three-tap with Channel Side EQ) to follow the tracked frequency inside that field. Dragging the band returns to manual control.
-- Dynamic Spectrum Tracker (DST): New High FFT Scanning toggle in Experimental menu, adjusting any frequencies inside the DST field to the nearest FFT resolution bins.
-- Spectrum Control: Merged Long-Window FFT Analyzer toggle into FFT Window Size, enabling real-time rolling FFT window shifts directly from Spectrum Control.
-- Precision Surgical EQ: Long-window rolling FFT spectrum analysis up to 65536 points, zoom-adaptive window sizing, target curve ghost overlay and delta fill, band solo audition, frequency axis zoom and pan.
-- Audio Output: Optional audio output compatibility mode (issue #141).
-- Presets: Rename presets by long-pressing them (issue #140).
-- Virtual Surround: Experimental HeSuVi / IRS virtual surround support (issue #128).
-- Performance & UI: Reduced latency, improved graph grid rendering, fixed translations and UI alignment across multiple languages.
+Added Dynamic Spectrum Tracker (DST) with band following and High FFT Scanning
+Added Long-Window rolling FFT spectrum analyzer up to 65k points with zoom-adaptive sizing
+Added target curve ghost overlay, delta fill, and band solo audition
+Added frequency axis zoom and pan on the EQ graph
+Added optional audio output compatibility mode - issue #141
+Added option to rename presets by long-pressing them - issue #140
+Added extra frequency grid lines on the EQ graph - issue #122
+Added About card with app version and GitHub link - issue #103
+Fixed spectrum analyzer drawing frequencies in the wrong place - issue #137
+Fixed power on/off pop-up covering the preamp slider - issue #133
+Fixed save icon staying highlighted after switching EQ modes - issue #117
+Fixed EQ not applying after pausing or stopping music on some phones - issue #109
+Fixed EQ not turning back on when headphones connect after a Disable EQ device - issue #136
+Fixed EQ not working on Xiaomi phones when Skip system sounds is on - issue #99
+
+Fixed lag when changing EQ settings on slower devices
+Fixed reverb labels getting cut off in translations
+Updated Ukrainian and Russian translations - PR #134 by reallystates
+Added unambiguous license badge - PR #3 by var2p

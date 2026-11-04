@@ -14,6 +14,16 @@ class VisualizerHelper {
     }
 
     private var visualizer: Visualizer? = null
+    private var captureSessionId = 0
+
+    fun refreshSession(graphView: EqGraphView) {
+        if (isRunning && captureSessionId != requestedSession(graphView.context)) start(graphView)
+    }
+
+    private fun requestedSession(context: Context): Int =
+        if (com.bearinmind.equalizer314.state.EqPreferencesManager(context).getOutputSessionCompatibility()) {
+            SessionEffectManager.visualizerSessionId
+        } else 0
     val renderer = SpectrumAnalyzerRenderer()
     var isRunning = false
         private set
@@ -24,6 +34,9 @@ class VisualizerHelper {
     @Volatile
     var isMusicPlaying = true  // assume playing until told otherwise
     private var graphViewRef: EqGraphView? = null
+    // Primary output rate — used when the Visualizer's reported capture rate can't be trusted (issue #137).
+    @Volatile
+    private var fallbackRateHz = 48000
 
     // Calibration: offset between normalized spectrum dB and absolute dBFS
     // Apply this to normalized per-band levels to get absolute dBFS for compressor math
@@ -38,6 +51,7 @@ class VisualizerHelper {
         // Register AudioPlaybackCallback to detect play/pause (works on speaker AND Bluetooth)
         val context = graphView.context
         audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        fallbackRateHz = audioManager?.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)?.toIntOrNull() ?: 48000
         isMusicPlaying = true  // assume playing on start
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -59,7 +73,8 @@ class VisualizerHelper {
         }
 
         try {
-            visualizer = Visualizer(0).apply {
+            captureSessionId = requestedSession(context)
+            visualizer = Visualizer(captureSessionId).apply {
                 captureSize = Visualizer.getCaptureSizeRange()[1]
                 scalingMode = Visualizer.SCALING_MODE_NORMALIZED
                 measurementMode = Visualizer.MEASUREMENT_MODE_PEAK_RMS
@@ -71,8 +86,8 @@ class VisualizerHelper {
                         if (waveform == null || waveform.size < 64 || v == null) return
 
                         if (isMusicPlaying) {
-                            // Visualizer reports the capture rate in MILLIHERTZ (48 kHz → 48_000_000)
-                            renderer.updateWaveformData(waveform, samplingRate / 1000)
+                            renderer.setSampleRate(SpectrumAnalyzerRenderer.captureRateHz(samplingRate, fallbackRateHz))
+                            renderer.updateWaveformData(waveform)
 
                             // Compute calibration offset: absolute dBFS vs normalized spectrum
                             val measurement = Visualizer.MeasurementPeakRms()

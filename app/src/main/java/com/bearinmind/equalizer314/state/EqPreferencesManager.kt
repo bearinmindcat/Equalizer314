@@ -334,6 +334,14 @@ class EqPreferencesManager(context: Context) {
     fun savePreampRight(v: Float) { prefs.edit().putFloat("preampRightDb", v.saneOr(0f, -20f, 20f)).apply() }
     fun getPreampRight(): Float = prefs.getFloat("preampRightDb", 0f)
     fun getPreampGain(): Float = prefs.getFloat("preampGain", 0f)
+    /** All three preamps in one commit — the slider saves on every move. */
+    fun savePreamps(shared: Float, left: Float, right: Float) {
+        prefs.edit()
+            .putFloat("preampGain", shared.saneOr(0f, -20f, 20f))
+            .putFloat("preampLeftDb", left.saneOr(0f, -20f, 20f))
+            .putFloat("preampRightDb", right.saneOr(0f, -20f, 20f))
+            .apply()
+    }
 
     // Auto-gain
     fun saveAutoGainEnabled(enabled: Boolean) { prefs.edit().putBoolean("autoGainEnabled", enabled).apply() }
@@ -818,6 +826,33 @@ class EqPreferencesManager(context: Context) {
             .apply()
     }
 
+    /** Renames a pool preset and every stored reference to it (issue #140); false if [newName] is blank, taken or [oldName] is gone. */
+    fun renamePreset(oldName: String, newName: String): Boolean {
+        if (newName == oldName) return true
+        if (newName.isBlank() || customPresetsPrefs.contains("preset_$newName")) return false
+        val json = customPresetsPrefs.getString("preset_$oldName", null) ?: return false
+        val names = (customPresetsPrefs.getStringSet("preset_names", emptySet()) ?: emptySet()).toMutableSet()
+        names.remove(oldName); names.add(newName)
+        customPresetsPrefs.edit()
+            .remove("preset_$oldName")
+            .putString("preset_$newName", json)
+            .putStringSet("preset_names", names)
+            .apply()
+        for (b in getAllDeviceBindings()) if (b.presetName == oldName) saveDeviceBinding(b.copy(presetName = newName))
+        for (b in getAllAppBindings()) if (b.presetName == oldName) saveAppBinding(b.copy(presetName = newName))
+        val e = bindingsPrefs.edit()
+        if (getAppliedBindingPreset() == oldName) e.putString("appliedBindingPreset", newName)
+        if (getAppliedAppPreset() == oldName) e.putString("appliedAppPreset", newName)
+        // Snapshots restored after an app/device override carry the name of what was live.
+        for (key in listOf("lastManualState", "appOverrideSnapshot")) {
+            val o = bindingsPrefs.getString(key, null)?.let { runCatching { JSONObject(it) }.getOrNull() } ?: continue
+            if (o.optString("presetName") == oldName) e.putString(key, o.put("presetName", newName).toString())
+        }
+        e.apply()
+        if (getPresetName() == oldName) savePresetName(newName)
+        return true
+    }
+
     /** Raw JSON of a pool preset — Simple picker thumbnails/subtitles. */
     fun getCustomPresetJson(name: String): String? =
         customPresetsPrefs.getString("preset_$name", null)
@@ -1141,6 +1176,18 @@ class EqPreferencesManager(context: Context) {
     fun saveAudioRoutingMode(mode: Int) {
         appBindingsPrefs.edit().putInt("audio_routing_mode", mode).apply()
     }
+
+    /** Optional workaround for firmware that routes session-0 effects away from Bluetooth. */
+    fun getOutputSessionCompatibility(): Boolean =
+        appBindingsPrefs.getBoolean("output_session_compatibility", false)
+
+    fun setOutputSessionCompatibility(enabled: Boolean) {
+        appBindingsPrefs.edit().putBoolean("output_session_compatibility", enabled).apply()
+    }
+
+    /** Processing backend; the user's System-wide / Session-based selection remains separate. */
+    fun usesSessionProcessing(): Boolean =
+        getAudioRoutingMode() == 1 || getOutputSessionCompatibility()
 
     /** Channel Input "Apps" filter: 0 = media-capable apps only (default), 1 = show all. */
     fun getAppListFilterMode(): Int =

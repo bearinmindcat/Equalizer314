@@ -124,6 +124,15 @@ open class ParametricEqualizer(private val sampleRate: Int = 48000) {
 
     fun getAllBands(): List<EqualizerBand> = bands.toList()
 
+    /** Independent copy of the bands, so the DP worker can convert while the UI keeps editing the original. */
+    fun snapshot(): ParametricEqualizer = ParametricEqualizer(sampleRate).also { c ->
+        c.clearBands()
+        for (b in bands) {
+            c.addBand(b.frequency, b.gain, b.filterType, b.q)
+            c.bands[c.bands.size - 1].apply { enabled = b.enabled; channel = b.channel }
+        }
+    }
+
     /**
      * Process stereo audio buffer
      * Input/output format: interleaved stereo (L, R, L, R, ...)

@@ -86,13 +86,18 @@ class DynamicsProcessingManager {
     var isActive = false
         private set
 
-    // Preamp
+    // Preamp (read on the worker at write time)
+    @Volatile
     var preampGainDb: Float = 0f
 
     // Auto-gain
     var autoGainEnabled: Boolean = false
+    @Volatile
     var lastAutoGainOffset: Float = 0f
         private set
+    /** Fired on the main thread when a worker-side conversion moves the auto-gain offset. */
+    @Volatile
+    var onAutoGainOffsetChanged: Runnable? = null
     // Issue #61: hold the auto-gain offset during a drag — per-write recompute pumps the whole mix.
     @Volatile
     var gainHold = false
@@ -117,15 +122,17 @@ class DynamicsProcessingManager {
     var limiterPostGainDb: Float = 0f
 
     // Channel balance + per-channel preamp — applied on the input-gain stage, not baked into bands.
-    var channelBalancePercent: Int = 0     // -100..100, 0 = center
-    var leftChannelGainDb: Float = 0f      // -12..12
-    var rightChannelGainDb: Float = 0f     // -12..12
+    @Volatile var channelBalancePercent: Int = 0     // -100..100, 0 = center
+    @Volatile var leftChannelGainDb: Float = 0f      // -12..12
+    @Volatile var rightChannelGainDb: Float = 0f     // -12..12
 
     // Worker thread for binder calls — on the UI thread they block rendering during drags.
     private val workerThread = android.os.HandlerThread("EqDpWorker").apply { start() }
     private val workerHandler = android.os.Handler(workerThread.looper)
     @Volatile private var pendingApply: Runnable? = null
     @Volatile private var pendingLimiter: Runnable? = null
+    @Volatile private var pendingGain: Runnable? = null
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
     // Issue #61: space band writes ≥ 50 ms apart — faster rewrite storms stutter on some HALs.
     private val minWriteSpacingMs = 50L
@@ -208,9 +215,8 @@ class DynamicsProcessingManager {
                 // MBC off: all allocated bands passthrough, so a later toggle is a live write.
                 if (!mbcEnabled) writePassthroughBands(this, mbcStageBandCount)
 
-                // Apply response, then enable — drain blocks until the band write lands.
-                applyParametricResponse(this, eq, rightEq ?: eq)
-                drainPendingApply()
+                // Apply response inline, then enable — never process default bands.
+                applyParametricResponse(this, eq, rightEq ?: eq, sync = true)
                 enabled = true
 
                 // Detect when another app disables/overrides our DP and re-attach
@@ -259,14 +265,6 @@ class DynamicsProcessingManager {
         limiterThresholdDb.saneOr(-2f, -30f, 0f), limiterPostGainDb.saneOr(0f, -12f, 12f),
     )
 
-    /** Block until any queued band write lands — start() enables only after the bands are in. */
-    private fun drainPendingApply() {
-        val job = pendingApply ?: return
-        // Dequeue and run synchronously — only ordering matters.
-        workerHandler.removeCallbacks(job)
-        try { job.run() } catch (_: Exception) {}
-    }
-
     private fun reclaimSession() {
         val now = System.currentTimeMillis()
         if (now - lastReclaimTime < reclaimCooldownMs) return  // Cooldown — don't fight endlessly
@@ -293,6 +291,17 @@ class DynamicsProcessingManager {
             Log.w(TAG, "in-place re-enable failed", e)
             false
         }
+    }
+
+    /** Re-send the live curve, input gains and limiter to the same effect (no rebuild); false when not ours or not running (issue #109). */
+    fun rewriteInPlace(): Boolean {
+        val dp = dynamicsProcessing ?: return false
+        val eq = lastEq ?: return false
+        if (!isActive) return false
+        try { if (!dp.hasControl()) return false } catch (_: Throwable) { return false }
+        applyParametricResponse(dp, eq, lastRightEq ?: eq)
+        updateLimiter()
+        return true
     }
 
     /** Power-cycle-equivalent recreate on the current output with the last EQ; caller re-applies MBC / bypass. */
@@ -353,13 +362,71 @@ class DynamicsProcessingManager {
         applyParametricResponse(dp, eq, eq)
     }
 
+    /** Snapshots the EQs on the caller's thread; the conversion and binder writes run on the worker (or inline when [sync]), so a slow phone's taps never wait on them. */
     private fun applyParametricResponse(
         dp: DynamicsProcessing,
         leftEq: ParametricEqualizer,
         rightEq: ParametricEqualizer,
+        sync: Boolean = false,
     ) {
-        // Sampling on the caller's thread (UI-owned EQ); binder writes on the worker. One conversion path for every mode.
+        val same = leftEq === rightEq
+        val l = leftEq.snapshot()
+        val r = if (same) l else rightEq.snapshot()
+        // Keep the overlay's identity with its channel EQ — the converter skips an overlay that IS the EQ.
+        val ov = ParametricToDpConverter.overlayEq.let { o ->
+            when { o == null -> null; o === leftEq -> l; o === rightEq -> r; else -> o.snapshot() }
+        }
+        val freeze = ParametricToDpConverter.layoutFrozen
+        val hold = gainHold
+        val autoGain = autoGainEnabled
+        val bypassed = curveBypassed
         val useInterleave = currentInterleave
+        var self: Runnable? = null
+        val job = Runnable {
+            try {
+                // Without control every setter silently no-ops — skip; reclaim recreates later.
+                if (!dp.hasControl()) {
+                    Log.w(TAG, "DP lost control — band write skipped, scheduling retry")
+                    scheduleControlRetry()
+                    return@Runnable
+                }
+                controlRetryCount = 0
+                writeConverted(dp, l, r, same, ov, freeze, hold, autoGain, bypassed, useInterleave)
+                lastWriteAtMs = android.os.SystemClock.uptimeMillis()
+            } catch (e: Exception) {
+                Log.e(TAG, "DP band write failed", e)
+            } finally {
+                if (pendingApply === self) pendingApply = null
+            }
+        }
+        self = job
+        if (sync) {
+            pendingApply?.let { workerHandler.removeCallbacks(it) }
+            pendingApply = null
+            job.run()
+            return
+        }
+        // A newer edit replaces a queued one, so a burst of taps converts only the latest state.
+        pendingApply?.let { workerHandler.removeCallbacks(it) }
+        pendingApply = job
+        val delay = (lastWriteAtMs + minWriteSpacingMs - android.os.SystemClock.uptimeMillis())
+            .coerceIn(0L, minWriteSpacingMs)
+        workerHandler.postDelayed(job, delay)
+    }
+
+    /** Fit the snapshotted EQs to DP stairs, apply auto-gain / bypass, and write input gain + Pre/Post EQ. */
+    private fun writeConverted(
+        dp: DynamicsProcessing,
+        leftEq: ParametricEqualizer,
+        rightEq: ParametricEqualizer,
+        same: Boolean,
+        ov: ParametricEqualizer?,
+        freeze: Boolean,
+        hold: Boolean,
+        autoGain: Boolean,
+        bypassed: Boolean,
+        useInterleave: Boolean,
+    ) {
         val cutoffs: FloatArray
         val leftGains: FloatArray
         val rightGains: FloatArray
@@ -368,8 +435,8 @@ class DynamicsProcessingManager {
         val leftPostGains: FloatArray?
         val rightPostGains: FloatArray?
         if (useInterleave) {
-            if (leftEq === rightEq) {
-                val li = ParametricToDpConverter.convertInterleaved(leftEq)
+            if (same) {
+                val li = ParametricToDpConverter.convertInterleaved(leftEq, ov, freeze)
                 cutoffs = li.preCutoffs
                 leftGains = li.preGains
                 postCutoffs = li.postCutoffs
@@ -377,7 +444,7 @@ class DynamicsProcessingManager {
                 rightGains = leftGains.copyOf()
                 rightPostGains = leftPostGains.copyOf()
             } else {
-                val di = ParametricToDpConverter.convertInterleavedDual(leftEq, rightEq)
+                val di = ParametricToDpConverter.convertInterleavedDual(leftEq, rightEq, ov, freeze)
                 cutoffs = di.preCutoffs
                 leftGains = di.leftPreGains
                 rightGains = di.rightPreGains
@@ -386,13 +453,13 @@ class DynamicsProcessingManager {
                 rightPostGains = di.rightPostGains
             }
         } else {
-            if (leftEq === rightEq) {
-                val l = ParametricToDpConverter.convertFeatureAware(leftEq)
-                cutoffs = l.cutoffs
-                leftGains = l.gains
+            if (same) {
+                val c = ParametricToDpConverter.convertFeatureAware(leftEq, ov, freeze)
+                cutoffs = c.cutoffs
+                leftGains = c.gains
                 rightGains = leftGains.copyOf()
             } else {
-                val d = ParametricToDpConverter.convertFeatureAwareDual(leftEq, rightEq)
+                val d = ParametricToDpConverter.convertFeatureAwareDual(leftEq, rightEq, ov, freeze)
                 cutoffs = d.cutoffs
                 leftGains = d.leftGains
                 rightGains = d.rightGains
@@ -403,9 +470,10 @@ class DynamicsProcessingManager {
         }
 
         // Auto-gain: flat shift bringing the loudest band to ≤ 0 dB.
-        if (autoGainEnabled) {
+        val prevOffset = lastAutoGainOffset
+        if (autoGain) {
             // Recompute even while bypassed so the flat fill below lands on the live curve's offset (level-matched on/off).
-            if (!gainHold) {
+            if (!hold) {
                 var peak = Float.NEGATIVE_INFINITY
                 if (useInterleave && leftPostGains != null && rightPostGains != null) {
                     // Split-half: the true peak is ~2× a single stage's gain.
@@ -427,18 +495,20 @@ class DynamicsProcessingManager {
         } else {
             lastAutoGainOffset = 0f
         }
+        if (lastAutoGainOffset != prevOffset) onAutoGainOffsetChanged?.let { mainHandler.post(it) }
 
         // Bypassed: flat curve carrying the held auto-gain offset, so on/off is level-matched.
-        if (curveBypassed) {
+        if (bypassed) {
             leftGains.fill(lastAutoGainOffset); rightGains.fill(lastAutoGainOffset)
             leftPostGains?.fill(0f); rightPostGains?.fill(0f)
         }
 
-        // Channel offsets + preamp go on the input-gain stage, not into band gains.
+        // Channel offsets + preamp go on the input-gain stage, not into band gains (read now, so the latest preamp wins).
         val (leftOffsetDb, rightOffsetDb) = computeChannelOffsets()
+        val preamp = preampGainDb.saneOr(0f, -20f, 20f)
 
-        Log.d(TAG, "[DUMP] preamp=${"%.2f".format(preampGainDb)} dB, " +
-            "autoGain=$autoGainEnabled (offset=${"%.2f".format(lastAutoGainOffset)} dB), " +
+        Log.d(TAG, "[DUMP] preamp=${"%.2f".format(preamp)} dB, " +
+            "autoGain=$autoGain (offset=${"%.2f".format(lastAutoGainOffset)} dB), " +
             "channelOffsets L=${"%.2f".format(leftOffsetDb)} R=${"%.2f".format(rightOffsetDb)} dB, " +
             "bands=${cutoffs.size}")
         run {
@@ -468,57 +538,59 @@ class DynamicsProcessingManager {
             }
         }
 
-        val n = ParametricToDpConverter.numBands
-        val cutoffsSnap = cutoffs
-        // Input gain = preamp + channel offset (auto-gain is already in the bands).
-        val preamp = preampGainDb.saneOr(0f, -20f, 20f)
-        val leftInputGainDb = preamp + leftOffsetDb
-        val rightInputGainDb = preamp + rightOffsetDb
+        val n = cutoffs.size
+        // Preamp + offset via the per-channel input-gain stage.
+        try {
+            dp.setInputGainbyChannel(0, preamp + leftOffsetDb)
+            dp.setInputGainbyChannel(1, preamp + rightOffsetDb)
+        } catch (e: Throwable) {
+            Log.w(TAG, "setInputGainbyChannel failed", e)
+        }
+        // Atomic per-channel EQ swap — one binder transaction per channel.
+        val leftEqObj = DynamicsProcessing.Eq(true, true, n)
+        val rightEqObj = DynamicsProcessing.Eq(true, true, n)
+        for (i in 0 until n) {
+            leftEqObj.setBand(i, DynamicsProcessing.EqBand(true, cutoffs[i], leftGains[i]))
+            rightEqObj.setBand(i, DynamicsProcessing.EqBand(true, cutoffs[i], rightGains[i]))
+        }
+        dp.setPreEqByChannelIndex(0, leftEqObj)
+        dp.setPreEqByChannelIndex(1, rightEqObj)
+        // Interleave: second staircase on the Post-EQ stage when the live config has one.
+        if (postCutoffs != null && leftPostGains != null && rightPostGains != null) {
+            val leftPostObj = DynamicsProcessing.Eq(true, true, n)
+            val rightPostObj = DynamicsProcessing.Eq(true, true, n)
+            for (i in 0 until n) {
+                leftPostObj.setBand(i, DynamicsProcessing.EqBand(true, postCutoffs[i], leftPostGains[i]))
+                rightPostObj.setBand(i, DynamicsProcessing.EqBand(true, postCutoffs[i], rightPostGains[i]))
+            }
+            dp.setPostEqByChannelIndex(0, leftPostObj)
+            dp.setPostEqByChannelIndex(1, rightPostObj)
+        }
+    }
+
+    /** Preamp / channel-gain change only: rewrite the input-gain stage without refitting the curve. */
+    fun applyInputGain() {
+        val dp = dynamicsProcessing ?: return
+        var self: Runnable? = null
         val job = Runnable {
             try {
-                // Without control every setter silently no-ops — skip; reclaim recreates later.
-                if (!dp.hasControl()) {
-                    Log.w(TAG, "DP lost control — band write skipped, scheduling retry")
-                    scheduleControlRetry()
-                    return@Runnable
-                }
-                controlRetryCount = 0
-                // Preamp + offset via the per-channel input-gain stage.
-                try {
-                    dp.setInputGainbyChannel(0, leftInputGainDb)
-                    dp.setInputGainbyChannel(1, rightInputGainDb)
-                } catch (e: Throwable) {
-                    Log.w(TAG, "setInputGainbyChannel failed", e)
-                }
-                // Atomic per-channel EQ swap — one binder transaction per channel.
-                val leftEqObj = DynamicsProcessing.Eq(true, true, n)
-                val rightEqObj = DynamicsProcessing.Eq(true, true, n)
-                for (i in 0 until n) {
-                    leftEqObj.setBand(i, DynamicsProcessing.EqBand(true, cutoffsSnap[i], leftGains[i]))
-                    rightEqObj.setBand(i, DynamicsProcessing.EqBand(true, cutoffsSnap[i], rightGains[i]))
-                }
-                dp.setPreEqByChannelIndex(0, leftEqObj)
-                dp.setPreEqByChannelIndex(1, rightEqObj)
-                // Interleave: second staircase on the Post-EQ stage when the live config has one.
-                if (postCutoffs != null && leftPostGains != null && rightPostGains != null) {
-                    val leftPostObj = DynamicsProcessing.Eq(true, true, n)
-                    val rightPostObj = DynamicsProcessing.Eq(true, true, n)
-                    for (i in 0 until n) {
-                        leftPostObj.setBand(i, DynamicsProcessing.EqBand(true, postCutoffs[i], leftPostGains[i]))
-                        rightPostObj.setBand(i, DynamicsProcessing.EqBand(true, postCutoffs[i], rightPostGains[i]))
-                    }
-                    dp.setPostEqByChannelIndex(0, leftPostObj)
-                    dp.setPostEqByChannelIndex(1, rightPostObj)
-                }
+                if (!dp.hasControl()) return@Runnable
+                val (leftOffsetDb, rightOffsetDb) = computeChannelOffsets()
+                val preamp = preampGainDb.saneOr(0f, -20f, 20f)
+                dp.setInputGainbyChannel(0, preamp + leftOffsetDb)
+                dp.setInputGainbyChannel(1, preamp + rightOffsetDb)
                 lastWriteAtMs = android.os.SystemClock.uptimeMillis()
-            } catch (e: Exception) {
-                Log.e(TAG, "DP band write failed", e)
+                Log.d(TAG, "[DUMP] input gain only: L=${"%.2f".format(preamp + leftOffsetDb)} R=${"%.2f".format(preamp + rightOffsetDb)} dB")
+            } catch (e: Throwable) {
+                Log.w(TAG, "input-gain write failed", e)
             } finally {
-                pendingApply = null
+                if (pendingGain === self) pendingGain = null
             }
         }
-        pendingApply?.let { workerHandler.removeCallbacks(it) }
-        pendingApply = job
+        self = job
+        pendingGain?.let { workerHandler.removeCallbacks(it) }
+        pendingGain = job
+        // Same write spacing as band writes (issue #61).
         val delay = (lastWriteAtMs + minWriteSpacingMs - android.os.SystemClock.uptimeMillis())
             .coerceIn(0L, minWriteSpacingMs)
         workerHandler.postDelayed(job, delay)
@@ -669,6 +741,8 @@ class DynamicsProcessingManager {
         pendingApply = null
         pendingLimiter?.let { workerHandler.removeCallbacks(it) }
         pendingLimiter = null
+        pendingGain?.let { workerHandler.removeCallbacks(it) }
+        pendingGain = null
         try {
             dynamicsProcessing?.enabled = false
             dynamicsProcessing?.release()

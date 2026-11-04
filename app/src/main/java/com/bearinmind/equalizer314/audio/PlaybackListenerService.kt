@@ -49,7 +49,9 @@ class PlaybackListenerService : NotificationListenerService() {
     private val heartbeatRunnable = object : Runnable {
         override fun run() {
             scheduleSnapshot("heartbeat")
-            detectorHandler?.postDelayed(this, HEARTBEAT_MS)
+            val p = com.bearinmind.equalizer314.state.EqPreferencesManager(this@PlaybackListenerService)
+            detectorHandler?.postDelayed(this,
+                if (p.getOutputSessionCompatibility() && p.getPowerState()) 500L else HEARTBEAT_MS)
         }
     }
 
@@ -188,7 +190,9 @@ class PlaybackListenerService : NotificationListenerService() {
         // Coalesce bursts of callbacks (BT route flip, codec change,
         // ExoPlayer rebuild) into one snapshot.
         handler.removeCallbacks(snapshotRunnable)
-        handler.postDelayed(snapshotRunnable, DEBOUNCE_MS)
+        val compatibility = com.bearinmind.equalizer314.state.EqPreferencesManager(this)
+            .getOutputSessionCompatibility()
+        handler.postDelayed(snapshotRunnable, if (compatibility) 0L else DEBOUNCE_MS)
     }
 
     private fun runSnapshot() {

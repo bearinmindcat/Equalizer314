@@ -25,6 +25,14 @@ class SpectrumAnalyzerRenderer(
     companion object {
         const val MIN_VISIBLE_HZ = 1f
         const val MAX_VISIBLE_HZ = 30000f
+
+        /** Capture rate in Hz from a Visualizer callback (milliHz); an implausible value, or 44.1 kHz before Android 14 (possibly the unset default), falls back to [fallbackHz]. */
+        fun captureRateHz(samplingRate: Int, fallbackHz: Int): Int {
+            val hz = if (samplingRate > 1_000_000) samplingRate / 1000 else samplingRate
+            if (hz !in 8000..768000) return fallbackHz
+            if (hz == 44100 && android.os.Build.VERSION.SDK_INT < 34) return fallbackHz
+            return hz
+        }
     }
 
     private var fftProcessor = WaveformFftProcessor(fftSize = 4096, sampleRate = sampleRate)
@@ -54,7 +62,7 @@ class SpectrumAnalyzerRenderer(
     fun setSampleRate(sr: Int) {
         var hz = sr
         if (hz > 1_000_000) hz /= 1000
-        if (hz < 8000 || hz > 192000) return
+        if (hz !in 8000..768000) return
         if (sampleRate == hz) return
         sampleRate = hz
         analyzer.sampleRate = hz
@@ -94,7 +102,6 @@ class SpectrumAnalyzerRenderer(
     fun getFftSize(): Int = if (useLongWindow) analyzer.getTargetSize() else fftProcessor.fftSize
     fun getEffectiveSize(): Int = if (useLongWindow) analyzer.effectiveSize else fftProcessor.fftSize
     fun getBinWidthHz(): Float = if (useLongWindow) analyzer.binWidthHz else fftProcessor.binWidthHz
-
     /** PPO (Points Per Octave) smoothing. 0 = disabled. Typical: 1, 3, 6, 12, 24, 48 */
     @Volatile
     var ppoSmoothing: Int = 0
@@ -394,7 +401,9 @@ class SpectrumAnalyzerRenderer(
         canvas: Canvas,
         left: Float, top: Float, right: Float, bottom: Float,
         dbMin: Float, dbMax: Float,
-        eqResponseDb: FloatArray? = null
+        eqResponseDb: FloatArray? = null,
+        freqMin: Float = 20f,
+        freqMax: Float = 20000f,
     ) {
         val linear = getSmoothedLinear() ?: return
         val n = linear.size
@@ -426,9 +435,9 @@ class SpectrumAnalyzerRenderer(
             mbcComputer.computeAllBandGains(fullDb, sampleRate, getEffectiveSize(), mbcSettings)
         }
 
-        // Log frequency mapping over the ZOOMED visible range
-        val visLo = visibleLoHz
-        val visHi = visibleHiHz
+        // Log frequency mapping across the visible / zoomed range
+        val visLo = if (freqMin != 20f) freqMin else visibleLoHz
+        val visHi = if (freqMax != 20000f) freqMax else visibleHiHz
         val logMin = log10(visLo)
         val logMax = log10(visHi)
         val logRange = logMax - logMin
