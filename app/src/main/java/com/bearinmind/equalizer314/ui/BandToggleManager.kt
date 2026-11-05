@@ -868,13 +868,16 @@ class BandToggleManager(
             if (buttonTapCount == 2 && state.selectedBandIndex == bandIdx && onBandReselected != null) {
                 onBandReselected.invoke(anchor, bandIdx)
                 return
-            } else if (buttonTapCount >= 3) {
+            } else if (buttonTapCount >= 3 && graphView.trackerEnabled) {
                 buttonTapCount = 0
+                graphView.setActiveBand(bandIdx)
+                updateSelection(bandIdx)
+                onBandSelected(bandIdx)
                 graphView.toggleFollowTrackedFrequency(bandIdx)
                 return
             }
         } else {
-            if (buttonTapCount >= 2) {
+            if (buttonTapCount >= 2 && graphView.trackerEnabled && state.selectedBandIndex == bandIdx) {
                 buttonTapCount = 0
                 graphView.toggleFollowTrackedFrequency(bandIdx)
                 return

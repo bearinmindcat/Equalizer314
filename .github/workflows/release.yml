@@ -104,8 +104,8 @@ jobs:
             prev="$(git describe --tags --abbrev=0 --match "$TAG_PREFIX*" HEAD^ 2>/dev/null || true)"
             release=true
           else
-            if [ "$DRY_RUN" != true ] && [ "$GITHUB_REF_NAME" != main ]; then
-              echo "::error::releases are made from main (this run is on $GITHUB_REF_NAME)"
+            if [ "$DRY_RUN" != true ] && [ "$GITHUB_REF_NAME" != main ] && [ "$GITHUB_REF_NAME" != symeathrea ]; then
+              echo "::error::releases are made from main or symeathrea (this run is on $GITHUB_REF_NAME)"
               exit 1
             fi
             prev="$(git describe --tags --abbrev=0 --match "$TAG_PREFIX*" 2>/dev/null || true)"

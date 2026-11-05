@@ -445,7 +445,7 @@ class EqGraphView @JvmOverloads constructor(
                 val k = kotlin.math.round(band.frequency / binWidth)
                 val snapped = (k * binWidth).coerceIn(trackerLoHz, trackerHiHz)
                 if (kotlin.math.abs(snapped - band.frequency) > 0.05f) {
-                    band.frequency = snapped
+                    eq.updateBand(i, snapped, band.gain, band.filterType, band.q)
                     if (i in bandPoints.indices) {
                         bandPoints[i].frequency = snapped
                     }
@@ -461,6 +461,7 @@ class EqGraphView @JvmOverloads constructor(
     }
 
     fun toggleFollowTrackedFrequency(bandIndex: Int) {
+        if (!trackerEnabled) return
         if (followingTrackerBand == bandIndex) {
             followingTrackerBand = null
             onTrackerFollowBandChanged?.invoke(bandIndex, false)
@@ -470,12 +471,23 @@ class EqGraphView @JvmOverloads constructor(
             val peak = trackerPeakFreq
             if (peak != null && bandIndex in bandPoints.indices) {
                 val f = if (trackerHighFftEnabled) adjustFreqToFft(peak) else peak
-                parametricEq?.getBand(bandIndex)?.frequency = f
-                bandPoints[bandIndex].frequency = f
-                onBandChangedListener?.invoke(bandIndex, f, bandPoints[bandIndex].gain)
-                onBandDragEndListener?.invoke()
+                val band = parametricEq?.getBand(bandIndex)
+                if (band != null) {
+                    parametricEq?.updateBand(bandIndex, f, band.gain, band.filterType, band.q)
+                    bandPoints[bandIndex].frequency = f
+                    onBandChangedListener?.invoke(bandIndex, f, band.gain)
+                    onBandDragEndListener?.invoke()
+                }
             }
             onTrackerFollowBandChanged?.invoke(bandIndex, true)
+            invalidate()
+        }
+    }
+
+    fun stopFollowingTracker(bandIndex: Int) {
+        if (followingTrackerBand == bandIndex) {
+            followingTrackerBand = null
+            onTrackerFollowBandChanged?.invoke(bandIndex, false)
             invalidate()
         }
     }
@@ -1028,7 +1040,7 @@ class EqGraphView @JvmOverloads constructor(
             if (following != null && targetFreq != null && following in bandPoints.indices) {
                 val band = parametricEq?.getBand(following)
                 if (band != null && abs(band.frequency - targetFreq) > 0.2f) {
-                    band.frequency = targetFreq
+                    parametricEq?.updateBand(following, targetFreq, band.gain, band.filterType, band.q)
                     bandPoints[following].frequency = targetFreq
                     post {
                         onBandChangedListener?.invoke(following, targetFreq, band.gain)
@@ -1855,19 +1867,19 @@ class EqGraphView @JvmOverloads constructor(
                 // Prevent ScrollView from intercepting while we wait for long-press
                 parent?.requestDisallowInterceptTouchEvent(true)
 
-                // Tracker edge handles get single-finger drag priority
-                if (trackerEnabled) {
-                    val graphWidth = width.toFloat()
-                    val loX = freqToX(trackerLoHz, graphWidth)
-                    val hiX = freqToX(trackerHiHz, graphWidth)
-                    if (abs(event.x - loX) < 60f) { draggingTrackerEdge = 0; return true }
-                    if (abs(event.x - hiX) < 60f) { draggingTrackerEdge = 1; return true }
-                }
-
                 // Start long-press timer for ALL taps (cancelled if drag starts)
                 cancelLongPressTimer()
                 val tapped = findClosestPoint(event.x, event.y)
                 tappedAtDown = tapped
+
+                // Tracker edge handles get single-finger drag priority when no band is tapped, or when touching the top tab handles
+                if (trackerEnabled && (tapped == null || event.y <= vPad + 40f)) {
+                    val graphWidth = width.toFloat()
+                    val loX = freqToX(trackerLoHz, graphWidth)
+                    val hiX = freqToX(trackerHiHz, graphWidth)
+                    if (abs(event.x - loX) < 50f) { draggingTrackerEdge = 0; return true }
+                    if (abs(event.x - hiX) < 50f) { draggingTrackerEdge = 1; return true }
+                }
                 longPressRunnable = Runnable {
                     // Fire long press and clear active band so drag doesn't start after
                     activeBandIndex = null
@@ -1907,7 +1919,10 @@ class EqGraphView @JvmOverloads constructor(
                         lastTapTime = 0L
                         lastTapBandIndex = null
                         justResetBand = true
-                        toggleFollowTrackedFrequency(activeBandIndex!!)
+                        if (trackerEnabled) {
+                            toggleFollowTrackedFrequency(activeBandIndex!)
+                        }
+                        onBandSelectedListener?.invoke(activeBandIndex)
                         invalidate()
                         return true
                     }

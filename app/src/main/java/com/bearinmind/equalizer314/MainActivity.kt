@@ -2846,7 +2846,10 @@ class  MainActivity : AppCompatActivity() {
                 stateManager.syncBothBands()
                 eqGraphView.invalidate()
             }
-            updateBandInputs(bandIndex)
+            val currentSelected = stateManager.selectedBandIndex ?: eqGraphView.getActiveBandIndex()
+            if (currentSelected == null || bandIndex == currentSelected) {
+                updateBandInputs(bandIndex)
+            }
             // NOTE: don't rebuild the table per drag move — recreating all rows/inputs makes the drag stutter.
             if (stateManager.currentEqUiMode == EqUiMode.GRAPHIC) graphicController.updateSliderValues()
         }
@@ -4108,6 +4111,9 @@ class  MainActivity : AppCompatActivity() {
     private fun applyBandHz(hz: Float) {
         val bandIndex = eqGraphView.getActiveBandIndex() ?: return
         val band = stateManager.parametricEq.getBand(bandIndex) ?: return
+        if (eqGraphView.followingTrackerBand == bandIndex) {
+            eqGraphView.stopFollowingTracker(bandIndex)
+        }
         stateManager.parametricEq.updateBand(bandIndex, hz, band.gain, band.filterType, band.q)
         eqGraphView.updateBandLevels()
         stateManager.pushEqUpdate()
