@@ -13,8 +13,8 @@ android {
         applicationId = "com.bearinmind.equalizer314.aethra"
         minSdk = 24
         targetSdk = 36
-        versionCode = 28
-        versionName = "0.0.23-beta"
+        versionCode = 29
+        versionName = "0.0.24-beta"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
