@@ -1873,7 +1873,7 @@ class EqGraphView @JvmOverloads constructor(
                 tappedAtDown = tapped
 
                 // Tracker edge handles get single-finger drag priority when no band is tapped, or when touching the top tab handles
-                if (trackerEnabled && (tapped == null || event.y <= vPad + 40f)) {
+                if (trackerEnabled && (tapped == null || event.y <= verticalPadding + 40f)) {
                     val graphWidth = width.toFloat()
                     val loX = freqToX(trackerLoHz, graphWidth)
                     val hiX = freqToX(trackerHiHz, graphWidth)
@@ -1920,7 +1920,7 @@ class EqGraphView @JvmOverloads constructor(
                         lastTapBandIndex = null
                         justResetBand = true
                         if (trackerEnabled) {
-                            toggleFollowTrackedFrequency(activeBandIndex!)
+                            activeBandIndex?.let { toggleFollowTrackedFrequency(it) }
                         }
                         onBandSelectedListener?.invoke(activeBandIndex)
                         invalidate()
