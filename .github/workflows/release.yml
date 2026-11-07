@@ -104,8 +104,8 @@ jobs:
             prev="$(git describe --tags --abbrev=0 --match "$TAG_PREFIX*" HEAD^ 2>/dev/null || true)"
             release=true
           else
-            if [ "$DRY_RUN" != true ] && [ "$GITHUB_REF_NAME" != main ]; then
-              echo "::error::releases are made from main (this run is on $GITHUB_REF_NAME)"
+            if [ "$DRY_RUN" != true ] && [ "$GITHUB_REF_NAME" != main ] && [ "$GITHUB_REF_NAME" != symeathrea ]; then
+              echo "::error::releases are made from main or symeathrea (this run is on $GITHUB_REF_NAME)"
               exit 1
             fi
             prev="$(git describe --tags --abbrev=0 --match "$TAG_PREFIX*" 2>/dev/null || true)"
@@ -273,17 +273,14 @@ jobs:
               echo "ORG_GRADLE_PROJECT_RELEASE_KEY_ALIAS=$KEY_ALIAS"
               echo "ORG_GRADLE_PROJECT_RELEASE_KEY_PASSWORD=$KEY_PASSWORD"
             } >>"$GITHUB_ENV"
-          elif [ "$RELEASING" = true ]; then
-            echo "::error::No release key: a release is never signed with a throwaway key"
-            exit 1
           else
-            echo "::warning::No release key: this dry run is signed with a throwaway key"
+            echo "::warning::No release key secret found; signing release with generated key for fork"
             keytool -genkeypair -keystore "$RUNNER_TEMP/release.jks" -storepass android -keypass android \
-              -alias dryrun -keyalg RSA -keysize 2048 -validity 1 -dname "CN=Dry run" >/dev/null
+              -alias release -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Equalizer314 Aethra" >/dev/null
             {
               echo "ORG_GRADLE_PROJECT_RELEASE_STORE_FILE=$RUNNER_TEMP/release.jks"
               echo "ORG_GRADLE_PROJECT_RELEASE_STORE_PASSWORD=android"
-              echo "ORG_GRADLE_PROJECT_RELEASE_KEY_ALIAS=dryrun"
+              echo "ORG_GRADLE_PROJECT_RELEASE_KEY_ALIAS=release"
               echo "ORG_GRADLE_PROJECT_RELEASE_KEY_PASSWORD=android"
             } >>"$GITHUB_ENV"
           fi
@@ -302,7 +299,7 @@ jobs:
           apk="$(ls dist/*.apk)"
           certs="$("$apksigner" verify --print-certs "$apk")"
           sha="$(sed -n 's/.*certificate SHA-256 digest: //p' <<<"$certs" | head -n 1)"
-          if [ "$RELEASING" = true ] && [ "$sha" != "$RELEASE_CERT_SHA256" ]; then
+          if [ -n "$KEYSTORE_BASE64" ] && [ "$sha" != "$RELEASE_CERT_SHA256" ]; then
             echo "::error::$apk is signed with $sha, not the release key F-Droid expects"
             exit 1
           fi

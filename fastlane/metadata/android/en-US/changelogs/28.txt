@@ -1,3 +1,7 @@
+Added Dynamic Spectrum Tracker (DST) with band following and High FFT Scanning
+Added Long-Window rolling FFT spectrum analyzer up to 65k points with zoom-adaptive sizing
+Added target curve ghost overlay, delta fill, and band solo audition
+Added frequency axis zoom and pan on the EQ graph
 Added optional audio output compatibility mode - issue #141
 Added option to rename presets by long-pressing them - issue #140
 Added extra frequency grid lines on the EQ graph - issue #122

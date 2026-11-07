@@ -25,8 +25,8 @@ class SpectrumControlActivity : AppCompatActivity() {
     private var fallbackRateHz = 48000
     private var playbackCallback: android.media.AudioManager.AudioPlaybackCallback? = null
 
-    private val fftSizes = intArrayOf(1024, 2048, 4096, 8192)
-    private val fftLabels = arrayOf("1024", "2048", "4096", "8192")
+    private val fftSizes = intArrayOf(1024, 2048, 4096, 8192, 16384, 32768, 65536)
+    private val fftLabels = arrayOf("1k", "2k", "4k", "8k", "16k", "32k", "65k")
     private val ppoValues = intArrayOf(1, 2, 3, 6, 12, 24, 48, 96)
     private val ppoLabels = arrayOf("1/1", "1/2", "1/3", "1/6", "1/12", "1/24", "1/48", "1/96")
 
@@ -129,13 +129,190 @@ class SpectrumControlActivity : AppCompatActivity() {
             }
         }
 
-        // setupFftSize() — commented out, zero-padding only
+        // setupFftSize() — long accumulated analysis windows (real resolution)
+        setupFftSize()
+        setupGhostDeltaToggles()
         setupPpoSmoothing()
         // setupRelease() — commented out, needs smoother implementation
         setupColor()
     }
 
-    // setupFftSize() — commented out, zero-padding only
+    private val fftTickLabelViews = mutableListOf<TextView>()
+
+    private fun setupFftSize() {
+        val summarySwitch = findViewById<MaterialSwitch>(R.id.fftSizeSwitch)
+        val summarySlider = findViewById<Slider>(R.id.fftSizeSlider)
+        val summaryText = findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.fftSizeText)
+        val summaryRow = findViewById<android.view.View>(R.id.fftSizeRow)
+        val tickRow = findViewById<android.widget.FrameLayout>(R.id.fftSizeTickLabels)
+
+        fftTickLabelViews.clear()
+        for (label in fftLabels) {
+            val tv = TextView(this).apply {
+                text = label
+                textSize = 10f
+                setTextColor(0xFF666666.toInt())
+            }
+            fftTickLabelViews.add(tv)
+            tickRow.addView(tv, android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT))
+        }
+        summarySlider.post {
+            val trackLeft = summarySlider.trackSidePadding.toFloat()
+            val trackWidth = (summarySlider.width - 2 * summarySlider.trackSidePadding).toFloat()
+            for ((i, tv) in fftTickLabelViews.withIndex()) {
+                val cx = trackLeft + trackWidth * i / (fftTickLabelViews.size - 1)
+                tv.setTypeface(null, android.graphics.Typeface.BOLD)
+                tv.measure(android.view.View.MeasureSpec.UNSPECIFIED, android.view.View.MeasureSpec.UNSPECIFIED)
+                val half = tv.measuredWidth / 2f
+                tv.setTypeface(null, android.graphics.Typeface.NORMAL)
+                tv.gravity = android.view.Gravity.CENTER
+                (tv.layoutParams as android.widget.FrameLayout.LayoutParams).apply {
+                    width = tv.measuredWidth
+                    leftMargin = (cx - half).toInt().coerceAtLeast(0)
+                }
+                tv.requestLayout()
+            }
+            updateFftTickHighlight(eqPrefs.getFftSizeIndex().coerceIn(0, fftSizes.size - 1))
+        }
+
+        val enabled = eqPrefs.getFftSizeEnabled()
+        var customSize = eqPrefs.getCustomFftSize()
+        var idx = fftSizes.indexOf(customSize)
+        if (idx < 0) {
+            idx = eqPrefs.getFftSizeIndex().coerceIn(0, fftSizes.size - 1)
+            customSize = fftSizes[idx]
+        }
+        summarySwitch.isChecked = enabled
+        summarySlider.value = idx.toFloat()
+        summaryText?.setText(customSize.toString())
+        summaryRow.alpha = if (enabled) 1f else 0.4f
+        summarySlider.isEnabled = enabled
+        summaryText?.isEnabled = enabled
+        updateFftTickHighlight(idx)
+        applyFftSize(enabled, customSize)
+
+        summarySwitch.setOnCheckedChangeListener { _, isChecked ->
+            eqPrefs.saveFftSizeEnabled(isChecked)
+            summaryRow.alpha = if (isChecked) 1f else 0.4f
+            summarySlider.isEnabled = isChecked
+            summaryText?.isEnabled = isChecked
+            applyFftSize(isChecked, eqPrefs.getCustomFftSize())
+        }
+
+        var isUpdatingText = false
+        summarySlider.addOnChangeListener { _, value, fromUser ->
+            if (!fromUser) return@addOnChangeListener
+            val newIdx = value.toInt().coerceIn(0, fftSizes.size - 1)
+            val newSize = fftSizes[newIdx]
+            updateFftTickHighlight(newIdx)
+            eqPrefs.saveFftSizeIndex(newIdx)
+            eqPrefs.saveCustomFftSize(newSize)
+            isUpdatingText = true
+            summaryText?.setText(newSize.toString())
+            isUpdatingText = false
+            applyFftSize(eqPrefs.getFftSizeEnabled(), newSize)
+        }
+
+        summaryText?.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
+                summaryText.clearFocus()
+                true
+            } else false
+        }
+        summaryText?.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus && !isUpdatingText) {
+                val inputStr = summaryText.text?.toString()?.trim()
+                val parsed = inputStr?.toIntOrNull()
+                if (parsed != null && parsed >= 512) {
+                    val validSize = com.bearinmind.equalizer314.audio.LongWindowAnalyzer.nextPowerOfTwo(parsed).coerceIn(512, 65536)
+                    eqPrefs.saveCustomFftSize(validSize)
+                    val matchIdx = fftSizes.indexOf(validSize)
+                    if (matchIdx >= 0) {
+                        summarySlider.value = matchIdx.toFloat()
+                        eqPrefs.saveFftSizeIndex(matchIdx)
+                        updateFftTickHighlight(matchIdx)
+                    } else {
+                        updateFftTickHighlight(-1)
+                    }
+                    summaryText.setText(validSize.toString())
+                    applyFftSize(eqPrefs.getFftSizeEnabled(), validSize)
+                } else {
+                    summaryText.setText(eqPrefs.getCustomFftSize().toString())
+                }
+            }
+        }
+    }
+
+    private fun updateFftTickHighlight(selectedIdx: Int) {
+        val primaryColor = com.google.android.material.color.MaterialColors.getColor(
+            this, com.google.android.material.R.attr.colorPrimary, 0xFFBB86FC.toInt())
+        for (i in fftTickLabelViews.indices) {
+            if (i == selectedIdx) {
+                fftTickLabelViews[i].setTextColor(primaryColor)
+                fftTickLabelViews[i].setTypeface(null, android.graphics.Typeface.BOLD)
+            } else {
+                fftTickLabelViews[i].setTextColor(0xFF666666.toInt())
+                fftTickLabelViews[i].setTypeface(null, android.graphics.Typeface.NORMAL)
+            }
+        }
+    }
+
+    /** Live preview of the size on this activity's renderer; MainActivity reapplies from prefs on resume. */
+    private fun applyFftSize(enabled: Boolean, size: Int) {
+        val r = renderer ?: return
+        r.useLongWindow = true
+        if (enabled) r.setFftSize(size)
+        else r.clearManualFftSize()
+        graphView?.invalidate()
+    }
+
+    private fun setupGhostDeltaToggles() {
+        val ghostSwitch = findViewById<MaterialSwitch>(R.id.ghostSwitch)
+        val deltaSwitch = findViewById<MaterialSwitch>(R.id.deltaSwitch)
+        val ghostEnabled = eqPrefs.getTargetGhostEnabled()
+        val deltaEnabled = eqPrefs.getTargetDeltaEnabled()
+        ghostSwitch.isChecked = ghostEnabled
+        deltaSwitch.isChecked = deltaEnabled
+        renderer?.showTargetGhost = ghostEnabled
+        renderer?.showTargetDelta = deltaEnabled
+        loadPreviewTargetCurve()
+        ghostSwitch.setOnCheckedChangeListener { _, isChecked ->
+            eqPrefs.saveTargetGhostEnabled(isChecked)
+            renderer?.showTargetGhost = isChecked
+            graphView?.invalidate()
+        }
+        deltaSwitch.setOnCheckedChangeListener { _, isChecked ->
+            eqPrefs.saveTargetDeltaEnabled(isChecked)
+            renderer?.showTargetDelta = isChecked
+            graphView?.invalidate()
+        }
+    }
+
+    private fun loadPreviewTargetCurve() {
+        val name = eqPrefs.getSelectedTarget() ?: return
+        Thread {
+            val fr = try {
+                if (name == "__custom__") {
+                    eqPrefs.getSelectedTargetName()?.let { customName ->
+                        eqPrefs.getImportedTargetText(customName)?.let {
+                            com.bearinmind.equalizer314.autoeq.FreqResponseParser.parse(it)
+                        }
+                    }
+                } else {
+                    assets.open("targets/$name.csv").bufferedReader().use { reader ->
+                        com.bearinmind.equalizer314.autoeq.FreqResponseParser.parse(reader.readText())
+                    }
+                }
+            } catch (_: Exception) { null }
+            if (fr != null) runOnUiThread {
+                renderer?.targetCurve = fr
+                renderer?.targetLabel = eqPrefs.getSelectedTargetName() ?: name
+                graphView?.invalidate()
+            }
+        }.start()
+    }
 
     private val tickLabelViews = mutableListOf<TextView>()
     private fun setupPpoSmoothing() {
@@ -304,6 +481,7 @@ class SpectrumControlActivity : AppCompatActivity() {
 
     private fun applyCurrentSettings() {
         val r = renderer ?: return
+        r.useLongWindow = true
         if (eqPrefs.getPpoEnabled()) {
             r.ppoSmoothing = ppoValues[eqPrefs.getPpoIndex().coerceIn(0, 7)]
         } else {
@@ -389,6 +567,7 @@ class SpectrumControlActivity : AppCompatActivity() {
         super.onDestroy()
         stopSpectrum()
         renderer?.release()
+        renderer?.shutdownWorker()
     }
 
     override fun finish() {

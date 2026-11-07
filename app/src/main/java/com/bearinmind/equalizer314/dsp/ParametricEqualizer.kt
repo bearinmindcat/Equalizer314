@@ -11,7 +11,7 @@ import kotlin.math.tanh
 // device. EqStateManager overrides with the actual AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE
 // for audio-path instances; non-audio callers (preset import, target curve,
 // auto-EQ) accept the default (response-curve computation only).
-class ParametricEqualizer(private val sampleRate: Int = 48000) {
+open class ParametricEqualizer(private val sampleRate: Int = 48000) {
 
     /** Which output channel(s) a band applies to (issue #53). BOTH is the
      *  default and the only value used outside Channel-Side-EQ mode. */
@@ -159,7 +159,7 @@ class ParametricEqualizer(private val sampleRate: Int = 48000) {
         filters.forEach { it.reset() }
     }
 
-    fun getFrequencyResponse(frequency: Float): Float {
+    open fun getFrequencyResponse(frequency: Float): Float {
         var totalMagnitude = 1f
 
         for (i in filters.indices) {

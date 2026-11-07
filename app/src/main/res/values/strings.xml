@@ -468,6 +468,29 @@
         <item quantity="one">%1$d target</item>
         <item quantity="other">%1$d targets</item>
     </plurals>
+    <!-- Precision Surgical EQ -->
+    <string name="solo_requires_eq_on">Turn the EQ on to audition a band</string>
+    <string name="notch_added_at">Notch added at %1$s</string>
+    <string name="spectrum_fft_size_title">FFT window size</string>
+    <string name="spectrum_fft_size_auto_note">Auto, window follows the zoom level</string>
+    <string name="spectrum_fft_size_custom_label">Custom FFT points</string>
+    <string name="spectrum_ghost_toggle_title">Target curve ghost</string>
+    <string name="spectrum_ghost_toggle_sub">Draw the selected target curve on the spectrum</string>
+    <string name="spectrum_delta_toggle_title">Delta view</string>
+    <string name="spectrum_delta_toggle_sub">Fill green above / red below the target curve</string>
+    <string name="exp_long_window_title">Long-Window FFT Analyzer</string>
+    <string name="exp_long_window_desc">Multi-block rolling FFT window, merged to Spectrum Control FFT Window Size.</string>
+    <string name="exp_band_solo_title">Band Solo Audition</string>
+    <string name="exp_band_solo_desc">Long-press any band on the graph to audition a narrow band-pass filter centered at its frequency.</string>
+    <string name="exp_graph_zoom_title">Frequency Axis Zoom &amp; Pan</string>
+    <string name="exp_graph_zoom_desc">Two-finger pinch to zoom and drag to pan frequency range on the EQ graph. Double-tap empty area to reset.</string>
+    <string name="exp_tracker_title">Dynamic Spectrum Tracker</string>
+    <string name="exp_tracker_desc">Draggable frequency window with live resonance peak tracking. Three-tap band node to follow tracked frequency, double-tap marker to add notch.</string>
+    <string name="exp_tracker_high_fft_title">High FFT Scanning</string>
+    <string name="exp_tracker_high_fft_desc">Adjust frequencies inside the DST field based on the FFT window size.</string>
+    <string name="band_following_tracker">Band %1$s following tracked frequency, %2$s</string>
+    <string name="band_stopped_following_tracker">Band %1$s stopped following</string>
+
     <string name="output_session_compatibility">Audio output compatibility</string>
     <string name="output_session_compatibility_description">Use app audio sessions when system-wide processing does not reach your output. System-wide applies the current settings to all detected media sessions; Session-based keeps app presets. Requires session detection. New sessions may take a moment to attach.</string>
 </resources>

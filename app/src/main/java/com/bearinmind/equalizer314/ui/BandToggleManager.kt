@@ -154,20 +154,30 @@ class BandToggleManager(
         }
     }
 
-    fun addNewBand() {
+    /**
+     * @param surgicalFreq Optional exact frequency for a surgical band added
+     *   by double-tapping the spectrum tracker (position ignored otherwise).
+     * @param surgicalType Filter type for the surgical band (NOTCH by
+     *   caller-specified convention; plain add uses BELL).
+     */
+    fun addNewBand(surgicalFreq: Float? = null, surgicalType: BiquadFilter.FilterType = BiquadFilter.FilterType.BELL) {
         val eq = state.parametricEq
         if (eq.getBandCount() >= EqStateManager.MAX_BANDS) return
 
         val oldBandCount = eq.getBandCount()
         val usedSlots = state.bandSlots.toSet()
         val newSlot = (0 until EqStateManager.MAX_BANDS).firstOrNull { it !in usedSlots } ?: return
-        val newFreq = state.allDefaultFrequencies[newSlot]
+        val newFreq = surgicalFreq ?: state.allDefaultFrequencies[newSlot]
+        val surgicalQ = when {
+            surgicalType == BiquadFilter.FilterType.NOTCH || surgicalType == BiquadFilter.FilterType.BAND_PASS -> 6.0
+            else -> 0.707
+        }
         // Clamp to band-list bounds so a stray slot desync can't throw in MutableList.add (issue #50).
         val insertPos = state.bandSlots.indexOfFirst { it > newSlot }
             .let { if (it < 0) state.bandSlots.size else it }
             .coerceIn(0, eq.getBandCount())
 
-        eq.insertBand(insertPos, newFreq, 0f, BiquadFilter.FilterType.BELL)
+        eq.insertBand(insertPos, newFreq, 0f, surgicalType, surgicalQ)
         state.bandSlots.add(insertPos, newSlot)
         state.displayToBandIndex = (0 until eq.getBandCount()).toList()
         // New bands default to BOTH: create the synced twin in the other channel (issue #53).
@@ -838,12 +848,40 @@ class BandToggleManager(
         onBandCountChanged()
     }
 
+    private var lastButtonTapTime = 0L
+    private var lastButtonTapBand: Int? = null
+    private var buttonTapCount = 0
+
     /** Selects the band; re-tapping it with Channel Side EQ on opens the L / Both / R picker (issue #53). */
     private fun onToggleClicked(anchor: View, bandIdx: Int) {
+        val now = System.currentTimeMillis()
+        if (lastButtonTapBand == bandIdx && now - lastButtonTapTime < 350L) {
+            buttonTapCount++
+        } else {
+            buttonTapCount = 1
+        }
+        lastButtonTapTime = now
+        lastButtonTapBand = bandIdx
+
         val cseOn = state.activeChannel != EqStateManager.ActiveChannel.BOTH
-        if (cseOn && state.selectedBandIndex == bandIdx && onBandReselected != null) {
-            onBandReselected.invoke(anchor, bandIdx)
-            return
+        if (cseOn) {
+            if (buttonTapCount == 2 && state.selectedBandIndex == bandIdx && onBandReselected != null) {
+                onBandReselected.invoke(anchor, bandIdx)
+                return
+            } else if (buttonTapCount >= 3 && graphView.trackerEnabled) {
+                buttonTapCount = 0
+                graphView.setActiveBand(bandIdx)
+                updateSelection(bandIdx)
+                onBandSelected(bandIdx)
+                graphView.toggleFollowTrackedFrequency(bandIdx)
+                return
+            }
+        } else {
+            if (buttonTapCount >= 2 && graphView.trackerEnabled && state.selectedBandIndex == bandIdx) {
+                buttonTapCount = 0
+                graphView.toggleFollowTrackedFrequency(bandIdx)
+                return
+            }
         }
         graphView.setActiveBand(bandIdx)
         updateSelection(bandIdx)
